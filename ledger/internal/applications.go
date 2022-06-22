@@ -202,7 +202,7 @@ func (cs *roundCowState) kvDel(key string) error {
 	return nil
 }
 
-func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64) error {
+func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr basics.Address) error {
 	// Use same limit on key length as for global/local storage
 	if len(key) > cs.proto.MaxAppKeyLen {
 		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
@@ -226,13 +226,13 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 		return fmt.Errorf("box %s exists for %d", key, appIdx)
 	}
 
-	record, err := cs.Get(appIdx.Address(), false)
+	record, err := cs.Get(appAddr, false)
 	if err != nil {
 		return err
 	}
 	record.TotalBoxes = basics.AddSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.AddSaturate(record.TotalBoxBytes, uint64(len(key))+size)
-	err = cs.Put(appIdx.Address(), record)
+	err = cs.Put(appAddr, record)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string
 	return cs.kvPut(fullKey, value)
 }
 
-func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string) error {
+func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
 	fullKey := logic.MakeBoxKey(appIdx, key)
 
 	value, ok, err := cs.kvGet(fullKey)
@@ -273,13 +273,13 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string) error {
 		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
 	}
 
-	record, err := cs.Get(appIdx.Address(), false)
+	record, err := cs.Get(appAddr, false)
 	if err != nil {
 		return err
 	}
 	record.TotalBoxes = basics.SubSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.SubSaturate(record.TotalBoxBytes, uint64(len(key)+len(value)))
-	err = cs.Put(appIdx.Address(), record)
+	err = cs.Put(appAddr, record)
 	if err != nil {
 		return err
 	}

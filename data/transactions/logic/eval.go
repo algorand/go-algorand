@@ -214,10 +214,10 @@ type LedgerForLogic interface {
 	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
-	NewBox(appIdx basics.AppIndex, key string, size uint64) error
+	NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr basics.Address) error
 	GetBox(appIdx basics.AppIndex, key string) (string, bool, error)
 	SetBox(appIdx basics.AppIndex, key string, value string) error
-	DelBox(appIdx basics.AppIndex, key string) error
+	DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
