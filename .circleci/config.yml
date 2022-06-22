@@ -45,17 +45,17 @@ executors:
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
-  darwin_arm64: &darwin_arm64
+  mac_arm64: &mac-arm64-executor
     machine: true
     resource_class: algorand/macstadium-m1
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
   # for `mac_arm64` there is only one size
-  darwin_arm64_medium:
-    <<: *darwin_arm64
-  darwin_arm64_large:
-    <<: *darwin_arm64
+  mac_arm64_medium:
+    <<: *mac-arm64-executor
+  mac_arm64_large:
+    <<: *mac-arm64-executor
 
 workflows:
   version: 2
@@ -67,7 +67,17 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "darwin_arm64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
+
+      - build:
+          name: mac_arm64_build
+          matrix: &matrix-mac-arm64
+            parameters: ["mac_arm64"]
+          filters: &filters-mac-arm64
+            branches:
+              only:
+                - /rel\/.*/
+                - master
 
       - test:
           name: << matrix.platform >>_test
@@ -80,6 +90,15 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
+
+      - test:
+          name: mac_arm64_test
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - mac_arm64_build
+          filters:
+            <<: *filters-mac-arm64
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -103,6 +122,15 @@ workflows:
           filters:
             <<: *filters-default
 
+      - integration:
+          name: mac_arm64_integration
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - mac_arm64_build
+          filters:
+            <<: *filters-mac-arm64
+
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
@@ -121,6 +149,15 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-default
+
+      - e2e_expect:
+          name: mac_arm64_e2e_expect
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - mac_arm64_build
+          filters:
+            <<: *filters-mac-arm64
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -141,6 +178,15 @@ workflows:
           filters:
             <<: *filters-default
 
+      - e2e_subs:
+          name: mac_arm64_e2e_subs
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - mac_arm64_build
+          filters:
+            <<: *filters-mac-arm64
+
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
@@ -157,10 +203,21 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "darwin_arm64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
               job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["mac_arm64"]
+              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          filters:
+            <<: *filters-mac-arm64
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
@@ -179,6 +236,25 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+
+      - upload_binaries:
+          name: << matrix.platform >>_upload_binaries
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+            - << matrix.platform >>_e2e_subs_nightly
+            - codegen_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+          context:
+            - slack-secrets
+            - aws-secrets
+
       #- windows_x64_build
 
 commands:
