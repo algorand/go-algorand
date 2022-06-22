@@ -18,7 +18,6 @@ package logic
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -53,8 +52,6 @@ func GetSourceMap(sourceNames []string, ops *OpStream) SourceMap {
 			maxPC = pc
 		}
 	}
-
-	fmt.Printf("%+v", ops.labelReferences)
 
 	// Array where index is the PC and value is the line.
 	pcToLine := make([]string, maxPC+1)
