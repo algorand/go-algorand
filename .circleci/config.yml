@@ -45,11 +45,17 @@ executors:
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_arm64_medium: # adding `_medium` b/c `build` job explicitly declares it
+  mac_arm64: &mac_arm64
     machine: true
     resource_class: algorand/macstadium-m1
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
+  # these are required b/c jobs explicitly assign sizes to the executors
+  # for `mac_arm64` there is only one size
+  mac_arm64_medium:
+    <<: *mac_arm64
+  mac_arm64_large:
+    <<: *mac_arm64
 
 workflows:
   version: 2
