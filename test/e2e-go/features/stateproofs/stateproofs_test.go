@@ -356,3 +356,76 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 		}
 	}
 }
+
+func TestStateProofsMultiWallets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.StateProofInterval = 16
+	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofVotersLookback = 2
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 4
+	consensusParams.StateProofRecoveryInterval = 6
+	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProofMultiWallets.json"))
+	defer fixture.Shutdown()
+
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoal := fixture.LibGoalClient
+
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		// send a dummy payment transaction to create non-empty blocks.
+		sendPayment(r, &fixture, rnd)
+
+		err = fixture.WaitForRound(rnd, 30*time.Second)
+		r.NoError(err)
+
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			// Must have a merkle commitment for participants
+			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		} else {
+			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+		}
+
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
