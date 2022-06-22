@@ -1400,8 +1400,7 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Parent address:            %s\n", part.Address)
 				fmt.Printf("Last vote round:           %s\n", strOrNA(part.LastVote))
 				fmt.Printf("Last block proposal round: %s\n", strOrNA(part.LastBlockProposal))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
+				fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
 				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
 				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
 				fmt.Printf("First round:               %d\n", part.Key.VoteFirstValid)
@@ -1410,7 +1409,24 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
 				if part.Key.StateProofKey != nil {
-					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+					// A part.Key.StateProofKey (aka a state proof verifier) is a constant size block of bytes
+					// If all those bytes are zero, then we don't want to display a "bogus" hash,
+					// instead we want to output "n/a" to inform the user
+					allZero := true
+					blockLength := len(*part.Key.StateProofKey)
+					for i := 0; i < blockLength; i++ {
+						keyByte := (*part.Key.StateProofKey)[i]
+						if keyByte != byte(0) {
+							allZero = false
+							break
+						}
+					}
+
+					if allZero {
+						fmt.Printf("State proof key:           n/a\n")
+					} else {
+						fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+					}
 				}
 			}
 		})
