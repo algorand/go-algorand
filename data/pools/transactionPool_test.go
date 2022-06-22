@@ -1394,7 +1394,7 @@ func TestTStateProofLogging(t *testing.T) {
 	msg, err := astateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
 
 	// Get the SP
-	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, voters.TotalWeight.Raw, t)
+	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, t)
 
 	// Set the transaction with the SP
 	var stxn transactions.SignedTxn
@@ -1458,7 +1458,6 @@ func generateProofForTesting(
 	partArray basics.ParticipantsArray,
 	partTree *merklearray.Tree,
 	allKeys []*merklesignature.Secrets,
-	totalWeight uint64,
 	t *testing.T) *stateproof.StateProof {
 
 	data := msg.IntoStateProofMessageHash()

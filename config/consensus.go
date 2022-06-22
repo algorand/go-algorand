@@ -387,6 +387,11 @@ type ConsensusParams struct {
 	// StateProofStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
 	StateProofStrengthTarget uint64
 
+	// StateProofRecoveryInterval represents the number of state proof intervals that the network will try to catch-up with.
+	// When the difference between the latest state proof and the current round will be greater than value, Nodes will
+	// release resources allocated for creating state proofs.
+	StateProofRecoveryInterval uint64
+
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
@@ -1141,6 +1146,7 @@ func initConsensusProtocols() {
 	vFuture.StateProofVotersLookback = 16
 	vFuture.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.StateProofStrengthTarget = 256
+	vFuture.StateProofRecoveryInterval = 10
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4

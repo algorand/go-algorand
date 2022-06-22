@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -32,22 +33,22 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// builderForRound not threadsafe, should be called in a lock environment
-func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
-	hdr, err := spw.ledger.BlockHdr(rnd)
+// makeBuilderForRound not threadsafe, should be called in a lock environment
+func makeBuilderForRound(l Ledger, rnd basics.Round) (builder, error) {
+	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRnd)
+	votersHdr, err := l.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := spw.ledger.VotersForStateProof(lookback)
+	voters, err := l.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -58,11 +59,10 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
+	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
 	if err != nil {
 		return builder{}, err
 	}
-	spw.Message = msg
 
 	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
@@ -72,6 +72,7 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	var res builder
 	res.votersHdr = votersHdr
 	res.voters = voters
+	res.message = msg
 	res.Builder, err = stateproof.MkBuilder(msg.IntoStateProofMessageHash(),
 		uint64(hdr.Round),
 		provenWeight,
@@ -82,7 +83,6 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	spw.builders[rnd] = res
 	return res, nil
 }
 
@@ -110,11 +110,12 @@ func (spw *Worker) initBuilders() {
 }
 
 func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := spw.builderForRound(rnd)
+	builderForRound, err := makeBuilderForRound(spw.ledger, rnd)
 	if err != nil {
-		spw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
+		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
 		return
 	}
+	spw.builders[rnd] = builderForRound
 
 	for _, sig := range sigs {
 		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
@@ -178,10 +179,11 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		builderForRound, err = spw.builderForRound(sfa.Round)
+		builderForRound, err = makeBuilderForRound(spw.ledger, sfa.Round)
 		if err != nil {
 			return network.Disconnect, err
 		}
+		spw.builders[sfa.Round] = builderForRound
 	}
 
 	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
@@ -242,9 +244,10 @@ func (spw *Worker) builder(latest basics.Round) {
 		if err != nil {
 			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
-		} else {
-			spw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		}
+
+		spw.deleteOldSigs(hdr)
+		spw.deleteOldBuilders(hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -327,19 +330,46 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (spw *Worker) deleteOldSigs(nextStateProof basics.Round) {
+func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 {
+		return nextStateProofRnd
+	}
+
+	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	// we add +1 to this number since we want exactly StateProofRecoveryInterval elements in the history
+	oldestRoundOnRecoveryPeriod++
+
+	var oldestRoundToRemove basics.Round
+	if oldestRoundOnRecoveryPeriod > nextStateProofRnd {
+		oldestRoundToRemove = oldestRoundOnRecoveryPeriod
+	} else {
+		oldestRoundToRemove = nextStateProofRnd
+	}
+	return oldestRoundToRemove
+}
+
+func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
+	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
+	})
+	if err != nil {
+		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", oldestRoundToRemove, err)
+	}
+}
+
+func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
+	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, nextStateProof)
-	})
-	if err != nil {
-		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
-	}
-
 	for rnd := range spw.builders {
-		if rnd < nextStateProof {
+		if rnd < oldestRoundToRemove {
 			delete(spw.builders, rnd)
 		}
 	}
@@ -353,7 +383,7 @@ func (spw *Worker) tryBuilding() {
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
-			// Haven't signed enough to build the cert at this time..
+			// Haven't signed enough to build the state proof at this time..
 			continue
 		}
 
@@ -362,7 +392,7 @@ func (spw *Worker) tryBuilding() {
 			continue
 		}
 
-		cert, err := b.Build()
+		sp, err := b.Build()
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
 			continue
@@ -376,8 +406,8 @@ func (spw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofIntervalLatestRound = rnd
-		stxn.Txn.StateProof = *cert
-		stxn.Txn.Message = spw.Message
+		stxn.Txn.StateProof = *sp
+		stxn.Txn.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
