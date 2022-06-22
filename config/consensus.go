@@ -418,9 +418,6 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
-	//EnableBatchVerification enable the use of the batch verification algorithm.
-	EnableBatchVerification bool
-
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 
@@ -1085,7 +1082,6 @@ func initConsensusProtocols() {
 
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v31.EnableBatchVerification = true
 	v31.RewardsCalculationFix = true
 	v31.MaxProposedExpiredOnlineAccounts = 32
 
