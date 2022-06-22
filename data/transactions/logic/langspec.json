@@ -1240,6 +1240,29 @@
     },
     {
       "Opcode": 92,
+      "Name": "replace2",
+      "Args": "BB",
+      "Returns": "B",
+      "Size": 2,
+      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+      "ImmediateNote": "{uint8 start position}",
+      "Groups": [
+        "Byte Array Manipulation"
+      ]
+    },
+    {
+      "Opcode": 93,
+      "Name": "replace3",
+      "Args": "BUB",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+      "Groups": [
+        "Byte Array Manipulation"
+      ]
+    },
+    {
+      "Opcode": 94,
       "Name": "base64_decode",
       "Args": "B",
       "Returns": "B",
@@ -1252,7 +1275,7 @@
       ]
     },
     {
-      "Opcode": 93,
+      "Opcode": 95,
       "Name": "json_ref",
       "Args": "BB",
       "Returns": ".",

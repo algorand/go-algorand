@@ -105,13 +105,13 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	return err
 }
 
-// getHostName returns the HostName for telemetry (GUID:Name -- :Name is optional if blank)
-func (cfg TelemetryConfig) getHostName() string {
-	hostName := cfg.GUID
+// getHostGUID returns the Host GUID for telemetry (GUID:Name -- :Name is optional if blank)
+func (cfg TelemetryConfig) getHostGUID() string {
+	ret := cfg.GUID
 	if cfg.Enable && len(cfg.Name) > 0 {
-		hostName += ":" + cfg.Name
+		ret += ":" + cfg.Name
 	}
-	return hostName
+	return ret
 }
 
 // getInstanceName allows us to distinguish between multiple instances running on the same node.

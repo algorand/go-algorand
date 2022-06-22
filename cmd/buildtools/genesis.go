@@ -152,8 +152,7 @@ var dumpGenesisHashCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		hash := crypto.HashObj(genesis)
-		fmt.Print(hash.String())
+		fmt.Print(genesis.Hash().String())
 	},
 }
 
@@ -237,7 +236,7 @@ func ensureReleaseGenesis(src bookkeeping.Genesis, releaseFile string) (err erro
 		return fmt.Errorf("error saving file: %v", err)
 	}
 
-	hash := crypto.HashObj(releaseGenesis)
+	hash := releaseGenesis.Hash()
 	err = ioutil.WriteFile(releaseFileHash, []byte(hash.String()), 0666)
 	if err != nil {
 		return fmt.Errorf("error saving hash file '%s': %v", releaseFileHash, err)
@@ -261,8 +260,20 @@ func verifyReleaseGenesis(src bookkeeping.Genesis, releaseFile string) (updateGe
 func verifyGenesisHashes(src, release bookkeeping.Genesis, hashFile string) (err error) {
 	src.Timestamp = release.Timestamp
 
-	srcHash := crypto.HashObj(src)
-	releaseHash := crypto.HashObj(release)
+	srcHash := src.Hash()
+	releaseHash := release.Hash()
+
+	srcHashCrypo := crypto.HashObj(src)
+	releaseHashCrypto := crypto.HashObj(release)
+
+	if srcHash != srcHashCrypo {
+		return fmt.Errorf("source hashes differ - genesis.json our hashing function isn't consistent")
+	}
+
+	if releaseHash != releaseHashCrypto {
+		return fmt.Errorf("release hashes differ - genesis.json our hashing function isn't consistent")
+	}
+
 	if srcHash != releaseHash {
 		return fmt.Errorf("source and release hashes differ - genesis.json may have diverge from released version")
 	}
