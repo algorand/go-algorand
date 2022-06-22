@@ -902,6 +902,9 @@ var addParticipationKeyCmd = &cobra.Command{
 		}
 
 		reportInfof("Participation key generation successful. Participation ID: %s\n", part.ID())
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with goal v" + version.String())
 	},
 }
 
@@ -990,6 +993,9 @@ var renewParticipationKeyCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(err.Error())
 		}
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with goal v" + version.String())
 	},
 }
 
