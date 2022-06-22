@@ -246,7 +246,7 @@ type OpStream struct {
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
 
-	// map comment to source l ine
+	// map comment to source line
 	Comments map[int]string
 
 	HasStatefulOps bool

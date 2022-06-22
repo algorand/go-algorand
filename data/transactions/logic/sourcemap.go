@@ -18,6 +18,8 @@ package logic
 
 import (
 	"bytes"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,29 +33,33 @@ const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 // the assembled bytecode position and details about
 // the template variables contained in the source file.
 type SourceMap struct {
-	Version    int            `json:"version"`
-	File       string         `json:"file,omitempty"`
-	SourceRoot string         `json:"sourceRoot,omitempty"`
-	Sources    []string       `json:"sources"`
-	Names      []string       `json:"names"`
-	Mapping    string         `json:"mapping"`
-	Comments   map[int]string `json:"comments"`
+	Version    int      `json:"version"`
+	File       string   `json:"file,omitempty"`
+	SourceRoot string   `json:"sourceRoot,omitempty"`
+	Sources    []string `json:"sources"`
+	Names      []string `json:"names"`
+	Mapping    string   `json:"mapping"`
+	// Extensions, must start with x_com_algorand
+	Comments map[string]string `json:"x_com_algorand_comments"`
+	Labels   map[string]string `json:"x_com_algorand_labels"`
 }
 
 // GetSourceMap returns a struct containing details about
 // the assembled file and encoded mappings to the source file.
-func GetSourceMap(sourceNames []string, offsetToLine map[int]int, comments map[int]string) SourceMap {
+func GetSourceMap(sourceNames []string, ops *OpStream) SourceMap {
 	maxPC := 0
-	for pc := range offsetToLine {
+	for pc := range ops.OffsetToLine {
 		if pc > maxPC {
 			maxPC = pc
 		}
 	}
 
+	fmt.Printf("%+v", ops.labelReferences)
+
 	// Array where index is the PC and value is the line.
 	pcToLine := make([]string, maxPC+1)
 	for pc := range pcToLine {
-		if line, ok := offsetToLine[pc]; ok {
+		if line, ok := ops.OffsetToLine[pc]; ok {
 			pcToLine[pc] = MakeSourceMapLine(0, 0, line, 0)
 		} else {
 			pcToLine[pc] = ""
@@ -63,12 +69,23 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int, comments map[i
 	// Encode the source map into a string
 	encodedMapping := strings.Join(pcToLine, ";")
 
+	stringKeyComments := map[string]string{}
+	for idx, cmt := range ops.Comments {
+		stringKeyComments[strconv.Itoa(idx)] = cmt
+	}
+
+	stringKeyLabels := map[string]string{}
+	for _, labelRef := range ops.labelReferences {
+		stringKeyLabels[strconv.Itoa(labelRef.position)] = labelRef.label
+	}
+
 	return SourceMap{
 		Version:  sourceMapVersion,
 		Sources:  sourceNames,
 		Names:    []string{}, // TEAL code does not generate any names.
 		Mapping:  encodedMapping,
-		Comments: comments,
+		Comments: stringKeyComments,
+		Labels:   stringKeyLabels,
 	}
 }
 
