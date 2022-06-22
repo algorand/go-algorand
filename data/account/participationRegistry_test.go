@@ -1223,6 +1223,55 @@ func TestParticipationDB_Locking(t *testing.T) {
 	}
 }
 
+func TestParticipationDBInstallWhileReading(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	dbName := strings.Replace(t.Name(), "/", "_", -1)
+
+	dbfile, err := db.OpenErasablePair(dbName + ".sqlite3")
+	a.NoError(err)
+
+	registry, err := makeParticipationRegistry(dbfile, logging.TestingLog(t))
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+
+	defer registryCloseTest(t, registry, dbName)
+
+	var sampledPartID ParticipationID
+	for i := 0; i < 3; i++ {
+		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		id, err := registry.Insert(part)
+		if i == 0 {
+			sampledPartID = id
+		}
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, part.StateProofSecrets.GetAllKeys()))
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, part.ID())
+	}
+
+	newPart := makeTestParticipationWithLifetime(a, 1, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution, merklesignature.KeyLifetimeDefault)
+	go func() {
+		id, err := registry.Insert(newPart)
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, newPart.StateProofSecrets.GetAllKeys()))
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, newPart.ID())
+	}()
+
+	for i := 0; i < 50; i++ {
+		_, err = registry.GetStateProofForRound(sampledPartID, basics.Round(256))
+		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
+		// while a different go routine is installing new keys.
+		a.NoError(err)
+	}
+}
+
 // based on BenchmarkOldKeysDeletion
 func BenchmarkDeleteExpired(b *testing.B) {
 	for _, erasable := range []bool{true, false} {
