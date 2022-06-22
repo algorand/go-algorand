@@ -70,8 +70,10 @@ func TestStateProofs(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
+
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		// send a dummy payment transaction.
+		// send a dummy payment transaction to create non-empty blocks.
 		sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
@@ -95,7 +97,8 @@ func TestStateProofs(t *testing.T) {
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
 		}
 
-		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
 			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
@@ -106,7 +109,7 @@ func TestStateProofs(t *testing.T) {
 		}
 	}
 
-	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfStateProofs, uint64(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
 func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd uint64) {
@@ -201,7 +204,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofRecoveryInterval = 3
+	consensusParams.StateProofRecoveryInterval = 4
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
@@ -219,6 +222,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	r.NoError(err)
 
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
+	//Stop one of the nodes to prevent SP generation due to insufficient signatures.
 	nc.FullStop()
 
 	restClient, err := fixture.NC.AlgodClient()
@@ -227,14 +231,17 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
+
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == (consensusParams.StateProofRecoveryInterval+1)*consensusParams.StateProofInterval {
+		// Start the node in the last interval after which the SP will be abandoned if SPs are not generated.
+		if rnd == (consensusParams.StateProofRecoveryInterval)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			fixture.StartNode(dir)
 		}
 
-		// send a dummy payment transaction.
+		// send a dummy payment transaction to create non-empty blocks
 		sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
@@ -255,7 +262,10 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 			}
 		}
 
-		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		// in case StateProofNextRound has changed (larger than the lastStateProofBlock ) we verify the new stateproof.
+		// since the stateproof chain is catching up there would be several proofs to check
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
 			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
@@ -265,9 +275,11 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 			lastStateProofBlock = nextStateProofBlock
 		}
 	}
-	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfStateProofs, uint64(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
+// TestUnableToRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
+// unlike TestRecoverFromLaggingStateProofChain, in this test the node will start at a later round and the network will not be able to produce stateproofs/
 func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -289,7 +301,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofRecoveryInterval = 3
+	consensusParams.StateProofRecoveryInterval = 4
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
@@ -310,13 +322,14 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 
 	libgoal := fixture.LibGoalClient
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == (consensusParams.StateProofRecoveryInterval+2)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			fixture.StartNode(dir)
 		}
-		// send a dummy payment transaction.
+		// send a dummy payment transaction to create non-empty blocks
 		sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
@@ -337,7 +350,8 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			}
 		}
 
-		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		if lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
 			r.FailNow("found a state proof at round %d", blk.Round())
 		}
 	}
