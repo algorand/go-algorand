@@ -608,9 +608,13 @@
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "NumApprovalProgramPages",
+        "ClearStateProgramPages",
+        "NumClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBB",
+      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of current transaction",
       "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -716,9 +720,13 @@
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "NumApprovalProgramPages",
+        "ClearStateProgramPages",
+        "NumClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBB",
+      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
@@ -758,9 +766,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ith value of the array field F of the current transaction",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
@@ -777,9 +787,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ith value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
@@ -856,9 +868,13 @@
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "NumApprovalProgramPages",
+        "ClearStateProgramPages",
+        "NumClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBB",
+      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of the Ath transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -877,9 +893,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ith value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
@@ -1947,9 +1965,11 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUBBUBBBUUUBUUUBBBUUBBBBBUUUUBBBBBBBBUBUUUUUUUUUB",
+      "ArgEnumTypes": "BUBBUBBBUUUBUUUBBBUUBBBBBUUUUBBBBBBBBUBUUUUUUUUUBBB",
       "Doc": "set field F of the current inner transaction to A",
       "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -2036,9 +2056,13 @@
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "NumApprovalProgramPages",
+        "ClearStateProgramPages",
+        "NumClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBB",
+      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
@@ -2055,9 +2079,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ith value of the array field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
@@ -2143,9 +2169,13 @@
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
-        "StateProofPK"
+        "StateProofPK",
+        "ApprovalProgramPages",
+        "NumApprovalProgramPages",
+        "ClearStateProgramPages",
+        "NumClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBB",
+      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
@@ -2162,9 +2192,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ith value of the array field F from the Tth transaction in the last inner group submitted",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
@@ -2182,9 +2214,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ath value of the array field F of the current transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
@@ -2202,9 +2236,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Ath value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
@@ -2222,9 +2258,11 @@
         "Accounts",
         "Assets",
         "Applications",
-        "Logs"
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
       ],
-      "ArgEnumTypes": "BBUUB",
+      "ArgEnumTypes": "BBUUBBB",
       "Doc": "Bth value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
