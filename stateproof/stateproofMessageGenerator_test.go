@@ -19,6 +19,7 @@ package stateproof
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -152,6 +153,7 @@ func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeigh
 		mu:                    deadlock.Mutex{},
 		latest:                0,
 		waiters:               make(map[basics.Round]chan struct{}),
+		waitersCount:          make(map[basics.Round]int),
 		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
 		keys:                  keys,
 		keysForVoters:         keys,
@@ -205,7 +207,9 @@ func TestStateProofMessage(t *testing.T) {
 		s.advanceLatest(proto.StateProofInterval)
 
 		for {
-			tx := <-s.w.txmsg
+			tx, err := s.w.waitOnTxnWithTimeout(time.Second * 5)
+			a.NoError(err)
+
 			a.Equal(tx.Txn.Type, protocol.StateProofTx)
 			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue

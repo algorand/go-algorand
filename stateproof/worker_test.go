@@ -51,6 +51,7 @@ type testWorkerStubs struct {
 	mu                    deadlock.Mutex
 	latest                basics.Round
 	waiters               map[basics.Round]chan struct{}
+	waitersCount          map[basics.Round]int
 	blocks                map[basics.Round]bookkeeping.BlockHeader
 	keys                  []account.Participation
 	keysForVoters         []account.Participation
@@ -66,10 +67,11 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		mu:                    deadlock.Mutex{},
 		latest:                0,
 		waiters:               make(map[basics.Round]chan struct{}),
+		waitersCount:          make(map[basics.Round]int),
 		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
 		keys:                  keys,
 		keysForVoters:         keys,
-		sigmsg:                make(chan []byte, 1024),
+		sigmsg:                make(chan []byte, 1024*1024),
 		txmsg:                 make(chan transactions.SignedTxn, 1024),
 		totalWeight:           totalWeight,
 		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
@@ -79,31 +81,32 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 	return s
 }
 
-func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
+func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic = bookkeeping.StateProofTrackingData{
+	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
-	ccBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
+	stateProofBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
-		ccBasic.StateProofVotersCommitment[1] = 0x12
+		stateProofBasic.StateProofVotersCommitment[1] = 0x12
 	}
 
-	ccBasic.StateProofNextRound = ccNextRound
+	stateProofBasic.StateProofNextRound = spNextRound
 	hdr.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-		protocol.StateProofBasic: ccBasic,
+		protocol.StateProofBasic: stateProofBasic,
 	}
 
 	s.blocks[s.latest] = hdr
+
 	if s.waiters[s.latest] != nil {
 		close(s.waiters[s.latest])
 	}
@@ -199,10 +202,12 @@ func (s *testWorkerStubs) Wait(r basics.Round) chan struct{} {
 	defer s.mu.Unlock()
 	if s.waiters[r] == nil {
 		s.waiters[r] = make(chan struct{})
+		s.waitersCount[r] = 0
 		if r <= s.latest {
 			close(s.waiters[r])
 		}
 	}
+	s.waitersCount[r] = s.waitersCount[r] + 1
 	return s.waiters[r]
 }
 
@@ -230,6 +235,24 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	}
 }
 
+func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
+	select {
+	case sig := <-s.sigmsg:
+		return sig, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
+func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transactions.SignedTxn, error) {
+	select {
+	case signedTx := <-s.txmsg:
+		return signedTx, nil
+	case <-time.After(timeout):
+		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
 	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
 }
@@ -246,7 +269,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part
@@ -279,12 +302,15 @@ func TestWorkerAllSigs(t *testing.T) {
 
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
-			_ = <-s.sigmsg
+			_, err := s.waitOnSigWithTimeout(time.Second * 2)
+			require.NoError(t, err)
 		}
 
 		// Expect a state proof to be formed.
 		for {
-			tx := <-s.txmsg
+			tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+			require.NoError(t, err)
+
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
@@ -340,7 +366,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed yet: not enough sigs for a stateproof this early.
@@ -352,7 +379,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	// Expect a state proof to be formed in the next StateProofInterval/2.
 	s.advanceLatest(proto.StateProofInterval / 2)
-	tx := <-s.txmsg
+
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
@@ -399,7 +429,8 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed: not enough sigs.
@@ -475,7 +506,9 @@ func TestWorkerHandleSig(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		msg := <-s.sigmsg
+		msg, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
+
 		res := w.handleSigMessage(network.IncomingMessage{
 			Data: msg,
 		})
@@ -551,6 +584,133 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	require.Zero(t, len(s.deletedStateProofKeys))
 }
 
+func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const expectedStateProofs = 8
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := 0; iter < expectedStateProofs; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+		tx := <-s.txmsg
+		a.Equal(tx.Txn.Type, protocol.StateProofTx)
+	}
+
+	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(expectedStateProofs, len(w.builders))
+
+	var roundSigs map[basics.Round][]pendingSig
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+
+	a.Equal(expectedStateProofs, len(roundSigs))
+
+	// add block that confirm a state proof for interval: expectedStateProofs - 1
+	s.mu.Lock()
+	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.mu.Unlock()
+
+	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(3, len(w.builders))
+
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+
+	a.Equal(3, len(roundSigs))
+}
+
+func TestWorkerBuildersRecoveryLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	expectedStateProofs := proto.StateProofRecoveryInterval + 1
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := uint64(0); iter < expectedStateProofs; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+		tx := <-s.txmsg
+		a.Equal(tx.Txn.Type, protocol.StateProofTx)
+	}
+
+	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+
+	s.mu.Lock()
+	s.addBlock(basics.Round(proto.StateProofInterval * 2))
+	s.mu.Unlock()
+
+	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
+
+	var roundSigs map[basics.Round][]pendingSig
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+	a.Equal(proto.StateProofRecoveryInterval, uint64(len(roundSigs)))
+}
+
+func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
+	const maxRetries = 10000
+	i := 0
+	for {
+		s.mu.Lock()
+		// in order to make sure the builder and the signer are waiting for a round we need to make sure
+		// that round r has c channel and r +1 doesn't have.
+		// we also want to make sure that the builder and the singer are waitting
+		isWaitingForRound := s.waiters[r] != nil && s.waiters[r+1] == nil
+		isWaitingForRound = isWaitingForRound && (s.waitersCount[r] == 2)
+		s.mu.Unlock()
+		if !isWaitingForRound {
+			if i == maxRetries {
+				return fmt.Errorf("timeout while waiting for round")
+			}
+			i++
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		return nil
+	}
+}
+
 // TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
 // It generates numAddresses and prepares a database with the account/signatures.
 // Then, calls broadcastSigs with round numbers spanning periods and
@@ -573,9 +733,8 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		signatureBcasted[parent] = 0
 	}
 
-	s := newWorkerStubs(t, keys, len(keys))
-	spw := newTestWorker(t, s)
-	proto := config.Consensus[protocol.ConsensusFuture]
+	tns := newWorkerStubs(t, keys, len(keys))
+	spw := newTestWorker(t, tns)
 
 	// Prepare the database
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -589,7 +748,7 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	round := basics.Round(255)
 
 	// Sign the message
-	spRecords := stateProofRecordFromKeys(round, keys)
+	spRecords := tns.StateProofKeys(round)
 	sigs := make([]sigFromAddr, 0, len(keys))
 	stateproofMessage := stateproofmsg.Message{}
 	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
@@ -619,22 +778,36 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		ftn = !ftn
 	}
 
+	for periods := 1; periods < 10; periods += 3 {
+		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
+		// reopen the channel
+		tns.sigmsg = make(chan []byte, 1024)
+		// reset the counters
+		for addr := range signatureBcasted {
+			signatureBcasted[addr] = 0
+		}
+	}
+}
+
+func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcasted map[basics.Address]int,
+	fromThisNode map[basics.Address]bool, spw *Worker, periods int) {
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
 	// Collect the broadcast messages
-	tns := spw.net.(*testWorkerStubs)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for bMsg := range tns.sigmsg {
 			sfa := sigFromAddr{}
-			err = protocol.Decode(bMsg, &sfa)
+			err := protocol.Decode(bMsg, &sfa)
 			require.NoError(t, err)
 			signatureBcasted[sfa.SignerAddress]++
 		}
 	}()
 
 	// Broadcast the messages
-	periods := 5
 	for brnd := 257; brnd < 257+256*periods; brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 	}
@@ -650,4 +823,39 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 			require.Equal(t, periods, sb)
 		}
 	}
+}
+
+func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	s.advanceLatest(proto.StateProofInterval)
+
+	for i := 0; i < len(keys); i++ {
+		// Expect all signatures to be broadcast.
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
+	}
+
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
+	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
