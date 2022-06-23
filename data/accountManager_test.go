@@ -200,9 +200,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 
 	// Generate 2 participations under the same account
 	store, err := db.MakeAccessor("stateprooftest", false, true)
-	if err != nil {
-		panic(err)
-	}
+	a.NoError(err)
 	root, err := account.GenerateRoot(store)
 	a.NoError(err)
 	part1, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, basics.Round(merklesignature.KeyLifetimeDefault*2), 3)
@@ -210,9 +208,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	store.Close()
 
 	store, err = db.MakeAccessor("stateprooftest", false, true)
-	if err != nil {
-		panic(err)
-	}
+	a.NoError(err)
 	part2, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(merklesignature.KeyLifetimeDefault), basics.Round(merklesignature.KeyLifetimeDefault*3), 3)
 	a.NoError(err)
 	store.Close()
@@ -224,6 +220,15 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	part1ID, err := acctManager.registry.Insert(part1.Participation)
 	a.NoError(err)
 	err = registry.AppendKeys(part1ID, keys1)
+	a.NoError(err)
+
+	err = acctManager.registry.Flush(10 * time.Second)
+	a.NoError(err)
+
+	res := acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault))
+	a.Equal(1, len(res))
+	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault * 2))
+	a.Equal(1, len(res))
 
 	part2ID, err := acctManager.registry.Insert(part2.Participation)
 	a.NoError(err)
@@ -233,7 +238,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	err = acctManager.registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	res := acctManager.StateProofKeys(0)
+	res = acctManager.StateProofKeys(0)
 	a.Equal(1, len(res))
 	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault))
 	a.Equal(2, len(res))

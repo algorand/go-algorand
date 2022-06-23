@@ -120,6 +120,10 @@ func TestStateProofs(t *testing.T) {
 func TestStateProofOverlappingKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
+	if testing.Short() {
+		t.Skip()
+	}
+
 	r := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)
@@ -166,10 +170,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	var participations [5]account.Participation
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
-	libgoal := fixture.LibGoalClient
+	libgoalClient := fixture.LibGoalClient
+
+	k, err := libgoalNodeClients[0].GetParticipationKeys()
+	r.NoError(err)
+	voteLastValid := k[0].Key.VoteLastValid
 	expectedNumberOfStateProofs := uint64(10)
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == 35 { // more than 32 rounds before participation expires
+		if rnd == voteLastValid-64 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
 			// Generate participation keys (for the same accounts)
 			for i := 0; i < 5; i++ {
 				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
@@ -189,7 +197,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)
 
-		blk, err := libgoal.BookkeepingBlock(rnd)
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		t.Logf("Round %d, block %v\n", rnd, blk)
@@ -211,7 +219,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoalClient, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
