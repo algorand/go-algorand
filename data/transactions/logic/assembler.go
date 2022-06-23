@@ -1242,7 +1242,7 @@ func init() {
 				}
 				desc, ok := opDocByName[spec.Name]
 				if ok {
-					opDocByName[spec.Name] = desc + "\n" + msg
+					opDocByName[spec.Name] = desc + "; " + msg
 				} else {
 					opDocByName[spec.Name] = msg
 				}
