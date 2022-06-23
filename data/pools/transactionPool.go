@@ -125,7 +125,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]ledgercore.IncludedTransactions), 0)
+	pool.recomputeBlockEvaluator(nil, 0)
 	return &pool
 }
 
@@ -181,7 +181,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]ledgercore.IncludedTransactions), 0)
+	pool.recomputeBlockEvaluator(nil, 0)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -944,7 +944,7 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]ledgercore.IncludedTransactions), 0)
+	pool.recomputeBlockEvaluator(nil, 0)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
