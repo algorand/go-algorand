@@ -2895,11 +2895,6 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 	return res, rows.Err()
 }
 
-type onlineAccountExpiration struct {
-	rnd    basics.Round
-	rowids []int64
-}
-
 func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccountData, error) {
 	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
