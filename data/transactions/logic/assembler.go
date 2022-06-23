@@ -1231,7 +1231,7 @@ func init() {
 	for name, specs := range pseudoOps {
 		if len(specs) > 1 {
 			for i, spec := range specs {
-				if spec.Name == name{
+				if spec.Name == name {
 					continue
 				}
 				msg := ""
