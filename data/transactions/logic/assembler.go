@@ -1231,6 +1231,9 @@ func init() {
 	for name, specs := range pseudoOps {
 		if len(specs) > 1 {
 			for i, spec := range specs {
+				if spec.Name == name{
+					continue
+				}
 				msg := ""
 				if i > 1 {
 					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
@@ -1239,7 +1242,7 @@ func init() {
 				}
 				desc, ok := opDocByName[spec.Name]
 				if ok {
-					opDocByName[spec.Name] = desc + " " + msg
+					opDocByName[spec.Name] = desc + "\n" + msg
 				} else {
 					opDocByName[spec.Name] = msg
 				}

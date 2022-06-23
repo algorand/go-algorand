@@ -355,7 +355,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 - Opcode: 0x31 {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
-- field F of current transaction txn can be called using txn with 1 immediate.
+- field F of current transaction
 
 `txn` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):
 
@@ -457,7 +457,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 - Opcode: 0x33 {uint8 transaction group index} {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
-- field F of the Tth transaction in the current group gtxn can be called using gtxn with 2 immediates.
+- field F of the Tth transaction in the current group
 
 for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.
 
@@ -477,7 +477,8 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 - Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F of the current transaction txna can be called using txn with 2 immediates.
+- Ith value of the array field F of the current transaction
+txna can be called using txn with 2 immediates.
 - Availability: v2
 
 `txna` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):
@@ -497,7 +498,8 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 - Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F from the Tth transaction in the current group gtxna can be called using gtxn with 3 immediates.
+- Ith value of the array field F from the Tth transaction in the current group
+gtxna can be called using gtxn with 3 immediates.
 - Availability: v2
 
 ## gtxns f

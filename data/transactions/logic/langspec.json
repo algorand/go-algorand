@@ -615,7 +615,7 @@
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
-      "Doc": "field F of current transaction txn can be called using txn with 1 immediate.",
+      "Doc": "field F of current transaction",
       "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
@@ -727,7 +727,7 @@
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
-      "Doc": "field F of the Tth transaction in the current group gtxn can be called using gtxn with 2 immediates.",
+      "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
@@ -771,7 +771,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F of the current transaction txna can be called using txn with 2 immediates.",
+      "Doc": "Ith value of the array field F of the current transaction\ntxna can be called using txn with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -792,7 +792,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group gtxna can be called using gtxn with 3 immediates.",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group\ngtxna can be called using gtxn with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
