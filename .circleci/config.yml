@@ -4,6 +4,7 @@ orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
   slack: circleci/slack@4.4.2
+  codecov: codecov/codecov@3.1.1
 
 parameters:
   ubuntu_image:
@@ -294,8 +295,8 @@ commands:
       result_path:
         type: string
         default: << pipeline.parameters.result_path >>
-      use_coverpkg:
-        description: whether to provide a -coverpkg flag to go test
+      full_coverage:
+        description: whether to provide a go test -coverpkg flag to measure coverage across all packages
         type: boolean
         default: false
     steps:
@@ -333,7 +334,7 @@ commands:
             export COVERPACKAGE_NAMES=$(echo $COVERPACKAGES | tr ' ' ',')
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
-            gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES <<# parameters.use_coverpkg >> -coverpkg=$COVERPACKAGE_NAMES <</ parameters.use_coverpkg >>
+            gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES <<# parameters.full_coverage >> -coverpkg=$COVERPACKAGE_NAMES <</ parameters.full_coverage >>
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -343,20 +344,6 @@ commands:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
-
-  upload_coverage:
-    description: Collect coverage reports and upload them
-    parameters:
-      args:
-        description: additional codecov arguments
-        type: string
-        default: ""
-    steps:
-      - run:
-          name: Upload Coverage Reports
-          no_output_timeout: 10m
-          command: |
-            scripts/travis/upload_coverage.sh << parameters.args >> || true
 
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
@@ -508,7 +495,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - upload_coverage
+      - codecov/upload:
+          validate: true
 
   test_nightly:
     parameters:
@@ -524,9 +512,10 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-          use_coverpkg: true
-      - upload_coverage:
-          args: "-F nightly"
+          full_coverage: true
+      - codecov/upload:
+          validate: true
+          flags: "full_coverage"
       - slack/notify: &slack-fail-event
           event: fail
           template: basic_fail_1
