@@ -1207,24 +1207,34 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 	wildcardSymbol := '%'
 	wildcardUint8 := uint8(wildcardSymbol)
+	wildcardAppID := basics.AppIndex(wildcardUint8)
 
 	sqlWildcardBoxName := make([]byte, 8)
 	binary.BigEndian.PutUint64(sqlWildcardBoxName, uint64(wildcardUint8))
+	wildcardBoxKey := logic.MakeBoxKey(wildcardAppID, string(sqlWildcardBoxName))
 
 	totalRound := basics.Round(protoParams.MaxBalLookback * 2)
+
+	randAppID0 := basics.AppIndex(crypto.RandUint64() >> 48)
+	randAppID1 := basics.AppIndex(crypto.RandUint64() >> 32)
+	randAppID2 := basics.AppIndex(crypto.RandUint64())
+
+	boxNameFromRound := func(i basics.Round) string { return fmt.Sprintf("boxKey%d", i) }
+	getRandomBoxName := func(appID basics.AppIndex) string { return boxNameFromRound(1 + basics.Round(appID)%totalRound) }
 
 	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
 	for i := basics.Round(1); i <= totalRound; i++ {
 		// adding empty blocks
 		boxContent := fmt.Sprintf("boxContent%d", i)
-		boxKeyNameAtRnd := fmt.Sprintf("boxKey%d", i)
-
-		auNewBlock(t, i, au, accts, opts, map[string]*string{
-			logic.MakeBoxKey(basics.AppIndex(0x4646464646464646), boxKeyNameAtRnd):       &boxContent,
-			logic.MakeBoxKey(basics.AppIndex(0x4646464646464646), boxKeyNameAtRnd):       &boxContent,
-			logic.MakeBoxKey(basics.AppIndex(0x0001010101014747), boxKeyNameAtRnd):       &boxContent,
-			logic.MakeBoxKey(basics.AppIndex(wildcardUint8), string(sqlWildcardBoxName)): &boxContent,
-		})
+		localKVstore := map[string]*string{
+			logic.MakeBoxKey(randAppID0, boxNameFromRound(i)): &boxContent,
+			logic.MakeBoxKey(randAppID1, boxNameFromRound(i)): &boxContent,
+			logic.MakeBoxKey(randAppID2, boxNameFromRound(i)): &boxContent,
+		}
+		if i == basics.Round(1) {
+			localKVstore[wildcardBoxKey] = &boxContent
+		}
+		auNewBlock(t, i, au, accts, opts, localKVstore)
 	}
 	auCommitSync(t, totalRound, au, ml)
 
@@ -1233,19 +1243,49 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	require.Equal(t, totalRound, rnd)
 	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
 
-	stuff, err := au.LookupKeysByPrefix(totalRound,
-		logic.MakeBoxKey(basics.AppIndex(0x0001010101014747), ""), 1000)
-	require.NoError(t, err)
-	for i, key := range stuff {
-		fmt.Println(i, key)
+	// ensure random appid, we can search all correct boxIDs
+	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
+		bKeys, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 1000)
+		require.NoError(t, err)
+		require.Len(t, bKeys, int(totalRound))
+
+		boxKeySet := make(map[string]bool, int(totalRound))
+		for i := basics.Round(1); i <= totalRound; i++ {
+			boxKeySet[logic.MakeBoxKey(appID, boxNameFromRound(i))] = true
+		}
+		for _, key := range bKeys {
+			_, ok := boxKeySet[key]
+			require.True(t, ok)
+		}
 	}
 
-	stuff, err = au.LookupKeysByPrefix(totalRound,
-		logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
-	require.NoError(t, err)
-	for i, key := range stuff {
-		fmt.Println(i, key)
+	// remove some random boxes in the final round
+	finalRnd := totalRound + 1
+	auNewBlock(t, finalRnd, au, accts, opts, map[string]*string{
+		logic.MakeBoxKey(randAppID0, getRandomBoxName(randAppID0)): nil,
+		logic.MakeBoxKey(randAppID1, getRandomBoxName(randAppID0)): nil,
+		logic.MakeBoxKey(randAppID2, getRandomBoxName(randAppID0)): nil,
+	})
+	auCommitSync(t, finalRnd, au, ml)
+
+	// ensure we remove the correct boxes
+	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
+		bKeys, err := au.LookupKeysByPrefix(finalRnd, logic.MakeBoxKey(appID, ""), 1000)
+		require.NoError(t, err)
+		require.Len(t, bKeys, int(totalRound-1))
+
+		boxKeySet := make(map[string]bool, int(totalRound))
+		for _, key := range bKeys {
+			boxKeySet[key] = true
+		}
+		_, ok := boxKeySet[getRandomBoxName(appID)]
+		require.False(t, ok)
 	}
+
+	wildcardRes, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
+	require.NoError(t, err)
+	require.Len(t, wildcardRes, 1)
+	require.Equal(t, wildcardBoxKey, wildcardRes[0])
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
@@ -1680,9 +1720,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
+			BlockHeader: bookkeeping.BlockHeader{Round: i},
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion

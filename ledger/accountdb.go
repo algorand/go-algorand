@@ -2000,7 +2000,8 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
 		if _err != nil {
 			if _err == sql.ErrNoRows {
-				_err = fmt.Errorf("unable to query value for prefix %v : %w", prefix, _err)
+				// we just found nothing, not an error I guess?
+				_err = nil
 				return
 			}
 		}
