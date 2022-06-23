@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -113,33 +114,31 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
-	return stateProofRecordFromKeys(rnd, s.keys)
-}
-
-func stateProofRecordFromKeys(rnd basics.Round, keys []account.Participation) (out []account.StateProofRecordForRound) {
-	for _, part := range keys {
-		partRecord := account.ParticipationRecord{
-			ParticipationID:   part.ID(),
-			Account:           part.Parent,
-			FirstValid:        part.FirstValid,
-			LastValid:         part.LastValid,
-			KeyDilution:       part.KeyDilution,
-			LastVote:          0,
-			LastBlockProposal: 0,
-			LastStateProof:    0,
-			EffectiveFirst:    0,
-			EffectiveLast:     0,
-			VRF:               part.VRF,
-			Voting:            part.Voting,
+	for _, part := range s.keys {
+		if part.OverlapsInterval(rnd, rnd) {
+			partRecord := account.ParticipationRecord{
+				ParticipationID:   part.ID(),
+				Account:           part.Parent,
+				FirstValid:        part.FirstValid,
+				LastValid:         part.LastValid,
+				KeyDilution:       part.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    0,
+				EffectiveLast:     0,
+				VRF:               part.VRF,
+				Voting:            part.Voting,
+			}
+			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+			partRecordForRound := account.StateProofRecordForRound{
+				ParticipationRecord: partRecord,
+				StateProofSecrets:   signerInRound,
+			}
+			out = append(out, partRecordForRound)
 		}
-		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-		partRecordForRound := account.StateProofRecordForRound{
-			ParticipationRecord: partRecord,
-			StateProofSecrets:   signerInRound,
-		}
-		out = append(out, partRecordForRound)
 	}
-	return out
+	return
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
@@ -858,4 +857,45 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	require.NoError(t, err)
 
 	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
+}
+
+func TestWorkerHandleSigExceptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	// relays reject signatures for old rounds (before stateproofNext)
+	// not disconnect
+	msg := sigFromAddr {
+		SignerAddress: basics.Address{},
+			Round: basics.Round(proto.StateProofInterval),
+			Sig: merklesignature.Signature{},
+		}
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+			Data: msgBytes,
+		})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+
+	// relays reject signatures for a round not in ledger
+	msg.Round = basics.Round(proto.StateProofInterval*10)
+	msgBytes = protocol.Encode(&msg)
+	reply = w.handleSigMessage(network.IncomingMessage{
+			Data: msgBytes,
+		})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+
 }

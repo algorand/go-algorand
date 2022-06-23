@@ -164,7 +164,21 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
+	/*
+	sfaBlkHdr, err := spw.ledger.BlockHdr(sfa.Round)
+	if err != nil {
+		// reject signatures for a round not in the ledger
+		return network.Disconnect, err
+	}
+	proto := config.Consensus[sfaBlkHdr.CurrentProtocol]
+	if sfa.Round % proto.StateProofInterval != 0 {
+		// reject sig for round not a multiple of the interval
+		// TODO: log the event as warning?
+		return network.Disconnect, err		
+	}
+*/
 
+		
 	builderForRound, ok := spw.builders[sfa.Round]
 	if !ok {
 		latest := spw.ledger.Latest()
