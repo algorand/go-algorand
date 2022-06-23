@@ -72,7 +72,8 @@ workflows:
       - build:
           name: mac_arm64_build
           matrix: &matrix-mac-arm64
-            parameters: ["mac_arm64"]
+            parameters:
+              platform: ["mac_arm64"]
           filters: &filters-mac-arm64
             branches:
               only:
