@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -38,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -1211,25 +1211,37 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	sqlWildcardBoxName := make([]byte, 8)
 	binary.BigEndian.PutUint64(sqlWildcardBoxName, uint64(wildcardUint8))
 
+	totalRound := basics.Round(protoParams.MaxBalLookback * 2)
+
 	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback*2); i++ {
+	for i := basics.Round(1); i <= totalRound; i++ {
 		// adding empty blocks
 		boxContent := fmt.Sprintf("boxContent%d", i)
+		boxKeyNameAtRnd := fmt.Sprintf("boxKey%d", i)
 
 		auNewBlock(t, i, au, accts, opts, map[string]*string{
-			logic.MakeBoxKey(basics.AppIndex(wildcardUint8), "box1"):                     &boxContent,
+			logic.MakeBoxKey(basics.AppIndex(0x4646464646464646), boxKeyNameAtRnd):       &boxContent,
+			logic.MakeBoxKey(basics.AppIndex(0x4646464646464646), boxKeyNameAtRnd):       &boxContent,
+			logic.MakeBoxKey(basics.AppIndex(0x0001010101014747), boxKeyNameAtRnd):       &boxContent,
 			logic.MakeBoxKey(basics.AppIndex(wildcardUint8), string(sqlWildcardBoxName)): &boxContent,
-			logic.MakeBoxKey(1, string(sqlWildcardBoxName)):                              &boxContent,
 		})
-		auCommitSync(t, i, au, ml)
 	}
+	auCommitSync(t, totalRound, au, ml)
 
 	// ensure rounds
 	rnd := au.latest()
-	require.Equal(t, basics.Round(protoParams.MaxBalLookback*2), rnd)
+	require.Equal(t, totalRound, rnd)
 	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
 
-	stuff, err := au.LookupKeysByPrefix(basics.Round(protoParams.MaxBalLookback*2), logic.MakeBoxKey(37, ""), 1000)
+	stuff, err := au.LookupKeysByPrefix(totalRound,
+		logic.MakeBoxKey(basics.AppIndex(0x0001010101014747), ""), 1000)
+	require.NoError(t, err)
+	for i, key := range stuff {
+		fmt.Println(i, key)
+	}
+
+	stuff, err = au.LookupKeysByPrefix(totalRound,
+		logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
 	require.NoError(t, err)
 	for i, key := range stuff {
 		fmt.Println(i, key)

@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// NOTE!
 // commitRoundNext schedules a commit with as many rounds as possible
 func commitRoundNext(l *Ledger) {
 	// maxAcctLookback := l.trackers.cfg.MaxAcctLookback
@@ -202,7 +201,6 @@ func (bt *producePrepareBlockingTracker) reset() {
 	bt.cancelTasks = false
 }
 
-// NOTE!
 // TestTrackerDbRoundDataRace checks for dbRound data race
 // when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
 // are used in calculations

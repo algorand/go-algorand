@@ -1883,7 +1883,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR(0, ?, key) = ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (key, 1, ?) = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -1976,7 +1976,7 @@ type persistedValue struct {
 func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
 	err = db.Retry(func() error {
 		var v sql.NullString
-		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&pv.round, &v)
+		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &v)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
@@ -1997,7 +1997,7 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() (_err error) {
-		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), prefix)
+		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
 		if _err != nil {
 			if _err == sql.ErrNoRows {
 				_err = fmt.Errorf("unable to query value for prefix %v : %w", prefix, _err)
@@ -2530,7 +2530,7 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 }
 
 func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
-	result, err := w.upsertKvPairStmt.Exec(key, value)
+	result, err := w.upsertKvPairStmt.Exec([]byte(key), []byte(value))
 	if err != nil {
 		return err
 	}
@@ -2539,7 +2539,7 @@ func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
 }
 
 func (w accountsSQLWriter) deleteKvPair(key string) error {
-	result, err := w.deleteKvPairStmt.Exec(key)
+	result, err := w.deleteKvPairStmt.Exec([]byte(key))
 	if err != nil {
 		return err
 	}

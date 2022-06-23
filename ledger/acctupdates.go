@@ -468,7 +468,7 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		results = map[string]bool{}
 		resultCount = 0
 
-		for i := offset - 1; i > 0; i-- {
+		for i := int(offset - 1); i >= 0; i-- {
 			for keyInRound, valOp := range au.kvDeltas[i] {
 				if !strings.HasPrefix(keyInRound, keyPrefix) {
 					continue

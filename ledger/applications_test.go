@@ -39,7 +39,6 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	commitRoundLookback(dbRound+basics.Round(offset), l)
 }
 
-// NOTE!
 func commitRoundLookback(lookback basics.Round, l *Ledger) {
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
