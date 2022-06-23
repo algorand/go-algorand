@@ -149,7 +149,7 @@ type ledgerForTracker interface {
 
 type trackerRegistry struct {
 	trackers []ledgerTracker
-	// the accts has some exceptional usages in the tracker registry.
+	// these trackers have some exceptional usages in the tracker registry.
 	accts       *accountUpdates
 	acctsOnline *onlineAccounts
 	txtail      *txTail
