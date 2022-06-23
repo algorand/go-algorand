@@ -399,11 +399,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_2` | LogicSig argument 2 |
 | `arg_3` | LogicSig argument 3 |
 | `args` | Ath LogicSig argument |
-| `txn f` | field F of current transaction |
-| `gtxn t f` | field F of the Tth transaction in the current group |
-| `txna f i` | Ith value of the array field F of the current transaction |
+| `txn f` | txn can be called using txn with 1 immediates. field F of current transaction |
+| `gtxn t f` | gtxn can be called using gtxn with 2 immediates. field F of the Tth transaction in the current group |
+| `txna f i` | txna can be called using txn with 2 immediates. Ith value of the array field F of the current transaction |
 | `txnas f` | Ath value of the array field F of the current transaction |
-| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group |
+| `gtxna t f i` | gtxna can be called using gtxn with 3 immediates. Ith value of the array field F from the Tth transaction in the current group |
 | `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | field F of the Ath transaction in the current group |
 | `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
@@ -482,6 +482,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
+| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
+| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

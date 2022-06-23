@@ -358,8 +358,8 @@ func (spec *OpSpec) AlwaysExits() bool {
 	return len(spec.Return.Types) == 1 && spec.Return.Types[0] == StackNone
 }
 
-func (spec *asmSpec) deadens() bool {
-	switch spec.name {
+func (spec *OpSpec) deadens() bool {
+	switch spec.Name {
 	case "b", "callsub", "retsub", "err", "return":
 		return true
 	default:

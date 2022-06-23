@@ -1125,86 +1125,47 @@ func typeTxField(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return StackTypes{fs.ftype}, nil
 }
 
-type selectFunc func(*OpStream, *selectorPseudo, []string) (asmSpec, bool)
-
-func opSpecToAsmSpec(spec OpSpec) asmSpec {
-	return asmSpec{spec.Opcode, spec.Name, spec.Proto, spec.Version, spec.asm, spec.refine, spec.Modes, spec.Immediates}
-}
-
-func asmSpecToOpSpec(spec asmSpec) OpSpec {
-	return OpSpec{Opcode: spec.opcode, Name: spec.name, Proto: spec.Proto, Version: spec.version, OpDetails: OpDetails{asm: spec.asm, refine: spec.refine, Modes: spec.modes, Immediates: spec.immediates}}
-}
-
-// Common pseudo func pattern which determines the spec based on the number of immediates and offset, i.e. i imms maps to the (i-offset)'th child
-// Warning: Not safe to use if any of children are themselves multi/pseudo ops
-func selectNumImmediatesChildOffset(ops *OpStream, sp *selectorPseudo, args []string, offset int) (asmSpec, bool) {
-	errMsg := fmt.Sprintf("%s expects", sp.name)
-	if len(args)-offset >= len(sp.children) || len(args)-offset < 0 {
-		for i, _ := range sp.children {
-			if i+1 < len(sp.children) {
-				errMsg += fmt.Sprintf(" %d or", i+offset)
-			} else {
-				errMsg += fmt.Sprintf(" %d", i+offset)
-			}
-		}
-		errMsg += " immediate arguments"
-		ops.error(errMsg)
-		return asmSpec{}, false
+func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
+	immediateCounts := make([]int, len(specs))
+	i := 0
+	for numImms, _ := range specs {
+		immediateCounts[i] = numImms
+		i++
 	}
-	res := OpsByName[sp.children[len(args)-offset].version][sp.children[len(args)-offset].name]
-	res.Name = sp.name
-	return opSpecToAsmSpec(res), true
+	sort.SliceStable(immediateCounts, func(j, k int) bool { return immediateCounts[j] < immediateCounts[k] })
+	errMsg := fmt.Sprintf("%s expects", name)
+	for i, numImms := range immediateCounts {
+		if i+1 < len(immediateCounts) {
+			errMsg += fmt.Sprintf(" %d or", numImms)
+		} else {
+			errMsg += fmt.Sprintf(" %d", numImms)
+		}
+	}
+	errMsg += " immediate arguments"
+	ops.error(errMsg)
 }
 
-func selectNumImmediatesChildSingleOffset(ops *OpStream, sp *selectorPseudo, args []string) (asmSpec, bool) {
-	return selectNumImmediatesChildOffset(ops, sp, args, 1)
-}
-
-func selectNumImmediatesChildDoubleOffset(ops *OpStream, sp *selectorPseudo, args []string) (asmSpec, bool) {
-	return selectNumImmediatesChildOffset(ops, sp, args, 2)
-}
-
-type pseudoSpec interface {
-	getAsmSpec(*OpStream, []string) (asmSpec, bool)
-}
-
-type childSpec struct {
-	name    string
-	version uint64
-}
-
-// These pseudo-ops look at the passed in args and select an OpSpec to assemble
-type selectorPseudo struct {
-	name       string
-	version    uint64
-	selectSpec selectFunc
-	children   []childSpec
-}
-
-func (sp selectorPseudo) getAsmSpec(ops *OpStream, args []string) (asmSpec, bool) {
-	return sp.selectSpec(ops, &sp, args)
-}
-
-// These pseudo-ops don't have any real OpSpec connected to them but have very customized assembly functions
-// For now I'm only going to let them specify what int used to specify but can be easily changed
-type asmPseudo struct {
-	name    string
-	version uint64
-	proto   Proto
-	asm     asmFunc
-}
-
-func (ap asmPseudo) getAsmSpec(ops *OpStream, args []string) (asmSpec, bool) {
-	return asmSpec{name: ap.name, version: ap.version, Proto: ap.proto, asm: ap.asm, modes: modeAny}, true
-}
-
-func getAsmSpec(ops *OpStream, name string, args []string) (asmSpec, bool) {
-	pseudoSpecs, ok := pseudoOps2[name]
+func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
+	pseudoSpecs, ok := pseudoOps[name]
 	if ok {
 		pseudo, ok := pseudoSpecs[len(args)]
 		if !ok {
-			// Need func here to deal with this case
-			return asmSpec{}, false
+			// Could be that pseudoOp wants to handle immediates itself so check -1 key
+			pseudo, ok = pseudoSpecs[-1]
+			if !ok {
+				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
+				pseudoImmediatesError(ops, name, pseudoSpecs)
+				proto, version, ok := mergeProtos(pseudoSpecs)
+				if !ok {
+					return OpSpec{}, false
+				}
+				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{asm: func(*OpStream, *OpSpec, []string) error { return nil }}}
+			}
+		}
+		pseudo.Name = name
+		if pseudo.Version > ops.Version && (ops.Version != 0 || pseudo.Version != 1) {
+			// For now I'm going to use the actual opspec name since it's a bit misleading to say the pseudo-op's version is wrong, but I could be convinced either way
+			ops.errorf("%s opcode with %d immediates was introduced in TEAL v%d", pseudo.Name, len(args), pseudo.Version)
 		}
 		return pseudo, true
 	}
@@ -1217,31 +1178,82 @@ func getAsmSpec(ops *OpStream, name string, args []string) (asmSpec, bool) {
 			ops.errorf("unknown opcode: %s", name)
 		}
 	}
-	return asmSpec{spec.Opcode, spec.Name, spec.Proto, spec.Version, spec.asm, spec.refine, spec.Modes, spec.Immediates}, ok
+	return spec, ok
 }
 
 // pseudoOps or "pseudo-ops" allow us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
-var pseudoOps = map[string]pseudoSpec{
-	"int":  asmPseudo{"int", 1, proto(":i"), asmInt},
-	"byte": asmPseudo{"byte", 1, proto(":b"), asmByte},
+// Immediates key of -1 means asmfunc handles number of immediates
+var pseudoOps = map[string]map[int]OpSpec{
+	"int":  {-1: OpSpec{Name: "int", Version: 1, Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"byte": {-1: OpSpec{Name: "byte", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": asmPseudo{"addr", 1, proto(":b"), asmAddr},
+	"addr": {-1: OpSpec{Name: "addr", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": asmPseudo{"method", 1, proto(":b"), asmMethod},
-	"txn":    selectorPseudo{"txn", 2, selectNumImmediatesChildSingleOffset, []childSpec{{"txn", 2}, {"txna", 2}}},
-	"gtxn":   selectorPseudo{"gtxn", 2, selectNumImmediatesChildDoubleOffset, []childSpec{{"gtxn", 2}, {"gtxna", 2}}},
+	"method": {-1: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"txn":    {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
+	"gtxn":   {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 }
 
-var pseudoOps2 = map[string]map[int]asmSpec{
-	"int":  {1: asmSpec{name: "int", version: 1, Proto: proto(":i"), asm: asmInt, modes: modeAny}},
-	"byte": {1: asmSpec{name: "byte", version: 1, Proto: proto(":b"), asm: asmByte, modes: modeAny}},
-	// parse basics.Address, actually just another []byte constant
-	"addr": {1: asmSpec{name: "addr", version: 1, Proto: proto(":b"), asm: asmAddr, modes: modeAny}},
-	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {1: asmSpec{name: "method", version: 1, Proto: proto(":b"), asm: asmMethod, modes: modeAny}},
-	// Should we update table with current version?
-	"txn":  {1: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["txn"]), 2: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["txna"])},
-	"gtxn": {1: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["gtxn"]), 2: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["gtxna"])},
+func init() {
+	for name, specs := range pseudoOps {
+		for i, spec := range specs {
+			desc, ok := opDocByName[spec.Name]
+			if ok {
+				opDocByName[spec.Name] = fmt.Sprintf("%s can be called using %s with %d immediates. ", spec.Name, name, i) + desc
+			} else {
+				opDocByName[spec.Name] = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
+			}
+		}
+	}
+}
+
+func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
+	var args StackTypes
+	var returns StackTypes
+	var minVersion uint64
+	i := 0
+	for _, spec := range specs {
+		if i == 0 {
+			args = spec.Arg.Types
+			returns = spec.Return.Types
+			minVersion = spec.Version
+		} else {
+			if spec.Version < minVersion {
+				minVersion = spec.Version
+			}
+			if len(args) != len(spec.Arg.Types) || len(returns) != len(spec.Return.Types) {
+				return Proto{}, 0, false
+			}
+			for j := range args {
+				if args[j] != spec.Arg.Types[j] {
+					args[j] = StackAny
+				}
+			}
+			for j := range returns {
+				if returns[j] != spec.Return.Types[j] {
+					returns[j] = StackAny
+				}
+			}
+		}
+		i++
+	}
+	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+}
+
+func updatePseudoTable(ops *OpStream) {
+	for name, specs := range pseudoOps {
+		for numImmediates, spec := range specs {
+			if spec.Version != 0 {
+				continue
+			}
+			newSpec, ok := OpsByName[ops.Version][spec.Name]
+			if ok {
+				pseudoOps[name][numImmediates] = newSpec
+			} else {
+				pseudoOps[name][numImmediates] = OpsByName[AssemblerMaxVersion][spec.Name]
+			}
+		}
+	}
 }
 
 type lineError struct {
@@ -1434,8 +1446,8 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
+		updatePseudoTable(ops)
 		opstring := fields[0]
-
 		if opstring[len(opstring)-1] == ':' {
 			ops.createLabel(opstring[:len(opstring)-1])
 			fields = fields[1:]
@@ -1445,11 +1457,11 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			opstring = fields[0]
 		}
-		spec, ok := getAsmSpec(ops, opstring, fields[1:])
+		spec, ok := getSpec(ops, opstring, fields[1:])
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
-			if spec.modes == modeApp {
+			if spec.Modes == modeApp {
 				ops.HasStatefulOps = true
 			}
 			args, returns := spec.Arg.Types, spec.Return.Types
@@ -1463,12 +1475,11 @@ func (ops *OpStream) assemble(text string) error {
 				}
 			}
 			ops.trackStack(args, returns, fields)
-			oSpec := asmSpecToOpSpec(spec)
-			spec.asm(ops, &oSpec, fields[1:])
+			spec.asm(ops, &spec, fields[1:])
 			if spec.deadens() { // An unconditional branch deadens the following code
 				ops.known.deaden()
 			}
-			if spec.name == "callsub" {
+			if spec.Name == "callsub" {
 				// since retsub comes back to the callsub, it is an entry point like a label
 				ops.known.label()
 			}

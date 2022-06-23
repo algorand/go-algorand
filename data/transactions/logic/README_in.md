@@ -280,6 +280,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 **Transaction Fields**
 
 @@ txn_fields.md @@
+@@ txna_fields.md @@
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
