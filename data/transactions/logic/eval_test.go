@@ -3901,7 +3901,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	const source = "int 0x01"
+	const source = "int 1"
 
 	// Construct a group of two payments, no rekeying
 	txn0 := makeSampleTxn()
@@ -3951,8 +3951,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			for v := uint64(0); v < cse.validFromVersion; v++ {
 				var ops *OpStream
 				if v == 0 {
-					ops = testProg(t, source, 1)
-					ops.Program[0] = 0x0
+					ops = testProg(t, source, 0)
 				} else {
 					ops = testProg(t, source, v)
 				}

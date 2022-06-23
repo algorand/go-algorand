@@ -1229,13 +1229,19 @@ var pseudoOps = map[string]map[int]OpSpec{
 
 func init() {
 	for name, specs := range pseudoOps {
-		if len(specs) > 1{
+		if len(specs) > 1 {
 			for i, spec := range specs {
+				msg := ""
+				if i > 1 {
+					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
+				} else {
+					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
+				}
 				desc, ok := opDocByName[spec.Name]
 				if ok {
-					opDocByName[spec.Name] = fmt.Sprintf("%s can be called using %s with %d immediates. ", spec.Name, name, i) + desc
+					opDocByName[spec.Name] = desc + " " + msg
 				} else {
-					opDocByName[spec.Name] = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
+					opDocByName[spec.Name] = msg
 				}
 			}
 		}

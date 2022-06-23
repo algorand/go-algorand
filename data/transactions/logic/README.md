@@ -401,11 +401,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_2` | LogicSig argument 2 |
 | `arg_3` | LogicSig argument 3 |
 | `args` | Ath LogicSig argument |
-| `txn f` | txn can be called using txn with 1 immediates. field F of current transaction |
-| `gtxn t f` | gtxn can be called using gtxn with 2 immediates. field F of the Tth transaction in the current group |
-| `txna f i` | txna can be called using txn with 2 immediates. Ith value of the array field F of the current transaction |
+| `txn f` | field F of current transaction txn can be called using txn with 1 immediate. |
+| `gtxn t f` | field F of the Tth transaction in the current group gtxn can be called using gtxn with 2 immediates. |
+| `txna f i` | Ith value of the array field F of the current transaction txna can be called using txn with 2 immediates. |
 | `txnas f` | Ath value of the array field F of the current transaction |
-| `gtxna t f i` | gtxna can be called using gtxn with 3 immediates. Ith value of the array field F from the Tth transaction in the current group |
+| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group gtxna can be called using gtxn with 3 immediates. |
 | `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | field F of the Ath transaction in the current group |
 | `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
@@ -422,7 +422,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gaids` | ID of the asset or application created in the Ath transaction of the current group |
 
 **Transaction Fields**
-
+*Scalar Fields*
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
@@ -487,6 +487,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
+*Array Fields*
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
