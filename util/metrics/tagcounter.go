@@ -26,8 +26,12 @@ import (
 
 // NewTagCounter makes a set of metrics under rootName for tagged counting.
 // "{TAG}" in rootName is replaced by the tag, otherwise "_{TAG}" is appended.
-func NewTagCounter(rootName, desc string) *TagCounter {
+// Optionally provided declaredTags counters for these names up front (making them easier to discover).
+func NewTagCounter(rootName, desc string, declaredTags ...string) *TagCounter {
 	tc := &TagCounter{Name: rootName, Description: desc}
+	for _, tag := range declaredTags {
+		tc.Add(tag, 0)
+	}
 	DefaultRegistry().Register(tc)
 	return tc
 }
@@ -98,32 +102,34 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 		// no values, nothing to say.
 		return
 	}
-	// TODO: what to do with "parentLabels"? obsolete part of interface?
-	buf.WriteString("# ")
-	buf.WriteString(tc.Name)
-	buf.WriteString(" ")
-	buf.WriteString(tc.Description)
-	buf.WriteString("\n")
 	isTemplate := strings.Contains(tc.Name, "{TAG}")
 	tags := tagptr.(map[string]*uint64)
 	for tag, tagcount := range tags {
 		if tagcount == nil {
 			continue
 		}
+		var name string
 		if isTemplate {
-			name := strings.ReplaceAll(tc.Name, "{TAG}", tag)
-			buf.WriteString(name)
-			buf.WriteRune(' ')
-			buf.WriteString(strconv.FormatUint(*tagcount, 10))
-			buf.WriteRune('\n')
+			name = strings.ReplaceAll(tc.Name, "{TAG}", tag)
 		} else {
-			buf.WriteString(tc.Name)
-			buf.WriteRune('_')
-			buf.WriteString(tag)
-			buf.WriteRune(' ')
-			buf.WriteString(strconv.FormatUint(*tagcount, 10))
-			buf.WriteRune('\n')
+			name = tc.Name + "_" + tag
 		}
+		buf.WriteString("# HELP ")
+		buf.WriteString(name)
+		buf.WriteRune(' ')
+		buf.WriteString(strings.ReplaceAll(tc.Description, "{TAG}", tag))
+		buf.WriteString("\n# TYPE ")
+		buf.WriteString(name)
+		buf.WriteString(" counter\n")
+		buf.WriteString(name)
+		if len(parentLabels) > 0 {
+			buf.WriteRune('{')
+			buf.WriteString(parentLabels)
+			buf.WriteRune('}')
+		}
+		buf.WriteRune(' ')
+		buf.WriteString(strconv.FormatUint(*tagcount, 10))
+		buf.WriteRune('\n')
 	}
 }
 

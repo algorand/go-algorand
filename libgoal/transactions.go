@@ -20,7 +20,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -191,8 +194,98 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 	return c.BroadcastTransaction(stx)
 }
 
+// generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is
+// similar to account.Participation.GenerateRegistrationTransaction.
+func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
+	addr, err := basics.UnmarshalChecksumAddress(part.Address)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	if len(part.Key.VoteParticipationKey) != 32 {
+		return transactions.Transaction{}, fmt.Errorf("voting key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+	}
+
+	var votePk [32]byte
+	copy(votePk[:], part.Key.VoteParticipationKey[:])
+
+	if len(part.Key.SelectionParticipationKey) != 32 {
+		return transactions.Transaction{}, fmt.Errorf("selection key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+	}
+
+	var selectionPk [32]byte
+	copy(selectionPk[:], part.Key.SelectionParticipationKey[:])
+
+	if part.Key.StateProofKey == nil {
+		return transactions.Transaction{}, fmt.Errorf("state proof key pointer is nil")
+	}
+
+	if len(*part.Key.StateProofKey) != len(merklesignature.Verifier{}) {
+		return transactions.Transaction{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Verifier{}), len(*part.Key.StateProofKey))
+	}
+
+	var stateProofPk merklesignature.Verifier
+	copy(stateProofPk[:], (*part.Key.StateProofKey)[:])
+
+	t := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:     addr,
+			Fee:        fee,
+			FirstValid: txnFirstValid,
+			LastValid:  txnLastValid,
+			Lease:      leaseBytes,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:       votePk,
+			SelectionPK:  selectionPk,
+			StateProofPK: stateProofPk,
+		},
+	}
+	t.KeyregTxnFields.VoteFirst = basics.Round(part.Key.VoteFirstValid)
+	t.KeyregTxnFields.VoteLast = basics.Round(part.Key.VoteLastValid)
+	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
+
+	return t, nil
+}
+
+// MakeRegistrationTransactionWithGenesisID Generates a Registration transaction with the genesis ID set from the suggested parameters of the client
+func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participation, fee, txnFirstValid, txnLastValid uint64, leaseBytes [32]byte, includeStateProofKeys bool) (transactions.Transaction, error) {
+
+	// Get current round, protocol, genesis ID
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	txnFirstValid, txnLastValid, err = computeValidityRounds(txnFirstValid, txnLastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	goOnlineTx := part.GenerateRegistrationTransaction(
+		basics.MicroAlgos{Raw: fee},
+		basics.Round(txnFirstValid),
+		basics.Round(txnLastValid),
+		leaseBytes, includeStateProofKeys)
+
+	goOnlineTx.Header.GenesisID = params.GenesisID
+
+	// Check if the protocol supports genesis hash
+	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
+		copy(goOnlineTx.Header.GenesisHash[:], params.GenesisHash)
+	}
+
+	return goOnlineTx, nil
+}
+
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
-func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participation, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
+func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, fee uint64, leaseBytes [32]byte) (transactions.Transaction, error) {
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
@@ -217,19 +310,19 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
-	if part == nil {
-		bestPart, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
-		if err != nil {
-			return transactions.Transaction{}, err
-		}
-		part = &bestPart
+	part, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
+	if err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	parsedFrstValid := basics.Round(firstValid)
 	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes, cparams.EnableStateProofKeyregCheck)
+	goOnlineTransaction, err := generateRegistrationTransaction(part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
