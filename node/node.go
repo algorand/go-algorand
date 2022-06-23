@@ -166,7 +166,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
-	node.genesisHash = crypto.HashObj(genesis)
+	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 
 	if node.devMode {
@@ -195,8 +195,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
 	}
-	var genalloc bookkeeping.GenesisBalances
-	genalloc, err = bootstrapData(genesis, log)
+	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
 		return nil, err
@@ -313,40 +312,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	return node, err
 }
 
-func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (bookkeeping.GenesisBalances, error) {
-	genalloc := make(map[basics.Address]basics.AccountData)
-	for _, entry := range genesis.Allocation {
-		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
-		if err != nil {
-			log.Errorf("Cannot parse genesis addr %s: %v", entry.Address, err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		_, present := genalloc[addr]
-		if present {
-			err = fmt.Errorf("repeated allocation to %s", entry.Address)
-			log.Error(err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		genalloc[addr] = entry.State
-	}
-
-	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
-	if err != nil {
-		log.Errorf("Cannot parse fee sink addr %s: %v", genesis.FeeSink, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
-	if err != nil {
-		log.Errorf("Cannot parse rewards pool addr %s: %v", genesis.RewardsPool, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	return bookkeeping.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
-}
-
 // Config returns a copy of the node's Local configuration
 func (node *AlgorandFullNode) Config() config.Local {
 	return node.config
@@ -403,12 +368,7 @@ func (node *AlgorandFullNode) Start() {
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Add(3)
-
-	// PKI TODO: Remove this with #2596
-	// Periodically check for new participation keys
-	go node.checkForParticipationKeys(node.ctx.Done())
-
+	node.monitoringRoutinesWaitGroup.Add(2)
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
 	go node.oldKeyDeletionThread(node.ctx.Done())
@@ -781,24 +741,6 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 	return account.MakeParticipationRegistry(accessor, log)
 }
 
-// Reload participation keys from disk periodically
-func (node *AlgorandFullNode) checkForParticipationKeys(done <-chan struct{}) {
-	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
-	for {
-		select {
-		case <-ticker.C:
-			err := node.loadParticipationKeys()
-			if err != nil {
-				node.log.Errorf("Could not refresh participation keys: %v", err)
-			}
-		case <-done:
-			ticker.Stop()
-			return
-		}
-	}
-}
-
 // ListParticipationKeys returns all participation keys currently installed on the node
 func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
 	return node.accountManager.Registry().GetAll(), nil
@@ -916,7 +858,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipation(inputdb)
+	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
@@ -927,20 +869,19 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	_ = node.accountManager.AddParticipation(partkey)
+	added := node.accountManager.AddParticipation(partkey)
+	if !added {
+		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
+	}
 
-	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
+	err = insertStateProofToRegistry(partkey, node)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
 
-	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
-	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
-
-	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
-
+	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
-		return account.ParticipationID{}, nil
+		return account.ParticipationID{}, err
 	}
 
 	return partkey.ID(), nil

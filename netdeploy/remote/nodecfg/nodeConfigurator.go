@@ -176,12 +176,12 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 }
 
 func (nc *nodeConfigurator) registerDNSRecords() (err error) {
-	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
+	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		return fmt.Errorf("error getting DNS credentials: %v", err)
 	}
 
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	const priority = 1
 	const weight = 1
@@ -234,11 +234,10 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	return
 }
 
-func getClouldflareCredentials() (zoneID string, email string, authKey string, err error) {
+func getClouldflareCredentials() (zoneID string, token string, err error) {
 	zoneID = os.Getenv("CLOUDFLARE_ZONE_ID")
-	email = os.Getenv("CLOUDFLARE_EMAIL")
-	authKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if zoneID == "" || email == "" || authKey == "" {
+	token = os.Getenv("CLOUDFLARE_API_TOKEN")
+	if zoneID == "" || token == "" {
 		err = fmt.Errorf("one or more credentials missing from ENV")
 	}
 	return

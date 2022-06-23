@@ -237,7 +237,7 @@ func TestAccountDBRound(t *testing.T) {
 	numElementsPerSegment := 10
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := crypto.RandUint64() % 512
+	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
@@ -247,7 +247,7 @@ func TestAccountDBRound(t *testing.T) {
 	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
-		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
+		updates, newacctsTotals, _ = ledgertesting.RandomDeltasFull(20, accts, 0, &lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = applyPartialDeltas(accts, updates)
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,

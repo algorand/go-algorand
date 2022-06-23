@@ -147,7 +147,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	fmt.Fprintln(logWriter, "Logging Starting")
 	if s.log.GetTelemetryUploadingEnabled() {
 		// May or may not be logging to node.log
-		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryHostName())
+		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryGUID())
 		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
 	} else {
 		// May or may not be logging to node.log
@@ -158,6 +158,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
 		metricLabels["telemetry_session"] = s.log.GetTelemetrySession()
+		if h := s.log.GetTelemetryGUID(); h != "" {
+			metricLabels["telemetry_host"] = h
+		}
+		if i := s.log.GetInstanceName(); i != "" {
+			metricLabels["telemetry_instance"] = i
+		}
 	}
 	s.metricCollector = metrics.MakeMetricService(
 		&metrics.ServiceConfig{
@@ -202,6 +208,10 @@ func (s *Server) Start() {
 	fmt.Println("Success!")
 
 	cfg := s.node.Config()
+
+	if cfg.EnableRuntimeMetrics {
+		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
 
 	if cfg.EnableMetricReporting {
 		if err := s.metricCollector.Start(context.Background()); err != nil {
