@@ -114,15 +114,15 @@ func TestStateProofs(t *testing.T) {
 		}
 	}
 
-	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfStateProofs, uint64(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
 func TestStateProofOverlappingKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
-	if testing.Short() {
-		t.Skip()
-	}
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -199,8 +199,6 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		t.Logf("Round %d, block %v\n", rnd, blk)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
