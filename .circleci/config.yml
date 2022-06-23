@@ -70,7 +70,7 @@ workflows:
               platform: ["amd64", "arm64", "mac_amd64"]
 
       - build:
-          name: mac_arm64_build
+          name: << matrix.platform >>_build
           matrix: &matrix-mac-arm64
             parameters:
               platform: ["mac_arm64"]
@@ -93,7 +93,7 @@ workflows:
                 - /hotfix\/.*/
 
       - test:
-          name: mac_arm64_test
+          name: << matrix.platform >>_test
           matrix:
             <<: *matrix-mac-arm64
           requires:
@@ -114,6 +114,19 @@ workflows:
                 - /hotfix\/.*/
           context: slack-secrets
 
+      - test_nightly:
+          name: << matrix.platform >>_test_nightly
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - << matrix.platform >>_build
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
+
       - integration:
           name: << matrix.platform >>_integration
           matrix:
@@ -124,7 +137,7 @@ workflows:
             <<: *filters-default
 
       - integration:
-          name: mac_arm64_integration
+          name: << matrix.platform >>_integration
           matrix:
             <<: *matrix-mac-arm64
           requires:
@@ -142,6 +155,16 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
+      - integration_nightly:
+          name: << matrix.platform >>_integration_nightly
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context: slack-secrets
+
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
           matrix:
@@ -152,7 +175,7 @@ workflows:
             <<: *filters-default
 
       - e2e_expect:
-          name: mac_arm64_e2e_expect
+          name: << matrix.platform >>_e2e_expect
           matrix:
             <<: *matrix-mac-arm64
           requires:
@@ -170,6 +193,16 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
+      - e2e_expect_nightly:
+          name: << matrix.platform >>_e2e_expect_nightly
+          matrix:
+            <<: *matrix-mac-arm64
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context: slack-secrets
+
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
           matrix:
@@ -180,7 +213,7 @@ workflows:
             <<: *filters-default
 
       - e2e_subs:
-          name: mac_arm64_e2e_subs
+          name: << matrix.platform >>_e2e_subs
           matrix:
             <<: *matrix-mac-arm64
           requires:
@@ -192,6 +225,18 @@ workflows:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
             <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context:
+            - slack-secrets
+            - aws-secrets
+
+      - e2e_subs_nightly:
+          name: << matrix.platform >>_e2e_subs_nightly
+          matrix:
+            <<: *matrix-mac-arm64
           requires:
             - << matrix.platform >>_build
           filters:
