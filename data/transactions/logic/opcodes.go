@@ -106,17 +106,6 @@ func (lc *linearCost) docCost(argLen int) string {
 	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
 }
 
-type asmSpec struct {
-	opcode byte
-	name   string
-	Proto
-	version    uint64
-	asm        asmFunc
-	refine     refineFunc
-	modes      runMode
-	immediates []immediate
-}
-
 // OpDetails records details such as non-standard costs, immediate arguments, or
 // dynamic layout controlled by a check function. These objects are mostly built
 // with constructor functions, so it's cleaner to have defaults set here, rather

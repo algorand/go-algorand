@@ -1161,7 +1161,7 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 	immediateCounts := make([]int, len(specs))
 	i := 0
-	for numImms, _ := range specs {
+	for numImms := range specs {
 		immediateCounts[i] = numImms
 		i++
 	}
