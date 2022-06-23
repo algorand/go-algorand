@@ -857,32 +857,6 @@ func simpleImm(value string, label string) (byte, error) {
 	return byte(res), err
 }
 
-// asmTxn2 delegates to asmTxn or asmTxna depending on number of operands
-func asmTxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	switch len(args) {
-	case 1:
-		txn := OpsByName[1]["txn"] // v1 txn opcode does not have array names
-		return asmDefault(ops, &txn, args)
-	case 2:
-		txna := OpsByName[ops.Version]["txna"]
-		return asmDefault(ops, &txna, args)
-	default:
-		return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-	}
-}
-
-func asmGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 2 {
-		gtxn := OpsByName[1]["gtxn"] // v1 gtxn opcode does not have array names
-		return asmDefault(ops, &gtxn, args)
-	}
-	if len(args) == 3 {
-		gtxna := OpsByName[ops.Version]["gtxna"]
-		return asmDefault(ops, &gtxna, args)
-	}
-	return ops.errorf("%s expects 2 or 3 immediate arguments", spec.Name)
-}
-
 func asmGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return asmDefault(ops, spec, args)
