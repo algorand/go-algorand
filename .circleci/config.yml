@@ -624,8 +624,6 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
-    environment:
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -642,8 +640,6 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
-    environment:
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -665,7 +661,6 @@ jobs:
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "GO"
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -683,7 +678,6 @@ jobs:
     parallelism: 4
     environment:
       E2E_TEST_FILTER: "GO"
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -703,7 +697,6 @@ jobs:
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -721,7 +714,6 @@ jobs:
     parallelism: 2
     environment:
       E2E_TEST_FILTER: "EXPECT"
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -740,7 +732,6 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -758,7 +749,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
       E2E_PLATFORM: << parameters.platform >>
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
@@ -798,8 +788,6 @@ jobs:
         type: string
       job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
         type: string
-    environment:
-      TAR_OPTIONS: --unlink-first
     steps:
       - checkout
       - tests_verification_command:
@@ -811,8 +799,6 @@ jobs:
       platform:
         type: string
     executor: << parameters.platform >>_medium
-    environment:
-      TAR_OPTIONS: --unlink-first
     steps:
       - prepare_build_dir
       - prepare_go
