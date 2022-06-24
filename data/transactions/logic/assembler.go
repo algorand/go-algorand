@@ -1412,10 +1412,11 @@ func (ops *OpStream) assemble(text string) error {
 			// enough to report follow-on errors.  Of course, we still have to
 			// bail out on the assembly as a whole.
 			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
-			if !ok {
+			if ok {
+				ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+			} else {
 				spec, ok = keywords[opstring]
 			}
-			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
