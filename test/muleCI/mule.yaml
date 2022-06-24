@@ -109,6 +109,9 @@ tasks:
   - task: shell.Make
     name: build.darwin-arm64
     target: ci-build
+  - task: shell.Make
+    name: build.darwin-amd64
+    target: ci-build
   - task: docker.Make
     name: build.amd64
     agent: cicd.ubuntu.amd64
@@ -234,6 +237,10 @@ jobs:
     tasks:
       - shell.Make.build.darwin-arm64
       - stash.Stash.darwin-arm64
+  build-darwin-amd64:
+    tasks:
+      - shell.Make.build.darwin-amd64
+      - stash.Stash.darwin-amd64
   build-linux-amd64:
     tasks:
       - docker.Make.build.amd64
@@ -252,6 +259,7 @@ jobs:
       - stash.Unstash.linux-arm64
       - stash.Unstash.linux-arm
       - stash.Unstash.darwin-arm64
+      - stash.Unstash.darwin-amd64
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages

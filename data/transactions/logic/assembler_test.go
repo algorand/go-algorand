@@ -1464,6 +1464,10 @@ itxn NumLogs
 itxn CreatedAssetID
 itxn CreatedApplicationID
 itxn LastLog
+txn NumApprovalProgramPages
+txna ApprovalProgramPages 0
+txn NumClearStateProgramPages
+txna ClearStateProgramPages 0
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {
