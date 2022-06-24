@@ -1385,7 +1385,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
 			} else if warningFlags&bitAccountOffline != 0 {
 				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
-				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
+				node.log.Warnf("node.VotingKeys: Address: %v - Account is offline.  No registration transaction has been issued or a previous registration transaction has expired", mismatchingAddr)
 			} else {
 				// If the account isn't closed/offline and has a valid participation key, then this key may have been generated
 				// on a different node.
@@ -1400,7 +1400,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
 			} else if warningFlags&bitAccountOffline != 0 {
 				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
-				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
+				node.log.Warnf("node.VotingKeys: Address: %v - Account is offline.  No registration transaction has been issued or a previous registration transaction has expired", mismatchingAddr)
 			} else {
 				// If the account isn't closed/offline and has a valid participation key, then this key may have been generated
 				// on a different node.
