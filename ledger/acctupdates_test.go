@@ -1257,6 +1257,10 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 			_, ok := boxKeySet[key]
 			require.True(t, ok)
 		}
+
+		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 2)
+		require.NoError(t, err)
+		require.Len(t, bKeys, 2)
 	}
 
 	// remove some random boxes in the final round
@@ -1282,6 +1286,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		require.False(t, ok)
 	}
 
+	// check the wildcard key is not doing anything weird
 	wildcardRes, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
 	require.NoError(t, err)
 	require.Len(t, wildcardRes, 1)
