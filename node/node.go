@@ -61,6 +61,13 @@ const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
 )
 
+const (
+	bitMismatchingVotingKey = 1 << iota
+	bitMismatchingSelectionKey
+	bitAccountOffline
+	bitAccountIsClosed
+)
+
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
 	LastRound                          basics.Round
@@ -1314,6 +1321,24 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 	return validatedBlock{vb: lvb}, nil
 }
 
+
+// getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online
+func getOfflineClosedStatus(acctData basics.OnlineAccountData) int {
+	rval := 0
+	isOffline := acctData.VoteFirstValid == 0 && acctData.VoteLastValid == 0
+
+	if isOffline {
+		rval = rval | bitAccountOffline
+	}
+
+	isClosed := isOffline && acctData.MicroAlgosWithRewards.Raw == 0
+	if isClosed {
+		rval = rval | bitAccountIsClosed
+	}
+
+	return rval
+}
+
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound {
@@ -1327,12 +1352,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
-	const (
-		bitMismatchingVotingKey = 1 << iota
-		bitMismatchingSelectionKey
-		bitAccountOffline
-		bitAccountIsClosed
-	)
+
 	for _, p := range parts {
 		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
@@ -1347,15 +1367,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			accountsData[p.Account] = acctData
 		}
 
-		isOffline := acctData.VoteFirstValid == 0 && acctData.VoteLastValid == 0
-		if isOffline {
-			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitAccountOffline
-		}
-
-		isClosed := isOffline && acctData.MicroAlgosWithRewards.Raw == 0
-		if isClosed {
-			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitAccountIsClosed
-		}
+		mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | getOfflineClosedStatus(acctData)
 
 		if acctData.VoteID != p.Voting.OneTimeSignatureVerifier {
 			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingVotingKey

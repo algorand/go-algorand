@@ -553,3 +553,22 @@ func TestAsyncRecord(t *testing.T) {
 	require.Equal(t, 10000, int(records[0].LastVote))
 	require.Equal(t, 20000, int(records[0].LastBlockProposal))
 }
+
+// OfflineOnlineClosedBitStatusTest a test that validates that the correct bits are being set 
+func OfflineOnlineClosedBitStatusTest(t *testing.T) {
+	tests := []struct {
+		name        string
+		acctData    basics.OnlineAccountData
+		expectedInt int
+	}{
+		{"online 1", basics.OnlineAccountData{VoteFirstValid: 1, VoteLastValid: 100, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0},
+		{"online 2", basics.OnlineAccountData{VoteFirstValid: 1, VoteLastValid: 100, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0},
+		{"offline & not closed", basics.OnlineAccountData{VoteFirstValid: 0, VoteLastValid: 0, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0 | bitAccountOffline},
+		{"offline & closed", basics.OnlineAccountData{VoteFirstValid: 0, VoteLastValid: 0, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0 | bitAccountOffline | bitAccountIsClosed},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
+		})
+	}
+}
