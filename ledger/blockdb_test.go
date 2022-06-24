@@ -18,8 +18,8 @@ package ledger
 
 import (
 	"database/sql"
-	"fmt"
-	"strings"
+	"github.com/algorand/go-algorand/ledger/blockdb"
+	testing2 "github.com/algorand/go-algorand/ledger/testing"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,18 +28,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/db"
 )
-
-func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
-	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
-	dbs, err := db.OpenPair(fn, inMemory)
-	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
-	return dbs, fn
-}
 
 func randomBlock(r basics.Round) blockEntry {
 	b := bookkeeping.Block{}
@@ -77,11 +68,11 @@ func blockChainBlocks(be []blockEntry) []bookkeeping.Block {
 }
 
 func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
-	next, err := blockNext(tx)
+	next, err := blockdb.BlockNext(tx)
 	require.NoError(t, err)
 	require.Equal(t, next, basics.Round(len(blocks)))
 
-	latest, err := blockLatest(tx)
+	latest, err := blockdb.BlockLatest(tx)
 	if len(blocks) == 0 {
 		require.Error(t, err)
 	} else {
@@ -89,7 +80,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 		require.Equal(t, latest, basics.Round(len(blocks))-1)
 	}
 
-	earliest, err := blockEarliest(tx)
+	earliest, err := blockdb.BlockEarliest(tx)
 	if len(blocks) == 0 {
 		require.Error(t, err)
 	} else {
@@ -98,38 +89,32 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	}
 
 	for rnd := basics.Round(0); rnd < basics.Round(len(blocks)); rnd++ {
-		blk, err := blockGet(tx, rnd)
+		blk, err := blockdb.BlockGet(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 
-		blk, cert, err := blockGetCert(tx, rnd)
+		blk, cert, err := blockdb.BlockGetCert(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
 	}
 
-	_, err = blockGet(tx, basics.Round(len(blocks)))
+	_, err = blockdb.BlockGet(tx, basics.Round(len(blocks)))
 	require.Error(t, err)
-}
-
-func setDbLogging(t testing.TB, dbs db.Pair) {
-	dblogger := logging.TestingLog(t)
-	dbs.Rdb.SetLogger(dblogger)
-	dbs.Wdb.SetLogger(dblogger)
 }
 
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := testing2.DbOpenTest(t, true)
+	testing2.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	err = blockInit(tx, nil)
+	err = blockdb.BlockInit(tx, nil)
 	require.NoError(t, err)
 	checkBlockDB(t, tx, nil)
 }
@@ -137,8 +122,8 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := testing2.DbOpenTest(t, true)
+	testing2.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -147,11 +132,11 @@ func TestBlockDBInit(t *testing.T) {
 
 	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = blockInit(tx, blockChainBlocks(blocks))
+	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 
-	err = blockInit(tx, blockChainBlocks(blocks))
+	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 }
@@ -159,8 +144,8 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := testing2.DbOpenTest(t, true)
+	testing2.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -169,13 +154,13 @@ func TestBlockDBAppend(t *testing.T) {
 
 	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = blockInit(tx, blockChainBlocks(blocks))
+	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 
 	for i := 0; i < 10; i++ {
 		blkent := randomBlock(basics.Round(len(blocks)))
-		err = blockPut(tx, blkent.block, blkent.cert)
+		err = blockdb.BlockPut(tx, blkent.block, blkent.cert)
 		require.NoError(t, err)
 
 		blocks = append(blocks, blkent)

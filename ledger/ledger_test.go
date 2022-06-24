@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -468,7 +469,7 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero Address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
@@ -500,23 +501,23 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink spent to non-sink address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink spent to non-sink Address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = addrList[0]
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink Address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.Receiver = poolAddr
 	badTx.CloseRemainderTo = addrList[0]
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink Address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = poolAddr
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to pool address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to pool Address")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -1150,7 +1151,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero Address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
@@ -1974,9 +1975,9 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accountDBVersion = 6
+	accountdb.accountDBVersion = 6
 	defer func() {
-		accountDBVersion = 7
+		accountdb.accountDBVersion = 7
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2000,16 +2001,16 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
+		if err := accountdb.accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
+		if err := accountdb.accountsCreateTxTailTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
+		if err := accountdb.accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+		if err := accountdb.accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
 			return err
 		}
 		return nil
@@ -2183,7 +2184,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.Close()
 
 	cfg.MaxAcctLookback = shorterLookback
-	accountDBVersion = 7
+	accountdb.accountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {

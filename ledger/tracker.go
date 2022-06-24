@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"reflect"
 	"sync"
 	"time"
@@ -133,9 +134,9 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() db.Pair
-	blockDB() db.Pair
-	trackerLog() logging.Logger
+	TrackerDB() db.Pair
+	BlockDB() db.Pair
+	TrackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
@@ -239,15 +240,15 @@ type deferredCommitContext struct {
 	onlineRoundParams          []ledgercore.OnlineRoundParamsData
 	onlineAccountsForgetBefore basics.Round
 
-	compactAccountDeltas   compactAccountDeltas
-	compactResourcesDeltas compactResourcesDeltas
+	compactAccountDeltas   accountdb.CompactAccountDeltas
+	compactResourcesDeltas accountdb.CompactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []persistedAccountData
-	updatedPersistedResources map[basics.Address][]persistedResourcesData
+	updatedPersistedAccounts  []accountdb.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]accountdb.PersistedResourcesData
 
-	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	compactOnlineAccountDeltas     accountdb.CompactOnlineAccountDeltas
+	updatedPersistedOnlineAccounts []accountdb.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
@@ -264,11 +265,11 @@ type deferredCommitContext struct {
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
-	tr.dbs = l.trackerDB()
-	tr.log = l.trackerLog()
+	tr.dbs = l.TrackerDB()
+	tr.log = l.TrackerLog()
 
 	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
+		tr.dbRound, err = accountdb.AccountsRound(tx)
 		return err
 	})
 
@@ -510,7 +511,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 			}
 		}
 
-		return updateAccountsRound(tx, dbRound+basics.Round(offset))
+		return accountdb.UpdateAccountsRound(tx, dbRound+basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 

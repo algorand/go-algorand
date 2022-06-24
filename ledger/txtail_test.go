@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -147,8 +148,8 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
-	t.blockDBs, _ = dbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.blockDBs, _ = ledgertesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = ledgertesting.DbOpenTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
@@ -158,7 +159,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	proto := config.Consensus[protoVersion]
 	newDB := accountsInitTest(ts, tx, accts, protoVersion)
 	require.True(ts, newDB)
-	_, err = accountsInit(tx, accts, proto)
+	_, err = accountdb.accountsInit(tx, accts, proto)
 	require.NoError(ts, err)
 
 	roundData := make([][]byte, 0, proto.MaxTxnLife)
@@ -166,13 +167,13 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
 		require.NoError(ts, err)
-		tail, err := txTailRoundFromBlock(blk)
+		tail, err := accountdb.txTailRoundFromBlock(blk)
 		require.NoError(ts, err)
 		encoded, _ := tail.encode()
 		roundData = append(roundData, encoded)
 	}
 	fmt.Printf("%d\n", len(roundData))
-	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	err = accountdb.txtailNewRound(context.Background(), tx, startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
 	return nil

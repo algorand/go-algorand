@@ -20,6 +20,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -99,11 +101,11 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := ledger.MakeMerkleCommitter(tx, false)
+		committer, err := accountdb.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, ledger.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, ledgercore.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}

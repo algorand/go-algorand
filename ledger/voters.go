@@ -142,7 +142,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
 		err := tr.LoadTree(onlineAccounts, hdr)
 		if err != nil {
-			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
+			vt.l.TrackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
 			tr.BroadcastError(err)
 		}
@@ -179,7 +179,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
 		_, ok := vt.round[basics.Round(r)]
 		if ok {
-			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
+			vt.l.TrackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
 			vt.loadTree(hdr)
 		}

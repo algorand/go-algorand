@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"sync"
 	"time"
 
@@ -61,7 +62,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	start := time.Now()
 	err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		bq.lastCommitted, err0 = blockLatest(tx)
+		bq.lastCommitted, err0 = blockdb.BlockLatest(tx)
 		return err0
 	})
 	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
@@ -111,7 +112,7 @@ func (bq *blockQueue) syncer() {
 		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for _, e := range workQ {
-				err0 := blockPut(tx, e.block, e.cert)
+				err0 := blockdb.BlockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
 				}
@@ -146,7 +147,7 @@ func (bq *blockQueue) syncer() {
 			bfstart := time.Now()
 			ledgerSyncBlockforgetCount.Inc(nil)
 			err = bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				return blockForgetBefore(tx, minToSave)
+				return blockdb.BlockForgetBefore(tx, minToSave)
 			})
 			ledgerSyncBlockforgetMicros.AddMicrosecondsSince(bfstart, nil)
 			if err != nil {
@@ -261,7 +262,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 	ledgerGetblockCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, err0 = blockGet(tx, r)
+		blk, err0 = blockdb.BlockGet(tx, r)
 		return err0
 	})
 	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
@@ -283,7 +284,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 	ledgerGetblockhdrCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		hdr, err0 = blockGetHdr(tx, r)
+		hdr, err0 = blockdb.BlockGetHdr(tx, r)
 		return err0
 	})
 	ledgerGetblockhdrMicros.AddMicrosecondsSince(start, nil)
@@ -309,7 +310,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 	ledgerGeteblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockGetEncodedCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r)
 		return err0
 	})
 	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
@@ -331,7 +332,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	ledgerGetblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockGetCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetCert(tx, r)
 		return err0
 	})
 	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)

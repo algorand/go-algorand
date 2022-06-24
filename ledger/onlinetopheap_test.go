@@ -41,7 +41,7 @@ func TestOnlineTopHeap_Less(t *testing.T) {
 				NormalizedOnlineBalance: 1,
 			},
 			{
-				Address:                 basics.Address(crypto.Hash([]byte("address"))),
+				Address:                 basics.Address(crypto.Hash([]byte("Address"))),
 				NormalizedOnlineBalance: 0,
 			},
 		},
@@ -70,7 +70,7 @@ func TestOnlineTopHeap_Swap(t *testing.T) {
 				NormalizedOnlineBalance: 1,
 			},
 			{
-				Address:                 basics.Address(crypto.Hash([]byte("address"))),
+				Address:                 basics.Address(crypto.Hash([]byte("Address"))),
 				NormalizedOnlineBalance: 0,
 			},
 		},
@@ -104,7 +104,7 @@ func TestOnlineTopHeap_Push(t *testing.T) {
 	acct0 := h.accts[0]
 	acct1 := h.accts[1]
 	acct2 := &ledgercore.OnlineAccount{
-		Address:                 basics.Address(crypto.Hash([]byte("address"))),
+		Address:                 basics.Address(crypto.Hash([]byte("Address"))),
 		NormalizedOnlineBalance: 0,
 	}
 
@@ -130,7 +130,7 @@ func TestOnlineTopHeap_Pop(t *testing.T) {
 				NormalizedOnlineBalance: 1,
 			},
 			{
-				Address:                 basics.Address(crypto.Hash([]byte("address"))),
+				Address:                 basics.Address(crypto.Hash([]byte("Address"))),
 				NormalizedOnlineBalance: 0,
 			},
 		},

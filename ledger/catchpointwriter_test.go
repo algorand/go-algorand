@@ -23,6 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"io"
 	"io/ioutil"
 	"os"
@@ -50,8 +51,8 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
-	er := encodedBalanceRecordV5{}
+func makeTestEncodedBalanceRecordV5(t *testing.T) accountdb.EncodedBalanceRecordV5 {
+	er := accountdb.EncodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
@@ -162,7 +163,7 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecordV5(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecordV5
+	var er2 accountdb.EncodedBalanceRecordV5
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -200,7 +201,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), accountdb.CatchpointDirName)
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
@@ -219,7 +220,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.data")
 
-	readDb := ml.trackerDB().Rdb
+	readDb := ml.TrackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
 		if err != nil {
@@ -283,7 +284,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), accountdb.CatchpointDirName)
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectory)
@@ -302,7 +303,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
-	readDb := ml.trackerDB().Rdb
+	readDb := ml.TrackerDB().Rdb
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
@@ -323,11 +324,11 @@ func TestFullCatchpointWriter(t *testing.T) {
 		totalAccounts = writer.GetTotalAccounts()
 		totalChunks = writer.GetTotalChunks()
 		biggestChunkLen = writer.GetBiggestChunkLen()
-		accountsRnd, err = accountsRound(tx)
+		accountsRnd, err = accountdb.accountsRound(tx)
 		if err != nil {
 			return
 		}
-		totals, err = accountsTotals(ctx, tx, false)
+		totals, err = accountdb.accountsTotals(ctx, tx, false)
 		return
 	})
 	require.NoError(t, err)
@@ -398,7 +399,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
+		err := accountdb.applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)

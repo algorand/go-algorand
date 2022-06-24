@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 					}
 				}
 
-				return updateAccountsRound(tx, newBase)
+				return accountdb.updateAccountsRound(tx, newBase)
 			})
 			require.NoError(t, err)
 		}()
@@ -805,7 +806,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		dbOnlineRoundParams, endRound, err = accountdb.accountsOnlineRoundParams(tx)
 		return err
 	})
 	require.NoError(t, err)
@@ -1200,7 +1201,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		dbOnlineRoundParams, endRound, err = accountdb.accountsOnlineRoundParams(tx)
 		return err
 	})
 	require.NoError(t, err)

@@ -25,9 +25,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/msgp/msgp"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -54,40 +53,21 @@ type catchpointWriter struct {
 	balancesChunkNum uint64
 	writtenBytes     int64
 	biggestChunkLen  uint64
-	accountsIterator encodedAccountsBatchIter
-}
-
-type encodedBalanceRecordV5 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	accountsIterator accountdb.EncodedAccountsBatchIter
 }
 
 type catchpointFileBalancesChunkV5 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
-}
-
-// SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
-// encoding the resources map below.
-type SortUint64 = basics.SortUint64
-
-type encodedBalanceRecordV6 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
+	_struct  struct{}                           `codec:",omitempty,omitemptyarray"`
+	Balances []accountdb.EncodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 type catchpointFileBalancesChunkV6 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	_struct  struct{}                           `codec:",omitempty,omitemptyarray"`
+	Balances []accountdb.EncodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*catchpointWriter, error) {
-	totalAccounts, err := totalAccounts(ctx, tx)
+	totalAccounts, err := accountdb.TotalAccounts(ctx, tx)
 	if err != nil {
 		return nil, err
 	}

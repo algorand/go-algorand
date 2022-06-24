@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"io/ioutil"
 	mathrand "math/rand"
 	"os"
@@ -77,16 +78,16 @@ func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() db.Pair {
-	return wl.l.trackerDB()
+func (wl *wrappedLedger) TrackerDB() db.Pair {
+	return wl.l.TrackerDB()
 }
 
-func (wl *wrappedLedger) blockDB() db.Pair {
-	return wl.l.blockDB()
+func (wl *wrappedLedger) BlockDB() db.Pair {
+	return wl.l.BlockDB()
 }
 
-func (wl *wrappedLedger) trackerLog() logging.Logger {
-	return wl.l.trackerLog()
+func (wl *wrappedLedger) TrackerLog() logging.Logger {
+	return wl.l.TrackerLog()
 }
 
 func (wl *wrappedLedger) GenesisHash() crypto.Digest {
@@ -223,10 +224,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -240,10 +241,10 @@ func TestArchivalRestart(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -338,7 +339,7 @@ func TestArchivalCreatables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Start in archival mode, add 2K blocks with asset + app txns
-	// restart, ensure all assets are there in index unless they were
+	// restart, ensure all assets are there in Index unless they were
 	// deleted
 
 	// disable deadlock checking code
@@ -762,10 +763,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -782,10 +783,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})

@@ -20,6 +20,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"os"
 	"time"
 
@@ -197,7 +199,7 @@ func (l *Ledger) reloadLedger() error {
 	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
 
 	// init tracker db
-	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
+	trackerDBInitParams, err := accountdb.TrackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
 		return err
 	}
@@ -225,7 +227,7 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// post-init actions
-	if trackerDBInitParams.vacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
+	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
 		err = l.accts.vacuumDatabase(context.Background())
 		if err != nil {
 			return err
@@ -246,12 +248,12 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	start := time.Now()
 	ledgerVerifygenhashCount.Inc(nil)
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err := blockLatest(tx)
+		latest, err := blockdb.BlockLatest(tx)
 		if err != nil {
 			return err
 		}
 
-		hdr, err := blockGetHdr(tx, latest)
+		hdr, err := blockdb.BlockGetHdr(tx, latest)
 		if err != nil {
 			return err
 		}
@@ -335,7 +337,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
-	err = blockInit(tx, initBlocks)
+	err = blockdb.BlockInit(tx, initBlocks)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
 		return err
@@ -343,7 +345,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 
 	// in archival mode check if DB contains all blocks up to the latest
 	if isArchival {
-		earliest, err := blockEarliest(tx)
+		earliest, err := blockdb.BlockEarliest(tx)
 		if err != nil {
 			err = fmt.Errorf("initBlocksDB.blockEarliest %v", err)
 			return err
@@ -353,12 +355,12 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 		// So reset the DB and init it again
 		if earliest != basics.Round(0) {
 			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
-			err := blockResetDB(tx)
+			err := blockdb.BlockResetDB(tx)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
 				return err
 			}
-			err = blockInit(tx, initBlocks)
+			err = blockdb.BlockInit(tx, initBlocks)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err
@@ -422,7 +424,7 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
-// look up a creator address, setting ok to false if the query succeeded but no
+// look up a creator Address, setting ok to false if the query succeeded but no
 // creator was found.
 func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
@@ -447,7 +449,7 @@ func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
-// ListAssets takes a maximum asset index and maximum result length, and
+// ListAssets takes a maximum asset Index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
@@ -456,7 +458,7 @@ func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (r
 	return l.accts.ListAssets(maxAssetIdx, maxResults)
 }
 
-// ListApplications takes a maximum app index and maximum result length, and
+// ListApplications takes a maximum app Index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
@@ -466,7 +468,7 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 }
 
 // LookupLatest uses the accounts tracker to return the account state (including
-// resources) for a given address, for the latest round. The returned account values
+// resources) for a given Address, for the latest round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
 func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
@@ -481,7 +483,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 }
 
 // LookupAccount uses the accounts tracker to return the account state (without
-// resources) for a given address, for a given round. The returned account values
+// resources) for a given Address, for a given round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
 // The returned AccountData contains the rewards applied up to that round number,
 // and the additional withoutRewards return value contains the value before rewards
@@ -734,16 +736,16 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() db.Pair {
+func (l *Ledger) TrackerDB() db.Pair {
 	return l.trackerDBs
 }
 
 // ledgerForTracker methods
-func (l *Ledger) blockDB() db.Pair {
+func (l *Ledger) BlockDB() db.Pair {
 	return l.blockDBs
 }
 
-func (l *Ledger) trackerLog() logging.Logger {
+func (l *Ledger) TrackerLog() logging.Logger {
 	return l.log
 }
 

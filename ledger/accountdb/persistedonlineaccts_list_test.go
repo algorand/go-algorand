@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package accountdb
 
 import (
 	"testing"
@@ -45,9 +45,9 @@ func (l *persistedOnlineAccountDataListNode) getPrev() dataListNode {
 func TestRemoveFromListOAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	l := newPersistedOnlineAccountList()
-	e1 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{1}})
-	e2 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{2}})
-	e3 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{3}})
+	e1 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{1}})
+	e2 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{2}})
+	e3 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{3}})
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e3, e2, e1})
 
 	l.remove(e2)
@@ -65,7 +65,7 @@ func TestAddingNewNodeWithAllocatedFreeListOAD(t *testing.T) {
 		return
 	}
 	// test elements
-	e1 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{1}})
+	e1 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{1}})
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e1})
 
 	if countListSize(l.freeList) != 9 {
@@ -89,11 +89,11 @@ func TestMultielementListPositioningOAD(t *testing.T) {
 	l := newPersistedOnlineAccountList()
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{})
 	// test elements
-	e2 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{2}})
-	e1 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{1}})
-	e3 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{3}})
-	e4 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{4}})
-	e5 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{5}})
+	e2 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{2}})
+	e1 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{1}})
+	e3 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{3}})
+	e4 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{4}})
+	e5 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{5}})
 
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e5, e4, e3, e1, e2})
 
@@ -121,7 +121,7 @@ func TestMultielementListPositioningOAD(t *testing.T) {
 	l.moveToFront(e1) // no movement
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e1, e3, e4})
 
-	e2 = l.pushFront(&persistedOnlineAccountData{addr: basics.Address{2}})
+	e2 = l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{2}})
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e2, e1, e3, e4})
 
 	l.remove(e3) // removing from middle
@@ -147,7 +147,7 @@ func TestSingleElementListPositioningOD(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	l := newPersistedOnlineAccountList()
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{})
-	e := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{1}})
+	e := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{1}})
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e})
 	l.moveToFront(e)
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e})
@@ -158,8 +158,8 @@ func TestSingleElementListPositioningOD(t *testing.T) {
 func TestRemovedNodeShouldBeMovedToFreeListOAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	l := newPersistedOnlineAccountList()
-	e1 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{1}})
-	e2 := l.pushFront(&persistedOnlineAccountData{addr: basics.Address{2}})
+	e1 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{1}})
+	e2 := l.pushFront(&PersistedOnlineAccountData{Addr: basics.Address{2}})
 
 	checkListPointersOAD(t, l, []*persistedOnlineAccountDataListNode{e2, e1})
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package accountdb
 
 import (
 	"testing"
@@ -31,19 +31,19 @@ import (
 func TestLRUOnlineAccountsBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseOnlineAcct lruOnlineAccounts
-	baseOnlineAcct.init(logging.TestingLog(t), 10, 5)
+	var baseOnlineAcct LRUOnlineAccounts
+	baseOnlineAcct.Init(logging.TestingLog(t), 10, 5)
 
 	accountsNum := 50
-	// write 50 accounts
+	// Write 50 accounts
 	for i := 0; i < accountsNum; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+		acct := PersistedOnlineAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			Rowid:       int64(i),
+			AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
-		baseOnlineAcct.write(acct)
+		baseOnlineAcct.Write(acct)
 	}
 
 	// verify that all these accounts are truly there.
@@ -52,9 +52,9 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.round)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, addr, acct.Addr)
+		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid)
 	}
 
 	// verify expected missing entries
@@ -62,10 +62,10 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedOnlineAccountData{}, acct)
+		require.Equal(t, PersistedOnlineAccountData{}, acct)
 	}
 
-	baseOnlineAcct.prune(accountsNum / 2)
+	baseOnlineAcct.Prune(accountsNum / 2)
 
 	// verify expected (missing/existing) entries
 	for i := 0; i < accountsNum*2; i++ {
@@ -76,12 +76,12 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			// expected to have it.
 			require.True(t, has)
 			require.Equal(t, basics.Round(i), acct.round)
-			require.Equal(t, addr, acct.addr)
-			require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.rowid)
+			require.Equal(t, addr, acct.Addr)
+			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+			require.Equal(t, int64(i), acct.Rowid)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedOnlineAccountData{}, acct)
+			require.Equal(t, PersistedOnlineAccountData{}, acct)
 		}
 	}
 }
@@ -89,25 +89,25 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseOnlineAcct lruOnlineAccounts
+	var baseOnlineAcct LRUOnlineAccounts
 	accountsNum := 250
-	baseOnlineAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
+	baseOnlineAcct.Init(logging.TestingLog(t), accountsNum*2, accountsNum)
 
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
-			acct := persistedOnlineAccountData{
-				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			acct := PersistedOnlineAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
-				rowid:       int64(i),
-				accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+				Rowid:       int64(i),
+				AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}(i)
 	}
 	testStarted := time.Now()
 	for {
-		baseOnlineAcct.flushPendingWrites()
+		baseOnlineAcct.FlushPendingWrites()
 		// check if all accounts were loaded into "main" cache.
 		allAccountsLoaded := true
 		for i := 0; i < accountsNum; i++ {
@@ -131,22 +131,22 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseOnlineAcct lruOnlineAccounts
+	var baseOnlineAcct LRUOnlineAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
 	log := &lruAccountsTestLogger{Logger: logging.TestingLog(t)}
-	baseOnlineAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
+	baseOnlineAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
-			acct := persistedOnlineAccountData{
-				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			acct := PersistedOnlineAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
-				rowid:       int64(i),
-				accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+				Rowid:       int64(i),
+				AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}
-		baseOnlineAcct.flushPendingWrites()
+		baseOnlineAcct.FlushPendingWrites()
 		if j >= pendingWritesThreshold {
 			// expect a warning in the log
 			require.Equal(t, 1+j-pendingWritesThreshold, log.warnMsgCount)
@@ -157,23 +157,23 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseOnlineAcct lruOnlineAccounts
+	var baseOnlineAcct LRUOnlineAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
 	log := &lruAccountsTestLogger{Logger: logging.TestingLog(t)}
-	baseOnlineAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
+	baseOnlineAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+		acct := PersistedOnlineAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			Rowid:       int64(i),
+			AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.writePending(acct)
 	}
 
-	baseOnlineAcct.flushPendingWrites()
+	baseOnlineAcct.FlushPendingWrites()
 
 	// verify that all these accounts are truly there.
 	for i := 0; i < pendingWritesBuffer; i++ {
@@ -181,9 +181,9 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.round)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, addr, acct.Addr)
+		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid)
 	}
 
 	// verify expected missing entries
@@ -191,6 +191,6 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedOnlineAccountData{}, acct)
+		require.Equal(t, PersistedOnlineAccountData{}, acct)
 	}
 }

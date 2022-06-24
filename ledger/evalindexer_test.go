@@ -250,8 +250,8 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
-	// Introduce an unknown address, but this time the Eval function is called with parameters that
-	// don't necessarily mean that this will cause an error.  Just that an empty address will be added
+	// Introduce an unknown Address, but this time the Eval function is called with parameters that
+	// don't necessarily mean that this will cause an error.  Just that an empty Address will be added
 	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{123})
 
 	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
