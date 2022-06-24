@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	for i := 0; i < roundsNum; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+			baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(addr, acct)
 		require.True(t, written)
@@ -61,7 +62,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	for i := proto.MaxBalLookback; i < uint64(roundsNum)+proto.MaxBalLookback; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+			baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(addr, acct)
 		require.True(t, written)
@@ -88,7 +89,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	// attempt to insert a value with the updRound less than latest, expect it to have ignored
 	acct = cachedOnlineAccount{
 		updRound:              basics.Round(uint64(roundsNum) + proto.MaxBalLookback - 1),
-		baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+		baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 	}
 	written := oac.writeFront(addr, acct)
 	require.False(t, written)
@@ -109,13 +110,13 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 	for i := 0; i < roundsNum; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+			baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 		}
 		oac.writeFront(addr, acct)
 	}
 	acct := cachedOnlineAccount{
 		updRound:              basics.Round(roundsNum),
-		baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(roundsNum)}},
+		baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(roundsNum)}},
 	}
 	oac.writeFront(addr, acct)
 
@@ -139,7 +140,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 		lastAddr = ledgertesting.RandomAddress()
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+			baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(lastAddr, acct)
 		require.True(t, written)
@@ -147,7 +148,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 
 	acct := cachedOnlineAccount{
 		updRound:              basics.Round(100),
-		baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+		baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
 	}
 	written := oac.writeFront(ledgertesting.RandomAddress(), acct)
 	require.False(t, written)
@@ -158,7 +159,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	// set one to be expired
 	acct = cachedOnlineAccount{
 		updRound:              basics.Round(maxCacheSize),
-		baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: baseVotingData{}},
+		baseOnlineAccountData: accountdb.baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: accountdb.baseVotingData{}},
 	}
 	written = oac.writeFront(lastAddr, acct)
 	require.True(t, written)
@@ -178,7 +179,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	require.Equal(t, maxCacheSize-1, len(oac.accounts))
 	require.False(t, oac.full())
 
-	// write a new address, check writeFrontIfExist after
+	// write a new Address, check writeFrontIfExist after
 	addr := ledgertesting.RandomAddress()
 	written = oac.writeFront(addr, acct)
 	require.True(t, written)

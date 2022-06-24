@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"io"
 	"os"
 	"strings"
@@ -370,7 +371,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				progress++
 				acctCount++
 			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			_, err = accountdb.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
 			}

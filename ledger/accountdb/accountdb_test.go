@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package accountdb
 
 import (
 	"bytes"
@@ -427,7 +427,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 			require.Equal(t, 1, len(outResourcesDeltas.deltas))
 			require.Equal(t,
-				resourceDelta{
+				ResourceDelta{
 					oldResource: persistedResourcesData{aidx: 100}, newResource: makeResourcesData(lastRound - 1),
 					nAcctDeltas: numResDeltas, address: addr,
 				},
@@ -1070,7 +1070,7 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 }
 
 // upsert updates existing or inserts a new entry
-func (a *compactResourcesDeltas) upsert(delta resourceDelta) {
+func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
 	if idx, exist := a.cache[accountCreatable{address: delta.address, index: delta.oldResource.aidx}]; exist {
 		a.deltas[idx] = delta
 		return
@@ -1183,12 +1183,12 @@ func TestCompactAccountDeltas(t *testing.T) {
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
+func (a *CompactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
 	if idx, exist := a.cache[accountCreatable{address: addr, index: old.aidx}]; exist {
 		a.deltas[idx].oldResource = old
 		return
 	}
-	idx := a.insert(resourceDelta{oldResource: old, address: addr})
+	idx := a.insert(ResourceDelta{oldResource: old, address: addr})
 	a.deltas[idx].address = addr
 }
 func TestCompactResourceDeltas(t *testing.T) {
@@ -1196,20 +1196,20 @@ func TestCompactResourceDeltas(t *testing.T) {
 
 	a := require.New(t)
 
-	ad := compactResourcesDeltas{}
+	ad := CompactResourcesDeltas{}
 	data, idx := ad.get(basics.Address{}, 0)
 	a.Equal(-1, idx)
-	a.Equal(resourceDelta{}, data)
+	a.Equal(ResourceDelta{}, data)
 
 	addr := ledgertesting.RandomAddress()
 	data, idx = ad.get(addr, 0)
 	a.Equal(-1, idx)
-	a.Equal(resourceDelta{}, data)
+	a.Equal(ResourceDelta{}, data)
 
 	a.Zero(ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	sample1 := ResourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
 	ad.upsert(sample1)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
@@ -1220,7 +1220,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.address)
 	a.Equal(sample1, data)
 
-	sample2 := resourceDelta{newResource: resourcesData{Total: 456}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	sample2 := ResourceDelta{newResource: resourcesData{Total: 456}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
 	ad.upsert(sample2)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
@@ -1246,7 +1246,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(1, ad.len())
 	data = ad.getByIdx(0)
 	a.Equal(addr, data.address)
-	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
+	a.Equal(ResourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
 	old2 := persistedResourcesData{addrid: 222, aidx: 2, data: resourcesData{Total: 789}}
@@ -1254,17 +1254,17 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(2, ad.len())
 	data = ad.getByIdx(0)
 	a.Equal(addr, data.address)
-	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
+	a.Equal(ResourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
 
 	data = ad.getByIdx(1)
 	a.Equal(addr1, data.address)
-	a.Equal(resourceDelta{oldResource: old2, address: addr1}, data)
+	a.Equal(ResourceDelta{oldResource: old2, address: addr1}, data)
 
 	ad.updateOld(0, old2)
 	a.Equal(2, ad.len())
 	data = ad.getByIdx(0)
 	a.Equal(addr, data.address)
-	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old2, address: addr}, data)
+	a.Equal(ResourceDelta{newResource: sample2.newResource, oldResource: old2, address: addr}, data)
 
 	addr2 := ledgertesting.RandomAddress()
 	sample2.oldResource.aidx = 2
@@ -1686,7 +1686,7 @@ func TestResourcesDataAsset(t *testing.T) {
 }
 
 // TestResourcesDataSetData checks combinations of old/new values when
-// updating resourceData from resourceDelta
+// updating resourceData from ResourceDelta
 func TestResourcesDataSetData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2674,17 +2674,17 @@ func compactAccountDeltasPermutations(a *require.Assertions, cad compactAccountD
 	return result
 }
 
-func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResourcesDeltas) []compactResourcesDeltas {
+func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResourcesDeltas) []CompactResourcesDeltas {
 
 	size := crd.len()
-	result := make([]compactResourcesDeltas, 0, factorial(size))
+	result := make([]CompactResourcesDeltas, 0, factorial(size))
 
 	perms := permHeap(size)
 	// remap existing deltas to permutated one
 	for _, perm := range perms {
-		new := compactResourcesDeltas{}
+		new := CompactResourcesDeltas{}
 		new.cache = make(map[accountCreatable]int, size)
-		new.deltas = make([]resourceDelta, size)
+		new.deltas = make([]ResourceDelta, size)
 		new.misses = make([]int, len(crd.misses))
 		for i, k := range perm {
 			new.deltas[k] = crd.deltas[i]
@@ -2801,7 +2801,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	a.Equal(3, resDeltas.len())       // (addr1, aidx), (observer, aidx) found
 
 	acctVariants := compactAccountDeltasPermutations(a, acctDeltas)
-	resVariants := compactResourcesDeltasPermutations(a, resDeltas)
+	resVariants := CompactResourcesDeltasPermutations(a, resDeltas)
 	for i, acctVariant := range acctVariants {
 		for j, resVariant := range resVariants {
 			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
@@ -3038,7 +3038,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
+		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, CompactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 

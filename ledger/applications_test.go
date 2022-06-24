@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"encoding/hex"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 	"time"
 
@@ -271,10 +272,10 @@ return`
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserOptInResource, buf)
 
-	pad, err := l.accts.accountsq.lookup(userOptin)
+	pad, err := l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
-	prd, err := l.accts.accountsq.lookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	prd, err := l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Nil(prd.data.GetAppLocalState().KeyValue)
 	ad, rnd, _, err := l.LookupLatest(userOptin)
@@ -753,14 +754,14 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.lookup(userLocal)
+	pad, err := l.accts.accountsq.Lookup(userLocal)
 	a.NoError(err)
-	a.Equal(baseAccountData{}, pad.accountData)
+	a.Equal(accountdb.baseAccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
+	emptyResourceData := accountdb.makeResourcesData(0)
 	a.Equal(emptyResourceData, prd.data)
 }
 
@@ -889,14 +890,14 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.lookup(creator)
+	pad, err := l.accts.accountsq.Lookup(creator)
 	a.NoError(err)
 	a.Empty(pad.accountData)
 	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
+	emptyResourceData := accountdb.makeResourcesData(0)
 	a.Equal(emptyResourceData, prd.data)
 }
 

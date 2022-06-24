@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package accountdb
 
 import (
 	"encoding/binary"
+
 	"testing"
 	"time"
 
@@ -32,58 +33,58 @@ import (
 func TestLRUBasicResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseRes lruResources
-	baseRes.init(logging.TestingLog(t), 10, 5)
+	var baseRes LRUResources
+	baseRes.Init(logging.TestingLog(t), 10, 5)
 
 	resourcesNum := 50
-	// write 50 resources
+	// Write 50 Resources
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := persistedResourcesData{
-			addrid: int64(i),
-			aidx:   basics.CreatableIndex(i),
-			round:  basics.Round(i),
-			data:   resourcesData{Total: uint64(i)},
+		res := PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   resourcesData{Total: uint64(i)},
 		}
-		baseRes.write(res, addr)
+		baseRes.Write(res, addr)
 	}
 
-	// verify that all these resources are truly there.
+	// verify that all these Resources are truly there.
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res, has := baseRes.read(addr, basics.CreatableIndex(i))
+		res, has := baseRes.Read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), res.round)
-		require.Equal(t, int64(i), res.addrid)
-		require.Equal(t, uint64(i), res.data.Total)
-		require.Equal(t, basics.CreatableIndex(i), res.aidx)
+		require.Equal(t, basics.Round(i), res.Round)
+		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, uint64(i), res.Data.Total)
+		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
 
 	// verify expected missing entries
 	for i := resourcesNum; i < resourcesNum*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res, has := baseRes.read(addr, basics.CreatableIndex(i%resourcesNum))
+		res, has := baseRes.Read(addr, basics.CreatableIndex(i%resourcesNum))
 		require.False(t, has)
-		require.Equal(t, persistedResourcesData{}, res)
+		require.Equal(t, PersistedResourcesData{}, res)
 	}
 
-	baseRes.prune(resourcesNum / 2)
+	baseRes.Prune(resourcesNum / 2)
 
 	// verify expected (missing/existing) entries
 	for i := 0; i < resourcesNum*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res, has := baseRes.read(addr, basics.CreatableIndex(i))
+		res, has := baseRes.Read(addr, basics.CreatableIndex(i))
 
 		if i >= resourcesNum/2 && i < resourcesNum {
 			// expected to have it.
 			require.True(t, has)
-			require.Equal(t, basics.Round(i), res.round)
-			require.Equal(t, int64(i), res.addrid)
-			require.Equal(t, uint64(i), res.data.Total)
-			require.Equal(t, basics.CreatableIndex(i), res.aidx)
+			require.Equal(t, basics.Round(i), res.Round)
+			require.Equal(t, int64(i), res.Addrid)
+			require.Equal(t, uint64(i), res.Data.Total)
+			require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedResourcesData{}, res)
+			require.Equal(t, PersistedResourcesData{}, res)
 		}
 	}
 }
@@ -91,31 +92,31 @@ func TestLRUBasicResources(t *testing.T) {
 func TestLRUResourcesPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseRes lruResources
+	var baseRes LRUResources
 	resourcesNum := 250
-	baseRes.init(logging.TestingLog(t), resourcesNum*2, resourcesNum)
+	baseRes.Init(logging.TestingLog(t), resourcesNum*2, resourcesNum)
 
 	for i := 0; i < resourcesNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i),
-				data:   resourcesData{Total: uint64(i)},
+			res := PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   resourcesData{Total: uint64(i)},
 			}
-			baseRes.writePending(res, addr)
+			baseRes.WritePending(res, addr)
 		}(i)
 	}
 	testStarted := time.Now()
 	for {
-		baseRes.flushPendingWrites()
-		// check if all resources were loaded into "main" cache.
+		baseRes.FlushPendingWrites()
+		// check if all Resources were loaded into "main" cache.
 		allResourcesLoaded := true
 		for i := 0; i < resourcesNum; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			_, has := baseRes.read(addr, basics.CreatableIndex(i))
+			_, has := baseRes.Read(addr, basics.CreatableIndex(i))
 			if !has {
 				allResourcesLoaded = false
 				break
@@ -144,23 +145,23 @@ func (cl *lruResourcesTestLogger) Warnf(s string, args ...interface{}) {
 func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseRes lruResources
+	var baseRes LRUResources
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
 	log := &lruResourcesTestLogger{Logger: logging.TestingLog(t)}
-	baseRes.init(log, pendingWritesBuffer, pendingWritesThreshold)
+	baseRes.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i),
-				data:   resourcesData{Total: uint64(i)},
+			res := PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   resourcesData{Total: uint64(i)},
 			}
-			baseRes.writePending(res, addr)
+			baseRes.WritePending(res, addr)
 		}
-		baseRes.flushPendingWrites()
+		baseRes.FlushPendingWrites()
 		if j >= pendingWritesThreshold {
 			// expect a warning in the log
 			require.Equal(t, 1+j-pendingWritesThreshold, log.warnMsgCount)
@@ -171,42 +172,42 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var baseRes lruResources
+	var baseRes LRUResources
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
 	log := &lruResourcesTestLogger{Logger: logging.TestingLog(t)}
-	baseRes.init(log, pendingWritesBuffer, pendingWritesThreshold)
+	baseRes.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := persistedResourcesData{
-			addrid: int64(i),
-			aidx:   basics.CreatableIndex(i),
-			round:  basics.Round(i),
-			data:   resourcesData{Total: uint64(i)},
+		res := PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   resourcesData{Total: uint64(i)},
 		}
-		baseRes.writePending(res, addr)
+		baseRes.WritePending(res, addr)
 	}
 
-	baseRes.flushPendingWrites()
+	baseRes.FlushPendingWrites()
 
 	// verify that all these accounts are truly there.
 	for i := 0; i < pendingWritesBuffer; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res, has := baseRes.read(addr, basics.CreatableIndex(i))
+		res, has := baseRes.Read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), res.round)
-		require.Equal(t, int64(i), res.addrid)
-		require.Equal(t, uint64(i), res.data.Total)
-		require.Equal(t, basics.CreatableIndex(i), res.aidx)
+		require.Equal(t, basics.Round(i), res.Round)
+		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, uint64(i), res.Data.Total)
+		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
 
 	// verify expected missing entries
 	for i := pendingWritesBuffer; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res, has := baseRes.read(addr, basics.CreatableIndex(i))
+		res, has := baseRes.Read(addr, basics.CreatableIndex(i))
 		require.False(t, has)
-		require.Equal(t, persistedResourcesData{}, res)
+		require.Equal(t, PersistedResourcesData{}, res)
 	}
 }
 
@@ -219,25 +220,29 @@ func BenchmarkLRUResourcesWrite(b *testing.B) {
 	benchLruWriteResources(b, fillerAccounts, accounts)
 }
 
+// defined the same as acctupdates.go
+const baseResourcesPendingAccountsBufferSize = 100000
+const baseResourcesPendingAccountsWarnThreshold = 85000
+
 func benchLruWriteResources(b *testing.B, fillerAccounts []cachedResourceData, accounts []cachedResourceData) {
 	b.ResetTimer()
 	b.StopTimer()
-	var baseRes lruResources
+	var baseRes LRUResources
 	// setting up the baseRess with a predefined cache size
-	baseRes.init(logging.TestingLog(b), baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+	baseRes.Init(logging.TestingLog(b), baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
 	for i := 0; i < b.N; i++ {
 		baseRes = fillLRUResources(baseRes, fillerAccounts)
 
 		b.StartTimer()
 		fillLRUResources(baseRes, accounts)
 		b.StopTimer()
-		baseRes.prune(0)
+		baseRes.Prune(0)
 	}
 }
 
-func fillLRUResources(baseRes lruResources, fillerAccounts []cachedResourceData) lruResources {
+func fillLRUResources(baseRes LRUResources, fillerAccounts []cachedResourceData) LRUResources {
 	for _, entry := range fillerAccounts {
-		baseRes.write(entry.persistedResourcesData, entry.address)
+		baseRes.Write(entry.PersistedResourcesData, entry.address)
 	}
 	return baseRes
 }
@@ -251,11 +256,11 @@ func generatePersistedResourcesData(startRound, endRound int) []cachedResourceDa
 		digest := crypto.Hash(buffer)
 
 		accounts[i-startRound] = cachedResourceData{
-			persistedResourcesData: persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i + startRound),
-				data:   resourcesData{Total: uint64(i)},
+			PersistedResourcesData: PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i + startRound),
+				Data:   resourcesData{Total: uint64(i)},
 			},
 			address: basics.Address(digest),
 		}

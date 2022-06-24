@@ -41,7 +41,7 @@ func (h *lruHeap) Len() int {
 }
 
 // Less reports whether the element with
-// index i should sort before the element with index j.
+// Index i should sort before the element with Index j.
 func (h *lruHeap) Less(i, j int) bool {
 	return h.heap[i].useIndex < h.heap[j].useIndex
 }

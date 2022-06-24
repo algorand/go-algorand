@@ -1300,7 +1300,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = makeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
+	dcc.CompactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
 	dcc.compactCreatableDeltas = compactCreatableDeltas(au.creatableDeltas[:offset])
 
 	au.accountsMu.RUnlock()
@@ -1347,7 +1347,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
 	}
 
-	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
+	err = dcc.CompactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 	if err != nil {
 		return err
 	}
@@ -1367,7 +1367,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.CompactResourcesDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -1416,8 +1416,8 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for i := 0; i < dcc.compactResourcesDeltas.len(); i++ {
-		resUpdate := dcc.compactResourcesDeltas.getByIdx(i)
+	for i := 0; i < dcc.CompactResourcesDeltas.len(); i++ {
+		resUpdate := dcc.CompactResourcesDeltas.getByIdx(i)
 		cnt := resUpdate.nAcctDeltas
 		key := accountCreatable{resUpdate.address, resUpdate.oldResource.aidx}
 		macct, ok := au.resources[key]

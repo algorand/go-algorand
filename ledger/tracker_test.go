@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"sync"
 	"testing"
 	"time"
@@ -71,7 +72,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	ct.initialize(conf, ".")
 	ao.initialize(conf)
 
-	_, err := trackerDBInitialize(ml, false, ".")
+	_, err := accountdb.trackerDBInitialize(ml, false, ".")
 	a.NoError(err)
 
 	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao, &txTail{}}, conf)

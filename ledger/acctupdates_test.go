@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/ledger/accountdb"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -77,7 +79,7 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := dbOpenTest(t, inMemory)
+	dbs, fileName := ledgertesting.DbOpenTest(t, inMemory)
 	dbs.Rdb.SetLogger(l)
 	dbs.Wdb.SetLogger(l)
 
@@ -201,15 +203,15 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() db.Pair {
+func (ml *mockLedgerForTracker) TrackerDB() db.Pair {
 	return ml.dbs
 }
 
-func (ml *mockLedgerForTracker) blockDB() db.Pair {
+func (ml *mockLedgerForTracker) BlockDB() db.Pair {
 	return db.Pair{}
 }
 
-func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
+func (ml *mockLedgerForTracker) TrackerLog() logging.Logger {
 	return ml.log
 }
 
@@ -267,7 +269,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local) (
 	ao := &onlineAccounts{}
 	ao.initialize(conf)
 
-	_, err := trackerDBInitialize(l, false, ".")
+	_, err := accountdb.TrackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
 	err = l.trackers.initialize(l, []ledgerTracker{au, ao, &txTail{}}, conf)
@@ -385,7 +387,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 		}
 
 		for _, rec := range rdelta.GetAllAppResources() {
-			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			key := ledgercore.AccountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
 			entry.resource.AppLocalState = rec.State.LocalState
 			entry.resource.AppParams = rec.Params.Params
@@ -393,7 +395,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			resources[key] = entry
 		}
 		for _, rec := range rdelta.GetAllAssetResources() {
-			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			key := ledgercore.AccountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
 			entry.resource.AssetHolding = rec.Holding.Holding
 			entry.resource.AssetParams = rec.Params.Params
@@ -500,7 +502,7 @@ func TestAcctUpdates(t *testing.T) {
 
 			checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount-1), accts, rewardsLevels, proto)
 
-			// lastCreatableID stores asset or app max used index to get rid of conflicts
+			// lastCreatableID stores asset or app max used Index to get rid of conflicts
 			lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 			knownCreatables := make(map[basics.CreatableIndex]bool)
 
@@ -523,7 +525,7 @@ func TestAcctUpdates(t *testing.T) {
 				newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 				updates.Upsert(testPoolAddr, newPool)
 				totals[testPoolAddr] = newPool
-				newAccts := applyPartialDeltas(base, updates)
+				newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 
 				blk := bookkeeping.Block{
 					BlockHeader: bookkeeping.BlockHeader{
@@ -535,7 +537,7 @@ func TestAcctUpdates(t *testing.T) {
 
 				delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 				delta.Accts.MergeAccounts(updates)
-				delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+				delta.Creatables = ledgertesting.CreatablesFromUpdates(base, updates, knownCreatables)
 
 				delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 				ml.trackers.newBlock(blk, delta)
@@ -560,7 +562,7 @@ func TestAcctUpdates(t *testing.T) {
 			// check the account totals.
 			var dbRound basics.Round
 			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				dbRound, err = accountsRound(tx)
+				dbRound, err = accountdb.AccountsRound(tx)
 				return
 			})
 			require.NoError(t, err)
@@ -573,7 +575,7 @@ func TestAcctUpdates(t *testing.T) {
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
 			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				actualTotals, err = accountsTotals(ctx, tx, false)
+				actualTotals, err = accountdb.AccountsTotals(ctx, tx, false)
 				return
 			})
 			require.NoError(t, err)
@@ -642,7 +644,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -726,7 +728,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -769,26 +771,26 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really useful otherwise")
-	defaultNodesPerPage := merkleCommitterNodesPerPage
+	defaultNodesPerPage := ledgercore.MerkleCommitterNodesPerPage
 	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
 		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
-			merkleCommitterNodesPerPage = int64(nodesPerPage)
+			ledgercore.MerkleCommitterNodesPerPage = int64(nodesPerPage)
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	merkleCommitterNodesPerPage = defaultNodesPerPage
+	ledgercore.MerkleCommitterNodesPerPage = defaultNodesPerPage
 }
 
 func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really useful otherwise")
-	defaultTrieCachedNodesCount := trieCachedNodesCount
+	defaultTrieCachedNodesCount := ledgercore.TrieCachedNodesCount
 	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
 		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
-			trieCachedNodesCount = cacheSize
+			ledgercore.TrieCachedNodesCount = cacheSize
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	trieCachedNodesCount = defaultTrieCachedNodesCount
+	ledgercore.TrieCachedNodesCount = defaultTrieCachedNodesCount
 }
 
 // TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
@@ -816,7 +818,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(CatchpointDirName)
+		os.RemoveAll(accountdb.CatchpointDirName)
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
@@ -864,7 +866,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -976,7 +978,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
 				require.NoError(t, err)
 				require.Equal(t, i-1, validThrough)
-				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
+				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account Index : %d\nRound number : %d", j, i)
 
 				fromAccountDataNew := fromAccountDataOld
 
@@ -1015,7 +1017,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					require.NoError(t, err)
 					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
 					// if we received no error, we want to make sure the reported amount is correct.
-					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account Index : %d\nRound number : %d", j, checkRound)
 					testback++
 					j--
 				}
@@ -1065,9 +1067,9 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 
 	// test configuration parameters
 
-	// pick the second largest index for the app and asset
+	// pick the second largest Index for the app and asset
 	// This is to make sure exactly one element is left out
-	// as a result of max index
+	// as a result of max Index
 	maxAss1 := basics.CreatableIndex(0)
 	maxAss2 := basics.CreatableIndex(0)
 	maxApp1 := basics.CreatableIndex(0)
@@ -1092,14 +1094,14 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 		}
 	}
 
-	// No limits. max asset index, max app index and max results have no effect
+	// No limits. max asset Index, max app Index and max results have no effect
 	// This is to make sure the deleted elements do not show up
 	maxAssetIdx := basics.AssetIndex(maxAss2)
 	maxAppIdx := basics.AppIndex(maxApp2)
 	maxResults := uint64(len(expected))
 	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
 
-	// Limit with max asset index and max app index (max results has no effect)
+	// Limit with max asset Index and max app Index (max results has no effect)
 	maxAssetIdx = basics.AssetIndex(maxAss1)
 	maxAppIdx = basics.AppIndex(maxApp1)
 	maxResults = uint64(len(expected))
@@ -1170,7 +1172,7 @@ func listAndCompare(t *testing.T,
 
 // TestListCreatables tests ListAssets and ListApplications
 // It tests with all elements in cache, all synced to database, and combination of both
-// It also tests the max results, max app index and max asset index
+// It also tests the max results, max app Index and max asset Index
 func TestListCreatables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1178,8 +1180,8 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := ledgertesting.DbOpenTest(t, true)
+	ledgertesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -1192,19 +1194,19 @@ func TestListCreatables(t *testing.T) {
 	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
-	err = accountsAddNormalizedBalance(tx, proto)
+	err = accountdb.accountsAddNormalizedBalance(tx, proto)
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
-	au.accountsq, err = accountsInitDbQueries(tx)
+	au.accountsq, err = accountdb.AccountsInitDbQueries(tx)
 	require.NoError(t, err)
 
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
 	// get random data. Initial batch, no deletes
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	ctbsList, randomCtbs := ledgertesting.RandomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
+	ctbsWithDeletes := ledgertesting.RandomCreatableSampling(1, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	// set the cache
 	au.creatables = ctbsWithDeletes
@@ -1213,9 +1215,9 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates compactAccountDeltas
-	var resUpdates compactResourcesDeltas
-	_, _, err = accountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
+	var updates accountdb.CompactAccountDeltas
+	var resUpdates accountdb.CompactResourcesDeltas
+	_, _, err = accountdb.AccountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1224,23 +1226,23 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* No deletes in the database.                               *******
 	// ******* Data in the database deleted in the cache                 *******
-	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
+	au.creatables = ledgertesting.RandomCreatableSampling(2, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
 
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, _, err = accountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
+	_, _, err = accountdb.AccountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
-	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+	au.creatables = ledgertesting.RandomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, Address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1256,7 +1258,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
-		var data baseAccountData
+		var data accountdb.BaseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1264,13 +1266,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB Address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		ad, err = accountdb.loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
@@ -1308,24 +1310,24 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		var updates compactAccountDeltas
+		var updates accountdb.CompactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := ledgertesting.RandomAddress()
-			acctData := baseAccountData{}
+			acctData := accountdb.BaseAccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates.upsert(addr, accountDelta{newAcct: acctData})
+			updates.upsert(addr, accountdb.AccountDelta{NewAcct: acctData})
 			i++
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
+			_, _, err = accountdb.AccountsNewRound(tx, updates, accountdb.CompactResourcesDeltas{}, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
 	}
 
 	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsHashRound(ctx, tx, 1)
+		return accountdb.UpdateAccountsHashRound(ctx, tx, 1)
 	})
 	require.NoError(b, err)
 
@@ -1364,7 +1366,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 		baseAccounts.init(nil, 100, 80)
 		b.ResetTimer()
 
-		makeCompactAccountDeltas(accountDeltas, 0, false, baseAccounts)
+		accountdb.makeCompactAccountDeltas(accountDeltas, 0, false, baseAccounts)
 
 	})
 }
@@ -1383,7 +1385,7 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
-	outAccountDeltas := makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+	outAccountDeltas := accountdb.makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas := compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, accountDeltas[0].Len(), outAccountDeltas.len())
@@ -1392,17 +1394,17 @@ func TestCompactDeltas(t *testing.T) {
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{}, delta.oldAcct)
+	require.Equal(t, accountdb.PersistedAccountData{}, delta.oldAcct)
 	require.NotEmpty(t, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// check deltas without missing accounts
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{}})
-	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+	baseAccounts.write(accountdb.PersistedAccountData{addr: addrs[0], accountData: accountdb.baseAccountData{}})
+	outAccountDeltas = accountdb.makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	require.Equal(t, 0, len(outAccountDeltas.misses))
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{addr: addrs[0]}, delta.oldAcct)
-	require.Equal(t, baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
+	require.Equal(t, accountdb.PersistedAccountData{addr: addrs[0]}, delta.oldAcct)
+	require.Equal(t, accountdb.baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.init(nil, 100, 80)
 
@@ -1415,9 +1417,9 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	baseAccounts.write(persistedAccountData{addr: addrs[3], accountData: baseAccountData{}})
-	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+	baseAccounts.write(accountdb.PersistedAccountData{addr: addrs[0], accountData: accountdb.baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(accountdb.PersistedAccountData{addr: addrs[3], accountData: accountdb.baseAccountData{}})
+	outAccountDeltas = accountdb.makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, 2, outAccountDeltas.len())
@@ -1459,26 +1461,26 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Deleted: true}, ledgercore.AssetHoldingDelta{})
 	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 
-	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas := accountdb.makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	delta, _ := outResourcesDeltas.get(addrs[0], 100)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[1], 101)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[2], 102)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[3], 103)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	// check actual data on non-empty input
 	accountDeltas = make([]ledgercore.AccountDeltas, 1)
@@ -1506,14 +1508,14 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = accountdb.makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
 	// check deltas with missing accounts
 
-	checkNewDeltas := func(outResourcesDeltas compactResourcesDeltas) {
+	checkNewDeltas := func(outResourcesDeltas accountdb.CompactResourcesDeltas) {
 		delta, _ := outResourcesDeltas.get(addrs[0], 100)
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appParams100.ApprovalProgram, delta.newResource.ApprovalProgram)
@@ -1550,23 +1552,23 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, accountdb.PersistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, accountdb.PersistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(accountdb.PersistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(accountdb.PersistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = accountdb.makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
@@ -1574,11 +1576,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, accountdb.PersistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, accountdb.PersistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1594,8 +1596,8 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
-	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	baseResources.write(accountdb.PersistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
+	outResourcesDeltas = accountdb.makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 7, len(outResourcesDeltas.deltas))
@@ -1667,7 +1669,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1767,7 +1769,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1805,7 +1807,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1885,7 +1887,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1922,7 +1924,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1960,7 +1962,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -2098,7 +2100,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		require.NoError(t, err)
 
 		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
 
 		blk := bookkeeping.Block{
@@ -2141,7 +2143,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					err = updateAccountsRound(tx, newBase)
+					err = accountdb.updateAccountsRound(tx, newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2225,7 +2227,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 }
 
 // This test helper attempts to cover the case when an accountUpdates.lookupX method:
-// - can't find the requested address,
+// - can't find the requested Address,
 // - falls through looking at deltas and the LRU accounts cache,
 // - then hits the database (calling accountsDbQueries.lookup)
 // only to discover that the round stored in the database (committed in accountUpdates.commitRound)
@@ -2268,7 +2270,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
 
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	// lastCreatableID stores asset or app max used Index to get rid of conflicts
 	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
@@ -2288,7 +2290,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -2368,7 +2370,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 
 	testAcctUpdatesLookupRetry(t,
 		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
-			// grab any address and data to use for call to lookup
+			// grab any Address and data to use for call to lookup
 			var addr basics.Address
 			for a := range accts[rnd] {
 				addr = a
@@ -2389,7 +2391,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 
 	testAcctUpdatesLookupRetry(t,
 		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
-			// grab any address and data to use for call to lookup
+			// grab any Address and data to use for call to lookup
 			var addr basics.Address
 			var data basics.AccountData
 			for a, d := range accts[rnd] {
@@ -2434,7 +2436,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 				if err != nil {
 					return err
 				}
-				err = updateAccountsRound(tx, newBase)
+				err = accountdb.updateAccountsRound(tx, newBase)
 				return err
 			})
 			require.NoError(t, err)
@@ -2469,7 +2471,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	blk.CurrentProtocol = data.version
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, data.updates.Len(), 0)
 	delta.Accts.MergeAccounts(data.updates)
-	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
+	delta.Creatables = ledgertesting.CreatablesFromUpdates(base, data.updates, data.knownCreatables)
 	delta.Totals = newTotals
 
 	au.newBlock(blk, delta)
@@ -2531,7 +2533,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 		}
 
 		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		accts = append(accts, newAccts)
 
 		// prepare block
@@ -2554,19 +2556,19 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	delete(au.accounts, addr1)
 	au.cachedDBRound--
 
-	pad, ok := au.baseAccounts.read(addr1)
+	pad, ok := au.baseAccounts.Read(addr1)
 	require.True(t, ok)
-	pad.round = au.cachedDBRound
-	au.baseAccounts.write(pad)
+	pad.Round = au.cachedDBRound
+	au.baseAccounts.Write(pad)
 
-	prd, ok := au.baseResources.read(addr1, basics.CreatableIndex(aidx1))
+	prd, ok := au.baseResources.Read(addr1, basics.CreatableIndex(aidx1))
 	require.True(t, ok)
-	prd.round = oldCachedDBRound
-	au.baseResources.write(prd, addr1)
-	prd, ok = au.baseResources.read(addr1, basics.CreatableIndex(aidx2))
+	prd.Round = oldCachedDBRound
+	au.baseResources.Write(prd, addr1)
+	prd, ok = au.baseResources.Read(addr1, basics.CreatableIndex(aidx2))
 	require.True(t, ok)
-	prd.round = oldCachedDBRound
-	au.baseResources.write(prd, addr1)
+	prd.Round = oldCachedDBRound
+	au.baseResources.Write(prd, addr1)
 
 	var ad basics.AccountData
 	var err error
@@ -2679,7 +2681,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 		}
 
 		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		accts = append(accts, newAccts)
 
 		// prepare block

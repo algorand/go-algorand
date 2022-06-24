@@ -47,7 +47,7 @@ type indexerLedgerForEval interface {
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
-// FoundAddress is a wrapper for an address and a boolean.
+// FoundAddress is a wrapper for an Address and a boolean.
 type FoundAddress struct {
 	Address basics.Address
 	Exists  bool

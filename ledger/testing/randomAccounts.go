@@ -535,3 +535,94 @@ func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 
 	return updates, totals
 }
+
+// RandomCreatableSampling sets elements to delete from previous iteration
+// It consideres 10 elements in an iteration.
+// loop 0: returns the first 10 elements
+// loop 1: returns: * the second 10 elements
+//                  * random sample of elements from the first 10: created changed from true -> false
+// loop 2: returns: * the elements 20->30
+//                  * random sample of elements from 10->20: created changed from true -> false
+func RandomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
+	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	numElementsPerSegement int) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+
+	iteration-- // 0-based here
+
+	delSegmentEnd := iteration * numElementsPerSegement
+	delSegmentStart := delSegmentEnd - numElementsPerSegement
+	if delSegmentStart < 0 {
+		delSegmentStart = 0
+	}
+
+	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	stop := delSegmentEnd + numElementsPerSegement
+
+	for i := delSegmentStart; i < delSegmentEnd; i++ {
+		ctb := creatables[crtbsList[i]]
+		if ctb.Created &&
+			// Always delete the first element, to make sure at least one
+			// element is always deleted.
+			(i == delSegmentStart || (crypto.RandUint64()%2) == 1) {
+			ctb.Created = false
+			newSample[crtbsList[i]] = ctb
+			delete(expectedDbImage, crtbsList[i])
+		}
+	}
+
+	for i := delSegmentEnd; i < stop; i++ {
+		newSample[crtbsList[i]] = creatables[crtbsList[i]]
+		if creatables[crtbsList[i]].Created {
+			expectedDbImage[crtbsList[i]] = creatables[crtbsList[i]]
+		}
+	}
+
+	return newSample
+}
+
+func RandomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
+	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
+	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
+
+	for i := 0; i < numElementsPerSegement*10; i++ {
+		assetIndex, mc := randomCreatable(uniqueAssetIds)
+		creatables[assetIndex] = mc
+		creatablesList[i] = assetIndex
+	}
+	return creatablesList, creatables // creatablesList is needed for maintaining the order
+}
+
+// randomCreatable generates a random creatable.
+func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
+	assetIndex basics.CreatableIndex, mc ledgercore.ModifiedCreatable) {
+
+	var ctype basics.CreatableType
+
+	switch crypto.RandUint64() % 2 {
+	case 0:
+		ctype = basics.AssetCreatable
+	case 1:
+		ctype = basics.AppCreatable
+	}
+
+	creatable := ledgercore.ModifiedCreatable{
+		Ctype:   ctype,
+		Created: (crypto.RandUint64() % 2) == 1,
+		Creator: RandomAddress(),
+		Ndeltas: 1,
+	}
+
+	var assetIdx basics.CreatableIndex
+	for {
+		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
+		_, found := uniqueAssetIds[assetIdx]
+		if !found {
+			uniqueAssetIds[assetIdx] = true
+			break
+		}
+	}
+	return assetIdx, creatable
+}

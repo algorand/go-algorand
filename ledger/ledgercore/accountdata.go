@@ -179,3 +179,9 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 func (u *AccountData) NormalizedOnlineBalance(genesisProto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, genesisProto)
 }
+
+// AccountCreatable is used as a map key.
+type AccountCreatable struct {
+	Address basics.Address
+	Index   basics.CreatableIndex
+}
