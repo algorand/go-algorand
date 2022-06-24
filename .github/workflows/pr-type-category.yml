@@ -14,8 +14,10 @@ jobs:
         if: |
           !contains(github.event.pull_request.labels.*.name, 'New Feature') &&
           !contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
-          !contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-      - name: "Found more than one PR Type label. Please add only one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
+          !contains(github.event.pull_request.labels.*.name, 'Bug-Fix') &&
+          !contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled') &&
+          !contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+      - name: "Found more than one PR Type label. Please add only one of the following: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'"
         run: exit 1
         if: |
           (
@@ -25,8 +27,29 @@ jobs:
             contains(github.event.pull_request.labels.*.name, 'New Feature') &&
             contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
           ) || (
+            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+            contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+            contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+          ) || (
             contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
             contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
+            contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
+            contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Bug-Fix') &&
+            contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Bug-Fix') &&
+            contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled') &&
+            contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
           )
       - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'"
         run: |
