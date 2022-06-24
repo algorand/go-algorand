@@ -1409,24 +1409,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
 				if part.Key.StateProofKey != nil {
-					// A part.Key.StateProofKey (aka a state proof verifier) is a constant size block of bytes
-					// If all those bytes are zero, then we don't want to display a "bogus" hash,
-					// instead we want to output "n/a" to inform the user
-					allZero := true
-					blockLength := len(*part.Key.StateProofKey)
-					for i := 0; i < blockLength; i++ {
-						keyByte := (*part.Key.StateProofKey)[i]
-						if keyByte != byte(0) {
-							allZero = false
-							break
-						}
-					}
-
-					if allZero {
-						fmt.Printf("State proof key:           n/a\n")
-					} else {
-						fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
-					}
+					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+				} else {
+					fmt.Printf("State proof key:           n/a\n")
 				}
 			}
 		})

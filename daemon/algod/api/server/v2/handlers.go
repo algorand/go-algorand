@@ -112,12 +112,30 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 			VoteFirstValid:  uint64(record.FirstValid),
 			VoteLastValid:   uint64(record.LastValid),
 			VoteKeyDilution: record.KeyDilution,
+			// Explicitly initialize to nil for zero key checking below
+			StateProofKey: nil,
 		},
 	}
 
 	if record.StateProof != nil {
-		tmp := record.StateProof[:]
-		participationKey.Key.StateProofKey = &tmp
+		// A record.StateProof (aka a state proof verifier) is a constant size block of bytes
+		// If all those bytes are zero, then we don't want to display a "bogus" hash,
+		// instead we want to output "n/a" to inform the user
+		allZero := true
+		blockLength := len(*record.StateProof)
+		for i := 0; i < blockLength; i++ {
+			keyByte := (*record.StateProof)[i]
+			if keyByte != byte(0) {
+				allZero = false
+				break
+			}
+		}
+
+		if !allZero {
+			tmp := record.StateProof[:]
+			participationKey.Key.StateProofKey = &tmp
+		}
+
 	}
 
 	// These are pointers but should always be present.
