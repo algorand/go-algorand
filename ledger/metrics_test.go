@@ -33,6 +33,7 @@ import (
 
 func TestMetricsReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Skip()
 
 	mt := metricsTracker{}
 	accts := ledgertesting.RandomAccounts(1, true)

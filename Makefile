@@ -111,8 +111,19 @@ check_shell:
 
 sanity: vet fix lint fmt
 
+# "make cover" runs all tests, and collects full coverage across all go-algorand packages by setting -coverpkg.
+# Without setting -coverpkg, coverage reports only measure lines of code exercised within the same package as the tests.
+#
+# "make cover PACKAGE=X" runs all tests in package github.com/algorand/go-algorand/X/... and collects full coverage
+# across all packages that are dependencies of that package.
 cover:
-	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+ifeq ($(PACKAGE),)
+	go test -v $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+else
+	cd $(PACKAGE); \
+	go test -v $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
+	go tool cover -html cover.out
+endif
 
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
