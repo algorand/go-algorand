@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck disable=2009,2093,2164
 
-MIN_VERSION="3.8.0"
+UPDATER_MIN_VERSION="3.8.0"
+UPDATER_CHANNEL="stable"
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 UPDATETYPE="update"
@@ -201,14 +202,14 @@ function get_updater_url() {
 
     # the updater will auto-update itself to the latest version, this means that the version of updater that is downloaded
     # can be arbitrary as long as the self-updating functionality is working, hence the hard-coded version
-    UPDATER_FILENAME="install_stable_${OS}-${ARCH}_${MIN_VERSION}.tar.gz"
-    UPDATER_URL="https://algorand-releases.s3.amazonaws.com/channel/stable/${UPDATER_FILENAME}"
+    UPDATER_FILENAME="install_${UPDATER_CHANNEL}_${OS}-${ARCH}_${UPDATER_MIN_VERSION}.tar.gz"
+    UPDATER_URL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}"
 
     # also set variables for signature and checksum validation
     if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
         UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
-        UPDATER_SIGURL="https://algorand-releases.s3.amazonaws.com/channel/stable/${UPDATER_FILENAME}.sig"
-        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/stable/hashes_stable_${OS}_${ARCH}_${MIN_VERSION}"
+        UPDATER_SIGURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}.sig"
+        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/hashes_${UPDATER_CHANNEL}_${OS}_${ARCH}_${UPDATER_MIN_VERSION}"
     fi
 }
 
