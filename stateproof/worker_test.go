@@ -115,28 +115,26 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
 	for _, part := range s.keys {
-		if part.OverlapsInterval(rnd, rnd) {
-			partRecord := account.ParticipationRecord{
-				ParticipationID:   part.ID(),
-				Account:           part.Parent,
-				FirstValid:        part.FirstValid,
-				LastValid:         part.LastValid,
-				KeyDilution:       part.KeyDilution,
-				LastVote:          0,
-				LastBlockProposal: 0,
-				LastStateProof:    0,
-				EffectiveFirst:    0,
-				EffectiveLast:     0,
-				VRF:               part.VRF,
-				Voting:            part.Voting,
-			}
-			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-			partRecordForRound := account.StateProofRecordForRound{
-				ParticipationRecord: partRecord,
-				StateProofSecrets:   signerInRound,
-			}
-			out = append(out, partRecordForRound)
+		partRecord := account.ParticipationRecord{
+			ParticipationID:   part.ID(),
+			Account:           part.Parent,
+			FirstValid:        part.FirstValid,
+			LastValid:         part.LastValid,
+			KeyDilution:       part.KeyDilution,
+			LastVote:          0,
+			LastBlockProposal: 0,
+			LastStateProof:    0,
+			EffectiveFirst:    0,
+			EffectiveLast:     0,
+			VRF:               part.VRF,
+			Voting:            part.Voting,
 		}
+		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+		partRecordForRound := account.StateProofRecordForRound{
+			ParticipationRecord: partRecord,
+			StateProofSecrets:   signerInRound,
+		}
+		out = append(out, partRecordForRound)
 	}
 	return
 }
@@ -859,43 +857,271 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
 
-func TestWorkerHandleSigExceptions(t *testing.T) {
+// relays reject signatures for old rounds (before stateproofNext) not disconnect
+func TestWorkerHandleSigOldRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(r))
+	}
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval),
+		Sig:           merklesignature.Signature{},
+	}
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	require.NoError(t, err)
+}
+
+// relays reject signatures for a round not in ledger
+func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.StateProofTopVoters = 2
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(r))
+	}
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msg.Round = basics.Round(proto.StateProofInterval * 10)
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Disconnect, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	expected := ledgercore.ErrNoEntry{
+		Round:     msg.Round,
+		Latest:    w.ledger.Latest(),
+		Committed: w.ledger.Latest(),
+	}
+	require.Equal(t, expected, err)
+}
+
+// relays reject signatures for wrong message (sig verification fails)
+func TestWorkerHandleSigWrongSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.StateProofTopVoters = 2
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(r))
+	}
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval * 2),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Disconnect, fwd)
+	expected2 := fmt.Errorf("%w: %v",
+		merklesignature.ErrSignatureSchemeVerificationFailed,
+		merklearray.ErrRootMismatch)
+	require.Equal(t, expected2, err)
+}
+
+// relays reject signatures for address not in top N
+func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.StateProofTopVoters = 2
+
+	addresses := make([]basics.Address, 0)
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 4; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
+		addresses = append(addresses, parent)
+
 		p := newPartKey(t, parent)
 		defer p.Close()
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(r))
+	}
 
-	// relays reject signatures for old rounds (before stateproofNext)
-	// not disconnect
-	msg := sigFromAddr {
-		SignerAddress: basics.Address{},
-			Round: basics.Round(proto.StateProofInterval),
-			Sig: merklesignature.Signature{},
-		}
+	msg := sigFromAddr{
+		SignerAddress: addresses[3],
+		Round:         basics.Round(proto.StateProofInterval * 2),
+		Sig:           merklesignature.Signature{},
+	}
+
 	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
-			Data: msgBytes,
-		})
-	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
-
-
-	// relays reject signatures for a round not in ledger
-	msg.Round = basics.Round(proto.StateProofInterval*10)
-	msgBytes = protocol.Encode(&msg)
-	reply = w.handleSigMessage(network.IncomingMessage{
-			Data: msgBytes,
-		})
+		Data: msgBytes,
+	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Disconnect, fwd)
+	expected3 := fmt.Errorf("handleSig: %v not in participants for %d",
+		msg.SignerAddress, msg.Round)
+	require.Equal(t, expected3, err)
+}
+
+// Signature already part of the builderForRound, ignore
+func TestWorkerHandleSigAlreadyIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.StateProofTopVoters = 2
+
+	var keys []account.Participation
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+	keys = append(keys, p.Participation)
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	lastRound := proto.StateProofInterval * 2
+	for r := 0; r < int(lastRound); r++ {
+		s.addBlock(basics.Round(r))
+	}
+
+	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
+	require.NoError(t, err)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	require.NoError(t, err)
+
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
+	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+	require.NoError(t, err)
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval * 2),
+		Sig:           sig,
+	}
+
+	// Create the database
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return initDB(tx)
+	})
+	require.NoError(t, err)
+
+	msgBytes := protocol.Encode(&msg)
+	// First call to add the sig
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
+
+	// The sig is already there. Shoud get error
+	reply = w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	require.NoError(t, err)
+}
+
+// Ignore on db internal error and report error
+func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.StateProofTopVoters = 2
+
+	var keys []account.Participation
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+	keys = append(keys, p.Participation)
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	lastRound := proto.StateProofInterval * 2
+	for r := 0; r < int(lastRound); r++ {
+		s.addBlock(basics.Round(r))
+	}
+
+	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
+	require.NoError(t, err)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	require.NoError(t, err)
+
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
+	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+	require.NoError(t, err)
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval * 2),
+		Sig:           sig,
+	}
+
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	require.Contains(t, "no such table: sigs", err.Error())
 }
