@@ -897,7 +897,6 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	proto.StateProofTopVoters = 2
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -922,10 +921,10 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
-	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
-	require.Equal(t, network.Disconnect, fwd)
+	require.Equal(t, network.Ignore, fwd)
 	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	expected := ledgercore.ErrNoEntry{
 		Round:     msg.Round,
@@ -1084,7 +1083,6 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	proto.StateProofTopVoters = 2
 
 	var keys []account.Participation
 	var address basics.Address
