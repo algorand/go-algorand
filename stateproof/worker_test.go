@@ -1123,7 +1123,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	require.Contains(t, "no such table: sigs", err.Error())
 }
 
-// relay reject signatures when could not makeBuilderForRound
+// relays reject signatures when could not makeBuilderForRound
 func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1172,7 +1172,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	require.Equal(t, expected, err)
 }
 
-// relay rejects signiture for a round where StateProofInterval is 0
+// relays reject signiture for a round where StateProofInterval is 0
 func TestWorkerHandleSigIntervalZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1216,7 +1216,7 @@ func TestWorkerHandleSigIntervalZero(t *testing.T) {
 	require.Equal(t, expected, err)
 }
 
-// relay rejects signiture for a round not multiple of  StateProofInterval
+// relays reject signiture for a round not multiple of  StateProofInterval
 func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1254,7 +1254,7 @@ func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	require.Equal(t, expected, err)
 }
 
-// relay handles corrupt message
+// relays handle corrupt message
 func TestWorkerHandleSigCorrupt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
