@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -856,4 +857,54 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	require.NoError(t, err)
 
 	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
+}
+
+// relay reject signatures when could not makeBuilderForRound
+func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	origProto := proto
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = origProto
+	}()
+	proto.StateProofInterval = 512
+	config.Consensus[protocol.ConsensusFuture] = proto
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(512))
+	}
+	// remove the first block from the ledger
+	delete(s.blocks, 0)
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msg.Round = basics.Round(proto.StateProofInterval)
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	expected := ledgercore.ErrNoEntry{
+		Round:     0,
+		Latest:    w.ledger.Latest(),
+		Committed: w.ledger.Latest(),
+	}
+	require.Equal(t, expected, err)
 }

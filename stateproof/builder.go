@@ -165,11 +165,31 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
+	// The sig should be for a round which is a multiple of StateProofInterval
+	sfaBlkHdr, err := spw.ledger.BlockHdr(sfa.Round)
+	if err != nil {
+		// reject signatures for a round not in the ledger
+		// Should not disconnect this peer, since this is a fault of the relay
+		// The peer could have other signatures what the relay is interested in
+		return network.Ignore, err
+	}
+	proto := config.Consensus[sfaBlkHdr.CurrentProtocol]
+	if proto.StateProofInterval == 0 {
+		// Disconnect: Sending a signature for a round that does not have SP enabled
+		return network.Disconnect, fmt.Errorf("handleSig: StateProofInterval is 0 for round %d", uint64(sfaBlkHdr.Round))
+	}
+	if uint64(sfa.Round) % proto.StateProofInterval != 0 {
+		// reject sig for round not a multiple of the interval
+		// Disconnect: should not be sending a sig for this round
+		return network.Disconnect, fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d at round %d", sfa.Round, proto.StateProofInterval, uint64(sfaBlkHdr.Round))
+	}
+
 	builderForRound, ok := spw.builders[sfa.Round]
 	if !ok {
 		latest := spw.ledger.Latest()
 		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
+			// The latest block in the ledger should never disappear, so this should never happen 
 			return network.Disconnect, err
 		}
 
@@ -181,7 +201,9 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 
 		builderForRound, err = makeBuilderForRound(spw.ledger, sfa.Round)
 		if err != nil {
-			return network.Disconnect, err
+			// Should not disconnect this peer, since this is a fault of the relay
+			// The peer could have other signatures what the relay is interested in
+			return network.Ignore, err
 		}
 		spw.builders[sfa.Round] = builderForRound
 	}
@@ -200,7 +222,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Disconnect, err
 	}
 
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return addPendingSig(tx, sfa.Round, pendingSig{
 			signer:       sfa.SignerAddress,
 			sig:          sfa.Sig,
@@ -212,6 +234,8 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	}
 	// validated that we can add the sig previously.
 	if err := builderForRound.Add(pos, sfa.Sig); err != nil {
+		// only Present called from Add returns an error which is already
+		// passed in the call above.
 		return network.Ignore, err
 	}
 	return network.Broadcast, nil
