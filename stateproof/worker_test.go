@@ -912,11 +912,10 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 
 	msg := sigFromAddr{
 		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval),
+		Round:         basics.Round(proto.StateProofInterval * 10),
 		Sig:           merklesignature.Signature{},
 	}
 
-	msg.Round = basics.Round(proto.StateProofInterval * 10)
 	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1122,4 +1121,157 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
 	require.Contains(t, "no such table: sigs", err.Error())
+}
+
+// relay reject signatures when could not makeBuilderForRound
+func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	origProto := proto
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = origProto
+	}()
+	proto.StateProofInterval = 512
+	config.Consensus[protocol.ConsensusFuture] = proto
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(512))
+	}
+	// remove the first block from the ledger
+	delete(s.blocks, 0)
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(proto.StateProofInterval),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	expected := ledgercore.ErrNoEntry{
+		Round:     0,
+		Latest:    w.ledger.Latest(),
+		Committed: w.ledger.Latest(),
+	}
+	require.Equal(t, expected, err)
+}
+
+// relay rejects signiture for a round where StateProofInterval is 0
+func TestWorkerHandleSigIntervalZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	origProto := proto
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = origProto
+	}()
+	proto.StateProofInterval = 0
+	config.Consensus[protocol.ConsensusFuture] = proto
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(origProto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(512))
+	}
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(256),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Disconnect, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	expected := fmt.Errorf("handleSig: StateProofInterval is 0 for round %d",
+		uint64(msg.Round))
+	require.Equal(t, expected, err)
+}
+
+// relay rejects signiture for a round not multiple of  StateProofInterval
+func TestWorkerHandleSigNotOnInterval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
+		s.addBlock(basics.Round(512))
+	}
+
+	msg := sigFromAddr{
+		SignerAddress: address,
+		Round:         basics.Round(300),
+		Sig:           merklesignature.Signature{},
+	}
+
+	msgBytes := protocol.Encode(&msg)
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Disconnect, fwd)
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	expected := fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d at round %d",
+		msg.Round, proto.StateProofInterval, uint64(msg.Round))
+	require.Equal(t, expected, err)
+}
+
+// relay handles corrupt message
+func TestWorkerHandleSigCorrupt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var address basics.Address
+	crypto.RandBytes(address[:])
+	p := newPartKey(t, address)
+	defer p.Close()
+
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w := newTestWorker(t, s)
+
+	msg := sigFromAddr{}
+	msgBytes := protocol.Encode(&msg)
+	crypto.RandBytes(msgBytes[:])
+
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 }

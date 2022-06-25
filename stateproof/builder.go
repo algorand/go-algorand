@@ -178,7 +178,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		// Disconnect: Sending a signature for a round that does not have SP enabled
 		return network.Disconnect, fmt.Errorf("handleSig: StateProofInterval is 0 for round %d", uint64(sfaBlkHdr.Round))
 	}
-	if uint64(sfa.Round) % proto.StateProofInterval != 0 {
+	if uint64(sfa.Round)%proto.StateProofInterval != 0 {
 		// reject sig for round not a multiple of the interval
 		// Disconnect: should not be sending a sig for this round
 		return network.Disconnect, fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d at round %d", sfa.Round, proto.StateProofInterval, uint64(sfaBlkHdr.Round))
@@ -189,7 +189,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		latest := spw.ledger.Latest()
 		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
-			// The latest block in the ledger should never disappear, so this should never happen 
+			// The latest block in the ledger should never disappear, so this should never happen
 			return network.Disconnect, err
 		}
 
