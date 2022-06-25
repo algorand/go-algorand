@@ -755,9 +755,9 @@ func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 	}
 }
 
-// TestForwardNotFromThisNodeSecondHalf2 tests that relays forward
+// TestForwardNotFromThisNodeFirstHal tests that relays forward
 // signatures in the first half of the period only if it is from this node
-func TestForwardNotFromThisNodeSecondHalf2(t *testing.T) {
+func TestForwardNotFromThisNodeFirstHal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, 0)
