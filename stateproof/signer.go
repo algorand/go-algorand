@@ -40,26 +40,28 @@ type sigFromAddr struct {
 
 func (spw *Worker) signer(latest basics.Round) {
 	var nextrnd basics.Round
-
-restart:
+	restart := true // for the first iteration
 	for {
-		latestHdr, err := spw.ledger.BlockHdr(latest)
-		if err != nil {
-			spw.log.Warnf("spw.signer(): BlockHdr(latest %d): %v", latest, err)
-			time.Sleep(1 * time.Second)
-			latest = spw.ledger.Latest()
-			continue
+		if restart {
+			for {
+				latestHdr, err := spw.ledger.BlockHdr(latest)
+				if err != nil {
+					spw.log.Warnf("spw.signer(): BlockHdr(latest %d): %v", latest, err)
+					time.Sleep(1 * time.Second)
+					latest = spw.ledger.Latest()
+					continue
+				}
+
+				nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+				if nextrnd == 0 {
+					// State proofs are not enabled yet.  Keep monitoring new blocks.
+					nextrnd = latest + 1
+				}
+				break
+			}
+			restart = false
 		}
 
-		nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-		if nextrnd == 0 {
-			// State proofs are not enabled yet.  Keep monitoring new blocks.
-			nextrnd = latest + 1
-		}
-		break
-	}
-
-	for {
 		select {
 		case <-spw.ledger.Wait(nextrnd):
 			hdr, err := spw.ledger.BlockHdr(nextrnd)
@@ -67,7 +69,8 @@ restart:
 				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextrnd, err)
 				time.Sleep(1 * time.Second)
 				latest = spw.ledger.Latest()
-				goto restart
+				restart = true
+				continue
 			}
 
 			spw.signBlock(hdr)
