@@ -704,6 +704,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
           short_test_flag: "-short"
+          no_output_timeout: 45m
 
   e2e_expect_nightly:
     parameters:
