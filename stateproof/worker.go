@@ -39,6 +39,7 @@ type builder struct {
 
 	voters    *ledgercore.VotersForRound
 	votersHdr bookkeeping.BlockHeader
+	message   stateproofmsg.Message
 }
 
 // Worker builds state proofs, by broadcasting
@@ -66,7 +67,6 @@ type Worker struct {
 
 	signed   basics.Round
 	signedCh chan struct{}
-	Message  stateproofmsg.Message
 }
 
 // NewWorker constructs a new Worker, as used by the node.
