@@ -2409,7 +2409,7 @@
         "summary": "Get application information."
       }
     },
-    "/v2/applications/{application-id}/boxes/{box-name}": {
+    "/v2/applications/{application-id}/box": {
       "get": {
         "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded).",
         "operationId": "GetApplicationBoxByName",
@@ -2425,8 +2425,8 @@
           },
           {
             "description": "A box name",
-            "in": "path",
-            "name": "box-name",
+            "in": "query",
+            "name": "name",
             "required": true,
             "schema": {
               "type": "string"

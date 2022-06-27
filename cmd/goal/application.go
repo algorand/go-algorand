@@ -19,9 +19,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha512"
-	"encoding/base32"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -195,33 +192,25 @@ func init() {
 	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
 }
 
-type appCallBytes struct {
-	Encoding string `codec:"encoding"`
-	Value    string `codec:"value"`
-}
-
-func newAppCallBytes(arg string) appCallBytes {
-	parts := strings.SplitN(arg, ":", 2)
-	if len(parts) != 2 {
-		reportErrorf("all arguments and box names should be of the form 'encoding:value'")
+func newAppCallBytes(arg string) logic.AppCallBytes {
+	appBytes, err := logic.NewAppCallBytes(arg)
+	if err != nil {
+		reportErrorf(err.Error())
 	}
-	return appCallBytes{
-		Encoding: parts[0],
-		Value:    parts[1],
-	}
+	return logic.AppCallBytes(appBytes)
 }
 
 type appCallInputs struct {
-	Accounts      []string       `codec:"accounts"`
-	ForeignApps   []uint64       `codec:"foreignapps"`
-	ForeignAssets []uint64       `codec:"foreignassets"`
-	Boxes         []boxRef       `codec:"boxes"`
-	Args          []appCallBytes `codec:"args"`
+	Accounts      []string             `codec:"accounts"`
+	ForeignApps   []uint64             `codec:"foreignapps"`
+	ForeignAssets []uint64             `codec:"foreignassets"`
+	Boxes         []boxRef             `codec:"boxes"`
+	Args          []logic.AppCallBytes `codec:"args"`
 }
 
 type boxRef struct {
-	appID uint64       `codec:"app"`
-	name  appCallBytes `codec:"name"`
+	appID uint64             `codec:"app"`
+	name  logic.AppCallBytes `codec:"name"`
 }
 
 // newBoxRef parses a command-line box ref, which is an optional appId, a comma,
@@ -270,67 +259,10 @@ func stringsToBoxRefs(strs []string) []boxRef {
 	return out
 }
 
-func (arg appCallBytes) raw() (rawValue []byte, parseErr error) {
-	switch arg.Encoding {
-	case "str", "string":
-		rawValue = []byte(arg.Value)
-	case "int", "integer":
-		num, err := strconv.ParseUint(arg.Value, 10, 64)
-		if err != nil {
-			parseErr = fmt.Errorf("Could not parse uint64 from string (%s): %v", arg.Value, err)
-			return
-		}
-		ibytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(ibytes, num)
-		rawValue = ibytes
-	case "addr", "address":
-		addr, err := basics.UnmarshalChecksumAddress(arg.Value)
-		if err != nil {
-			parseErr = fmt.Errorf("Could not unmarshal checksummed address from string (%s): %v", arg.Value, err)
-			return
-		}
-		rawValue = addr[:]
-	case "b32", "base32", "byte base32":
-		data, err := base32.StdEncoding.DecodeString(arg.Value)
-		if err != nil {
-			parseErr = fmt.Errorf("Could not decode base32-encoded string (%s): %v", arg.Value, err)
-			return
-		}
-		rawValue = data
-	case "b64", "base64", "byte base64":
-		data, err := base64.StdEncoding.DecodeString(arg.Value)
-		if err != nil {
-			parseErr = fmt.Errorf("Could not decode base64-encoded string (%s): %v", arg.Value, err)
-			return
-		}
-		rawValue = data
-	case "abi":
-		typeAndValue := strings.SplitN(arg.Value, ":", 2)
-		if len(typeAndValue) != 2 {
-			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
-			return
-		}
-		abiType, err := abi.TypeOf(typeAndValue[0])
-		if err != nil {
-			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
-			return
-		}
-		value, err := abiType.UnmarshalFromJSON([]byte(typeAndValue[1]))
-		if err != nil {
-			parseErr = fmt.Errorf("Could not decode abi value string (%s):%v ", typeAndValue[1], err)
-			return
-		}
-		return abiType.Encode(value)
-	default:
-		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
-	}
-	return
-}
-
 func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRef {
 	output := make([]transactions.BoxRef, len(input))
 	for i, tbr := range input {
-		rawName, err := tbr.name.raw()
+		rawName, err := tbr.name.Raw()
 		if err != nil {
 			reportErrorf("Could not decode box name %s: %v", tbr.name, err)
 		}
@@ -372,7 +304,7 @@ func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, for
 	boxes = translateBoxRefs(inputs.Boxes, foreignApps)
 	args = make([][]byte, len(inputs.Args))
 	for i, arg := range inputs.Args {
-		rawValue, err := arg.raw()
+		rawValue, err := arg.Raw()
 		if err != nil {
 			reportErrorf("Could not decode input at index %d: %v", i, err)
 		}
@@ -410,7 +342,7 @@ func getAppInputs() (args [][]byte, accounts []string, apps []uint64, assets []u
 	// on it. appArgs became `StringArrayVar` in order to support abi arguments
 	// which contain commas.
 
-	var encodedArgs []appCallBytes
+	var encodedArgs []logic.AppCallBytes
 	for _, arg := range appArgs {
 		if len(arg) > 0 {
 			encodedArgs = append(encodedArgs, newAppCallBytes(arg))

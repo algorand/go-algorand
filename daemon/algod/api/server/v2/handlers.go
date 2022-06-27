@@ -1115,14 +1115,23 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 }
 
 // GetApplicationBoxByName returns the value of an application's box
-// (GET /v2/applications/{application-id}/boxes/{box-name})
-func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, boxName string) error {
+// (GET /v2/applications/{application-id}/box)
+func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxByNameParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
-
 	lastRound := ledger.Latest()
 
-	boxName, err := url.PathUnescape(boxName)
+	encodedBoxName := params.Name
+	boxNameBytes, err := logic.NewAppCallBytes(encodedBoxName)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	rawBoxName, err := boxNameBytes.Raw()
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	boxName, err := url.PathUnescape(string(rawBoxName))
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}

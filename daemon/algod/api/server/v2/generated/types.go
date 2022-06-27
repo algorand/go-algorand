@@ -827,6 +827,13 @@ type GetPendingTransactionsByAddressParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
+// GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
+type GetApplicationBoxByNameParams struct {
+
+	// A box name
+	Name string `json:"name"`
+}
+
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
 

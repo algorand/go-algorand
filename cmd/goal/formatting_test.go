@@ -48,7 +48,7 @@ func TestNewAppCallBytes(t *testing.T) {
 	acb := newAppCallBytes("str:hello")
 	require.Equal(t, "str", acb.Encoding)
 	require.Equal(t, "hello", acb.Value)
-	_, err := acb.raw()
+	_, err := acb.Raw()
 	require.NoError(t, err)
 
 	require.Panics(t, func() { newAppCallBytes("hello") })
@@ -56,11 +56,11 @@ func TestNewAppCallBytes(t *testing.T) {
 	acb = newAppCallBytes("str:1:2")
 	require.Equal(t, "str", acb.Encoding)
 	require.Equal(t, "1:2", acb.Value)
-	_, err = acb.raw()
+	_, err = acb.Raw()
 	require.NoError(t, err)
 
 	acb = newAppCallBytes(":x")
-	_, err = acb.raw()
+	_, err = acb.Raw()
 	require.Error(t, err)
 }
 
