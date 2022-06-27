@@ -2023,8 +2023,6 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 				}
 				results[v.String] = true
 				resultCount++
-			} else {
-				continue
 			}
 		}
 		return
@@ -2531,6 +2529,12 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 }
 
 func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
+	// NOTE! If we are passing in `string`, then for `BoxKey` case,
+	// we might contain 0-byte in boxKey, coming from uint64 appID.
+	// The consequence would be DB key write in be cut off after such 0-byte.
+	// Casting `string` to `[]byte` avoids such trouble, and test:
+	// - `TestBoxNamesByAppIDs` in `acctupdates_test`
+	// relies on such modification.
 	result, err := w.upsertKvPairStmt.Exec([]byte(key), []byte(value))
 	if err != nil {
 		return err
