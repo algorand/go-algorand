@@ -188,6 +188,7 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 
 // LookupKv delegates to the Ledger and marks the box key as touched for post-processing
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
+	// TODO: remove print statements before merging!!!!
 	fmt.Printf("indexerLedgerConnector.LookupKv(rnd=%d, key=%s)", rnd, key)
 	value, err := l.il.LookupKv(rnd, key)
 	if err != nil {
@@ -197,39 +198,7 @@ func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string,
 	l.roundResources.TouchedBoxes[key] = struct{}{}
 	fmt.Printf("\n<<<COPACETIC>>>indexerLedgerConnector.LookupKv(round=%d, key=%s) ---> %v", rnd, key, value)
 	return value, nil
-
-	// // TODO: we should probably defer de-structuring the app & name from the key till later!!!!
-	// // add the box info to the indexer cache:
-	// app, name, err := logic.GetAppAndNameFromKey(key)
-	// if err != nil {
-	// 	return value, fmt.Errorf("LookupKv() received nonsensical key [%s] yet somehow Ledger's LookupKv() gave value [%v]. error key decoding: %w", key, value, err)
-	// }
-	// // look up and update the box in the indexer cache:
-	// box, ok := l.roundResources.DeprecatedBoxes2[key]
-	// if !ok {
-	// 	// add the missing box to the cache:
-	// 	l.roundResources.DeprecatedBoxes2[key] = DeprectedIndexerBox{
-	// 		Index:   app,
-	// 		Name:    name,
-	// 		Value:   value,
-	// 		Touched: true,
-	// 	}
-	// 	return value, nil
-	// }
-	// if !box.Touched {
-	// 	box.Touched = true
-	// 	l.roundResources.DeprecatedBoxes2[key] = box
-	// }
-	// return box.Value, nil
 }
-
-// func (l indexerLedgerConnector) StoreKv(rnd basics.Round, key string, value string) error {
-// 	if rnd != l.latestRound {
-// 		return fmt.Errorf("StoreKv() attempted to store round %d which mismatched ledger's round %d", rnd, l.latestRound)
-// 	}
-// 	l.kvStore[key] = &value
-// 	return nil
-// }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
