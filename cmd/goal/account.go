@@ -139,8 +139,9 @@ func init() {
 	rewardsCmd.MarkFlagRequired("address")
 
 	// changeOnlineStatus flags
-	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no -partkeyfile)")
-	changeOnlineCmd.Flags().StringVarP(&partKeyFile, "partkeyfile", "", "", "Participation key file (required if no -account)")
+	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no --partkeyfile)")
+	changeOnlineCmd.Flags().StringVarP(&partKeyFile, "partkeyfile", "", "", "Participation key file (required if no --address)")
+	changeOnlineCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different due to rekeying")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
 	changeOnlineCmd.Flags().Uint64VarP(&firstValid, "firstRound", "", 0, "")
@@ -203,6 +204,7 @@ func init() {
 	// markNonparticipatingCmd flags
 	markNonparticipatingCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change")
 	markNonparticipatingCmd.MarkFlagRequired("address")
+	markNonparticipatingCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from address due to rekeying")
 	markNonparticipatingCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
 	markNonparticipatingCmd.Flags().Uint64VarP(&firstValid, "firstRound", "", 0, "")
 	markNonparticipatingCmd.Flags().Uint64VarP(&firstValid, "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
@@ -783,13 +785,11 @@ var changeOnlineCmd = &cobra.Command{
 		checkTxValidityPeriodCmdFlags(cmd)
 
 		if accountAddress == "" && partKeyFile == "" {
-			fmt.Printf("Must specify one of --address or --partkeyfile\n")
-			os.Exit(1)
+			reportErrorf("Must specify one of --address or --partkeyfile\n")
 		}
 
 		if partKeyFile != "" && !online {
-			fmt.Printf("Going offline does not support --partkeyfile\n")
-			os.Exit(1)
+			reportErrorf("Going offline does not support --partkeyfile\n")
 		}
 
 		dataDir := ensureSingleDataDir()
@@ -805,14 +805,12 @@ var changeOnlineCmd = &cobra.Command{
 		if partKeyFile != "" {
 			partdb, err := db.MakeErasableAccessor(partKeyFile)
 			if err != nil {
-				fmt.Printf("Cannot open partkey %s: %v\n", partKeyFile, err)
-				os.Exit(1)
+				reportErrorf("Cannot open partkey %s: %v\n", partKeyFile, err)
 			}
 
 			partkey, err := algodAcct.RestoreParticipation(partdb)
 			if err != nil {
-				fmt.Printf("Cannot load partkey %s: %v\n", partKeyFile, err)
-				os.Exit(1)
+				reportErrorf("Cannot load partkey %s: %v\n", partKeyFile, err)
 			}
 
 			part = &partkey.Participation
@@ -858,9 +856,14 @@ func changeAccountOnlineStatus(
 
 	// Sign & broadcast the transaction
 	wh, pw := ensureWalletHandleMaybePassword(dataDir, wallet, true)
-	txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+	signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, utx)
 	if err != nil {
-		return fmt.Errorf(errorOnlineTX, err)
+		return fmt.Errorf(errorSigningTX, err)
+	}
+
+	txid, err := client.BroadcastTransaction(signedTxn)
+	if err != nil {
+		return fmt.Errorf(errorBroadcastingTX, err)
 	}
 	fmt.Printf("Transaction id for status change transaction: %s\n", txid)
 
@@ -915,7 +918,7 @@ var installParticipationKeyCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if !partKeyDeleteInput {
-			fmt.Println(
+			reportErrorf(
 				`The installpartkey command deletes the input participation file on
 successful installation.  Please acknowledge this by passing the
 "--delete-input" flag to the installpartkey command.  You can make
@@ -925,7 +928,6 @@ forward security.  Storing old participation keys compromises overall
 system security.
 
 No --delete-input flag specified, exiting without installing key.`)
-			os.Exit(1)
 		}
 
 		dataDir := ensureSingleDataDir()
@@ -1447,9 +1449,14 @@ var markNonparticipatingCmd = &cobra.Command{
 
 		// Sign & broadcast the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		txid, err := client.SignAndBroadcastTransaction(wh, pw, utx)
+		signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, utx)
 		if err != nil {
-			reportErrorf(errorOnlineTX, err)
+			reportErrorf(errorSigningTX, err)
+		}
+
+		txid, err := client.BroadcastTransaction(signedTxn)
+		if err != nil {
+			reportErrorf(errorBroadcastingTX, err)
 		}
 		fmt.Printf("Transaction id for mark-nonparticipating transaction: %s\n", txid)
 
