@@ -158,7 +158,7 @@ func opBoxDel(cx *EvalContext) error {
 
 const boxPrefix = "bx:"
 const boxPrefixLength = 3 // len("bx:")
-const boxSuffixIndex = 11 // len("bx:") + 8 (appIdx, big-endian)
+const boxNameIndex = 11 // len("bx:") + 8 (appIdx, big-endian)
 
 // MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
 func MakeBoxKey(appIdx basics.AppIndex, name string) string {
@@ -169,10 +169,10 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 	   The "bx:" prefix is so that the kvstore might be usable for things
 	   besides boxes.
 	*/
-	key := make([]byte, boxSuffixIndex + len(name))
+	key := make([]byte, boxNameIndex + len(name))
 	copy(key, boxPrefix)
 	binary.BigEndian.PutUint64(key[boxPrefixLength:], uint64(appIdx))
-	copy(key[boxSuffixIndex:], name)
+	copy(key[boxNameIndex:], name)
 	return string(key)
 }
 
@@ -184,7 +184,7 @@ func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
 	}
 	// WARNING: even junk such as "this is definitely NOT a box key" will return without error
 	keyBytes := []byte(key)
-	app := (basics.AppIndex)(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:(boxPrefixLength+8)]))
+	app := (basics.AppIndex)(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
 	return app, string(keyBytes[11:]), nil
 }
 
@@ -204,7 +204,7 @@ func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
 // 		app  AppIndex
 // 		name string
 // 	}{
-// 		{42, "yo yo mama"}, {0, "stranger"}, {131231, "348-8uj"}, {0, ""},
+// 		{42, "yo yo mother"}, {0, "stranger"}, {131231, "348-8uj"}, {0, ""},
 // 	}
 // 	fmt.Printf("TEST CASES: %+v\n\n", testCases)
 // 	for i, testCase := range testCases {
@@ -216,6 +216,7 @@ func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
 // 	}
 
 // 	errorCases := []string{"too short", "this is uttter nonsense"}
+// OOPS - the second case doesn't actually error
 
 // 	fmt.Printf("\n\n\nERRORING CASES: %#v\n\b\n", errorCases)
 // 	for i, errorCase := range errorCases {
