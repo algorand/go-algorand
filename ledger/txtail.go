@@ -103,11 +103,11 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 	t.recent = make(map[basics.Round]roundLeases)
 
-	// the roundsLastValids is a temporary map used during the execution of
+	// the lastValid is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
 	// optimal size. This would ensure that upon startup, we don't preallocate
 	// more memory than we truly need.
-	roundsLastValids := make(map[basics.Round][]transactions.Txid)
+	lastValid := make(map[basics.Round][]transactions.Txid)
 
 	// the roundTailHashes and blockHeaderData need a single element to start with
 	// in order to allow lookups on zero offsets when they are empty (new database)
@@ -125,17 +125,17 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 		}
 
 		if consensusParams.SupportTransactionLeases {
-			for i := 0; i < len(txTailRound.Leases); i++ {
-				if txTailRound.Leases[i].Lease != [32]byte{} {
-					key := ledgercore.Txlease{Sender: txTailRound.Leases[i].Sender, Lease: txTailRound.Leases[i].Lease}
-					t.recent[old].txleases[key] = txTailRound.LastValid[txTailRound.Leases[i].TxnIdx]
+			for _, rlease := range txTailRound.Leases {
+				if rlease.Lease != [32]byte{} {
+					key := ledgercore.Txlease{Sender: rlease.Sender, Lease: rlease.Lease}
+					t.recent[old].txleases[key] = txTailRound.LastValid[rlease.TxnIdx]
 				}
 			}
 		}
 
 		for i := 0; i < len(txTailRound.LastValid); i++ {
 			if txTailRound.LastValid[i] > t.lowWaterMark {
-				list := roundsLastValids[txTailRound.LastValid[i]]
+				list := lastValid[txTailRound.LastValid[i]]
 				// if the list reached capacity, resize.
 				if len(list) == cap(list) {
 					var newList []transactions.Txid
@@ -148,7 +148,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 					list = newList
 				}
 				list = append(list, txTailRound.TxnIDs[i])
-				roundsLastValids[txTailRound.LastValid[i]] = list
+				lastValid[txTailRound.LastValid[i]] = list
 			}
 		}
 
@@ -157,7 +157,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
-	for lastValid, list := range roundsLastValids {
+	for lastValid, list := range lastValid {
 		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
 		for _, id := range list {
 			lastValueMap[id] = struct{}{}
@@ -240,7 +240,7 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	}
 
 	if enableTxTailHashes {
-		rnd := dcc.oldBase + basics.Round(dcc.offset)
+		rnd := dcc.newBase
 		t.tailMu.RLock()
 		proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
 		if !ok {
@@ -264,7 +264,7 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 	}
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
-	rnd := dcc.oldBase + basics.Round(dcc.offset)
+	rnd := dcc.newBase
 	proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
 	if !ok {
 		lowest := t.lowestBlockHeaderRound
@@ -286,6 +286,7 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 
 func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
 	newBase := dcc.newBase
 
 	t.roundTailSerializedDeltas = t.roundTailSerializedDeltas[dcc.offset:]
@@ -306,7 +307,6 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 			t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
 		}
 	}
-	t.tailMu.Unlock()
 }
 
 func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {

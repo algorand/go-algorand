@@ -290,6 +290,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						offset:               1,
 						catchpointFirstStage: true,
 					},
+					newBase: basics.Round(i),
 				}
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
@@ -310,7 +311,6 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
 					}
 				}
-				dcc.newBase = dcc.oldBase + basics.Round(dcc.offset)
 				txtail.postCommit(context.Background(), dcc)
 				if uint64(i) > proto.MaxTxnLife*2 {
 					// validate internal storage length.
