@@ -730,7 +730,7 @@ func (wn *WebsocketNetwork) setup() {
 	)
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
-	wn.broadcastQueueBulk = make(chan broadcastRequest, 10000)
+	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
