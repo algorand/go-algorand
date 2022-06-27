@@ -857,10 +857,7 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
 
-// relays reject signatures for old rounds (before stateproofNext) not disconnect
-func TestWorkerHandleSigOldRounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStubs, w *Worker, msg sigFromAddr, msgBytes []byte) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	var address basics.Address
@@ -868,19 +865,30 @@ func TestWorkerHandleSigOldRounds(t *testing.T) {
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
-	w := newTestWorker(t, s)
+	s = newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	w = newTestWorker(t, s)
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
-		s.addBlock(basics.Round(r))
+		s.addBlock(basics.Round(proto.StateProofInterval * 2))
 	}
 
-	msg := sigFromAddr{
+	msg = sigFromAddr{
 		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval),
+		Round:         sigRound,
 		Sig:           merklesignature.Signature{},
 	}
-	msgBytes := protocol.Encode(&msg)
+	msgBytes = protocol.Encode(&msg)
+	return
+}
+
+// relays reject signatures for old rounds (before stateproofNext) not disconnect
+func TestWorkerHandleSigOldRounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	intervalRound := basics.Round(proto.StateProofInterval)
+	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound)
+
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
@@ -897,26 +905,9 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
+	intervalRound := basics.Round(proto.StateProofInterval)
+	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
 
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
-
-	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
-	w := newTestWorker(t, s)
-
-	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
-		s.addBlock(basics.Round(r))
-	}
-
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval * 10),
-		Sig:           merklesignature.Signature{},
-	}
-
-	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
@@ -938,27 +929,9 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	proto.StateProofTopVoters = 2
+	intervalRound := basics.Round(proto.StateProofInterval)
+	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
-
-	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
-	w := newTestWorker(t, s)
-
-	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
-		s.addBlock(basics.Round(r))
-	}
-
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval * 2),
-		Sig:           merklesignature.Signature{},
-	}
-
-	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
@@ -1022,21 +995,8 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	proto.StateProofTopVoters = 2
-
-	var keys []account.Participation
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
-	keys = append(keys, p.Participation)
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
 	lastRound := proto.StateProofInterval * 2
-	for r := 0; r < int(lastRound); r++ {
-		s.addBlock(basics.Round(r))
-	}
+	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
 	require.NoError(t, err)
@@ -1047,12 +1007,8 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval * 2),
-		Sig:           sig,
-	}
 
+	msg.Sig = sig
 	// Create the database
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initDB(tx)
@@ -1082,21 +1038,8 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-
-	var keys []account.Participation
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
-	keys = append(keys, p.Participation)
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
 	lastRound := proto.StateProofInterval * 2
-	for r := 0; r < int(lastRound); r++ {
-		s.addBlock(basics.Round(r))
-	}
-
+	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
 	require.NoError(t, err)
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
@@ -1106,11 +1049,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(proto.StateProofInterval * 2),
-		Sig:           sig,
-	}
+	msg.Sig = sig
 
 	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
@@ -1184,25 +1123,9 @@ func TestWorkerHandleSigIntervalZero(t *testing.T) {
 	proto.StateProofInterval = 0
 	config.Consensus[protocol.ConsensusFuture] = proto
 
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
+	intervalRound := basics.Round(proto.StateProofInterval)
+	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 
-	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
-	w := newTestWorker(t, s)
-
-	for r := 0; r < int(origProto.StateProofInterval)*2; r++ {
-		s.addBlock(basics.Round(512))
-	}
-
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(512),
-		Sig:           merklesignature.Signature{},
-	}
-
-	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
@@ -1220,26 +1143,8 @@ func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
+	_, w, msg, msgBytes := setBlocksAndMessage(t, basics.Round(600))
 
-	var address basics.Address
-	crypto.RandBytes(address[:])
-	p := newPartKey(t, address)
-	defer p.Close()
-
-	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
-	w := newTestWorker(t, s)
-
-	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
-		s.addBlock(basics.Round(512))
-	}
-
-	msg := sigFromAddr{
-		SignerAddress: address,
-		Round:         basics.Round(600),
-		Sig:           merklesignature.Signature{},
-	}
-
-	msgBytes := protocol.Encode(&msg)
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
