@@ -577,9 +577,16 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	require.Zero(t, len(s.deletedStateProofKeys))
 }
 
+type sigOriginatedFrom int
+
+const (
+	makeFromThisNode sigOriginatedFrom = iota
+	makeNotFromThisNode
+	makeFromOrNOtThisNode
+)
+
 // getSignaturesInDatabase sets up the db with signatures
-// makeFromThisNode -1 no, +1 yes, 0 mix
-func getSignaturesInDatabase(t *testing.T, numAddresses, makeFromThisNode int) (
+func getSignaturesInDatabase(t *testing.T, numAddresses int, fromWhere sigOriginatedFrom) (
 	signatureBcasted map[basics.Address]int, fromThisNode map[basics.Address]bool,
 	tns *testWorkerStubs, spw *Worker) {
 
@@ -626,7 +633,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses, makeFromThisNode int) (
 	}
 
 	// Add the signatures to the databse
-	ftn := makeFromThisNode >= 0
+	ftn := fromWhere == makeFromOrNOtThisNode || fromWhere == makeFromThisNode
 	for _, sfa := range sigs {
 		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return addPendingSig(tx, sfa.Round, pendingSig{
@@ -637,7 +644,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses, makeFromThisNode int) (
 		})
 		require.NoError(t, err)
 		fromThisNode[sfa.SignerAddress] = ftn
-		if makeFromThisNode == 0 {
+		if fromWhere == makeFromOrNOtThisNode {
 			// alternate the from this node argument between addresses
 			ftn = !ftn
 		}
@@ -652,7 +659,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses, makeFromThisNode int) (
 // if received from another relay.
 func TestSigBroacastTwoPerSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, 0)
+	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, makeFromOrNOtThisNode)
 
 	for periods := 1; periods < 10; periods += 3 {
 		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
@@ -741,7 +748,7 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, _, tns, spw := getSignaturesInDatabase(t, 10, -1)
+	_, _, tns, spw := getSignaturesInDatabase(t, 10, makeNotFromThisNode)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
@@ -755,12 +762,12 @@ func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 	}
 }
 
-// TestForwardNotFromThisNodeFirstHal tests that relays forward
+// TestForwardNotFromThisNodeFirstHalf tests that relays forward
 // signatures in the first half of the period only if it is from this node
-func TestForwardNotFromThisNodeFirstHal(t *testing.T) {
+func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, 0)
+	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, makeFromOrNOtThisNode)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
