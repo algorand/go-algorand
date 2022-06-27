@@ -300,9 +300,7 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (
-	ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
-	// TODO: probably should revert
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
 
 	eval, err := internal.StartEvaluator(

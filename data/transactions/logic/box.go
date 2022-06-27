@@ -158,7 +158,7 @@ func opBoxDel(cx *EvalContext) error {
 
 const boxPrefix = "bx:"
 const boxPrefixLength = 3 // len("bx:")
-const boxNameIndex = 11 // len("bx:") + 8 (appIdx, big-endian)
+const boxNameIndex = 11   // len("bx:") + 8 (appIdx, big-endian)
 
 // MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
 func MakeBoxKey(appIdx basics.AppIndex, name string) string {
