@@ -896,7 +896,6 @@ func TestWorkerHandleSigOldRounds(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	require.NoError(t, err)
 }
 
@@ -915,7 +914,6 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	expected := ledgercore.ErrNoEntry{
 		Round:     msg.Round,
 		Latest:    w.ledger.Latest(),
@@ -1102,7 +1100,6 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	expected := ledgercore.ErrNoEntry{
 		Round:     0,
 		Latest:    w.ledger.Latest(),
@@ -1152,7 +1149,6 @@ func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
-	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	expected := fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d",
 		msg.Round, proto.StateProofInterval)
 	require.Equal(t, expected, err)
