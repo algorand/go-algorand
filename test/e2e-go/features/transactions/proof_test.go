@@ -99,10 +99,10 @@ func TestTxnMerkleProof(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
+	proofresp, err := client.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
-	proofrespSHA256, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
+	proofrespSHA256, err := client.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
 
 	generateProof := func(h crypto.HashType, prfRsp generated.ProofResponse) (p merklearray.Proof) {
