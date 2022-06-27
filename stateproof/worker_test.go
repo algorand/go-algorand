@@ -1198,7 +1198,7 @@ func TestWorkerHandleSigIntervalZero(t *testing.T) {
 
 	msg := sigFromAddr{
 		SignerAddress: address,
-		Round:         basics.Round(256),
+		Round:         basics.Round(512),
 		Sig:           merklesignature.Signature{},
 	}
 
@@ -1210,13 +1210,12 @@ func TestWorkerHandleSigIntervalZero(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
-	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	expected := fmt.Errorf("handleSig: StateProofInterval is 0 for round %d",
 		uint64(msg.Round))
 	require.Equal(t, expected, err)
 }
 
-// relays reject signiture for a round not multiple of  StateProofInterval
+// relays reject signiture for a round not multiple of StateProofInterval
 func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1236,7 +1235,7 @@ func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 
 	msg := sigFromAddr{
 		SignerAddress: address,
-		Round:         basics.Round(300),
+		Round:         basics.Round(600),
 		Sig:           merklesignature.Signature{},
 	}
 
@@ -1249,8 +1248,8 @@ func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
 	fwd, err = w.handleSig(msg, msg.SignerAddress)
-	expected := fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d at round %d",
-		msg.Round, proto.StateProofInterval, uint64(msg.Round))
+	expected := fmt.Errorf("handleSig: round %d is not a multiple of SP interval %d",
+		msg.Round, proto.StateProofInterval)
 	require.Equal(t, expected, err)
 }
 
