@@ -1261,6 +1261,12 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 2)
 		require.NoError(t, err)
 		require.Len(t, bKeys, 2)
+
+		// consider taking only 10 keys from 16 keys, 8 rounds in-mem and 8 rounds in DB
+		// only take 2 from DB
+		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 10)
+		require.NoError(t, err)
+		require.Len(t, bKeys, 10)
 	}
 
 	// remove some random boxes in the final round
