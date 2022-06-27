@@ -248,7 +248,7 @@ func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd
 	r.NoError(err)
 }
 
-func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
+func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
@@ -257,19 +257,25 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 
 	var stateProof sp.StateProof
 	var stateProofMessage stateproofmsg.Message
-	stateProofFound := false
 	for _, txn := range res.Transactions {
 		r.Equal(txn.Type, string(protocol.StateProofTx))
 		r.True(txn.StateProof != nil)
-		if txn.StateProof.StateProofIntervalLatestRound == nextStateProofRound {
+		if txn.StateProof.StateProofIntervalLatestRound == stateProofLatestRound {
 			err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
 			r.NoError(err)
 			err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 			r.NoError(err)
-			stateProofFound = true
+
+			return stateProof, stateProofMessage
 		}
 	}
-	r.True(stateProofFound)
+
+	r.False(false)
+	return stateProof, stateProofMessage
+}
+
+func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
+	stateProof, stateProofMessage := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
 
 	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 	r.NoError(err)
