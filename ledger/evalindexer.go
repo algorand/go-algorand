@@ -25,49 +25,48 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-type DeprectedIndexerBox struct {
-	Index   basics.AppIndex
-	Name    string
-	Value   *string
-	Touched bool
-}
+// type DeprectedIndexerBox struct {
+// 	Index   basics.AppIndex
+// 	Name    string
+// 	Value   *string
+// 	Touched bool
+// }
 
-// BoxRefComp is a comparable version of go-algorand's transactions.BoxRef
-type DeprecatedBoxRefCmp struct {
-	Index uint64
-	Name  string
-}
+// // BoxRefComp is a comparable version of go-algorand's transactions.BoxRef
+// type DeprecatedBoxRefCmp struct {
+// 	Index uint64
+// 	Name  string
+// }
 
-func (boxRef *DeprecatedBoxRefCmp) BoxRef() transactions.BoxRef {
-	return transactions.BoxRef{
-		Index: boxRef.Index,
-		Name:  []byte(boxRef.Name),
-	}
-}
+// func (boxRef *DeprecatedBoxRefCmp) BoxRef() transactions.BoxRef {
+// 	return transactions.BoxRef{
+// 		Index: boxRef.Index,
+// 		Name:  []byte(boxRef.Name),
+// 	}
+// }
 
-func (boxRef *DeprecatedBoxRefCmp) BoxKey() string {
-	return logic.MakeBoxKey(basics.AppIndex(boxRef.Index), string(boxRef.Name))
-}
+// func (boxRef *DeprecatedBoxRefCmp) BoxKey() string {
+// 	return logic.MakeBoxKey(basics.AppIndex(boxRef.Index), string(boxRef.Name))
+// }
 
-// DeprecatedMakeComparable transforms a tranasaction.BoxRef to a BoxRefCmp
-func DeprecatedMakeComparable(boxRef *transactions.BoxRef) DeprecatedBoxRefCmp {
-	return DeprecatedBoxRefCmp{
-		Index: boxRef.Index,
-		Name:  string(boxRef.Name),
-	}
-}
+// // DeprecatedMakeComparable transforms a tranasaction.BoxRef to a BoxRefCmp
+// func DeprecatedMakeComparable(boxRef *transactions.BoxRef) DeprecatedBoxRefCmp {
+// 	return DeprecatedBoxRefCmp{
+// 		Index: boxRef.Index,
+// 		Name:  string(boxRef.Name),
+// 	}
+// }
 
-// FoundBoxRef is a wrapper for a BoxRefCmp and a boolean.
-type DeprecatedFoundBox struct {
-	BoxRef transactions.BoxRef
-	Value  *string
-	Exists bool
-}
+// // FoundBoxRef is a wrapper for a BoxRefCmp and a boolean.
+// type DeprecatedFoundBox struct {
+// 	BoxRef transactions.BoxRef
+// 	Value  *string
+// 	Exists bool
+// }
 
 // A ledger interface that Indexer implements. This is a simplified version of the
 // LedgerForEvaluator interface. Certain functions that the evaluator doesn't use
@@ -97,12 +96,12 @@ type FoundAddress struct {
 // resources one by one.
 type EvalForIndexerResources struct {
 	// The map value is nil iff the account does not exist. The account data is owned here.
-	Accounts         map[basics.Address]*ledgercore.AccountData
-	Resources        map[basics.Address]map[Creatable]ledgercore.AccountResource
-	Creators         map[Creatable]FoundAddress
-	DeprecatedBoxes  map[DeprecatedBoxRefCmp]DeprecatedFoundBox
-	DeprecatedBoxes2 map[string]DeprectedIndexerBox
-	TouchedBoxes     map[string]struct{}
+	Accounts  map[basics.Address]*ledgercore.AccountData
+	Resources map[basics.Address]map[Creatable]ledgercore.AccountResource
+	Creators  map[Creatable]FoundAddress
+	// DeprecatedBoxes  map[DeprecatedBoxRefCmp]DeprecatedFoundBox
+	// DeprecatedBoxes2 map[string]DeprectedIndexerBox
+	TouchedBoxes map[string]struct{}
 }
 
 // Creatable represent a single creatable object.
