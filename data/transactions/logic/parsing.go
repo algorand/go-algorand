@@ -27,11 +27,13 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// AppCallBytes represents an encoding and a value of an app call argument.
 type AppCallBytes struct {
 	Encoding string `codec:"encoding"`
 	Value    string `codec:"value"`
 }
 
+// NewAppCallBytes parses an argument of "form encoding:value" to AppCallBytes.
 func NewAppCallBytes(arg string) (AppCallBytes, error) {
 	parts := strings.SplitN(arg, ":", 2)
 	if len(parts) != 2 {
@@ -42,6 +44,8 @@ func NewAppCallBytes(arg string) (AppCallBytes, error) {
 		Value:    parts[1],
 	}, nil
 }
+
+// Raw converts an AppCallBytes arg to a byte array.
 func (arg AppCallBytes) Raw() (rawValue []byte, parseErr error) {
 	switch arg.Encoding {
 	case "str", "string":
