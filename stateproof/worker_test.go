@@ -708,18 +708,22 @@ func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) er
 	}
 }
 
-// TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
-// It generates numAddresses and prepares a database with the account/signatures.
-// Then, calls broadcastSigs with round numbers spanning periods and
-// makes sure each account has 2 sigs sent per period if originated locally, and 1 sig
-// if received from another relay.
-func TestSigBroacastTwoPerSig(t *testing.T) {
-	partitiontest.PartitionTest(t)
+type sigOriginatedFrom int
+
+const (
+	makeFromThisNode sigOriginatedFrom = iota
+	makeNotFromThisNode
+	makeFromOrNOtThisNode
+)
+
+// getSignaturesInDatabase sets up the db with signatures
+func getSignaturesInDatabase(t *testing.T, numAddresses int, fromWhere sigOriginatedFrom) (
+	signatureBcasted map[basics.Address]int, fromThisNode map[basics.Address]bool,
+	tns *testWorkerStubs, spw *Worker) {
 
 	// Prepare the addresses and the keys
-	numAddresses := 10
-	signatureBcasted := make(map[basics.Address]int)
-	fromThisNode := make(map[basics.Address]bool)
+	signatureBcasted = make(map[basics.Address]int)
+	fromThisNode = make(map[basics.Address]bool)
 	var keys []account.Participation
 	for i := 0; i < numAddresses; i++ {
 		var parent basics.Address
@@ -730,8 +734,8 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		signatureBcasted[parent] = 0
 	}
 
-	tns := newWorkerStubs(t, keys, len(keys))
-	spw := newTestWorker(t, tns)
+	tns = newWorkerStubs(t, keys, len(keys))
+	spw = newTestWorker(t, tns)
 
 	// Prepare the database
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -760,7 +764,7 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	}
 
 	// Add the signatures to the databse
-	ftn := true
+	ftn := fromWhere == makeFromOrNOtThisNode || fromWhere == makeFromThisNode
 	for _, sfa := range sigs {
 		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return addPendingSig(tx, sfa.Round, pendingSig{
@@ -771,9 +775,22 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		})
 		require.NoError(t, err)
 		fromThisNode[sfa.SignerAddress] = ftn
-		// alternate the from this node argument between addresses
-		ftn = !ftn
+		if fromWhere == makeFromOrNOtThisNode {
+			// alternate the from this node argument between addresses
+			ftn = !ftn
+		}
 	}
+	return
+}
+
+// TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
+// It generates numAddresses and prepares a database with the account/signatures.
+// Then, calls broadcastSigs with round numbers spanning periods and
+// makes sure each account has 2 sigs sent per period if originated locally, and 1 sig
+// if received from another relay.
+func TestSigBroacastTwoPerSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, makeFromOrNOtThisNode)
 
 	for periods := 1; periods < 10; periods += 3 {
 		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
@@ -805,7 +822,7 @@ func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcast
 	}()
 
 	// Broadcast the messages
-	for brnd := 257; brnd < 257+256*periods; brnd++ {
+	for brnd := 257; brnd < 257+int(proto.StateProofInterval)*periods; brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 	}
 
@@ -855,6 +872,59 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	require.NoError(t, err)
 
 	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
+}
+
+// TestForwardNotFromThisNodeSecondHalf tests that relays forward
+// signatures from other nodes only in the second half of the period
+func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, _, tns, spw := getSignaturesInDatabase(t, 10, makeNotFromThisNode)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
+		spw.broadcastSigs(basics.Round(brnd), proto)
+		select {
+		case <-tns.sigmsg:
+			// The message is broadcast in the second half of the period
+			require.GreaterOrEqual(t, brnd%int(proto.StateProofInterval), int(proto.StateProofInterval)/2)
+		default:
+		}
+	}
+}
+
+// TestForwardNotFromThisNodeFirstHalf tests that relays forward
+// signatures in the first half of the period only if it is from this node
+func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, makeFromOrNOtThisNode)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
+		spw.broadcastSigs(basics.Round(brnd), proto)
+		select {
+		case bMsg := <-tns.sigmsg:
+			sfa := sigFromAddr{}
+			err := protocol.Decode(bMsg, &sfa)
+			require.NoError(t, err)
+
+			// If it is in the first half, then it must be from this node
+			if brnd%int(proto.StateProofInterval) < int(proto.StateProofInterval)/2 {
+				require.True(t, fromThisNode[sfa.SignerAddress])
+				signatureBcasted[sfa.SignerAddress]++
+				continue
+			}
+
+			// The message is broadcast in the second half of the period, can be from this node or another node
+			require.GreaterOrEqual(t, brnd%int(proto.StateProofInterval), int(proto.StateProofInterval)/2)
+			if fromThisNode[sfa.SignerAddress] {
+				// It must have already been broadcasted once in the first period
+				require.Equal(t, brnd/int(proto.StateProofInterval), signatureBcasted[sfa.SignerAddress])
+			}
+		default:
+		}
+	}
 }
 
 func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStubs, w *Worker, msg sigFromAddr, msgBytes []byte) {

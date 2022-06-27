@@ -17,15 +17,21 @@
 package stateproofs
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -36,8 +42,6 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-const expectedNumberOfStateProofs = uint64(4)
 
 func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -71,6 +75,7 @@ func TestStateProofs(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
 
+	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// send a dummy payment transaction to create non-empty blocks.
@@ -103,7 +108,116 @@ func TestStateProofs(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestStateProofOverlappingKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+	//if testing.Short() {
+	//	t.Skip()
+	//}
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.StateProofInterval = 16
+	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofVotersLookback = 2
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 3
+	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1000 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1000 * time.Millisecond
+	consensusParams.SeedLookback = 2
+	consensusParams.SeedRefreshInterval = 8
+	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	consensusParams.StateProofRecoveryInterval = 4
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	defer fixture.Shutdown()
+
+	// Get node libgoal clients in order to update their participation keys
+	var libgoalNodeClients [5]libgoal.Client
+	for i := 0; i < 5; i++ {
+		nodeName := fmt.Sprintf("Node%d", i)
+		c := fixture.GetLibGoalClientForNamedNode(nodeName)
+		libgoalNodeClients[i] = c
+	}
+
+	// Get account address of each participating node
+	var accounts [5]string
+	for i, c := range libgoalNodeClients {
+		parts, err := c.GetParticipationKeys() // should have 1 participation per node
+		r.NoError(err)
+		accounts[i] = parts[0].Address
+	}
+
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	var participations [5]account.Participation
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoalClient := fixture.LibGoalClient
+
+	k, err := libgoalNodeClients[0].GetParticipationKeys()
+	r.NoError(err)
+	voteLastValid := k[0].Key.VoteLastValid
+	expectedNumberOfStateProofs := uint64(10)
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		if rnd == voteLastValid-64 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
+			// Generate participation keys (for the same accounts)
+			for i := 0; i < 5; i++ {
+				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
+				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 200)
+				r.NoError(err)
+				participations[i] = part
+			}
+			// Register overlapping participation keys
+			for i := 0; i < 5; i++ {
+				registerParticipationAndWait(t, libgoalNodeClients[i], participations[i])
+			}
+		}
+
+		// send a dummy payment transaction.
+		sendPayment(r, &fixture, rnd)
+
+		err = fixture.WaitForRound(rnd, 30*time.Second)
+		r.NoError(err)
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			// Must have a merkle commitment for participants
+			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		}
+
+		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoalClient, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -134,7 +248,7 @@ func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd
 	r.NoError(err)
 }
 
-func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams) (stateproofmsg.Message, bookkeeping.Block) {
+func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
@@ -232,6 +346,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
 
+	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Start the node in the last interval after which the SP will be abandoned if SPs are not generated.
@@ -270,7 +385,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -320,8 +435,9 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	nc.FullStop()
 
 	var lastStateProofBlock bookkeeping.Block
-
 	libgoal := fixture.LibGoalClient
+
+	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == (consensusParams.StateProofRecoveryInterval+2)*consensusParams.StateProofInterval {
@@ -355,4 +471,37 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			r.FailNow("found a state proof at round %d", blk.Round())
 		}
 	}
+}
+
+// installParticipationKey generates a new key for a given account and installs it with the client.
+func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
+	dir, err := ioutil.TempDir("", "temporary_partkey_dir")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	// Install overlapping participation keys...
+	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	require.NoError(t, err)
+	require.NotNil(t, filePath)
+	require.Equal(t, addr, part.Parent.String())
+
+	resp, err = client.AddParticipationKey(filePath)
+	return
+}
+
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+	currentRnd, err := client.CurrentRound()
+	require.NoError(t, err)
+	sAccount := part.Address().String()
+	sWH, err := client.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, 1000, currentRnd, uint64(part.LastValid), [32]byte{}, true)
+	assert.NoError(t, err)
+	require.Equal(t, sAccount, goOnlineTx.Src().String())
+	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
+	require.NoError(t, err)
+	require.NotEmpty(t, onlineTxID)
+	status, err := client.WaitForRound(currentRnd + 1)
+	require.NoError(t, err)
+	return status
 }
