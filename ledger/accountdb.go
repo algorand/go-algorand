@@ -2317,6 +2317,92 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 	return err
 }
 
+// removeOfflineStateProofID clears the StateProofID field for all offline accounts
+func removeOfflineStateProofID(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+
+	var updateAcct *sql.Stmt
+	updateAcct, err = tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE addrid = ?")
+	if err != nil {
+		return err
+	}
+	defer updateAcct.Close()
+
+	var rows *sql.Rows
+	rows, err = tx.QueryContext(ctx, "SELECT addrid, address, data, normalizedonlinebalance FROM accountbase")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var updateRes sql.Result
+	var rowsAffected int64
+	var processedAccounts uint64
+	var totalOnlineBaseAccounts uint64
+
+	totalOnlineBaseAccounts, err = totalAccounts(ctx, tx)
+	var total uint64
+	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+		total = 0
+		err = nil
+	}
+
+	checkSQLResult := func(e error, res sql.Result) (err error) {
+		if e != nil {
+			err = e
+			return
+		}
+		rowsAffected, err = res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected != 1 {
+			return fmt.Errorf("number of affected rows is not 1 - %d", rowsAffected)
+		}
+		return nil
+	}
+
+	for rows.Next() {
+		var addrid sql.NullInt64
+		var addrbuf []byte
+		var encodedAcctData []byte
+		var normBal sql.NullInt64
+		err = rows.Scan(&addrid, &addrbuf, &encodedAcctData, &normBal)
+		if err != nil {
+			return err
+		}
+		var ba baseAccountDataMigrate
+		err = protocol.Decode(encodedAcctData, &ba)
+		if err != nil {
+			return err
+		}
+
+		// update entries in accounts table
+		if ba.Status == basics.Offline && !ba.StateProofID.MsgIsZero() {
+			ba.StateProofID = merklesignature.Verifier{}
+			encodedOnlineAcctData := protocol.Encode(&ba)
+			updateRes, err = updateAcct.ExecContext(ctx, addrbuf, encodedOnlineAcctData)
+			err = checkSQLResult(err, updateRes)
+			if err != nil {
+				return err
+			}
+		}
+
+		processedAccounts++
+		if log != nil {
+			log(processedAccounts, totalOnlineBaseAccounts)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	return err
+}
+
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
 func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {

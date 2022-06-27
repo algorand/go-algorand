@@ -152,6 +152,15 @@ type catchpointTracker struct {
 	//    but that's only if newBlock was called with that round ), plus the lookback.
 	accountDataResourceSeparationRound basics.Round
 
+	// forceCatchpointFileWriting used for debugging purpose by bypassing the test against
+	// accountDataResourceSeparationRound in isCatchpointRound(), so that we could generate
+	// catchpoint files even before the protocol upgrade took place.
+	forceCatchpointFileWriting bool
+
+	// renableGeneratingCatchpointFiles is used for signaling when catchpoint generation
+	// should be turned back on after a consensus upgrade.
+	renableGeneratingCatchpointFiles bool
+
 	// catchpointsMu protects `roundDigest`, `accountDataResourceSeparationRound` and
 	// `lastCatchpointLabel`.
 	catchpointsMu deadlock.RWMutex
@@ -182,6 +191,12 @@ func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 		if cfg.CatchpointInterval > 0 {
 			ct.catchpointInterval = cfg.CatchpointInterval
 			ct.enableGeneratingCatchpointFiles = true
+		}
+	case forceCatchpointFileGenerationTrackingMode:
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = true
+			ct.forceCatchpointFileWriting = true
 		}
 	}
 
@@ -364,6 +379,8 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 		}
 		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
 	}
+
+	ct.renableGeneratingCatchpointFiles = config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -1403,7 +1420,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 func (ct *catchpointTracker) catchpointEnabled() bool {
-	return ct.catchpointInterval != 0
+	return ct.catchpointInterval != 0 && ct.renableGeneratingCatchpointFiles
 }
 
 // accountsInitializeHashes initializes account hashes.
