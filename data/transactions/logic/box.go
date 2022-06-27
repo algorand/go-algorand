@@ -156,6 +156,10 @@ func opBoxDel(cx *EvalContext) error {
 	return cx.Ledger.DelBox(cx.appID, name, appAddr)
 }
 
+const boxPrefix = "bx:"
+const boxPrefixLength = 3 // len("bx:")
+const boxSuffixIndex = 11 // len("bx:") + 8 (appIdx, big-endian)
+
 // MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
 func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 	/* This format is chosen so that a simple indexing scheme on the key would
@@ -165,9 +169,59 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 	   The "bx:" prefix is so that the kvstore might be usable for things
 	   besides boxes.
 	*/
-	key := make([]byte, 3 /* bx: */ +8 /* appIdx, big-endian */ +len(name))
-	copy(key, "bx:")
-	binary.BigEndian.PutUint64(key[3:], uint64(appIdx))
-	copy(key[11:], name)
+	key := make([]byte, boxSuffixIndex + len(name))
+	copy(key, boxPrefix)
+	binary.BigEndian.PutUint64(key[boxPrefixLength:], uint64(appIdx))
+	copy(key[boxSuffixIndex:], name)
 	return string(key)
 }
+
+// GetAppAndNameFromKey extracts an appid and box name from a string that was created by MakeBoxKey()
+func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
+	// no assertion that prefix is "bx:"
+	if len(key) < boxPrefixLength+8 {
+		return 0, "", fmt.Errorf("GetAppNameFromKey() cannot extract AppIndex as key too short (length=%d)", len(key))
+	}
+	// WARNING: even junk such as "this is definitely NOT a box key" will return without error
+	keyBytes := []byte(key)
+	app := (basics.AppIndex)(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:(boxPrefixLength+8)]))
+	return app, string(keyBytes[11:]), nil
+}
+
+// TODO: convert the following to a unit test
+// func main() {
+// 	var app AppIndex = 42
+// 	fmt.Printf("Hello app %d\n", app)
+
+// 	name := "yo yo mama"
+
+// 	key := MakeBoxKey(app, name)
+// 	fmt.Printf("app->%d\nname->%s\nkey=>%s", app, name, key)
+
+// 	fmt.Println("\n\n\nNOW FOR GetAppNameFromkey()\n\n")
+
+// 	testCases := []struct {
+// 		app  AppIndex
+// 		name string
+// 	}{
+// 		{42, "yo yo mama"}, {0, "stranger"}, {131231, "348-8uj"}, {0, ""},
+// 	}
+// 	fmt.Printf("TEST CASES: %+v\n\n", testCases)
+// 	for i, testCase := range testCases {
+// 		fmt.Printf("%d. %d + %s -->\n", i+1, testCase.app, testCase.name)
+// 		key = MakeBoxKey(testCase.app, testCase.name)
+// 		fmt.Printf("-->[%s] of length <%d>\n", key, len(key))
+// 		app2, name2, _ := GetAppNameFromKey(key)
+// 		fmt.Printf("BACK TO app=[%d] and box=<%s>\n", app2, name2)
+// 	}
+
+// 	errorCases := []string{"too short", "this is uttter nonsense"}
+
+// 	fmt.Printf("\n\n\nERRORING CASES: %#v\n\b\n", errorCases)
+// 	for i, errorCase := range errorCases {
+// 		fmt.Printf("%d. %s -->\n", i+1, errorCase)
+// 		app, name, err := GetAppNameFromKey(errorCase)
+// 		fmt.Printf("app=%d\nbox=%s\nerr=%v\n", app, name, err)
+// 	}
+
+// }

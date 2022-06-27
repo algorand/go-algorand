@@ -25,9 +25,49 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+type DeprectedIndexerBox struct {
+	Index   basics.AppIndex
+	Name    string
+	Value   *string
+	Touched bool
+}
+
+// BoxRefComp is a comparable version of go-algorand's transactions.BoxRef
+type DeprecatedBoxRefCmp struct {
+	Index uint64
+	Name  string
+}
+
+func (boxRef *DeprecatedBoxRefCmp) BoxRef() transactions.BoxRef {
+	return transactions.BoxRef{
+		Index: boxRef.Index,
+		Name:  []byte(boxRef.Name),
+	}
+}
+
+func (boxRef *DeprecatedBoxRefCmp) BoxKey() string {
+	return logic.MakeBoxKey(basics.AppIndex(boxRef.Index), string(boxRef.Name))
+}
+
+// DeprecatedMakeComparable transforms a tranasaction.BoxRef to a BoxRefCmp
+func DeprecatedMakeComparable(boxRef *transactions.BoxRef) DeprecatedBoxRefCmp {
+	return DeprecatedBoxRefCmp{
+		Index: boxRef.Index,
+		Name:  string(boxRef.Name),
+	}
+}
+
+// FoundBoxRef is a wrapper for a BoxRefCmp and a boolean.
+type DeprecatedFoundBox struct {
+	BoxRef transactions.BoxRef
+	Value  *string
+	Exists bool
+}
 
 // A ledger interface that Indexer implements. This is a simplified version of the
 // LedgerForEvaluator interface. Certain functions that the evaluator doesn't use
@@ -43,6 +83,7 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+	LookupKv(basics.Round, string) (*string, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -56,9 +97,12 @@ type FoundAddress struct {
 // resources one by one.
 type EvalForIndexerResources struct {
 	// The map value is nil iff the account does not exist. The account data is owned here.
-	Accounts  map[basics.Address]*ledgercore.AccountData
-	Resources map[basics.Address]map[Creatable]ledgercore.AccountResource
-	Creators  map[Creatable]FoundAddress
+	Accounts         map[basics.Address]*ledgercore.AccountData
+	Resources        map[basics.Address]map[Creatable]ledgercore.AccountResource
+	Creators         map[Creatable]FoundAddress
+	DeprecatedBoxes  map[DeprecatedBoxRefCmp]DeprecatedFoundBox
+	DeprecatedBoxes2 map[string]DeprectedIndexerBox
+	TouchedBoxes     map[string]struct{}
 }
 
 // Creatable represent a single creatable object.
@@ -142,9 +186,50 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
+// LookupKv delegates to the Ledger and marks the box key as touched for post-processing
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
-	panic("not implemented")
+	fmt.Printf("indexerLedgerConnector.LookupKv(rnd=%d, key=%s)", rnd, key)
+	value, err := l.il.LookupKv(rnd, key)
+	if err != nil {
+		fmt.Printf("\n<<<err !!!>>> indexerLedgerConnector.LookupKv(rnd=%d, key=%s) --err--> %v", rnd, key, err)
+		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
+	}
+	l.roundResources.TouchedBoxes[key] = struct{}{}
+	fmt.Printf("\n<<<COPACETIC>>>indexerLedgerConnector.LookupKv(round=%d, key=%s) ---> %v", rnd, key, value)
+	return value, nil
+
+	// // TODO: we should probably defer de-structuring the app & name from the key till later!!!!
+	// // add the box info to the indexer cache:
+	// app, name, err := logic.GetAppAndNameFromKey(key)
+	// if err != nil {
+	// 	return value, fmt.Errorf("LookupKv() received nonsensical key [%s] yet somehow Ledger's LookupKv() gave value [%v]. error key decoding: %w", key, value, err)
+	// }
+	// // look up and update the box in the indexer cache:
+	// box, ok := l.roundResources.DeprecatedBoxes2[key]
+	// if !ok {
+	// 	// add the missing box to the cache:
+	// 	l.roundResources.DeprecatedBoxes2[key] = DeprectedIndexerBox{
+	// 		Index:   app,
+	// 		Name:    name,
+	// 		Value:   value,
+	// 		Touched: true,
+	// 	}
+	// 	return value, nil
+	// }
+	// if !box.Touched {
+	// 	box.Touched = true
+	// 	l.roundResources.DeprecatedBoxes2[key] = box
+	// }
+	// return box.Value, nil
 }
+
+// func (l indexerLedgerConnector) StoreKv(rnd basics.Round, key string, value string) error {
+// 	if rnd != l.latestRound {
+// 		return fmt.Errorf("StoreKv() attempted to store round %d which mismatched ledger's round %d", rnd, l.latestRound)
+// 	}
+// 	l.kvStore[key] = &value
+// 	return nil
+// }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -215,7 +300,9 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (
+	ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+	// TODO: probably should revert
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
 
 	eval, err := internal.StartEvaluator(
