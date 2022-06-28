@@ -18,6 +18,7 @@ package testing
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -199,8 +200,6 @@ func RandomAppLocalState() basics.AppLocalState {
 	return ls
 }
 
-const maxInt64 = int64((^uint64(0)) >> 1)
-
 // RandomFullAccountData generates a random AccountData
 func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.CreatableIndex, assets map[basics.AssetIndex]struct{}, apps map[basics.AppIndex]struct{}) basics.AccountData {
 	data := RandomAccountData(rewardsLevel)
@@ -210,7 +209,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 		crypto.RandBytes(data.SelectionID[:])
 		crypto.RandBytes(data.StateProofID[:])
 		data.VoteFirstValid = basics.Round(crypto.RandUint64())
-		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(maxInt64)) // int64 is the max sqlite can store
+		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
 		data.VoteKeyDilution = crypto.RandUint64()
 	} else {
 		data.VoteID = crypto.OneTimeSignatureVerifier{}

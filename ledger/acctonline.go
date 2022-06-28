@@ -135,7 +135,14 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 	if err != nil {
 		return err
 	}
-	return nil
+
+	// the votes have a special dependency on the online accounts, so we need to initialize these separately.
+	ao.voters = &votersTracker{}
+	err = ao.voters.loadFromDisk(l, ao)
+	if err != nil {
+		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
+	}
+	return err
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk

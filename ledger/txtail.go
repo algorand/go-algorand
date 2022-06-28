@@ -205,6 +205,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	encodedTail, tailHash := tail.encode()
 
 	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
@@ -214,7 +215,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		t.roundTailHashes = append(t.roundTailHashes, tailHash)
 	}
 	t.blockHeaderData[rnd] = blk.BlockHeader
-	t.tailMu.Unlock()
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {

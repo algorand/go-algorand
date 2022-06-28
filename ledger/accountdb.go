@@ -139,13 +139,13 @@ var createOnlineAccountsTable = []string{
 var createTxTailTable = []string{
 	`CREATE TABLE IF NOT EXISTS txtail (
 		round INTEGER PRIMARY KEY NOT NULL,
-		data blob)`,
+		data BLOB NOT NULL)`,
 }
 
 var createOnlineRoundParamsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
 		round INTEGER NOT NULL PRIMARY KEY,
-		data blob)`, // contains a msgp encoded OnlineRoundParamsData
+		data BLOB NOT NULL)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 // Table containing some metadata for a future catchpoint. The `info` column
@@ -153,7 +153,7 @@ var createOnlineRoundParamsTable = []string{
 const createCatchpointFirstStageInfoTable = `
 	CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
 	round integer primary key NOT NULL,
-	info blob NOT NULL)`
+	info BLOB NOT NULL)`
 
 const createUnfinishedCatchpointsTable = `
 	CREATE TABLE IF NOT EXISTS unfinishedcatchpoints (
