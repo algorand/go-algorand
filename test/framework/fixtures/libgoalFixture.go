@@ -18,6 +18,9 @@ package fixtures
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -498,4 +501,46 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 		minBalance = 1000
 	}
 	return params.MinTxnFee, minBalance, nil
+}
+
+func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (proof merklearray.Proof, err error) {
+	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
+	if err != nil {
+		return
+	}
+
+	return f.ProofRespToProof(proofResp)
+}
+
+func (f *LibGoalFixture) LightHeaderBlockProof(round uint64) (proof merklearray.Proof, err error) {
+	proofResp, err := f.LibGoalClient.LightHeaderBlockProof(round)
+	if err != nil {
+		return
+	}
+
+	return f.ProofRespToProof(proofResp)
+}
+
+func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (proof merklearray.Proof, err error) {
+	if proofResp.Treedepth == 0 {
+		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
+	}
+
+	hashType, err := crypto.UnmarshalHashType(proofResp.Hashtype)
+
+	if err != nil {
+		return
+	}
+
+	proof.HashFactory = crypto.HashFactory{HashType: hashType}
+	proof.TreeDepth = uint8(proofResp.Treedepth)
+	proofconcat := proofResp.Proof
+	for len(proofconcat) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcat)
+		proof.Path = append(proof.Path, d[:])
+		proofconcat = proofconcat[len(d):]
+	}
+
+	return
 }
