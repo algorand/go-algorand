@@ -656,23 +656,20 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}
-		// lookupOnlineHistory does not fetch the account db round because of the following observation:
-		// 1. ao.onlineAccountsCache update happens with ao.accountsMu taken below and in postCommit
-		// 2. If we started reading the history (lookupOnlineHistory)
-		//   1. before commitRound or while it is running => OK, read what is in DB and then add new entries in postCommit
-		//     * if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
-		//   2. after commitRound but before postCommit => OK, read full history, ignore the update from postCommit in writeFront's updRound comparison
-		//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
+		// lookupOnlineHistory fetches the account DB round from the acctrounds table (returned as validThrough)
+		// We load the entire history of this account to fill the onlineAccountsCache, so that the next lookup for
+		// this online account will not hit the on-disk DB.
 		persistedDataHistory, validThrough, err := ao.accountsq.lookupOnlineHistory(addr)
 		if err != nil || len(persistedDataHistory) == 0 {
 			return ledgercore.OnlineAccountData{}, err
 		}
-		// 3. If we fishied reading the history (lookupOnlineHistory)
+		// onlineAccountsCache update happens with ao.accountsMu taken below, and in postCommit
+		// After we finished reading the history (lookupOnlineHistory), either
 		//   1. db has not advanced (validThrough == currentDbRound) => OK
 		//   2. after commitRound but before postCommit (currentDeltaLen == len(ao.deltas)) => OK, the cache gets populated and postCommit updates the new entry
-		//   3. after commitRound and after postCommit => problem, postCommit does not add a new entry but the cache gets constructed by misses the latest entry, retry
-		// In order to resolve this lookupOnlineHistory returns dbRound value and determine what happened
-		// So handle 3.1 and 3.2 here and 3.3 below
+		//   3. after commitRound and after postCommit => problem, postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
+		// In order to resolve this lookupOnlineHistory returns dbRound value (validThrough) and determine what happened
+		// So handle case 1 and case 2 here, and case 3 below
 		ao.accountsMu.Lock()
 		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 			// not advanced or postCommit not called yet, write to the cache and return the value
@@ -695,6 +692,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			ao.accountsMu.Unlock()
 			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
+		// case 3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()
 
 		if validThrough < currentDbRound {
