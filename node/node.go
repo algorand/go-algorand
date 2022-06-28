@@ -792,7 +792,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 	return nil
 }
 
-// AppendParticipationKeys given a participation id, remove the records from the node
+// AppendParticipationKeys imports stateproof keys into the participation registry (under provided participation ID)
 func (node *AlgorandFullNode) AppendParticipationKeys(partKeyID account.ParticipationID, keys account.StateProofKeys) error {
 	err := node.accountManager.Registry().AppendKeys(partKeyID, keys)
 	if err != nil {
@@ -947,10 +947,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				continue
 			}
 			err = insertStateProofToRegistry(part, node)
+			part.Close()
 			if err != nil {
 				return err
 			}
 		}
+		node.log.Infof("removing old database file: %s", filename)
+		os.Remove(filepath.Join(genesisDir, filename)) // Done importing this participation file into registry
 	}
 
 	return nil
@@ -963,12 +966,7 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 		return nil
 	}
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSigner := make(account.StateProofKeys, len(keys))
-	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSigner[i] = keys[i]
-	}
-	return node.accountManager.Registry().AppendKeys(partID, keysSigner)
-
+	return node.accountManager.Registry().AppendKeys(partID, keys)
 }
 
 var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
