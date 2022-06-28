@@ -843,8 +843,10 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
-	// TODO: can I delegate to aul.au.lookup() and avoid taking a lock?
-	return aul.au.LookupKv(rnd, key)
+	// TODO: should I explicitly be avoiding the lock as I'm doing here?
+	// TODO: don't merge with this print statement
+	fmt.Printf("*accountUpdatesLedgerEvaluator.LookupKv(): rnd-->%d, key-->%s", rnd, key)
+	return aul.au.lookupKv(rnd, key, false)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
