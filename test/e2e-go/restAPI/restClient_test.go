@@ -1358,7 +1358,7 @@ end:
 	}
 
 	// iterate and create boxes
-	totalBoxNum := 1
+	totalBoxNum := 10
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
@@ -1402,23 +1402,22 @@ end:
 	a.Empty(resp.Boxes)
 	a.Zero(createdBoxCount)
 
-	// Get Box value from name
-	boxTests := [][]string{
-		{"str:foo", "bar"},
-		{"int:42", "baz"},
-		{"b64:foo", "lux"},
+	// Get Box value from name tests
+	boxTests := [][]interface{}{
+		{[]byte("foo"), "str:foo", []byte("bar12")},
 	}
 	for _, boxTest := range boxTests {
-		boxName := boxTest[0]
-		boxVal := boxTest[1]
-		operateBoxAndSendTxn("create", boxName, "")
+		boxName := boxTest[0].([]byte)
+		encodedName := boxTest[1].(string)
+		// Box values are 5 bytes, as defined by the test TEAL program.
+		boxValue := boxTest[2].([]byte)
+		operateBoxAndSendTxn("create", string(boxName), "")
 		a.NoError(err)
 
-		operateBoxAndSendTxn("set", boxName, boxVal)
-
-		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxName)
+		operateBoxAndSendTxn("set", string(boxName), string(boxValue))
+		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), encodedName)
 		a.NoError(err)
-		a.Equal(boxVal, boxResponse.Value)
+		a.Equal(boxName, boxResponse.Name)
+		a.Equal(boxValue, boxResponse.Value)
 	}
-
 }

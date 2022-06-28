@@ -1201,12 +1201,12 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-
 	if value == nil {
 		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
 	}
+
 	response := generated.BoxResponse{
-		Name:  []byte(escapedBoxName),
+		Name:  []byte(boxName),
 		Value: []byte(*value),
 	}
 	return ctx.JSON(http.StatusOK, response)
