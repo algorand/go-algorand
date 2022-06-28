@@ -235,50 +235,38 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
+	dcc.txTailDeltas = make([][]byte, 0, dcc.offset)
+	t.tailMu.RLock()
+	for i := uint64(0); i < dcc.offset; i++ {
+		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
+	}
+	lowest := t.lowestBlockHeaderRound
+	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase].CurrentProtocol]
+	t.tailMu.RUnlock()
+	if !ok {
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase, lowest, dcc.oldBase)
+	}
+	// get the MaxTxnLife from the consensus params of the latest round in this commit range
+	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
+	dcc.txTailRetainSize = proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+
 	if !dcc.catchpointFirstStage {
 		return nil
 	}
 
 	if enableTxTailHashes {
-		rnd := dcc.newBase
-		t.tailMu.RLock()
-		proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
-		if !ok {
-			lowest := t.lowestBlockHeaderRound
-			t.tailMu.RUnlock()
-			return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, lowest, dcc.oldBase)
-		}
-		t.tailMu.RUnlock()
 		// update the dcc with the hash we'll need.
-		dcc.txTailHash, err = t.recentTailHash(dcc.offset, proto.MaxTxnLife+proto.DeeperBlockHeaderHistory)
+		dcc.txTailHash, err = t.recentTailHash(dcc.offset, dcc.txTailRetainSize)
 	}
 	return
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
-	roundsData := make([][]byte, 0, dcc.offset)
-
-	t.tailMu.RLock()
-	for i := uint64(0); i < dcc.offset; i++ {
-		roundsData = append(roundsData, t.roundTailSerializedDeltas[i])
-	}
-	// get the MaxTxnLife from the consensus params of the latest round in this commit range
-	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
-	rnd := dcc.newBase
-	proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
-	if !ok {
-		lowest := t.lowestBlockHeaderRound
-		t.tailMu.RUnlock()
-		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, lowest, dcc.oldBase)
-	}
-	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
-	t.tailMu.RUnlock()
-
 	// determine the round to remove data
-	// This is the similar formula to the committedUpTo: rnd + 1 - retain size
-	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(retainSize))
+	// the formula is similar to the committedUpTo: rnd + 1 - retain size
+	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
-	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetBeforeRound); err != nil {
+	if err := txtailNewRound(ctx, tx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil
@@ -287,22 +275,19 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	t.tailMu.Lock()
 	defer t.tailMu.Unlock()
-	newBase := dcc.newBase
 
 	t.roundTailSerializedDeltas = t.roundTailSerializedDeltas[dcc.offset:]
 
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
-	proto := config.Consensus[t.blockHeaderData[newBase].CurrentProtocol]
-	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
-	newLowestRound := (newBase + 1).SubSaturate(basics.Round(retainSize))
+	newLowestRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	for t.lowestBlockHeaderRound < newLowestRound {
 		delete(t.blockHeaderData, t.lowestBlockHeaderRound)
 		t.lowestBlockHeaderRound++
 	}
 	if enableTxTailHashes {
 		newDeltaLength := len(t.roundTailSerializedDeltas)
-		firstTailIdx := len(t.roundTailHashes) - newDeltaLength - int(retainSize)
+		firstTailIdx := len(t.roundTailHashes) - newDeltaLength - int(dcc.txTailRetainSize)
 		if firstTailIdx > 0 {
 			t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
 		}
