@@ -253,9 +253,16 @@ type deferredCommitContext struct {
 
 	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
+
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
+
+	// serialized rounds deltas to be committed
+	txTailDeltas [][]byte
+
+	// txtail rounds deltas history size
+	txTailRetainSize uint64
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
