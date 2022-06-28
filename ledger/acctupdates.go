@@ -320,6 +320,7 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 }
 
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error) {
+	fmt.Printf("accountUpdates.LookupKv(). rnd=%d; key=%s\n", rnd, key)
 	return au.lookupKv(rnd, key, true /* take lock */)
 }
 
@@ -842,7 +843,8 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
-	panic("not implemented")
+	// TODO: can I delegate to aul.au.lookup() and avoid taking a lock?
+	return aul.au.LookupKv(rnd, key)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
