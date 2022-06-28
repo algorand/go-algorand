@@ -803,13 +803,21 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 			batchOffset += batchSize
 		}
-		if dbRound != currentDbRound && dbRound != basics.Round(0) {
+		// If dbRound has advanced beyond the last read of ao.cachedDBRoundOnline, postCommmit has
+		// occurred since then, so wait until deltas is consistent with dbRound and try again.
+		// dbRound will be zero if all the information needed was already found in deltas, so no DB
+		// query was made, and it is safe to let through and return.
+		if dbRound > currentDbRound && dbRound != basics.Round(0) {
 			// database round doesn't match the last au.dbRound we sampled.
 			ao.accountsMu.RLock()
 			for currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 				ao.accountsReadCond.Wait()
 			}
 			continue
+		}
+		if dbRound < currentDbRound && dbRound != basics.Round(0) {
+			ao.log.Errorf("onlineAccounts.onlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			return nil, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 
 		// Now update the candidates based on the in-memory deltas.
