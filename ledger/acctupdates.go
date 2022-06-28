@@ -465,6 +465,12 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 
 		// reset `results` to be empty each iteration
 		// if db round does not match the round number returned from DB query, start over again
+		// NOTE: `results` is maintained as we walk backwards from the latest round, to DB
+		// IT IS NOT SIMPLY A SET STORING KEY NAMES!
+		// - if the boolean for the key is true: we consider the key is still valid in later round
+		// - otherwise, we consider that the key is deleted in later round, and we will not return it as part of result
+		// Thus: `resultCount` keeps track of how many VALID keys in the `results`
+		// DO NOT TRY `len(results)` TO SEE NUMBER OF VALID KEYS!
 		results = map[string]bool{}
 		resultCount = 0
 
@@ -502,9 +508,8 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 			needUnlock = false
 		}
 
-		// No updates of this account in kvDeltas; use on-disk DB.  The check in
-		// roundOffset() made sure the round is exactly the one present in the
-		// on-disk DB.
+		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
+		// to find the rest matching keys in DB.
 		dbRound, _err := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
 		if _err != nil {
 			err = _err

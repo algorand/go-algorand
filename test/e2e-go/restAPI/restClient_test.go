@@ -1230,6 +1230,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 
 func TestBoxNamesByAppID(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -1352,7 +1353,7 @@ end:
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
-	a.Empty(resp.Boxes)
+	a.Empty(resp)
 
 	createdBoxName := map[string]bool{}
 	createdBoxCount := 0
@@ -1366,8 +1367,8 @@ end:
 
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 		a.NoError(err)
-		a.Equal(createdBoxCount, len(resp.Boxes))
-		for _, byteName := range resp.Boxes {
+		a.Equal(createdBoxCount, len(resp))
+		for _, byteName := range resp {
 			a.True(createdBoxName[string(byteName)])
 		}
 	}
@@ -1381,14 +1382,14 @@ end:
 
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 		a.NoError(err)
-		a.Equal(createdBoxCount, len(resp.Boxes))
-		for _, byteName := range resp.Boxes {
+		a.Equal(createdBoxCount, len(resp))
+		for _, byteName := range resp {
 			a.True(createdBoxName[string(byteName)])
 		}
 	}
 
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
-	a.Empty(resp.Boxes)
+	a.Empty(resp)
 	a.Zero(createdBoxCount)
 }

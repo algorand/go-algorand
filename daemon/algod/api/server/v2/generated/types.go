@@ -608,11 +608,7 @@ type BlockResponse struct {
 type BoxResponse Box
 
 // BoxesResponse defines model for BoxesResponse.
-type BoxesResponse struct {
-
-	// Box names
-	Boxes [][]byte `json:"boxes"`
-}
+type BoxesResponse [][]byte
 
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {
