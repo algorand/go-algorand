@@ -2328,7 +2328,7 @@ func removeOfflineStateProofID(ctx context.Context, tx *sql.Tx, log func(process
 	defer updateAcct.Close()
 
 	var rows *sql.Rows
-	rows, err = tx.QueryContext(ctx, "SELECT addrid, address, data, normalizedonlinebalance FROM accountbase")
+	rows, err = tx.QueryContext(ctx, "SELECT addrid, data FROM accountbase")
 	if err != nil {
 		return err
 	}
@@ -2367,10 +2367,8 @@ func removeOfflineStateProofID(ctx context.Context, tx *sql.Tx, log func(process
 
 	for rows.Next() {
 		var addrid sql.NullInt64
-		var addrbuf []byte
 		var encodedAcctData []byte
-		var normBal sql.NullInt64
-		err = rows.Scan(&addrid, &addrbuf, &encodedAcctData, &normBal)
+		err = rows.Scan(&addrid, &encodedAcctData)
 		if err != nil {
 			return err
 		}
@@ -2381,10 +2379,10 @@ func removeOfflineStateProofID(ctx context.Context, tx *sql.Tx, log func(process
 		}
 
 		// update entries in accounts table
-		if ba.Status == basics.Offline && !ba.StateProofID.MsgIsZero() {
+		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
 			ba.StateProofID = merklesignature.Verifier{}
 			encodedOnlineAcctData := protocol.Encode(&ba)
-			updateRes, err = updateAcct.ExecContext(ctx, addrbuf, encodedOnlineAcctData)
+			updateRes, err = updateAcct.ExecContext(ctx, encodedOnlineAcctData, addrid.Int64)
 			err = checkSQLResult(err, updateRes)
 			if err != nil {
 				return err
@@ -2396,11 +2394,7 @@ func removeOfflineStateProofID(ctx context.Context, tx *sql.Tx, log func(process
 			log(processedAccounts, totalOnlineBaseAccounts)
 		}
 	}
-	if err = rows.Err(); err != nil {
-		return err
-	}
-
-	return err
+	return rows.Err()
 }
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table

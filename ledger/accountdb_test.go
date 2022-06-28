@@ -3758,3 +3758,42 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 	}
 	require.Equal(t, expected, ret)
 }
+
+func TestRemoveOfflineStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, true)
+	for addr, acct := range accts {
+		rand.Read(acct.StateProofID[:])
+		accts[addr] = acct
+	}
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	err = removeOfflineStateProofID(context.Background(), tx, nil)
+	require.NoError(t, err)
+
+	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var addrid sql.NullInt64
+		var encodedAcctData []byte
+		err = rows.Scan(&addrid, &encodedAcctData)
+		require.NoError(t, err)
+		var ba baseAccountDataMigrate
+		err = protocol.Decode(encodedAcctData, &ba)
+		require.NoError(t, err)
+		if ba.Status != basics.Online {
+			require.Equal(t, merklesignature.Verifier{}, ba.StateProofID)
+		}
+	}
+}

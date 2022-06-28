@@ -447,9 +447,6 @@ type ConsensusParams struct {
 	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
 	DeeperBlockHeaderHistory uint64
 
-	// ClearOfflineStateProofID tells the ledger to clear the account's StateProofID when a keyreg transaction marks it offline.
-	ClearOfflineStateProofID bool
-
 	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
 	EnableOnlineAccountCatchpoints bool
 }

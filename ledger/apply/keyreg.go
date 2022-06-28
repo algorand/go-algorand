@@ -52,9 +52,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
-	if params.EnableStateProofKeyregCheck && params.EnableOnlineAccountCatchpoints {
-		record.StateProofID = keyreg.StateProofPK
-	}
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
 		if keyreg.Nonparticipation {
 			if params.SupportBecomeNonParticipatingTransactions {
@@ -70,7 +67,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteKeyDilution = 0
 		record.StateProofID = merklesignature.Verifier{}
 	} else {
-
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
 				return errKeyregGoingOnlineExpiredParticipationKey

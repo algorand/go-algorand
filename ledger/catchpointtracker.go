@@ -157,9 +157,9 @@ type catchpointTracker struct {
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
 
-	// renableGeneratingCatchpointFiles is used for signaling when catchpoint generation
+	// reenableGeneratingCatchpointFiles is used for signaling when catchpoint generation
 	// should be turned back on after a consensus upgrade.
-	renableGeneratingCatchpointFiles bool
+	reenableGeneratingCatchpointFiles int32
 
 	// catchpointsMu protects `roundDigest`, `accountDataResourceSeparationRound` and
 	// `lastCatchpointLabel`.
@@ -380,7 +380,11 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
 	}
 
-	ct.renableGeneratingCatchpointFiles = config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints
+	if config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints {
+		atomic.StoreInt32(&ct.reenableGeneratingCatchpointFiles, 1)
+	} else {
+		atomic.StoreInt32(&ct.reenableGeneratingCatchpointFiles, 0)
+	}
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -1420,7 +1424,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 func (ct *catchpointTracker) catchpointEnabled() bool {
-	return ct.catchpointInterval != 0 && ct.renableGeneratingCatchpointFiles
+	return ct.catchpointInterval != 0 && atomic.LoadInt32(&ct.reenableGeneratingCatchpointFiles) != 0
 }
 
 // accountsInitializeHashes initializes account hashes.
