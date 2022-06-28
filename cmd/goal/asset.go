@@ -298,7 +298,7 @@ var createAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -377,7 +377,7 @@ var destroyAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -470,7 +470,7 @@ var configAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -557,7 +557,7 @@ var sendAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -626,7 +626,7 @@ var freezeAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -715,7 +715,7 @@ var optinAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
