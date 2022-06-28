@@ -21,6 +21,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+<<<<<<< Updated upstream
+=======
+	"fmt"
+
+>>>>>>> Stashed changes
 	"math"
 	"math/rand"
 	"os"
@@ -1267,9 +1272,19 @@ del:                        // delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
     byte "delete"           // [arg[0], "delete"]
     ==                      // [arg[0]=?="delete"]
-    bz bad                  // "delete" ? continue : goto bad
+	bz set                  // "delete" ? continue : goto set
     txn ApplicationArgs 1   // [arg[1]]
     box_del                 // del boxes[arg[1]]
+    b end
+set:						// put arg[1] at start of box arg[0] ... so actually a _partial_ "set"
+    txn ApplicationArgs 0   // [arg[0]]
+    byte "set"              // [arg[0], "set"]
+    ==                      // [arg[0]=?="set"]
+    bz bad                  // "delete" ? continue : goto bad
+    txn ApplicationArgs 1   // [arg[1]]
+    int 0                   // [arg[1], 0]
+    txn ApplicationArgs 2   // [arg[1], 0, arg[2]]
+    box_replace             // [] // boxes: arg[1] -> replace(boxes[arg[1]], 0, arg[2])
     b end
 bad:
     err
@@ -1316,10 +1331,10 @@ end:
 	a.NoError(err)
 
 	// define operate box helper
-	operateBoxAndSendTxn := func(operation, boxName string) (txID string, err error) {
+	operateBoxAndSendTxn := func(operation, boxName string, boxVal string) (txID string, err error) {
 		tx, err := testClient.MakeUnsignedAppNoOpTx(
 			uint64(createdAppID),
-			[][]byte{[]byte(operation), []byte(boxName)},
+			[][]byte{[]byte(operation), []byte(boxName), []byte(boxVal)},
 			nil, nil, nil,
 			[]transactions.BoxRef{
 				{
