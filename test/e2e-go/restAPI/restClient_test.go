@@ -21,11 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
-<<<<<<< Updated upstream
-=======
-	"fmt"
-
->>>>>>> Stashed changes
 	"math"
 	"math/rand"
 	"os"
@@ -1363,7 +1358,7 @@ end:
 	}
 
 	// iterate and create boxes
-	totalBoxNum := 10
+	totalBoxNum := 1
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
@@ -1374,7 +1369,7 @@ end:
 
 	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
 		boxName := "box" + strconv.Itoa(boxIterIndex)
-		_, err = operateBoxAndSendTxn("create", boxName)
+		_, err = operateBoxAndSendTxn("create", boxName, "")
 		a.NoError(err)
 		createdBoxName[boxName] = true
 		createdBoxCount++
@@ -1389,7 +1384,7 @@ end:
 
 	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
 		boxName := "box" + strconv.Itoa(boxIterIndex)
-		_, err = operateBoxAndSendTxn("delete", boxName)
+		_, err = operateBoxAndSendTxn("delete", boxName, "")
 		a.NoError(err)
 		createdBoxName[boxName] = false
 		createdBoxCount--
@@ -1406,4 +1401,24 @@ end:
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 	a.Zero(createdBoxCount)
+
+	// Get Box value from name
+	boxTests := [][]string{
+		{"str:foo", "bar"},
+		{"int:42", "baz"},
+		{"b64:foo", "lux"},
+	}
+	for _, boxTest := range boxTests {
+		boxName := boxTest[0]
+		boxVal := boxTest[1]
+		operateBoxAndSendTxn("create", boxName, "")
+		a.NoError(err)
+
+		operateBoxAndSendTxn("set", boxName, boxVal)
+
+		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxName)
+		a.NoError(err)
+		a.Equal(boxVal, boxResponse.Value)
+	}
+
 }
