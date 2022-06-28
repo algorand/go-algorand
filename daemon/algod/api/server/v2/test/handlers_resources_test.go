@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -65,6 +66,19 @@ func (l *mockLedger) LookupKv(round basics.Round, key string) (*string, error) {
 		return &value, nil
 	}
 	return nil, fmt.Errorf("Key %v does not exist", key)
+}
+
+func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	var results []string
+	for key := range l.kvstore {
+		if strings.HasPrefix(key, keyPrefix) {
+			results = append(results, key)
+			if maxKeyNum > 0 && int(maxKeyNum) == len(results) {
+				break
+			}
+		}
+	}
+	return results, nil
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {

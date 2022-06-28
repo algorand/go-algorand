@@ -84,6 +84,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIBoxPerApplication:                    10000,
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxCatchpointDownloadDuration:              7200000000000,
 	MaxConnectionsPerIP:                        30,

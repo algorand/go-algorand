@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -36,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -1175,6 +1177,128 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
+func TestBoxNamesByAppIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	initialBlocksCount := 1
+	accts := make(map[basics.Address]basics.AccountData)
+
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 8
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+		[]map[basics.Address]basics.AccountData{accts},
+	)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+
+	wildcardSymbol := '%'
+	wildcardUint8 := uint8(wildcardSymbol)
+	wildcardAppID := basics.AppIndex(wildcardUint8)
+
+	sqlWildcardBoxName := make([]byte, 8)
+	binary.BigEndian.PutUint64(sqlWildcardBoxName, uint64(wildcardUint8))
+	wildcardBoxKey := logic.MakeBoxKey(wildcardAppID, string(sqlWildcardBoxName))
+
+	totalRound := basics.Round(protoParams.MaxBalLookback * 2)
+
+	randAppID0 := basics.AppIndex(crypto.RandUint64() >> 48)
+	randAppID1 := basics.AppIndex(crypto.RandUint64() >> 32)
+	randAppID2 := basics.AppIndex(crypto.RandUint64())
+
+	boxNameFromRound := func(i basics.Round) string { return fmt.Sprintf("boxKey%d", i) }
+	getRandomBoxName := func(appID basics.AppIndex) string { return boxNameFromRound(1 + basics.Round(appID)%totalRound) }
+
+	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
+	for i := basics.Round(1); i <= totalRound; i++ {
+		// adding empty blocks
+		boxContent := fmt.Sprintf("boxContent%d", i)
+		localKVstore := map[string]*string{
+			logic.MakeBoxKey(randAppID0, boxNameFromRound(i)): &boxContent,
+			logic.MakeBoxKey(randAppID1, boxNameFromRound(i)): &boxContent,
+			logic.MakeBoxKey(randAppID2, boxNameFromRound(i)): &boxContent,
+		}
+		if i == basics.Round(1) {
+			localKVstore[wildcardBoxKey] = &boxContent
+		}
+		auNewBlock(t, i, au, accts, opts, localKVstore)
+	}
+	auCommitSync(t, totalRound, au, ml)
+
+	// ensure rounds
+	rnd := au.latest()
+	require.Equal(t, totalRound, rnd)
+	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
+
+	// ensure random appid, we can search all correct boxIDs
+	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
+		bKeys, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 1000)
+		require.NoError(t, err)
+		require.Len(t, bKeys, int(totalRound))
+
+		boxKeySet := make(map[string]bool, int(totalRound))
+		for i := basics.Round(1); i <= totalRound; i++ {
+			boxKeySet[logic.MakeBoxKey(appID, boxNameFromRound(i))] = true
+		}
+		for _, key := range bKeys {
+			_, ok := boxKeySet[key]
+			require.True(t, ok)
+		}
+
+		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 2)
+		require.NoError(t, err)
+		require.Len(t, bKeys, 2)
+
+		// consider taking only 10 keys from 16 keys, 8 rounds in-mem and 8 rounds in DB
+		// only take 2 from DB
+		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 10)
+		require.NoError(t, err)
+		require.Len(t, bKeys, 10)
+	}
+
+	// remove some random boxes in the final round
+	finalRnd := totalRound + 1
+	auNewBlock(t, finalRnd, au, accts, opts, map[string]*string{
+		logic.MakeBoxKey(randAppID0, getRandomBoxName(randAppID0)): nil,
+		logic.MakeBoxKey(randAppID1, getRandomBoxName(randAppID0)): nil,
+		logic.MakeBoxKey(randAppID2, getRandomBoxName(randAppID0)): nil,
+	})
+	auCommitSync(t, finalRnd, au, ml)
+
+	// ensure we remove the correct boxes
+	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
+		bKeys, err := au.LookupKeysByPrefix(finalRnd, logic.MakeBoxKey(appID, ""), 1000)
+		require.NoError(t, err)
+		require.Len(t, bKeys, int(totalRound-1))
+
+		boxKeySet := make(map[string]bool, int(totalRound))
+		for _, key := range bKeys {
+			boxKeySet[key] = true
+		}
+		_, ok := boxKeySet[getRandomBoxName(appID)]
+		require.False(t, ok)
+	}
+
+	// check the wildcard key is not doing anything weird
+	wildcardRes, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
+	require.NoError(t, err)
+	require.Len(t, wildcardRes, 1)
+	require.Equal(t, wildcardBoxKey, wildcardRes[0])
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
@@ -1607,9 +1731,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
+			BlockHeader: bookkeeping.BlockHeader{Round: i},
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion
@@ -2404,7 +2526,7 @@ type auNewBlockOpts struct {
 	knownCreatables map[basics.CreatableIndex]bool
 }
 
-func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts) {
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]*string) {
 	rewardLevel := uint64(0)
 	prevRound, prevTotals, err := au.LatestTotals()
 	require.Equal(t, rnd-1, prevRound)
@@ -2413,9 +2535,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, data.updates, rewardLevel, data.protoParams, base, prevTotals)
 
 	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(rnd),
-		},
+		BlockHeader: bookkeeping.BlockHeader{Round: rnd},
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = data.version
@@ -2423,6 +2543,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	delta.Accts.MergeAccounts(data.updates)
 	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
 	delta.Totals = newTotals
+	delta.KvMods = kvMods
 
 	au.newBlock(blk, delta)
 }
@@ -2495,7 +2616,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		// commit changes synchroniously
 		auCommitSync(t, i, au, ml)
@@ -2559,7 +2680,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	au.cachedDBRound = oldCachedDBRound
 	au.accountsMu.Unlock()
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
-	auNewBlock(t, rnd+1, au, accts[rnd], opts)
+	auNewBlock(t, rnd+1, au, accts[rnd], opts, nil)
 	auCommitSync(t, rnd+1, au, ml)
 
 	wg.Wait()
@@ -2643,7 +2764,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		if i <= basics.Round(protoParams.MaxBalLookback+1) {
 			auCommitSync(t, i, au, ml)

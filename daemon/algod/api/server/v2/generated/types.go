@@ -607,6 +607,13 @@ type BlockResponse struct {
 // BoxResponse defines model for BoxResponse.
 type BoxResponse Box
 
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+
+	// Box names
+	Boxes [][]byte `json:"boxes"`
+}
+
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {
 
@@ -832,6 +839,13 @@ type GetApplicationBoxByNameParams struct {
 
 	// A box name
 	Name string `json:"name"`
+}
+
+// GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParams struct {
+
+	// Number of box names to return. If max is not set, or max == 0, returns all box-names.
+	Max *uint64 `json:"max,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

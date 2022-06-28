@@ -21,11 +21,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
-
 	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1226,4 +1226,169 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	account, err := testClient.AccountInformationV2(someAddress, false)
 	a.NoError(err)
 	a.Nil(account.Participation.StateProofKey)
+}
+
+func TestBoxNamesByAppID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	prog := `#pragma version 7
+    txn ApplicationID
+    bz end
+    txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists
+    byte "create"           // [arg[0], "create"] // create box named arg[1]
+    ==                      // [arg[0]=?="create"]
+    bz del                  // "create" ? continue : goto del
+    int 5                   // [5]
+    txn ApplicationArgs 1   // [5, arg[1]]
+    box_create              // [] // boxes: arg[1] -> [5]byte
+    b end
+del:                        // delete box arg[1]
+    txn ApplicationArgs 0   // [arg[0]]
+    byte "delete"           // [arg[0], "delete"]
+    ==                      // [arg[0]=?="delete"]
+    bz bad                  // "delete" ? continue : goto bad
+    txn ApplicationArgs 1   // [arg[1]]
+    box_del                 // del boxes[arg[1]]
+    b end
+bad:
+    err
+end:
+    int 1
+`
+	ops, err := logic.AssembleString(prog)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 7\nint 1")
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+
+	// get app ID
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	a.NoError(err)
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+	a.Greater(uint64(createdAppID), uint64(0))
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, someAddress, createdAppID.Address().String(),
+		0, 10_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	appFundTxID := appFundTxn.ID()
+	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
+	a.NoError(err)
+
+	// define operate box helper
+	operateBoxAndSendTxn := func(operation, boxName string) (txID string, err error) {
+		tx, err := testClient.MakeUnsignedAppNoOpTx(
+			uint64(createdAppID),
+			[][]byte{[]byte(operation), []byte(boxName)},
+			nil, nil, nil,
+			[]transactions.BoxRef{
+				{
+					Name: []byte(boxName), Index: 0,
+				},
+			},
+		)
+		if err != nil {
+			return
+		}
+		tx, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, tx)
+		if err != nil {
+			return
+		}
+		wh, err = testClient.GetUnencryptedWalletHandle()
+		if err != nil {
+			return
+		}
+		txID, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
+		if err != nil {
+			return
+		}
+		_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
+		// no matter wait for txn returns error or not, we should all return with txID and err
+		return
+	}
+
+	// iterate and create boxes
+	totalBoxNum := 10
+
+	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
+	a.NoError(err)
+	a.Empty(resp.Boxes)
+
+	createdBoxName := map[string]bool{}
+	createdBoxCount := 0
+
+	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
+		boxName := "box" + strconv.Itoa(boxIterIndex)
+		_, err = operateBoxAndSendTxn("create", boxName)
+		a.NoError(err)
+		createdBoxName[boxName] = true
+		createdBoxCount++
+
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		a.NoError(err)
+		a.Equal(createdBoxCount, len(resp.Boxes))
+		for _, byteName := range resp.Boxes {
+			a.True(createdBoxName[string(byteName)])
+		}
+	}
+
+	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
+		boxName := "box" + strconv.Itoa(boxIterIndex)
+		_, err = operateBoxAndSendTxn("delete", boxName)
+		a.NoError(err)
+		createdBoxName[boxName] = false
+		createdBoxCount--
+
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		a.NoError(err)
+		a.Equal(createdBoxCount, len(resp.Boxes))
+		for _, byteName := range resp.Boxes {
+			a.True(createdBoxName[string(byteName)])
+		}
+	}
+
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+	a.NoError(err)
+	a.Empty(resp.Boxes)
+	a.Zero(createdBoxCount)
 }

@@ -45,6 +45,7 @@ type accountsDbQueries struct {
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupKvPairStmt            *sql.Stmt
+	lookupKeysByPrefixStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -1882,6 +1883,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (key, 1, ?) = ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -1970,7 +1976,7 @@ type persistedValue struct {
 func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
 	err = db.Retry(func() error {
 		var v sql.NullString
-		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&pv.round, &v)
+		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &v)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
@@ -1985,6 +1991,41 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 		}
 		// we don't have that key, just return pv with the database round (pv.value==nil)
 		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	err = db.Retry(func() (_err error) {
+		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
+		if _err != nil {
+			if _err == sql.ErrNoRows {
+				// we just found nothing, not an error I guess?
+				_err = nil
+				return
+			}
+		}
+		defer rows.Close()
+
+		var v sql.NullString
+
+		for rows.Next() {
+			if maxKeyNum > 0 && resultCount == maxKeyNum {
+				return
+			}
+			_err = rows.Scan(&round, &v)
+			if _err != nil {
+				return
+			}
+			if v.Valid {
+				if _, ok := results[v.String]; ok {
+					continue
+				}
+				results[v.String] = true
+				resultCount++
+			}
+		}
+		return
 	})
 	return
 }
@@ -2235,6 +2276,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
+		&qs.lookupKeysByPrefixStmt,
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
@@ -2487,7 +2529,13 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 }
 
 func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
-	result, err := w.upsertKvPairStmt.Exec(key, value)
+	// NOTE! If we are passing in `string`, then for `BoxKey` case,
+	// we might contain 0-byte in boxKey, coming from uint64 appID.
+	// The consequence would be DB key write in be cut off after such 0-byte.
+	// Casting `string` to `[]byte` avoids such trouble, and test:
+	// - `TestBoxNamesByAppIDs` in `acctupdates_test`
+	// relies on such modification.
+	result, err := w.upsertKvPairStmt.Exec([]byte(key), []byte(value))
 	if err != nil {
 		return err
 	}
@@ -2496,7 +2544,7 @@ func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
 }
 
 func (w accountsSQLWriter) deleteKvPair(key string) error {
-	result, err := w.deleteKvPairStmt.Exec(key)
+	result, err := w.deleteKvPairStmt.Exec([]byte(key))
 	if err != nil {
 		return err
 	}

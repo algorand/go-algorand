@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -413,6 +414,126 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			return nil, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 
+	}
+}
+
+func (au *accountUpdates) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	return au.lookupKeysByPrefix(round, keyPrefix, maxKeyNum, true /* take lock */)
+}
+
+func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64, synchronized bool) (resultKeys []string, err error) {
+	var results map[string]bool
+	// keep track of the number of result key with value
+	var resultCount uint64
+
+	needUnlock := false
+	if synchronized {
+		au.accountsMu.RLock()
+		needUnlock = true
+	}
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+		// preparation of result happens in deferring function
+		// prepare result only when err != nil
+		if err == nil {
+			resultKeys = make([]string, 0, resultCount)
+			for resKey, isValid := range results {
+				if isValid {
+					resultKeys = append(resultKeys, resKey)
+				}
+			}
+		}
+	}()
+
+	// TODO: This loop and round handling is copied from other routines like
+	// lookupResource. I believe that it is overly cautious, as it always reruns
+	// the lookup if the DB round does not match the expected round. However, as
+	// long as the db round has not advanced too far (greater than `rnd`), I
+	// believe it would be valid to use. In the interest of minimizing changes,
+	// I'm not doing that now.
+
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, _err := au.roundOffset(round)
+		if _err != nil {
+			err = _err
+			return
+		}
+
+		// reset `results` to be empty each iteration
+		// if db round does not match the round number returned from DB query, start over again
+		results = map[string]bool{}
+		resultCount = 0
+
+		for i := int(offset - 1); i >= 0; i-- {
+			for keyInRound, valOp := range au.kvDeltas[i] {
+				if !strings.HasPrefix(keyInRound, keyPrefix) {
+					continue
+				}
+				// whether it is set or deleted in later round, if such modification exists in later round
+				// we just ignore the earlier insert
+				if _, ok := results[keyInRound]; ok {
+					continue
+				}
+				if valOp == nil {
+					results[keyInRound] = false
+				} else {
+					// set such key to be valid with value
+					results[keyInRound] = true
+					resultCount++
+					// check if the size of `results` reaches `maxKeyNum`
+					// if so just return the list of keys
+					if maxKeyNum > 0 && resultCount == maxKeyNum {
+						return
+					}
+				}
+			}
+		}
+
+		round = currentDBRound + basics.Round(currentDeltaLen)
+
+		// after this line, we should dig into DB I guess
+		// OTHER LOOKUPS USE "base" caches here.
+		if synchronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
+
+		// No updates of this account in kvDeltas; use on-disk DB.  The check in
+		// roundOffset() made sure the round is exactly the one present in the
+		// on-disk DB.
+		dbRound, _err := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
+		if _err != nil {
+			err = _err
+			return
+		}
+		if dbRound == currentDBRound {
+			return
+		}
+
+		// The DB round is unexpected... '_>'?
+		if synchronized {
+			if dbRound < currentDBRound {
+				// does not make sense if DB round is earlier than it should be
+				au.log.Errorf("accountUpdates.lookupKvPair: database round %d is behind in-memory round %d", dbRound, currentDBRound)
+				err = &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+				return
+			}
+			// The DB round is higher than expected, so a write-into-DB must have happened. Start over again.
+			au.accountsMu.RLock()
+			needUnlock = true
+			// WHY BOTH - seems the goal is just to wait until the au is aware of progress. au.cachedDBRound should be enough?
+			for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			au.log.Errorf("accountUpdates.lookupKvPair: database round %d mismatching in-memory round %d", dbRound, currentDBRound)
+			err = &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+			return
+		}
 	}
 }
 
