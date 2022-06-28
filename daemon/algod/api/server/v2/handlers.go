@@ -1126,16 +1126,17 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	rawBoxName, err := boxNameBytes.Raw()
+	escapedBoxName, err := url.PathUnescape(string(boxNameBytes.Value))
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	boxNameBytes.Value = escapedBoxName
+	boxName, err := boxNameBytes.Raw()
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	boxName, err := url.PathUnescape(string(rawBoxName))
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, boxName))
+	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, string(boxName)))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -1144,7 +1145,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
 	}
 	response := generated.BoxResponse{
-		Name:  []byte(boxName),
+		Name:  []byte(escapedBoxName),
 		Value: []byte(*value),
 	}
 	return ctx.JSON(http.StatusOK, response)
