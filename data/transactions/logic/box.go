@@ -185,7 +185,7 @@ func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
 	// WARNING: even junk such as "this is definitely NOT a box key" will return without error
 	keyBytes := []byte(key)
 	app := (basics.AppIndex)(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
-	return app, string(keyBytes[boxNameIndex:]), nil
+	return app, key[boxNameIndex:], nil
 }
 
 // TODO: convert the following to a unit test
