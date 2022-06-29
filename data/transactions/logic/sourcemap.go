@@ -51,17 +51,6 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 		}
 	}
 
-	// Backwards compatibility for `mapping` field.
-	oldPcToLine := make([]string, maxPC+1)
-	for pc := range oldPcToLine {
-		if line, ok := offsetToLine[pc]; ok {
-			oldPcToLine[pc] = MakeSourceMapLine(0, 0, line, 0)
-		} else {
-			oldPcToLine[pc] = ""
-		}
-	}
-	oldEncodedMapping := strings.Join(oldPcToLine, ";")
-
 	// Array where index is the PC and value is the line for `mappings` field.
 	prevSourceLine := 0
 	pcToLine := make([]string, maxPC+1)
@@ -75,10 +64,11 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 	}
 
 	return SourceMap{
-		Version:  sourceMapVersion,
-		Sources:  sourceNames,
-		Names:    []string{}, // TEAL code does not generate any names.
-		Mapping:  oldEncodedMapping,
+		Version: sourceMapVersion,
+		Sources: sourceNames,
+		Names:   []string{}, // TEAL code does not generate any names.
+		// Mapping is deprecated, and only for backwards compatibility.
+		Mapping:  strings.Join(pcToLine, ";"),
 		Mappings: strings.Join(pcToLine, ";"),
 	}
 }
