@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"container/heap"
 	"context"
 	"database/sql"
 	"sort"
@@ -1458,7 +1457,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		postCommitEntryLock:           make(chan struct{}),
 		postCommitReleaseLock:         make(chan struct{}),
 		alwaysLock:                    false,
-		shouldLockPostCommit:          true,
+		shouldLockPostCommit:          false,
 	}
 
 	conf := config.GetDefaultLocal()
@@ -1473,8 +1472,19 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	_, totals, err := au.LatestTotals()
 	require.NoError(t, err)
 
+	// apply some rounds so the db round will make progress (not be 0)
+	i := 0
+	for ; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	stallingTracker.shouldLockPostCommit = true
+
 	updateAccountsRoutine := func() {
-		for i := 0; i < 10; i++ {
+		for ; i < 12; i++ {
 			var updates ledgercore.AccountDeltas
 			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
 				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
@@ -1492,6 +1502,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	case <-stallingTracker.postCommitEntryLock:
 		go func() {
 			time.Sleep(2 * time.Second)
+			stallingTracker.shouldLockPostCommit = false
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
 		top, err = oa.onlineTop(2, 2, 5)
@@ -1507,32 +1518,96 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	}
 }
 
-func TestAcctOnlineTopSecondarySortOrder(t *testing.T) {
+func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	var accounts [2]*ledgercore.OnlineAccount
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 
-	// create two accounts with the same balance. we expect the heap to sort it in a lexicographic order
-	accounts[0] = &ledgercore.OnlineAccount{NormalizedOnlineBalance: 200}
-	accounts[1] = &ledgercore.OnlineAccount{NormalizedOnlineBalance: 200}
-	accounts[1].Address[0] = 1
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	addSinkAndPoolAccounts(genesisAccts)
 
-	topHeap := &onlineTopHeap{
-		accts: nil,
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	stallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		postCommitEntryLock:           make(chan struct{}),
+		postCommitReleaseLock:         make(chan struct{}),
+		alwaysLock:                    false,
+		shouldLockPostCommit:          false,
 	}
 
-	for _, data := range accounts {
-		heap.Push(topHeap, data)
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
+
+	top, err := oa.onlineTop(0, 0, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// apply some rounds so the db round will make progress (not be 0)
+	i := 0
+	for ; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
-	var res []*ledgercore.OnlineAccount
-	for topHeap.Len() > 0 {
-		acct := heap.Pop(topHeap).(*ledgercore.OnlineAccount)
-		res = append(res, acct)
+	stallingTracker.shouldLockPostCommit = true
+
+	updateAccountsRoutine := func() {
+		for ; i < 12; i++ {
+			var updates ledgercore.AccountDeltas
+			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+			newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+		}
 	}
 
-	a.Equal(*accounts[0], *res[1])
-	a.Equal(*accounts[1], *res[0])
+	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
+	// onlineAccoutsTracker to be "stuck" between commit and Post commit .
+	// thus, when we call onlineTop - it should wait for the post commit to happen.
+	// in a different go routine we will wait 2 sec and release the commit.
+	go updateAccountsRoutine()
 
+	select {
+	case <-stallingTracker.postCommitEntryLock:
+		go func() {
+			time.Sleep(2 * time.Second)
+			// tweak the database to move backwards
+			err = oa.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
+				return
+			})
+			stallingTracker.shouldLockPostCommit = false
+			stallingTracker.postCommitReleaseLock <- struct{}{}
+		}()
+		top, err = oa.onlineTop(2, 2, 5)
+		a.Error(err)
+		a.Contains(err.Error(), "is behind in-memory round")
+
+	case <-time.After(1 * time.Minute):
+		a.FailNow("timedout while waiting for post commit")
+	}
 }
