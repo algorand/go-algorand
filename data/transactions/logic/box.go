@@ -169,7 +169,7 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 	   The "bx:" prefix is so that the kvstore might be usable for things
 	   besides boxes.
 	*/
-	key := make([]byte, boxNameIndex + len(name))
+	key := make([]byte, boxNameIndex+len(name))
 	copy(key, boxPrefix)
 	binary.BigEndian.PutUint64(key[boxPrefixLength:], uint64(appIdx))
 	copy(key[boxNameIndex:], name)
