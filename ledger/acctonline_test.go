@@ -1213,6 +1213,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// +1 comes from the deletion before X without checking account state at X
 	require.Equal(t, maxBalLookback+1, oa.onlineAccountsCache.accounts[addrA].Len())
 }
+
 func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
@@ -1280,7 +1281,7 @@ func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, u
 	commitSync(t, oa, ml, basics.Round(round))
 }
 
-func TestTopOnlineAccounts(t *testing.T) {
+func TestAcctOnlineTop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1390,7 +1391,7 @@ func TestTopOnlineAccounts(t *testing.T) {
 
 }
 
-func TestTopOnlineAccountsInBatches(t *testing.T) {
+func TestAcctOnlineTopInBatches(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1425,7 +1426,7 @@ func TestTopOnlineAccountsInBatches(t *testing.T) {
 	compareTopAccounts(a, top, allAccts)
 }
 
-func TestTopOnlineAccountsBetweenCommitAndPostCommit(t *testing.T) {
+func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1506,7 +1507,7 @@ func TestTopOnlineAccountsBetweenCommitAndPostCommit(t *testing.T) {
 	}
 }
 
-func TestOnlineTopSecondarySortOrder(t *testing.T) {
+func TestAcctOnlineTopSecondarySortOrder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
