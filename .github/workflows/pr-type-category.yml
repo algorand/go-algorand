@@ -14,10 +14,10 @@ jobs:
     steps:
       - if: contains(github.event.pull_request.labels.*.name, 'New Feature')
         id: new-feature
-        run: echo "NEW_FEATURE_COUNT=1" >> $GITHUB_ENV
+        run: echo "NEW_FEATURE_LABEL_COUNT=1" >> $GITHUB_ENV
       - if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
         id: enhancement
-        run: echo "ENHANCEMENT_COUNT=1" >> $GITHUB_ENV
+        run: echo "ENHANCEMENT_LABEL_COUNT=1" >> $GITHUB_ENV
       # - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
       #   id: bug-fix
       #   run: echo '::set-env name=COUNT::1'
@@ -29,11 +29,12 @@ jobs:
       #   run: echo '::set-env name=COUNT::1'
 
       - run: |
-          # ONE=${{env.NEW_FEATURE_COUNT}}
-          # TWO=${{env.ENHANCEMENT_COUNT}}
-          LABELS_COUNT=$((${{env.NEW_FEATURE_COUNT}}+${{env.ENHANCEMENT_COUNT}}))
-          echo $LABELS_COUNT
-      - run: echo $LABELS_COUNT
+          LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL_COUNT}}+${{env.ENHANCEMENT_LABEL_COUNT}} + 0))
+          echo "LABELS_COUNT=${{LABELS_COUNT}}" >> $GITHUB_ENV
+      - name: "Checking for one and only one github pr label"
+        if: env.LABELS_COUNT != 1
+        run: |
+          exit 1
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
       #   run: exit 1
