@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -1205,98 +1204,99 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
 
-	wildcardSymbol := '%'
-	wildcardUint8 := uint8(wildcardSymbol)
-	wildcardAppID := basics.AppIndex(wildcardUint8)
-
-	sqlWildcardBoxName := make([]byte, 8)
-	binary.BigEndian.PutUint64(sqlWildcardBoxName, uint64(wildcardUint8))
-	wildcardBoxKey := logic.MakeBoxKey(wildcardAppID, string(sqlWildcardBoxName))
-
-	totalRound := basics.Round(protoParams.MaxBalLookback * 2)
-
-	randAppID0 := basics.AppIndex(crypto.RandUint64() >> 48)
-	randAppID1 := basics.AppIndex(crypto.RandUint64() >> 32)
-	randAppID2 := basics.AppIndex(crypto.RandUint64())
-
-	boxNameFromRound := func(i basics.Round) string { return fmt.Sprintf("boxKey%d", i) }
-	getRandomBoxName := func(appID basics.AppIndex) string { return boxNameFromRound(1 + basics.Round(appID)%totalRound) }
-
-	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
-	for i := basics.Round(1); i <= totalRound; i++ {
-		// adding empty blocks
-		boxContent := fmt.Sprintf("boxContent%d", i)
-		localKVstore := map[string]*string{
-			logic.MakeBoxKey(randAppID0, boxNameFromRound(i)): &boxContent,
-			logic.MakeBoxKey(randAppID1, boxNameFromRound(i)): &boxContent,
-			logic.MakeBoxKey(randAppID2, boxNameFromRound(i)): &boxContent,
-		}
-		if i == basics.Round(1) {
-			localKVstore[wildcardBoxKey] = &boxContent
-		}
-		auNewBlock(t, i, au, accts, opts, localKVstore)
-	}
-	auCommitSync(t, totalRound, au, ml)
-
-	// ensure rounds
-	rnd := au.latest()
-	require.Equal(t, totalRound, rnd)
-	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
-
-	// ensure random appid, we can search all correct boxIDs
-	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
-		bKeys, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 1000)
-		require.NoError(t, err)
-		require.Len(t, bKeys, int(totalRound))
-
-		boxKeySet := make(map[string]bool, int(totalRound))
-		for i := basics.Round(1); i <= totalRound; i++ {
-			boxKeySet[logic.MakeBoxKey(appID, boxNameFromRound(i))] = true
-		}
-		for _, key := range bKeys {
-			_, ok := boxKeySet[key]
-			require.True(t, ok)
-		}
-
-		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 2)
-		require.NoError(t, err)
-		require.Len(t, bKeys, 2)
-
-		// consider taking only 10 keys from 16 keys, 8 rounds in-mem and 8 rounds in DB
-		// only take 2 from DB
-		bKeys, err = au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(appID, ""), 10)
-		require.NoError(t, err)
-		require.Len(t, bKeys, 10)
+	testingBoxNames := []string{
+		` `,
+		`     	`,
+		` % `,
+		` ? = % ;`,
+		`; DROP *;`,
+		`OR 1 = 1;`,
+		`"      ;  SELECT * FROM kvstore; DROP acctrounds; `,
+		`; SELECT key from kvstore WHERE key LIKE %;`,
+		`?&%!=`,
+		"SELECT * FROM kvstore " + string([]byte{0, 0}) + " WHERE key LIKE %; ",
+		`b64:APj/AA==`,
+		`str:123.3/aa\\0`,
+		string([]byte{0, 255, 254, 254}),
+		string([]byte{0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF}),
+		string([]byte{'%', 'a', 'b', 'c', 0, 0, '%', 'a', '!'}),
+		`
+`,
+		`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`,
+		`∑´´˙©˚¬∆ßåƒ√¬`,
+		`背负青天而莫之夭阏者，而后乃今将图南。`,
+		`於浩歌狂熱之際中寒﹔於天上看見深淵。`,
+		`於一切眼中看見無所有﹔於無所希望中得救。`,
+		`有一遊魂，化為長蛇，口有毒牙。`,
+		`不以嚙人，自嚙其身，終以殞顛。`,
+		`那些智力超常的人啊`,
+		`认为已经，熟悉了云和闪电的脾气`,
+		`就不再迷惑，就不必了解自己，世界和他人`,
+		`每天只管，被微风吹拂，与猛虎谈情`,
+		`他们从来，不需要楼梯，只有窗口`,
+		`把一切交付于梦境，和优美的浪潮`,
+		`在这颗行星所有的酒馆，青春自由似乎理所应得`,
+		`面向涣散的未来，只唱情歌，看不到坦克`,
+		`在科学和啤酒都不能安抚的夜晚`,
+		`他们丢失了四季，惶惑之行开始`,
+		`这颗行星所有的酒馆，无法听到远方的呼喊`,
+		`野心勃勃的灯火，瞬间吞没黑暗的脸庞`,
 	}
 
-	// remove some random boxes in the final round
-	finalRnd := totalRound + 1
-	auNewBlock(t, finalRnd, au, accts, opts, map[string]*string{
-		logic.MakeBoxKey(randAppID0, getRandomBoxName(randAppID0)): nil,
-		logic.MakeBoxKey(randAppID1, getRandomBoxName(randAppID0)): nil,
-		logic.MakeBoxKey(randAppID2, getRandomBoxName(randAppID0)): nil,
-	})
-	auCommitSync(t, finalRnd, au, ml)
+	appIDset := make(map[basics.AppIndex]struct{}, len(testingBoxNames))
+	boxNameToAppID := make(map[string]basics.AppIndex, len(testingBoxNames))
+	var currentRound basics.Round
 
-	// ensure we remove the correct boxes
-	for _, appID := range []basics.AppIndex{randAppID0, randAppID1, randAppID2} {
-		bKeys, err := au.LookupKeysByPrefix(finalRnd, logic.MakeBoxKey(appID, ""), 1000)
-		require.NoError(t, err)
-		require.Len(t, bKeys, int(totalRound-1))
+	// keep adding one box key and one random appID (non-duplicated)
+	for i, boxName := range testingBoxNames {
+		currentRound = basics.Round(i + 1)
 
-		boxKeySet := make(map[string]bool, int(totalRound))
-		for _, key := range bKeys {
-			boxKeySet[key] = true
+		var appID basics.AppIndex
+		for {
+			appID = basics.AppIndex(crypto.RandUint64())
+			_, preExisting := appIDset[appID]
+			if !preExisting {
+				break
+			}
 		}
-		_, ok := boxKeySet[getRandomBoxName(appID)]
-		require.False(t, ok)
+
+		appIDset[appID] = struct{}{}
+		boxNameToAppID[boxName] = appID
+
+		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): &boxName})
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > protoParams.MaxBalLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
+		}
+
+		// check input ...
+		for _, storedBoxName := range testingBoxNames[:i+1] {
+			res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[storedBoxName], ""), 10000)
+			require.NoError(t, err)
+			require.Len(t, res, 1)
+			require.Equal(t, logic.MakeBoxKey(boxNameToAppID[storedBoxName], storedBoxName), res[0])
+		}
 	}
 
-	// check the wildcard key is not doing anything weird
-	wildcardRes, err := au.LookupKeysByPrefix(totalRound, logic.MakeBoxKey(basics.AppIndex(wildcardUint8), ""), 1000)
-	require.NoError(t, err)
-	require.Len(t, wildcardRes, 1)
-	require.Equal(t, wildcardBoxKey, wildcardRes[0])
+	// removing inserted boxes
+	for _, boxName := range testingBoxNames {
+		currentRound++
+
+		// remove inserted box
+		appID := boxNameToAppID[boxName]
+		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): nil})
+		auCommitSync(t, currentRound, au, ml)
+
+		res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[boxName], ""), 10000)
+		require.NoError(t, err)
+		require.Len(t, res, 0)
+	}
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
