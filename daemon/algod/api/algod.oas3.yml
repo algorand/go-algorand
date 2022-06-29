@@ -2435,7 +2435,7 @@
     },
     "/v2/applications/{application-id}/box": {
       "get": {
-        "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded).",
+        "description": "Given an application ID and box name in the goal app call arg encoding form 'encoding:value', it returns the box name and value (each base64 encoded).",
         "operationId": "GetApplicationBoxByName",
         "parameters": [
           {
@@ -2448,7 +2448,7 @@
             }
           },
           {
-            "description": "A box name",
+            "description": "A box name, in the goal app call arg form 'encoding:value'",
             "in": "query",
             "name": "name",
             "required": true,

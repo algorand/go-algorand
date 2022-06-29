@@ -24,7 +24,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -1187,11 +1186,6 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	escapedBoxName, err := url.PathUnescape(string(boxNameBytes.Value))
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	boxNameBytes.Value = escapedBoxName
 	boxName, err := boxNameBytes.Raw()
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)

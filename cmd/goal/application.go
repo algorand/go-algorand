@@ -197,7 +197,7 @@ func newAppCallBytes(arg string) logic.AppCallBytes {
 	if err != nil {
 		reportErrorf(err.Error())
 	}
-	return logic.AppCallBytes(appBytes)
+	return appBytes
 }
 
 type appCallInputs struct {

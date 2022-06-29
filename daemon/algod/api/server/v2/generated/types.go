@@ -837,7 +837,7 @@ type GetPendingTransactionsByAddressParams struct {
 // GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
 type GetApplicationBoxByNameParams struct {
 
-	// A box name
+	// A box name, in the goal app call arg form 'encoding:value'
 	Name string `json:"name"`
 }
 
