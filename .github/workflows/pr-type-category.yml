@@ -29,8 +29,8 @@ jobs:
       #   run: echo '::set-env name=COUNT::1'
 
       - run: |
-          LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL_COUNT}}+${{env.ENHANCEMENT_LABEL_COUNT}} + 0))
-          echo "LABELS_COUNT=${{LABELS_COUNT}}" >> $GITHUB_ENV
+          echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL_COUNT}}+${{env.ENHANCEMENT_LABEL_COUNT}} + 0))" >> $GITHUB_ENV
+
       - name: "Checking for one and only one github pr label"
         if: env.LABELS_COUNT != 1
         run: |
