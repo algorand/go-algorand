@@ -8,25 +8,28 @@ jobs:
   check_label:
     runs-on: ubuntu-latest
     name: Check PR Category and Type
+    env:
+      NEW_FEATURE_COUNT: 0
+      ENHANCEMENT_COUNT: 0
     steps:
       - if: contains(github.event.pull_request.labels.*.name, 'New Feature')
         id: new-feature
-        run: echo '::set-output name=COUNT::1'
+        run: echo '::set-env name=NEW_FEATURE_COUNT::1'
       - if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
         id: enhancement
-        run: echo '::set-output name=COUNT::1'
-      - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-        id: bug-fix
-        run: echo '::set-output name=COUNT::1'
-      - if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
-        id: not-yet-enabled
-        run: echo '::set-output name=COUNT::1'
-      - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
-        id: skip-release-notes
-        run: echo '::set-output name=COUNT::1'
+        run: echo '::set-env name=ENHANCEMENT_COUNT::1'
+      # - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+      #   id: bug-fix
+      #   run: echo '::set-env name=COUNT::1'
+      # - if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+      #   id: not-yet-enabled
+      #   run: echo '::set-env name=COUNT::1'
+      # - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+      #   id: skip-release-notes
+      #   run: echo '::set-env name=COUNT::1'
 
       - run: |
-          echo ::set-env name=LABELS_COUNT::$((steps.new-feature.outputs.COUNT+steps.enhancement.outputs.COUNT+steps.bug-fix.outputs.COUNT))
+          echo ::set-env name=LABELS_COUNT::$(($NEW_FEATURE_COUNT+$ENHANCEMENT_COUNT))
       - run: echo $LABELS_COUNT
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
