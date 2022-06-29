@@ -4,6 +4,12 @@ on:
     branches:
       - master
     types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+env:
+  NEW_FEATURE_LABEL: 0
+  ENHANCEMENT_LABEL: 0
+  BUG_FIX_LABEL: 0
+  NOT_YET_ENABLED_LABEL: 0
+  SKIP_RELEASE_NOTES_LABEL: 0
 jobs:
   check_label:
     runs-on: ubuntu-latest
@@ -27,7 +33,7 @@ jobs:
 
       - name: Adding up all labels
         run: |
-          echo "LABELS_COUNT=$((0+${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
+          echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
 
       - name: Checking for one and only one github pr label
         if: env.LABELS_COUNT != 1
