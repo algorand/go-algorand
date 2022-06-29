@@ -833,7 +833,7 @@ type GetPendingTransactionsByAddressParams struct {
 // GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
 type GetApplicationBoxByNameParams struct {
 
-	// A box name, in the goal app call arg form 'encoding:value'
+	// A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
 	Name string `json:"name"`
 }
 

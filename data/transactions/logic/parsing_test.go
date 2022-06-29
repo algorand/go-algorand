@@ -25,6 +25,8 @@ import (
 
 func TestNewAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	acb, err := NewAppCallBytes("str:hello")
 	require.NoError(t, err)
 	require.Equal(t, "str", acb.Encoding)

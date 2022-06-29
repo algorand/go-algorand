@@ -1380,7 +1380,7 @@
     },
     "/v2/applications/{application-id}/box": {
       "get": {
-        "description": "Given an application ID and box name in the goal app call arg encoding form 'encoding:value', it returns the box name and value (each base64 encoded).",
+        "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded). Box names must be in the goal app call arg encoding form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
         "produces": [
           "application/json"
         ],
@@ -1399,7 +1399,7 @@
           },
           {
             "type": "string",
-            "description": "A box name, in the goal app call arg form 'encoding:value'",
+            "description": "A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
             "name": "name",
             "in": "query",
             "required": true
