@@ -35,16 +35,15 @@ jobs:
         run: |
           echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
 
-      - name: Checking github pr labels
+      - name: Missing or too many github pr labels
         if: env.LABELS_COUNT != 1
         run: |
-          echo "# Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'." >> $GITHUB_STEP_SUMMARY
+          echo "Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'."
           exit 1
 
-      - name: "Checking PR title category"
+      - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'."
         run: |
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
-            echo "# PR Category is missing from PR title. Please add it like '<category>: <pr title>'." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
