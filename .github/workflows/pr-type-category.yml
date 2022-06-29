@@ -31,7 +31,7 @@ jobs:
       - run: |
           # ONE=${{env.NEW_FEATURE_COUNT}}
           # TWO=${{env.ENHANCEMENT_COUNT}}
-          LABELS_COUNT=$((${{NEW_FEATURE_COUNT}}+${{ENHANCEMENT_COUNT}}))
+          LABELS_COUNT=$((${{env.NEW_FEATURE_COUNT}}+${{env.ENHANCEMENT_COUNT}}))
           echo $LABELS_COUNT
       - run: echo $LABELS_COUNT
 
