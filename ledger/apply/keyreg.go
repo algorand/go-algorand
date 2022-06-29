@@ -65,7 +65,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
-		record.StateProofID = merklesignature.Verifier{}
+		if params.EnableStateProofKeyregCheck {
+			record.StateProofID = merklesignature.Verifier{}
+		}
 	} else {
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
@@ -79,7 +81,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if params.EnableStateProofKeyregCheck && !params.EnableOnlineAccountCatchpoints {
+		if params.EnableStateProofKeyregCheck {
 			record.StateProofID = keyreg.StateProofPK
 		}
 	}

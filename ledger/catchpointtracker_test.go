@@ -411,6 +411,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
