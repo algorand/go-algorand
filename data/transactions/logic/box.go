@@ -179,7 +179,7 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 // GetAppAndNameFromKey extracts an appid and box name from a string that was created by MakeBoxKey()
 func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
 	// no assertion that prefix is "bx:"
-	if len(key) < boxPrefixLength+8 {
+	if len(key) < boxNameIndex {
 		return 0, "", fmt.Errorf("GetAppNameFromKey() cannot extract AppIndex as key too short (length=%d)", len(key))
 	}
 	// WARNING: even junk such as "this is definitely NOT a box key" will return without error
