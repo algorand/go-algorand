@@ -18,6 +18,7 @@ package restapi
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -1358,7 +1359,7 @@ end:
 	}
 
 	// iterate and create boxes
-	totalBoxNum := 10
+	totalBoxNum := 1 // TODO: Change me!
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
@@ -1402,9 +1403,17 @@ end:
 	a.Empty(resp.Boxes)
 	a.Zero(createdBoxCount)
 
-	// Get Box value from name tests
+	// Get Box value from box name
+	encodeInt := func(n uint64) []byte {
+		ibytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(ibytes, n)
+		return ibytes
+	}
+
 	boxTests := [][]interface{}{
 		{[]byte("foo"), "str:foo", []byte("bar12")},
+		{encodeInt(12321), "int:12321", []byte{0, 1, 246, 247, 2}},
+		{[]byte{0, 248, 255, 0}, "b64:APj/AA==", []byte("lux56")},
 	}
 	for _, boxTest := range boxTests {
 		boxName := boxTest[0].([]byte)
