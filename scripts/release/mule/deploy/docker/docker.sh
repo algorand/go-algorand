@@ -13,9 +13,9 @@ if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
     exit 1
 fi
 
-if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
+if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$|^alphanet$ ]]
 then
-    echo "[$0] Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
+    echo "[$0] Network values must be either \`mainnet\`, \`testnet\`, \`betanet\`, or \`alphanet\`."
     exit 1
 fi
 
@@ -28,9 +28,9 @@ then
 
   # Build and push testnet.
   ./build_releases.sh --tagname "$VERSION" --network testnet --cached
-elif [ "$NETWORK" = betanet ]
+elif [ "$NETWORK" = betanet ] || [ "$NETWORK" = alphanet ]
 then
-  ./build_releases.sh --tagname "$VERSION" --network betanet
+  ./build_releases.sh --tagname "$VERSION" --network "$NETWORK"
 fi
 
 popd
