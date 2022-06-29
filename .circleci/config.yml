@@ -74,11 +74,11 @@ workflows:
           matrix: &matrix-mac-arm64
             parameters:
               platform: ["mac_arm64"]
-          # filters: &filters-mac-arm64
-          #   branches:
-          #     only:
-          #       - /rel\/.*/
-          #       - master
+          filters: &filters-mac-arm64
+            branches:
+              only:
+                - /rel\/.*/
+                - master
 
       - test:
           name: << matrix.platform >>_test
@@ -98,8 +98,8 @@ workflows:
             <<: *matrix-mac-arm64
           requires:
             - mac_arm64_build
-          # filters:
-          #   <<: *filters-mac-arm64
+          filters:
+            <<: *filters-mac-arm64
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -142,8 +142,8 @@ workflows:
             <<: *matrix-mac-arm64
           requires:
             - mac_arm64_build
-          # filters:
-          #   <<: *filters-mac-arm64
+          filters:
+            <<: *filters-mac-arm64
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -180,8 +180,8 @@ workflows:
             <<: *matrix-mac-arm64
           requires:
             - mac_arm64_build
-          # filters:
-          #   <<: *filters-mac-arm64
+          filters:
+            <<: *filters-mac-arm64
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -218,8 +218,8 @@ workflows:
             <<: *matrix-mac-arm64
           requires:
             - mac_arm64_build
-          # filters:
-          #   <<: *filters-mac-arm64
+          filters:
+            <<: *filters-mac-arm64
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -262,8 +262,8 @@ workflows:
               job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
-          # filters:
-          #   <<: *filters-mac-arm64
+          filters:
+            <<: *filters-mac-arm64
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
