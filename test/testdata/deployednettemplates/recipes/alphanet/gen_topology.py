@@ -1,15 +1,14 @@
 import json
 import os
 
-node_types = {"R":1, "N":4, "NPN":2}
+node_types = {"R":5, "N":0, "NPN":4}
 node_size = {"R":"-m5d.4xl", "N":"-m5d.4xl", "NPN":"-m5d.4xl"}
 regions = [
-    "AWS-US-EAST-2",
-    "AWS-US-WEST-2",
-    "AWS-EU-CENTRAL-1",
-    "AWS-EU-WEST-2",
-    "AWS-AP-SOUTHEAST-1",
-    "AWS-AP-SOUTHEAST-2"
+    "AWS-US-EAST-1",
+    "AWS-US-WEST-1",
+    "AWS-SA-EAST-1",
+    "AWS-EU-NORTH-1",
+    "AWS-AP-SOUTHEAST-1"
 ]
 
 network = "alphanet"
