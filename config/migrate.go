@@ -17,9 +17,15 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"strconv"
+	"unicode"
+	"unicode/utf8"
 )
 
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
@@ -197,4 +203,79 @@ func getVersionedDefaultLocalConfig(version uint32) (local Local) {
 		}
 	}
 	return
+}
+
+func checkLocalTags() error {
+	var local Local
+	localType := reflect.TypeOf(local)
+	return checkReflectStructTags(localType)
+}
+
+func checkReflectStructTags(localType reflect.Type) error {
+	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
+		field := localType.Field(fieldNum)
+		if field.Tag == "" {
+			continue
+		}
+		err := checkTag(string(field.Tag))
+		if err != nil {
+			return fmt.Errorf("field %#v tag error: %v", field.Name, err)
+		}
+	}
+	return nil
+}
+
+// ErrTagEndsInKey is returned for a struct field tag `foo:"bar" badkey`
+var ErrTagEndsInKey = errors.New("tag ends in key without value")
+
+func checkTag(tag string) error {
+	// By convention, tag strings are a concatenation of optionally space-separated key:"value" pairs. Each key is a non-empty string consisting of non-control characters other than space (U+0020 ' '), quote (U+0022 '"'), and colon (U+003A ':'). Each value is quoted using U+0022 '"' characters and Go string literal syntax.
+	pos := 0
+	chari := 0
+	spaceOk := false
+	for pos < len(tag) {
+		r, rsize := utf8.DecodeRuneInString(tag[pos:])
+		if r == utf8.RuneError {
+			return fmt.Errorf("invalid utf8 in key at tag byte %d", pos)
+		}
+		if r == ' ' {
+			if !spaceOk {
+				return fmt.Errorf("unexpected space in key at tag char %d", chari)
+			}
+		} else {
+			spaceOk = false
+		}
+		if r == '"' {
+			return fmt.Errorf("unexpected '\"' in key at tag char %d", chari)
+		}
+		if !unicode.IsPrint(r) {
+			return fmt.Errorf("unprintable rune in key at tag char %d", chari)
+		}
+		pos += rsize
+		chari++
+		if r == ':' {
+			// parse the value. Use the Go parser to parse a "Go string literal"
+			expr, _ := parser.ParseExpr(tag[pos:])
+			lit, ok := expr.(*ast.BasicLit)
+			if ok {
+				if lit.Kind != token.STRING {
+					return fmt.Errorf("value not a Go string literal at tag char %d", chari)
+				}
+				endpos := pos + int(expr.End()) - 1
+				for (pos < endpos) && (pos < len(tag)) {
+					r, rsize = utf8.DecodeRuneInString(tag[pos:])
+					//fmt.Printf("pos %d r %c rsize %d endpos %d\n", pos, r, rsize, endpos)
+					pos += rsize
+					chari++
+				}
+				spaceOk = true
+			} else {
+				return fmt.Errorf("value not a Go string literal at tag char %d", chari)
+			}
+		}
+	}
+	if !spaceOk {
+		return ErrTagEndsInKey
+	}
+	return nil
 }
