@@ -344,25 +344,16 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "boxes": {
-                  "description": "Box names",
-                  "items": {
-                    "format": "byte",
-                    "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
+              "items": {
+                "format": "byte",
+                "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                "type": "string"
               },
-              "required": [
-                "boxes"
-              ],
-              "type": "object"
+              "type": "array"
             }
           }
         },
-        "description": "Boxes of an application"
+        "description": "Box names of an application"
       },
       "CatchpointAbortResponse": {
         "content": {
@@ -2544,25 +2535,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "boxes": {
-                      "description": "Box names",
-                      "items": {
-                        "format": "byte",
-                        "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                        "type": "string"
-                      },
-                      "type": "array"
-                    }
+                  "items": {
+                    "format": "byte",
+                    "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                    "type": "string"
                   },
-                  "required": [
-                    "boxes"
-                  ],
-                  "type": "object"
+                  "type": "array"
                 }
               }
             },
-            "description": "Boxes of an application"
+            "description": "Box names of an application"
           },
           "400": {
             "content": {

@@ -3263,21 +3263,12 @@
       }
     },
     "BoxesResponse": {
-      "description": "Boxes of an application",
+      "description": "Box names of an application",
       "schema": {
-        "type": "object",
-        "required": [
-          "boxes"
-        ],
-        "properties": {
-          "boxes": {
-            "description": "Box names",
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "byte"
-            }
-          }
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },

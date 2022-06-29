@@ -1168,9 +1168,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	for i, boxKey := range boxKeys {
 		responseBoxes[i] = []byte(boxKey[prefixLen:])
 	}
-	response := generated.BoxesResponse{
-		Boxes: responseBoxes,
-	}
+	response := generated.BoxesResponse(responseBoxes)
 	return ctx.JSON(http.StatusOK, response)
 }
 
