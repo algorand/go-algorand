@@ -42,6 +42,7 @@ jobs:
           exit 1
 
       - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'."
+        if: env.SKIP_RELEASE_NOTES_LABEL != 1
         run: |
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
             exit 1
