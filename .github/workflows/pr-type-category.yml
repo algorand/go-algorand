@@ -14,10 +14,10 @@ jobs:
     steps:
       - if: contains(github.event.pull_request.labels.*.name, 'New Feature')
         id: new-feature
-        run: echo '::set-env name=NEW_FEATURE_COUNT::1'
+        run: echo "NEW_FEATURE_COUNT=1" >> $GITHUB_ENV
       - if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
         id: enhancement
-        run: echo '::set-env name=ENHANCEMENT_COUNT::1'
+        run: echo "ENHANCEMENT_COUNT=1" >> $GITHUB_ENV
       # - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
       #   id: bug-fix
       #   run: echo '::set-env name=COUNT::1'
@@ -29,7 +29,8 @@ jobs:
       #   run: echo '::set-env name=COUNT::1'
 
       - run: |
-          echo ::set-env name=LABELS_COUNT::$(($NEW_FEATURE_COUNT+$ENHANCEMENT_COUNT))
+          LABELS_COUNT=$(($env.NEW_FEATURE_COUNT+$env.ENHANCEMENT_COUNT))
+          echo $LABELS_COUNT
       - run: echo $LABELS_COUNT
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
