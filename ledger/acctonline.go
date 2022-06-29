@@ -673,8 +673,10 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		}
 		// 3. After we finished reading the history (lookupOnlineHistory), either
 		//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
-		//   2. after commitRound but before postCommit (currentDeltaLen == len(ao.deltas)) => OK, the cache gets populated and postCommit updates the new entry
-		//   3. after commitRound and after postCommit => problem, postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
+		//   2. after commitRound but before postCommit (currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas)) => OK
+		//      the cache gets populated and postCommit updates the new entry
+		//   3. after commitRound and after postCommit => problem
+		//      postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
 		// In order to resolve this lookupOnlineHistory returns dbRound value (as validThrough) and determine what happened
 		// So handle cases 3.1 and 3.2 here, and 3.3 below
 		ao.accountsMu.Lock()
