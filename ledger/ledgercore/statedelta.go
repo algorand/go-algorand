@@ -70,7 +70,7 @@ type Txlease struct {
 // IncludedTransactions defines the transactions included in a block, their index and last valid round.
 type IncludedTransactions struct {
 	LastValid basics.Round
-	Infra     uint64 // the index of the transaction in the block
+	Intra     uint64 // the index of the transaction in the block
 }
 
 // StateDelta describes the delta between a given round to the previous round

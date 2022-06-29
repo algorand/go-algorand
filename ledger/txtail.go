@@ -192,13 +192,13 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
-		tail.TxnIDs[txnInc.Infra] = txid
-		tail.LastValid[txnInc.Infra] = txnInc.LastValid
-		if blk.Payset[txnInc.Infra].Txn.Lease != [32]byte{} {
+		tail.TxnIDs[txnInc.Intra] = txid
+		tail.LastValid[txnInc.Intra] = txnInc.LastValid
+		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
 			tail.Leases = append(tail.Leases, txTailRoundLease{
-				Sender: blk.Payset[txnInc.Infra].Txn.Sender,
-				Lease:  blk.Payset[txnInc.Infra].Txn.Lease,
-				TxnIdx: txnInc.Infra,
+				Sender: blk.Payset[txnInc.Intra].Txn.Sender,
+				Lease:  blk.Payset[txnInc.Intra].Txn.Lease,
+				TxnIdx: txnInc.Intra,
 			})
 		}
 	}
