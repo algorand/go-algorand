@@ -64,7 +64,7 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 
 	// Array where index is the PC and value is the line for `mappings` field.
 	prevSourceLine := 0
-	pcToLine := make([]string, maxPC)
+	pcToLine := make([]string, maxPC+1)
 	for pc := range pcToLine {
 		if line, ok := offsetToLine[pc]; ok {
 			pcToLine[pc] = MakeSourceMapLine(0, 0, line-prevSourceLine, 0)
