@@ -2,31 +2,39 @@
   "Hosts": [
     {
       "Name": "R1-alphanet",
-      "Template": "AWS-US-EAST-2-m5d.4xl"
+      "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
-      "Name": "N1-alphanet",
-      "Template": "AWS-US-EAST-2-m5d.4xl"
+      "Name": "R2-alphanet",
+      "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
-      "Name": "N2-alphanet",
-      "Template": "AWS-US-WEST-2-m5d.4xl"
+      "Name": "R3-alphanet",
+      "Template": "AWS-SA-EAST-1-m5d.4xl"
     },
     {
-      "Name": "N3-alphanet",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+      "Name": "R4-alphanet",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
-      "Name": "N4-alphanet",
-      "Template": "AWS-EU-WEST-2-m5d.4xl"
+      "Name": "R5-alphanet",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
       "Name": "NPN1-alphanet",
-      "Template": "AWS-US-EAST-2-m5d.4xl"
+      "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
       "Name": "NPN2-alphanet",
-      "Template": "AWS-US-WEST-2-m5d.4xl"
+      "Template": "AWS-US-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN3-alphanet",
+      "Template": "AWS-SA-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN4-alphanet",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
     }
   ]
 }
