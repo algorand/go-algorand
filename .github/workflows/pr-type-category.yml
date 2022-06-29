@@ -33,6 +33,7 @@ jobs:
           TWO=${{env.ENHANCEMENT_COUNT}}
           LABELS_COUNT=$(($TWO+$ONE))
           echo $LABELS_COUNT
+          echo "testing"
       - run: echo $LABELS_COUNT
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
