@@ -518,7 +518,7 @@ func (f *LibGoalFixture) LightHeaderBlockProof(round uint64) (proof merklearray.
 		return
 	}
 
-	return f.ProofRespToProof(proofResp)
+	return f.LightBlockProofRespToProof(proofResp)
 }
 
 func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (proof merklearray.Proof, err error) {
@@ -526,13 +526,34 @@ func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (
 		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
 	}
 
-	hashType, err := crypto.UnmarshalHashType(proofResp.Hashtype)
+	hashType := crypto.Sha256
+	if proofResp.Hashtype != "" {
+		hashType, err = crypto.UnmarshalHashType(proofResp.Hashtype)
+	}
 
 	if err != nil {
 		return
 	}
 
 	proof.HashFactory = crypto.HashFactory{HashType: hashType}
+	proof.TreeDepth = uint8(proofResp.Treedepth)
+	proofconcat := proofResp.Proof
+	for len(proofconcat) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcat)
+		proof.Path = append(proof.Path, d[:])
+		proofconcat = proofconcat[len(d):]
+	}
+
+	return
+}
+
+func (f *LibGoalFixture) LightBlockProofRespToProof(proofResp generatedV2.LightBlockHeaderProofResponse) (proof merklearray.Proof, err error) {
+	if proofResp.Treedepth == 0 {
+		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
+	}
+
+	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha256}
 	proof.TreeDepth = uint8(proofResp.Treedepth)
 	proofconcat := proofResp.Proof
 	for len(proofconcat) > 0 {

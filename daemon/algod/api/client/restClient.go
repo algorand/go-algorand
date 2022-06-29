@@ -655,7 +655,7 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 // LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
-func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.ProofResponse, err error) {
+func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.LightBlockHeaderProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
 	return
 }

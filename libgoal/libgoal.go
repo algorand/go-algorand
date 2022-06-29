@@ -1220,7 +1220,7 @@ func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.Has
 }
 
 // LightHeaderBlockProof returns a Merkle proof for a block.
-func (c *Client) LightHeaderBlockProof(round uint64) (resp generatedV2.ProofResponse, err error) {
+func (c *Client) LightHeaderBlockProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)
