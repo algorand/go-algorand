@@ -543,4 +543,6 @@ func (f *LibGoalFixture) proofBytesToPath(proofBytes []byte) (proofPath []crypto
 		proofPath = append(proofPath, d[:])
 		proofBytes = proofBytes[len(d):]
 	}
+
+	return proofPath
 }
