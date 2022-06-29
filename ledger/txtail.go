@@ -192,19 +192,20 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
-		tail.TxnIDs[txnInc.TransactionIndex] = txid
-		tail.LastValid[txnInc.TransactionIndex] = txnInc.LastValid
-		if blk.Payset[txnInc.TransactionIndex].Txn.Lease != [32]byte{} {
+		tail.TxnIDs[txnInc.Intra] = txid
+		tail.LastValid[txnInc.Intra] = txnInc.LastValid
+		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
 			tail.Leases = append(tail.Leases, txTailRoundLease{
-				Sender: blk.Payset[txnInc.TransactionIndex].Txn.Sender,
-				Lease:  blk.Payset[txnInc.TransactionIndex].Txn.Lease,
-				TxnIdx: txnInc.TransactionIndex,
+				Sender: blk.Payset[txnInc.Intra].Txn.Sender,
+				Lease:  blk.Payset[txnInc.Intra].Txn.Lease,
+				TxnIdx: txnInc.Intra,
 			})
 		}
 	}
 	encodedTail, tailHash := tail.encode()
 
 	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
@@ -214,7 +215,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		t.roundTailHashes = append(t.roundTailHashes, tailHash)
 	}
 	t.blockHeaderData[rnd] = blk.BlockHeader
-	t.tailMu.Unlock()
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {

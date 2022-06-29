@@ -21,11 +21,12 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/algorand/go-algorand/config"
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
@@ -473,13 +474,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	}
 
 	if !tu.newDatabase {
-		err = performTxTailTableMigration(context.Background(), tx, tu.blockDb.Rdb)
+		err = performTxTailTableMigration(ctx, tx, tu.blockDb.Rdb)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
 	}
 
-	err = performOnlineRoundParamsTailMigration(context.Background(), tx, tu.blockDb.Rdb, tu.newDatabase, tu.initProto)
+	err = performOnlineRoundParamsTailMigration(ctx, tx, tu.blockDb.Rdb, tu.newDatabase, tu.initProto)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}

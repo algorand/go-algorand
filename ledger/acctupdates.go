@@ -1130,7 +1130,6 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
 				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, err
-				// return persistedData.accountData.GetLedgerCoreAccountBaseData(), rnd, rewardsVersion, rewardsLevel, err
 			}
 			// otherwise return empty
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, err

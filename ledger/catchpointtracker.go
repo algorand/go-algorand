@@ -380,37 +380,38 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataResourceSeparationRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (hasIntermediateFirstStageRound bool, hasMultipleIntermediateFirstStageRounds bool, newOffset uint64) {
 	newOffset = offset
 
-	if accountDataResourceSeparationRound > 0 {
-		minFirstStageRound := oldBase + 1
-		if (accountDataResourceSeparationRound > basics.Round(catchpointLookback)) &&
-			(accountDataResourceSeparationRound-basics.Round(catchpointLookback) >
-				minFirstStageRound) {
-			minFirstStageRound =
-				accountDataResourceSeparationRound - basics.Round(catchpointLookback)
-		}
-
-		// The smallest integer r >= dcr.minFirstStageRound such that
-		// (r + catchpointLookback) % ct.catchpointInterval == 0.
-		first := (int64(minFirstStageRound)+int64(catchpointLookback)+
-			int64(catchpointInterval)-1)/
-			int64(catchpointInterval)*int64(catchpointInterval) -
-			int64(catchpointLookback)
-		// The largest integer r <= dcr.oldBase + dcr.offset such that
-		// (r + catchpointLookback) % ct.catchpointInterval == 0.
-		last := (int64(oldBase)+int64(offset)+int64(catchpointLookback))/
-			int64(catchpointInterval)*int64(catchpointInterval) - int64(catchpointLookback)
-
-		if first <= last {
-			hasIntermediateFirstStageRound = true
-			// We skip earlier catchpoints if there is more than one to generate.
-			newOffset = uint64(last) - uint64(oldBase)
-
-			if first < last {
-				hasMultipleIntermediateFirstStageRounds = true
-			}
-		}
+	if accountDataResourceSeparationRound == 0 {
+		return
 	}
 
+	minFirstStageRound := oldBase + 1
+	if (accountDataResourceSeparationRound > basics.Round(catchpointLookback)) &&
+		(accountDataResourceSeparationRound-basics.Round(catchpointLookback) >
+			minFirstStageRound) {
+		minFirstStageRound =
+			accountDataResourceSeparationRound - basics.Round(catchpointLookback)
+	}
+
+	// The smallest integer r >= dcr.minFirstStageRound such that
+	// (r + catchpointLookback) % ct.catchpointInterval == 0.
+	first := (int64(minFirstStageRound)+int64(catchpointLookback)+
+		int64(catchpointInterval)-1)/
+		int64(catchpointInterval)*int64(catchpointInterval) -
+		int64(catchpointLookback)
+	// The largest integer r <= dcr.oldBase + dcr.offset such that
+	// (r + catchpointLookback) % ct.catchpointInterval == 0.
+	last := (int64(oldBase)+int64(offset)+int64(catchpointLookback))/
+		int64(catchpointInterval)*int64(catchpointInterval) - int64(catchpointLookback)
+
+	if first <= last {
+		hasIntermediateFirstStageRound = true
+		// We skip earlier catchpoints if there is more than one to generate.
+		newOffset = uint64(last) - uint64(oldBase)
+
+		if first < last {
+			hasMultipleIntermediateFirstStageRounds = true
+		}
+	}
 	return
 }
 

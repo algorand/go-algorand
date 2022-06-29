@@ -57,9 +57,9 @@ type AccountTotals struct {
 type OnlineRoundParamsData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	OnlineSupply    uint64                    `codec:"a"`
-	RewardsLevel    uint64                    `codec:"b"`
-	CurrentProtocol protocol.ConsensusVersion `codec:"c"`
+	OnlineSupply    uint64                    `codec:"online"`
+	RewardsLevel    uint64                    `codec:"rwdlvl"`
+	CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
 }
 
 func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
