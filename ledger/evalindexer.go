@@ -60,8 +60,6 @@ type EvalForIndexerResources struct {
 	Accounts  map[basics.Address]*ledgercore.AccountData
 	Resources map[basics.Address]map[Creatable]ledgercore.AccountResource
 	Creators  map[Creatable]FoundAddress
-	// TODO: Do not merge with this following!!!!
-	DeprecatedTouchedBoxes map[string]struct{}
 }
 
 // Creatable represent a single creatable object.
@@ -154,7 +152,6 @@ func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string,
 		fmt.Printf("\n<<<err !!!>>> indexerLedgerConnector.LookupKv(rnd=%d, key=%s) --err--> %v", rnd, key, err)
 		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
 	}
-	l.roundResources.DeprecatedTouchedBoxes[key] = struct{}{}
 	fmt.Printf("\n<<<COPACETIC>>>indexerLedgerConnector.LookupKv(round=%d, key=%s) ---> %v", rnd, key, value)
 	return value, nil
 }
