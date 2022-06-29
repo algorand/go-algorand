@@ -40,7 +40,7 @@ jobs:
         run: |
           echo '<<EOF' >> $GITHUB_STEP_SUMMARY
           # Found ${{ env.LABELS_COUNT }} labels. Need exactly 1 required label.
-          Please add exactly one of the following labels: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'.
+          echo 'Please add exactly one of the following labels: \'New Feature\', \'Enhancement\', \'Bug-Fix\', \'Not-Yet-Enabled\', or \'Skip-Release-Notes\'.' >> $GITHUB_STEP_SUMMARY
           echo 'EOF' >> $GITHUB_STEP_SUMMARY
           exit 1
 
@@ -48,7 +48,7 @@ jobs:
         run: |
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
             echo '<<EOF' >> $GITHUB_STEP_SUMMARY
-            # PR Category is missing from PR title. Please add it like '<category>: <pr title>'
+            echo '# PR Category is missing from PR title. Please add it like \'<category>: <pr title>\'.' >> $GITHUB_STEP_SUMMARY
             echo 'EOF' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
