@@ -29,11 +29,10 @@ jobs:
       #   run: echo '::set-env name=COUNT::1'
 
       - run: |
-          ONE=${{env.NEW_FEATURE_COUNT}}
-          TWO=${{env.ENHANCEMENT_COUNT}}
-          LABELS_COUNT=$(($TWO+$ONE))
+          # ONE=${{env.NEW_FEATURE_COUNT}}
+          # TWO=${{env.ENHANCEMENT_COUNT}}
+          LABELS_COUNT=$((${{NEW_FEATURE_COUNT}}+${{ENHANCEMENT_COUNT}}))
           echo $LABELS_COUNT
-          echo "testing"
       - run: echo $LABELS_COUNT
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
