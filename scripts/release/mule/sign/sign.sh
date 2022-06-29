@@ -68,48 +68,45 @@ cd "$PKG_DIR"
 # Note the surrounding parens turns the string created by `find` into an array.
 OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
-    if [ "$os" = linux ]
-    then
-        for arch in "${ARCHS[@]}"; do
-            if [ -d "$os/$arch" ]
+    for arch in "${ARCHS[@]}"; do
+        if [ -d "$os/$arch" ]
+        then
+            # Only do the subsequent operations in a subshell if the directory is not empty.
+            if stat -t "$os/$arch/"* > /dev/null 2>&1
             then
-                # Only do the subsequent operations in a subshell if the directory is not empty.
-                if stat -t "$os/$arch/"* > /dev/null 2>&1
-                then
-                (
-                    cd "$os/$arch"
+            (
+                cd "$os/$arch"
 
-                    # Clean package directory of any previous operations.
-                    rm -rf hashes* *.sig *.asc *.asc.gz
+                # Clean package directory of any previous operations.
+                rm -rf hashes* *.sig *.asc *.asc.gz
 
-                    for file in *.tar.gz *.deb
-                    do
-                        gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
-                    done
+                for file in *.tar.gz *.deb
+                do
+                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
+                done
 
-                    for file in *.rpm
-                    do
-                        gpg -u rpm@algorand.com --detach-sign "$file"
-                    done
+                for file in *.rpm
+                do
+                    gpg -u rpm@algorand.com --detach-sign "$file"
+                done
 
-                    HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
-                    md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                    shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                    shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
+                md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
 
-                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
-                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
+                gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
+                gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
-                    STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
-                    if [[ -f "$STATUSFILE" ]]; then
-                        gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
-                        gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
-                    fi
-                )
+                STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
+                if [[ -f "$STATUSFILE" ]]; then
+                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
+                    gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
                 fi
+            )
             fi
-        done
-    fi
+        fi
+    done
 done
 
 echo

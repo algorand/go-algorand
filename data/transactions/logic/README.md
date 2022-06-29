@@ -489,6 +489,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
+| 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
