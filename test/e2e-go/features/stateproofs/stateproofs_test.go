@@ -18,6 +18,8 @@ package stateproofs
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -224,6 +226,78 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	}
 
 	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestBlkMerkleProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.StateProofInterval = 16
+	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofVotersLookback = 2
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	consensusParams.StateProofStrengthTarget = 256
+	consensusParams.StateProofRecoveryInterval = 6
+	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	defer fixture.Shutdown()
+
+	libgoalClient := fixture.LibGoalClient
+
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	var startRound = uint64(1)
+	var nextStateProofRound = uint64(0)
+	var firstStateProofRound = 2 * consensusParams.StateProofInterval
+
+	for rnd := startRound; nextStateProofRound <= firstStateProofRound; rnd++ {
+		sendPayment(r, &fixture, rnd)
+
+		_, err := libgoalClient.WaitForRound(rnd)
+		r.NoError(err)
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoError(err)
+
+		t.Logf("Finished round %d\n", rnd)
+
+		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	}
+
+	_, stateProofMessage := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	t.Logf("found first stateproof %d %d\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
+
+	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
+		t.Logf("Retrieving proof for block %d\n", rnd)
+		proofResp, err := libgoalClient.LightHeaderBlockProof(rnd)
+		r.NoError(err)
+
+		proof, err := fixture.LightBlockProofRespToProof(proofResp)
+		r.NoError(err)
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoError(err)
+
+		lightBlockHeader := blk.ToLightBlockHeader()
+
+		elems := make(map[uint64]crypto.Hashable)
+		leafIndex := rnd - stateProofMessage.FirstAttestedRound
+		elems[leafIndex] = &lightBlockHeader
+		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, &proof)
+		r.NoError(err)
+	}
 }
 
 func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd uint64) {
