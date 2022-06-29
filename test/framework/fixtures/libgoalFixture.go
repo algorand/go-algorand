@@ -503,24 +503,6 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 	return params.MinTxnFee, minBalance, nil
 }
 
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (proof merklearray.Proof, err error) {
-	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
-	if err != nil {
-		return
-	}
-
-	return f.ProofRespToProof(proofResp)
-}
-
-func (f *LibGoalFixture) LightHeaderBlockProof(round uint64) (proof merklearray.Proof, err error) {
-	proofResp, err := f.LibGoalClient.LightHeaderBlockProof(round)
-	if err != nil {
-		return
-	}
-
-	return f.LightBlockProofRespToProof(proofResp)
-}
-
 func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (proof merklearray.Proof, err error) {
 	if proofResp.Treedepth == 0 {
 		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
@@ -537,13 +519,7 @@ func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (
 
 	proof.HashFactory = crypto.HashFactory{HashType: hashType}
 	proof.TreeDepth = uint8(proofResp.Treedepth)
-	proofconcat := proofResp.Proof
-	for len(proofconcat) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcat)
-		proof.Path = append(proof.Path, d[:])
-		proofconcat = proofconcat[len(d):]
-	}
+	proof.Path = f.proofBytesToPath(proofResp.Proof)
 
 	return
 }
@@ -555,13 +531,16 @@ func (f *LibGoalFixture) LightBlockProofRespToProof(proofResp generatedV2.LightB
 
 	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha256}
 	proof.TreeDepth = uint8(proofResp.Treedepth)
-	proofconcat := proofResp.Proof
-	for len(proofconcat) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcat)
-		proof.Path = append(proof.Path, d[:])
-		proofconcat = proofconcat[len(d):]
-	}
+	proof.Path = f.proofBytesToPath(proofResp.Proof)
 
 	return
+}
+
+func (f *LibGoalFixture) proofBytesToPath(proofBytes []byte) (proofPath []crypto.GenericDigest) {
+	for len(proofBytes) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofBytes)
+		proofPath = append(proofPath, d[:])
+		proofBytes = proofBytes[len(d):]
+	}
 }
