@@ -262,25 +262,26 @@ func TestBlkMerkleProof(t *testing.T) {
 	var nextStateProofRound = uint64(0)
 	var firstStateProofRound = 2 * consensusParams.StateProofInterval
 
+	t.Logf("Waiting for state proof to be committed.")
+
 	for rnd := startRound; nextStateProofRound <= firstStateProofRound; rnd++ {
 		sendPayment(r, &fixture, rnd)
 
 		_, err := libgoalClient.WaitForRound(rnd)
 		r.NoError(err)
+		t.Logf("Finished waiting for round %d.\n", rnd)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
 		r.NoError(err)
 
-		t.Logf("Finished round %d\n", rnd)
-
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
-	t.Logf("found first stateproof %d %d\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
+	_, stateProofMessage, err := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	r.NoError(err)
+	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
-		t.Logf("Retrieving proof for block %d\n", rnd)
 		proofResp, err := libgoalClient.LightHeaderBlockProof(rnd)
 		r.NoError(err)
 
@@ -296,6 +297,7 @@ func TestBlkMerkleProof(t *testing.T) {
 		leafIndex := rnd - stateProofMessage.FirstAttestedRound
 		elems[leafIndex] = &lightBlockHeader
 		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, &proof)
+		t.Logf("Successfully verified block at round %d.\n", rnd)
 		r.NoError(err)
 	}
 }
@@ -322,15 +324,13 @@ func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd
 	r.NoError(err)
 }
 
-func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (stateProof sp.StateProof, stateProofMessage stateproofmsg.Message, err error) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
 	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
 	r.NoError(err)
 
-	var stateProof sp.StateProof
-	var stateProofMessage stateproofmsg.Message
 	for _, txn := range res.Transactions {
 		r.Equal(txn.Type, string(protocol.StateProofTx))
 		r.True(txn.StateProof != nil)
@@ -340,16 +340,16 @@ func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, r
 			err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 			r.NoError(err)
 
-			return stateProof, stateProofMessage
+			return
 		}
 	}
 
-	r.False(false)
-	return stateProof, stateProofMessage
+	return sp.StateProof{}, stateproofmsg.Message{}, fmt.Errorf("No state proof with latest round %d found.\n", stateProofLatestRound)
 }
 
 func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
+	stateProof, stateProofMessage, err := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
+	r.NoError(err)
 
 	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 	r.NoError(err)
