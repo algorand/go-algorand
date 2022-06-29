@@ -24,9 +24,11 @@ jobs:
       - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
         id: skip-release-notes
         run: echo '::set-output name=COUNT::1'
+      # - run:
+          # echo ::set-output name=LABELS_COUNT::$(($NUM+200))
 
       - run: |
-          labels_sum=$((steps.new-feature.outputs.COUNT+steps.enhancement.outputs.COUNT+steps.bug-fix.outputs.COUNT))
+          labels_sum=$(($steps.new-feature.outputs.COUNT+$steps.enhancement.outputs.COUNT+$steps.bug-fix.outputs.COUNT))
           echo $labels_sum
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
