@@ -39,12 +39,14 @@ jobs:
         if: env.LABELS_COUNT != 1
         run: |
           echo "Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'."
+          echo "## Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'." >> GITHUB_STEP_SUMMARY
           exit 1
 
       - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'."
         if: env.SKIP_RELEASE_NOTES_LABEL != 1
         run: |
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
+            echo "## PR Category is missing from PR title. Please add it like '<category>: <pr title>'." >> GITHUB_STEP_SUMMARY
             exit 1
           fi
 
