@@ -21,11 +21,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1316,80 +1316,157 @@ end:
 	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
+	createdBoxName := map[string]bool{}
+	var createdBoxCount uint64 = 0
+
 	// define operate box helper
-	operateBoxAndSendTxn := func(operation, boxName string) (txID string, err error) {
-		tx, err := testClient.MakeUnsignedAppNoOpTx(
-			uint64(createdAppID),
-			[][]byte{[]byte(operation), []byte(boxName)},
-			nil, nil, nil,
-			[]transactions.BoxRef{
-				{
-					Name: []byte(boxName), Index: 0,
-				},
-			},
-		)
-		if err != nil {
-			return
+	operateBoxAndSendTxn := func(operation string, boxNames []string) {
+		txns := make([]transactions.Transaction, len(boxNames))
+		txIDs := make(map[string]string, len(boxNames))
+
+		for i := 0; i < len(boxNames); i++ {
+			appArgs := [][]byte{
+				[]byte(operation),
+				[]byte(boxNames[i]),
+			}
+			boxRef := transactions.BoxRef{
+				Name:  []byte(boxNames[i]),
+				Index: 0,
+			}
+
+			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
+				uint64(createdAppID), appArgs,
+				nil, nil, nil,
+				[]transactions.BoxRef{boxRef},
+			)
+			a.NoError(err)
+			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
+			a.NoError(err)
+			txIDs[txns[i].ID().String()] = someAddress
 		}
-		tx, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, tx)
-		if err != nil {
-			return
+
+		var gid crypto.Digest
+		gid, err = testClient.GroupID(txns)
+		a.NoError(err)
+
+		stxns := make([]transactions.SignedTxn, len(boxNames))
+		for i := 0; i < len(boxNames); i++ {
+			txns[i].Group = gid
+			wh, err = testClient.GetUnencryptedWalletHandle()
+			a.NoError(err)
+			stxns[i], err = testClient.SignTransactionWithWallet(wh, nil, txns[i])
+			a.NoError(err)
 		}
-		wh, err = testClient.GetUnencryptedWalletHandle()
-		if err != nil {
-			return
-		}
-		txID, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
-		if err != nil {
-			return
-		}
-		_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
-		// no matter wait for txn returns error or not, we should all return with txID and err
+
+		err = testClient.BroadcastTransactionGroup(stxns)
+		a.NoError(err)
+
+		_, err = waitForTransaction(t, testClient, someAddress, txns[0].ID().String(), 30*time.Second)
+		a.NoError(err)
 		return
 	}
 
-	// iterate and create boxes
-	totalBoxNum := 10
+	operateAndMatchRes := func(operation string, boxNames []string) {
+		if operation == "create" {
+			for _, box := range boxNames {
+				keyValid, ok := createdBoxName[box]
+				a.False(ok && keyValid)
+			}
+		} else if operation == "delete" {
+			for _, box := range boxNames {
+				keyValid, ok := createdBoxName[box]
+				a.True(keyValid == ok)
+			}
+		} else {
+			a.True(false)
+		}
+
+		operateBoxAndSendTxn(operation, boxNames)
+
+		if operation == "create" {
+			for _, box := range boxNames {
+				createdBoxName[box] = true
+			}
+			createdBoxCount += uint64(len(boxNames))
+		} else if operation == "delete" {
+			for _, box := range boxNames {
+				createdBoxName[box] = false
+			}
+			createdBoxCount -= uint64(len(boxNames))
+		}
+
+		var resp generated.BoxesResponse
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		a.NoError(err)
+		a.Equal(createdBoxCount, uint64(len(resp)))
+		for _, byteName := range resp {
+			a.True(createdBoxName[string(byteName)])
+		}
+	}
+
+	testingBoxNames := []string{
+		` `,
+		`     	`,
+		` ? = % ;`,
+		`; DROP *;`,
+		`OR 1 = 1;`,
+		`"      ;  SELECT * FROM kvstore; DROP acctrounds; `,
+		`背负青天而莫之夭阏者，而后乃今将图南。`,
+		`於浩歌狂熱之際中寒﹔於天上看見深淵。`,
+		`於一切眼中看見無所有﹔於無所希望中得救。`,
+		`有一遊魂，化為長蛇，口有毒牙。`,
+		`不以嚙人，自嚙其身，終以殞顛。`,
+		`那些智力超常的人啊`,
+		`认为已经，熟悉了云和闪电的脾气`,
+		`就不再迷惑，就不必了解自己，世界和他人`,
+		`每天只管，被微风吹拂，与猛虎谈情`,
+		`他们从来，不需要楼梯，只有窗口`,
+		`把一切交付于梦境，和优美的浪潮`,
+		`在这颗行星所有的酒馆，青春自由似乎理所应得`,
+		`面向涣散的未来，只唱情歌，看不到坦克`,
+		`在科学和啤酒都不能安抚的夜晚`,
+		`他们丢失了四季，惶惑之行开始`,
+		`这颗行星所有的酒馆，无法听到远方的呼喊`,
+		`野心勃勃的灯火，瞬间吞没黑暗的脸庞`,
+		`b64:APj/AA==`,
+		`str:123.3/aa\\0`,
+		string([]byte{0, 255, 254, 254}),
+		string([]byte{0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF}),
+		`; SELECT key from kvstore WHERE key LIKE %;`,
+		`?&%!=`,
+		"SELECT * FROM kvstore " + string([]byte{0, 0}) + " WHERE key LIKE %; ",
+		string([]byte{'%', 'a', 'b', 'c', 0, 0, '%', 'a', '!'}),
+		`
+`,
+		`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`,
+		`∑´´˙©˚¬∆ßåƒ√¬`,
+	}
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
 	a.Empty(resp)
 
-	createdBoxName := map[string]bool{}
-	createdBoxCount := 0
-
-	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
-		boxName := "box" + strconv.Itoa(boxIterIndex)
-		_, err = operateBoxAndSendTxn("create", boxName)
-		a.NoError(err)
-		createdBoxName[boxName] = true
-		createdBoxCount++
-
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
-		a.NoError(err)
-		a.Equal(createdBoxCount, len(resp))
-		for _, byteName := range resp {
-			a.True(createdBoxName[string(byteName)])
+	for i := 0; i < len(testingBoxNames); i += 16 {
+		var strSliceTest []string
+		if i+16 >= len(testingBoxNames) {
+			strSliceTest = testingBoxNames[i:]
+		} else {
+			strSliceTest = testingBoxNames[i : i+16]
 		}
+		operateAndMatchRes("create", strSliceTest)
 	}
 
-	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
-		boxName := "box" + strconv.Itoa(boxIterIndex)
-		_, err = operateBoxAndSendTxn("delete", boxName)
-		a.NoError(err)
-		createdBoxName[boxName] = false
-		createdBoxCount--
-
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
-		a.NoError(err)
-		a.Equal(createdBoxCount, len(resp))
-		for _, byteName := range resp {
-			a.True(createdBoxName[string(byteName)])
+	for i := 0; i < len(testingBoxNames); i += 16 {
+		var strSliceTest []string
+		if i+16 >= len(testingBoxNames) {
+			strSliceTest = testingBoxNames[i:]
+		} else {
+			strSliceTest = testingBoxNames[i : i+16]
 		}
+		operateAndMatchRes("delete", strSliceTest)
 	}
 
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
 	a.Empty(resp)
-	a.Zero(createdBoxCount)
 }
