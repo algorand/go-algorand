@@ -588,7 +588,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 }
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data ledgercore.OnlineAccountData, err error) {
+func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
 	ao.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -596,6 +596,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			ao.accountsMu.RUnlock()
 		}
 	}()
+	var err error
+
 	var offset uint64
 	var paramsOffset uint64
 	var rewardsProto config.ConsensusParams
@@ -605,12 +607,12 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	for {
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
-		offset, err = ao.roundOffset(rnd)
 		inHistory := false
+		offset, err = ao.roundOffset(rnd)
 		if err != nil {
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
-				return
+				return ledgercore.OnlineAccountData{}, err
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
@@ -618,7 +620,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
-			return
+			return ledgercore.OnlineAccountData{}, err
 		}
 
 		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
@@ -637,6 +639,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				// delta range of [0..offset], so we'll need to check :
 				// Traverse the deltas backwards to ensure that later updates take
 				// priority if present.
+				// Note the element at offset is handled above.
 				for offset > 0 {
 					offset--
 					d, ok := ao.deltas[offset].GetData(addr)
