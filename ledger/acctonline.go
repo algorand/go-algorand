@@ -656,8 +656,12 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}
-		// lookupOnlineHistory does not fetch the account db round because of the following observation:
-		// 1. ao.onlineAccountsCache update happens with ao.accountsMu taken below and in postCommit
+		// Now we load the entire history of this account to fill the onlineAccountsCache, so that the
+		// next lookup for this online account will not hit the on-disk DB.
+		//
+		// lookupOnlineHistory fetches the account DB round from the acctrounds table (validThrough) to
+		// distinguish between different cases involving the last-observed value of ao.cachedDBRoundOnline.
+		// 1. Updates to ao.onlineAccountsCache happen with ao.accountsMu taken below, as well as in postCommit()
 		// 2. If we started reading the history (lookupOnlineHistory)
 		//   1. before commitRound or while it is running => OK, read what is in DB and then add new entries in postCommit
 		//     * if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
@@ -667,12 +671,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if err != nil || len(persistedDataHistory) == 0 {
 			return ledgercore.OnlineAccountData{}, err
 		}
-		// 3. If we fishied reading the history (lookupOnlineHistory)
-		//   1. db has not advanced (validThrough == currentDbRound) => OK
-		//   2. after commitRound but before postCommit (currentDeltaLen == len(ao.deltas)) => OK, the cache gets populated and postCommit updates the new entry
-		//   3. after commitRound and after postCommit => problem, postCommit does not add a new entry but the cache gets constructed by misses the latest entry, retry
-		// In order to resolve this lookupOnlineHistory returns dbRound value and determine what happened
-		// So handle 3.1 and 3.2 here and 3.3 below
+		// 3. After we finished reading the history (lookupOnlineHistory), either
+		//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
+		//   2. after commitRound but before postCommit (currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas)) => OK
+		//      the cache gets populated and postCommit updates the new entry
+		//   3. after commitRound and after postCommit => problem
+		//      postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
+		// In order to resolve this lookupOnlineHistory returns dbRound value (as validThrough) and determine what happened
+		// So handle cases 3.1 and 3.2 here, and 3.3 below
 		ao.accountsMu.Lock()
 		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 			// not advanced or postCommit not called yet, write to the cache and return the value
@@ -695,6 +701,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			ao.accountsMu.Unlock()
 			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
+		// case 3.3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()
 
 		if validThrough < currentDbRound {
@@ -803,13 +810,21 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 			batchOffset += batchSize
 		}
-		if dbRound != currentDbRound && dbRound != basics.Round(0) {
+		// If dbRound has advanced beyond the last read of ao.cachedDBRoundOnline, postCommmit has
+		// occurred since then, so wait until deltas is consistent with dbRound and try again.
+		// dbRound will be zero if all the information needed was already found in deltas, so no DB
+		// query was made, and it is safe to let through and return.
+		if dbRound > currentDbRound && dbRound != basics.Round(0) {
 			// database round doesn't match the last au.dbRound we sampled.
 			ao.accountsMu.RLock()
 			for currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 				ao.accountsReadCond.Wait()
 			}
 			continue
+		}
+		if dbRound < currentDbRound && dbRound != basics.Round(0) {
+			ao.log.Errorf("onlineAccounts.onlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			return nil, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 
 		// Now update the candidates based on the in-memory deltas.
