@@ -15,19 +15,24 @@ jobs:
     runs-on: ubuntu-latest
     name: Check PR Category and Type
     steps:
-      - if: contains(github.event.pull_request.labels.*.name, 'New Feature')
+      - name: Check for New Feature label
+        if: contains(github.event.pull_request.labels.*.name, 'New Feature')
         id: new-feature
         run: echo "NEW_FEATURE_LABEL=1" >> $GITHUB_ENV
-      - if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
+      - name: Check for Enhancement label
+        if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
         id: enhancement
         run: echo "ENHANCEMENT_LABEL=1" >> $GITHUB_ENV
-      - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+      - name: Check for Bug-Fix label
+        if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
         id: bug-fix
         run: echo "BUG_FIX_LABEL=1" >> $GITHUB_ENV
-      - if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+      - name: Check for Not-Yet-Enabled label
+        if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
         id: not-yet-enabled
         run: echo "NOT_YET_ENABLED_LABEL=1" >> $GITHUB_ENV
-      - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+      - name: Check for Skip-Release-Notes label
+        if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
         id: skip-release-notes
         run: echo "SKIP_RELEASE_NOTES_LABEL=1" >> $GITHUB_ENV
 
