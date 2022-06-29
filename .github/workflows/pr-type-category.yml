@@ -8,30 +8,34 @@ jobs:
   check_label:
     runs-on: ubuntu-latest
     name: Check PR Category and Type
-    env:
-      NEW_FEATURE_COUNT: 0
-      ENHANCEMENT_COUNT: 0
     steps:
       - if: contains(github.event.pull_request.labels.*.name, 'New Feature')
         id: new-feature
-        run: echo "NEW_FEATURE_LABEL_COUNT=1" >> $GITHUB_ENV
+        run: echo "NEW_FEATURE_LABEL=1" >> $GITHUB_ENV
       - if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
         id: enhancement
-        run: echo "ENHANCEMENT_LABEL_COUNT=1" >> $GITHUB_ENV
-      # - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-      #   id: bug-fix
-      #   run: echo '::set-env name=COUNT::1'
-      # - if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
-      #   id: not-yet-enabled
-      #   run: echo '::set-env name=COUNT::1'
-      # - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
-      #   id: skip-release-notes
-      #   run: echo '::set-env name=COUNT::1'
+        run: echo "ENHANCEMENT_LABEL=1" >> $GITHUB_ENV
+      - if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+        id: bug-fix
+        run: echo "BUG_FIX_LABEL=1" >> $GITHUB_ENV
+      - if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+        id: not-yet-enabled
+        run: echo "NOT_YET_ENABLED_LABEL=1" >> $GITHUB_ENV
+      - if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+        id: skip-release-notes
+        run: echo "SKIP_RELEASE_NOTES_LABEL=1" >> $GITHUB_ENV
 
-      - run: |
-          echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL_COUNT}}+${{env.ENHANCEMENT_LABEL_COUNT}} + 0))" >> $GITHUB_ENV
+      - name: Adding up all labels
+        run: |
+          echo "LABELS_COUNT=$(( \
+            ${{env.NEW_FEATURE_LABEL}}+\
+            ${{env.ENHANCEMENT_LABEL}}+\
+            ${{env.BUG_FIX_LABEL}}+\
+            ${{env.NOT_YET_ENABLED_LABEL}}+\
+            ${{env.SKIP_RELEASE_NOTES_LABEL}}\
+            ))" >> $GITHUB_ENV
 
-      - name: "Checking for one and only one github pr label"
+      - name: Checking for one and only one github pr label
         if: env.LABELS_COUNT != 1
         run: |
           exit 1
