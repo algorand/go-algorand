@@ -1513,12 +1513,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 
 // IsEmpty returns true if all of the fields other than UpdateRound are zero.
 func (bv baseVotingData) IsEmpty() bool {
-	return bv.VoteID.MsgIsZero() &&
-		bv.SelectionID.MsgIsZero() &&
-		bv.StateProofID.MsgIsZero() &&
-		bv.VoteFirstValid == 0 &&
-		bv.VoteLastValid == 0 &&
-		bv.VoteKeyDilution == 0
+	return bv == baseVotingData{}
 }
 
 // SetCoreAccountData initializes baseVotingData from ledgercore.AccountData
