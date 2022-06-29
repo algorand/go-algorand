@@ -27,13 +27,7 @@ jobs:
 
       - name: Adding up all labels
         run: |
-          echo "LABELS_COUNT=$(( \
-            ${{env.NEW_FEATURE_LABEL}}+\
-            ${{env.ENHANCEMENT_LABEL}}+\
-            ${{env.BUG_FIX_LABEL}}+\
-            ${{env.NOT_YET_ENABLED_LABEL}}+\
-            ${{env.SKIP_RELEASE_NOTES_LABEL}}\
-            ))" >> $GITHUB_ENV
+          echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
 
       - name: Checking for one and only one github pr label
         if: env.LABELS_COUNT != 1
