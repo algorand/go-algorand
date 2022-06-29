@@ -34,7 +34,8 @@ import (
 )
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
-func makeBuilderForRound(l Ledger, rnd basics.Round) (builder, error) {
+func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
+	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
@@ -110,7 +111,7 @@ func (spw *Worker) initBuilders() {
 }
 
 func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := makeBuilderForRound(spw.ledger, rnd)
+	builderForRound, err := spw.makeBuilderForRound(rnd)
 	if err != nil {
 		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
 		return
@@ -197,7 +198,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 				sfa.Round, proto.StateProofInterval)
 		}
 
-		builderForRound, err = makeBuilderForRound(spw.ledger, sfa.Round)
+		builderForRound, err = spw.makeBuilderForRound(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
