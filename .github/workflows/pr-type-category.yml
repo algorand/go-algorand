@@ -26,12 +26,12 @@ jobs:
         run: echo '::set-output name=COUNT::1'
 
       - run: |
-          echo $(( \
+          echo "$(( \
             steps.id.outputs.COUNT + \
             steps.id.outputs.COUNT + \
             steps.id.outputs.COUNT + \
             steps.id.outputs.COUNT + \
-            steps.id.outputs.COUNT ))
+            steps.id.outputs.COUNT ))"
 
       # - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
       #   run: exit 1
