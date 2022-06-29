@@ -1271,13 +1271,16 @@ func addSinkAndPoolAccounts(genesisAccts []map[basics.Address]basics.AccountData
 	sinkdata.Status = basics.NotParticipating
 	genesisAccts[0][testSinkAddr] = sinkdata
 }
-
 func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
+	newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, round, oa)
+	commitSync(t, oa, ml, basics.Round(round))
+}
+
+func newBlockWithUpdatesNoCommit(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
 	base := genesisAccts[0]
 	newAccts := applyPartialDeltas(base, updates)
 	genesisAccts = append(genesisAccts, newAccts)
 	totals = newBlock(t, ml, totals, protocol.ConsensusCurrentVersion, config.Consensus[protocol.ConsensusCurrentVersion], basics.Round(round), base, updates, totals)
-	commitSync(t, oa, ml, basics.Round(round))
 }
 
 func TestAcctOnlineTop(t *testing.T) {
@@ -1488,8 +1491,9 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 			var updates ledgercore.AccountDeltas
 			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
 				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-			newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+			newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, i, oa)
 		}
+		commitSync(t, oa, ml, basics.Round(i))
 	}
 
 	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
@@ -1502,7 +1506,6 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	case <-stallingTracker.postCommitEntryLock:
 		go func() {
 			time.Sleep(2 * time.Second)
-			stallingTracker.shouldLockPostCommit = false
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
 		top, err = oa.onlineTop(2, 2, 5)
@@ -1581,8 +1584,9 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			var updates ledgercore.AccountDeltas
 			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
 				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-			newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+			newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, i, oa)
 		}
+		commitSync(t, oa, ml, basics.Round(i))
 	}
 
 	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
@@ -1600,7 +1604,6 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
 				return
 			})
-			stallingTracker.shouldLockPostCommit = false
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
 		top, err = oa.onlineTop(2, 2, 5)
