@@ -73,7 +73,6 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
-                - cicd/add-m1-to-intergration-tests
 
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -85,7 +84,6 @@ workflows:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
-                - cicd/add-m1-to-intergration-tests
           context: slack-secrets
 
       - test:
