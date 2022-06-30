@@ -79,6 +79,7 @@ workflows:
               only:
                 - /rel\/.*/
                 - master
+                - /hotfix\/.*/
 
       - test:
           name: << matrix.platform >>_test
