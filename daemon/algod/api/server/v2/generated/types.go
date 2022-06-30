@@ -833,7 +833,7 @@ type GetPendingTransactionsByAddressParams struct {
 // GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
 type GetApplicationBoxesParams struct {
 
-	// Number of box names to return. If max is not set, or max == 0, returns all box-names.
+	// Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `json:"max,omitempty"`
 }
 

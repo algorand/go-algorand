@@ -1142,7 +1142,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	var boxKeys []string
 	var err error
 
-	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold > castedMax || maxBoxThreshold == 0)
+	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || maxBoxThreshold == 0)
 	returnsAll := castedMax == 0 && maxBoxThreshold == 0
 
 	if dominatedByQryParams || returnsAll {
