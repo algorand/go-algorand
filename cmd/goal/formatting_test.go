@@ -45,23 +45,14 @@ func TestUnicodePrintable(t *testing.T) {
 
 func TestNewAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	acb := newAppCallBytes("str:hello")
-	require.Equal(t, "str", acb.Encoding)
-	require.Equal(t, "hello", acb.Value)
-	_, err := acb.raw()
+
+	acb := newAppCallBytes("int:3")
+	require.Equal(t, "int", acb.Encoding)
+	require.Equal(t, "3", acb.Value)
+	_, err := acb.Raw()
 	require.NoError(t, err)
 
 	require.Panics(t, func() { newAppCallBytes("hello") })
-
-	acb = newAppCallBytes("str:1:2")
-	require.Equal(t, "str", acb.Encoding)
-	require.Equal(t, "1:2", acb.Value)
-	_, err = acb.raw()
-	require.NoError(t, err)
-
-	acb = newAppCallBytes(":x")
-	_, err = acb.raw()
-	require.Error(t, err)
 }
 
 func TestNewBoxRef(t *testing.T) {

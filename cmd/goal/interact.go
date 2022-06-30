@@ -512,7 +512,7 @@ var appExecuteCmd = &cobra.Command{
 
 		var inputs appCallInputs
 		for _, arg := range proc.Args {
-			var callArg appCallBytes
+			var callArg logic.AppCallBytes
 			callArg.Encoding = arg.Kind
 
 			if !procFlags.Changed(arg.Name) && arg.Default != "" {
@@ -564,7 +564,7 @@ var appExecuteCmd = &cobra.Command{
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
-			rawValue, err := arg.raw()
+			rawValue, err := arg.Raw()
 			if err != nil {
 				reportErrorf("Could not parse argument corresponding to '%s': %v", proc.Args[i].Name, err)
 			}

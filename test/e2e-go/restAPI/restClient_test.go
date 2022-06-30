@@ -18,10 +18,10 @@ package restapi
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"flag"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"math"
 	"math/rand"
 	"os"
@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
 	"github.com/stretchr/testify/require"
 
@@ -1268,9 +1270,19 @@ del:                        // delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
     byte "delete"           // [arg[0], "delete"]
     ==                      // [arg[0]=?="delete"]
-    bz bad                  // "delete" ? continue : goto bad
+	bz set                  // "delete" ? continue : goto set
     txn ApplicationArgs 1   // [arg[1]]
     box_del                 // del boxes[arg[1]]
+    b end
+set:						// put arg[1] at start of box arg[0] ... so actually a _partial_ "set"
+    txn ApplicationArgs 0   // [arg[0]]
+    byte "set"              // [arg[0], "set"]
+    ==                      // [arg[0]=?="set"]
+    bz bad                  // "delete" ? continue : goto bad
+    txn ApplicationArgs 1   // [arg[1]]
+    int 0                   // [arg[1], 0]
+    txn ApplicationArgs 2   // [arg[1], 0, arg[2]]
+    box_replace             // [] // boxes: arg[1] -> replace(boxes[arg[1]], 0, arg[2])
     b end
 bad:
     err
@@ -1320,7 +1332,7 @@ end:
 	var createdBoxCount uint64 = 0
 
 	// define operate box helper
-	operateBoxAndSendTxn := func(operation string, boxNames []string) {
+	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string) {
 		txns := make([]transactions.Transaction, len(boxNames))
 		txIDs := make(map[string]string, len(boxNames))
 
@@ -1328,6 +1340,7 @@ end:
 			appArgs := [][]byte{
 				[]byte(operation),
 				[]byte(boxNames[i]),
+				[]byte(boxValues[i]),
 			}
 			boxRef := transactions.BoxRef{
 				Name:  []byte(boxNames[i]),
@@ -1370,21 +1383,24 @@ end:
 	// then submit transaction group containing all operations on box names
 	// Then we check these boxes are appropriately created/deleted
 	operateAndMatchRes := func(operation string, boxNames []string) {
+		boxValues := make([]string, len(boxNames))
 		if operation == "create" {
-			for _, box := range boxNames {
+			for i, box := range boxNames {
 				keyValid, ok := createdBoxName[box]
 				a.False(ok && keyValid)
+				boxValues[i] = ""
 			}
 		} else if operation == "delete" {
-			for _, box := range boxNames {
+			for i, box := range boxNames {
 				keyValid, ok := createdBoxName[box]
 				a.True(keyValid == ok)
+				boxValues[i] = ""
 			}
 		} else {
 			a.True(false)
 		}
 
-		operateBoxAndSendTxn(operation, boxNames)
+		operateBoxAndSendTxn(operation, boxNames, boxValues)
 
 		if operation == "create" {
 			for _, box := range boxNames {
@@ -1474,4 +1490,30 @@ end:
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
 	a.Empty(resp)
+
+	// Get Box value from box name
+	encodeInt := func(n uint64) []byte {
+		ibytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(ibytes, n)
+		return ibytes
+	}
+
+	boxTests := [][]interface{}{
+		{[]byte("foo"), "str:foo", []byte("bar12")},
+		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}},
+		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
+	}
+	for _, boxTest := range boxTests {
+		boxName := boxTest[0].([]byte)
+		encodedName := boxTest[1].(string)
+		// Box values are 5 bytes, as defined by the test TEAL program.
+		boxValue := boxTest[2].([]byte)
+		operateBoxAndSendTxn("create", []string{string(boxName)}, []string{""})
+		operateBoxAndSendTxn("set", []string{string(boxName)}, []string{string(boxValue)})
+
+		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), encodedName)
+		a.NoError(err)
+		a.Equal(boxName, boxResponse.Name)
+		a.Equal(boxValue, boxResponse.Value)
+	}
 }
