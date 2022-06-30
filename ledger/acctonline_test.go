@@ -1271,16 +1271,13 @@ func addSinkAndPoolAccounts(genesisAccts []map[basics.Address]basics.AccountData
 	sinkdata.Status = basics.NotParticipating
 	genesisAccts[0][testSinkAddr] = sinkdata
 }
-func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
-	newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, round, oa)
-	commitSync(t, oa, ml, basics.Round(round))
-}
 
-func newBlockWithUpdatesNoCommit(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
+func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
 	base := genesisAccts[0]
 	newAccts := applyPartialDeltas(base, updates)
 	genesisAccts = append(genesisAccts, newAccts)
 	totals = newBlock(t, ml, totals, protocol.ConsensusCurrentVersion, config.Consensus[protocol.ConsensusCurrentVersion], basics.Round(round), base, updates, totals)
+	commitSync(t, oa, ml, basics.Round(round))
 }
 
 func TestAcctOnlineTop(t *testing.T) {
@@ -1475,8 +1472,9 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	_, totals, err := au.LatestTotals()
 	require.NoError(t, err)
 
-	// apply some rounds so the db round will make progress (not be 0)
-	i := 0
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	i := 1
 	for ; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
@@ -1487,13 +1485,10 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	stallingTracker.shouldLockPostCommit = true
 
 	updateAccountsRoutine := func() {
-		for ; i < 12; i++ {
-			var updates ledgercore.AccountDeltas
-			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-			newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, i, oa)
-		}
-		commitSync(t, oa, ml, basics.Round(i))
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
 	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
@@ -1568,8 +1563,9 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	_, totals, err := au.LatestTotals()
 	require.NoError(t, err)
 
-	// apply some rounds so the db round will make progress (not be 0)
-	i := 0
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	i := 1
 	for ; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
@@ -1580,13 +1576,10 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	stallingTracker.shouldLockPostCommit = true
 
 	updateAccountsRoutine := func() {
-		for ; i < 12; i++ {
-			var updates ledgercore.AccountDeltas
-			updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-			newBlockWithUpdatesNoCommit(genesisAccts, updates, totals, t, ml, i, oa)
-		}
-		commitSync(t, oa, ml, basics.Round(i))
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
 	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
