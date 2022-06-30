@@ -18,8 +18,6 @@ package stateproofs
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklearray"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -30,6 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"

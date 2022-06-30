@@ -18,9 +18,6 @@ package fixtures
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklearray"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -34,6 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
