@@ -527,7 +527,7 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 	return proofResp, proof, nil
 }
 
-// LightBlockHeaderProof return a proof for usage in merkle array verification for the provided block's light block.
+// LightBlockHeaderProof returns a proof for usage in merkle array verification for the provided block's light block header.
 func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (generatedV2.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
 
