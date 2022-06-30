@@ -2576,3 +2576,22 @@ done:
  concat
 `, LogicVersion, Expect{5, "concat arg 1 wanted type []byte..."})
 }
+
+func TestMergeProtos(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	oneIntArgOneIntRet := OpSpec{Proto: proto("i:i")}
+	oneBytesArgOneBytesRet := OpSpec{Proto: proto("b:b")}
+	twoAnyArgsOneAnyRet := OpSpec{Proto: proto("aa:a")}
+	oneAnyArgsTwoAnyRets := OpSpec{Proto: proto("a:aa")}
+	p, _, _ := mergeProtos(map[int]OpSpec{0: oneIntArgOneIntRet, 1: oneBytesArgOneBytesRet})
+	require.Equal(t, proto("a:a"), p)
+	_, _, ok := mergeProtos(map[int]OpSpec{0: twoAnyArgsOneAnyRet, 1: oneIntArgOneIntRet})
+	require.Equal(t, false, ok)
+	_, _, ok = mergeProtos(map[int]OpSpec{0: oneAnyArgsTwoAnyRets, 1: oneIntArgOneIntRet})
+	require.Equal(t, false, ok)
+	medley := OpSpec{Proto: proto("aibibabai:aibibabai")}
+	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}
+	p, _, _ = mergeProtos(map[int]OpSpec{0: medley, 1: medley2})
+	require.Equal(t, proto("aiaabaaaa:aiaabaaaa"), p)
+}

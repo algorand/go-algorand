@@ -477,7 +477,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 - Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F of the current transaction; txna can be called using txn with 2 immediates.
+- Ith value of the array field F of the current transaction<br />txna can be called using txn with 2 immediates.
 - Availability: v2
 
 `txna` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):
@@ -497,7 +497,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 - Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F from the Tth transaction in the current group; gtxna can be called using gtxn with 3 immediates.
+- Ith value of the array field F from the Tth transaction in the current group<br />gtxna can be called using gtxn with 3 immediates.
 - Availability: v2
 
 ## gtxns f

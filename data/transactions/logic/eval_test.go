@@ -3949,25 +3949,14 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			// Should fail for all versions < validFromVersion
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
-				var ops *OpStream
-				if v == 0 {
-					ops = testProg(t, source, 0)
-				} else {
-					ops = testProg(t, source, v)
-				}
+				ops := testProg(t, source, v)
 				testAppBytes(t, ops.Program, ep, expected, expected)
 				testLogicBytes(t, ops.Program, ep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
-				var ops *OpStream
-				if v == 0 {
-					ops = testProg(t, source, 1)
-					ops.Program[0] = 0x0
-				} else {
-					ops = testProg(t, source, v)
-				}
+				ops := testProg(t, source, v)
 				testAppBytes(t, ops.Program, ep)
 				testLogicBytes(t, ops.Program, ep)
 			}

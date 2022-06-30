@@ -403,9 +403,9 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `args` | Ath LogicSig argument |
 | `txn f` | field F of current transaction |
 | `gtxn t f` | field F of the Tth transaction in the current group |
-| `txna f i` | Ith value of the array field F of the current transaction; txna can be called using txn with 2 immediates. |
+| `txna f i` | Ith value of the array field F of the current transaction<br />txna can be called using txn with 2 immediates. |
 | `txnas f` | Ath value of the array field F of the current transaction |
-| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group; gtxna can be called using gtxn with 3 immediates. |
+| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group<br />gtxna can be called using gtxn with 3 immediates. |
 | `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | field F of the Ath transaction in the current group |
 | `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
@@ -421,8 +421,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gaid t` | ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | ID of the asset or application created in the Ath transaction of the current group |
 
-**Transaction Fields**
-*Scalar Fields*
+#### Transaction Fields
+##### Scalar Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
@@ -487,7 +487,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
-*Array Fields*
+##### Array Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |

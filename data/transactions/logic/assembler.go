@@ -1178,6 +1178,8 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 	ops.error(errMsg)
 }
 
+// getSpec finds the OpSpec we need during assembly based on it's name, our current version, and the immediates passed in
+// Note getSpec handles both normal OpSpecs and those supplied by pseduoOps
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 	pseudoSpecs, ok := pseudoOps[name]
 	if ok {
@@ -1214,7 +1216,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 	return spec, ok
 }
 
-// pseudoOps or "pseudo-ops" allow us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
+// pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
 // Immediates key of -1 means asmfunc handles number of immediates
 var pseudoOps = map[string]map[int]OpSpec{
 	"int":  {-1: OpSpec{Name: "int", Version: 1, Proto: proto(":i"), OpDetails: assembler(asmInt)}},
@@ -1242,7 +1244,7 @@ func init() {
 				}
 				desc, ok := opDocByName[spec.Name]
 				if ok {
-					opDocByName[spec.Name] = desc + "; " + msg
+					opDocByName[spec.Name] = desc + "<br />" + msg
 				} else {
 					opDocByName[spec.Name] = msg
 				}
@@ -1251,6 +1253,8 @@ func init() {
 	}
 }
 
+// mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
+//by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
@@ -1284,20 +1288,30 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
 }
 
-func updatePseudoTable(ops *OpStream) {
+func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
+	m := make(map[string]map[int]OpSpec)
 	for name, specs := range pseudoOps {
+		m[name] = make(map[int]OpSpec)
 		for numImmediates, spec := range specs {
 			if spec.Version != 0 {
+				// If a version is specified, we will use it
+				fullSpec, ok := OpsByName[spec.Version][spec.Name]
+				if ok {
+					m[name][numImmediates] = fullSpec
+				} else {
+					m[name][numImmediates] = spec
+				}
 				continue
 			}
-			newSpec, ok := OpsByName[ops.Version][spec.Name]
+			newSpec, ok := OpsByName[version][spec.Name]
 			if ok {
-				pseudoOps[name][numImmediates] = newSpec
+				m[name][numImmediates] = newSpec
 			} else {
-				pseudoOps[name][numImmediates] = OpsByName[AssemblerMaxVersion][spec.Name]
+				m[name][numImmediates] = OpsByName[AssemblerMaxVersion][spec.Name]
 			}
 		}
 	}
+	return m
 }
 
 type lineError struct {
@@ -1459,6 +1473,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
+	var preparedTable bool
 	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
@@ -1490,7 +1505,10 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
-		updatePseudoTable(ops)
+		if !preparedTable {
+			pseudoOps = prepareVersionedPseudoTable(ops.Version)
+			preparedTable = true
+		}
 		opstring := fields[0]
 		if opstring[len(opstring)-1] == ':' {
 			ops.createLabel(opstring[:len(opstring)-1])
