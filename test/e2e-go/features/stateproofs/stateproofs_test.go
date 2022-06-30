@@ -285,7 +285,7 @@ func TestBlkMerkleProof(t *testing.T) {
 		proofResp, err := libgoalClient.LightHeaderBlockProof(rnd)
 		r.NoError(err)
 
-		proof, err := fixture.LightBlockProofRespToProof(proofResp)
+		singleLeafProof, err := fixture.LightBlockProofRespToProof(proofResp)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -296,7 +296,7 @@ func TestBlkMerkleProof(t *testing.T) {
 		elems := make(map[uint64]crypto.Hashable)
 		leafIndex := rnd - stateProofMessage.FirstAttestedRound
 		elems[leafIndex] = &lightBlockHeader
-		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, &proof)
+		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, singleLeafProof.ToProof())
 		t.Logf("Successfully verified block at round %d.\n", rnd)
 		r.NoError(err)
 	}
@@ -324,13 +324,15 @@ func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd
 	r.NoError(err)
 }
 
-func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (stateProof sp.StateProof, stateProofMessage stateproofmsg.Message, err error) {
+func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message, error) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
 	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
 	r.NoError(err)
 
+	var stateProof sp.StateProof
+	var stateProofMessage stateproofmsg.Message
 	for _, txn := range res.Transactions {
 		r.Equal(txn.Type, string(protocol.StateProofTx))
 		r.True(txn.StateProof != nil)
@@ -340,7 +342,7 @@ func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, r
 			err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 			r.NoError(err)
 
-			return
+			return stateProof, stateProofMessage, nil
 		}
 	}
 

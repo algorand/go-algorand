@@ -99,7 +99,8 @@ func (p *SingleLeafProof) GetConcatenatedProof() []byte {
 
 // ProofBytesToPath takes the byte representation of the proof path and converts it to a representation suitable
 // for building a proof object.
-func ProofBytesToPath(proofBytes []byte) (proofPath []crypto.GenericDigest) {
+func ProofBytesToPath(proofBytes []byte) []crypto.GenericDigest {
+	var proofPath []crypto.GenericDigest
 	for len(proofBytes) > 0 {
 		var d crypto.Digest
 		copy(d[:], proofBytes)
