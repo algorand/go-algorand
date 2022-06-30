@@ -4,56 +4,59 @@ on:
     branches:
       - master
     types: [opened, synchronize, reopened, labeled, unlabeled, edited]
-env:
-  NEW_FEATURE_LABEL: 0
-  ENHANCEMENT_LABEL: 0
-  BUG_FIX_LABEL: 0
-  NOT_YET_ENABLED_LABEL: 0
-  SKIP_RELEASE_NOTES_LABEL: 0
+# env:
+#   NEW_FEATURE_LABEL: 0
+#   ENHANCEMENT_LABEL: 0
+#   BUG_FIX_LABEL: 0
+#   NOT_YET_ENABLED_LABEL: 0
+#   SKIP_RELEASE_NOTES_LABEL: 0
 jobs:
   check_label:
     runs-on: ubuntu-latest
     name: Check PR Category and Type
     steps:
-      - name: Check for New Feature label
-        if: contains(github.event.pull_request.labels.*.name, 'New Feature')
-        id: new-feature
-        run: echo "NEW_FEATURE_LABEL=1" >> $GITHUB_ENV
-      - name: Check for Enhancement label
-        if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
-        id: enhancement
-        run: echo "ENHANCEMENT_LABEL=1" >> $GITHUB_ENV
-      - name: Check for Bug-Fix label
-        if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-        id: bug-fix
-        run: echo "BUG_FIX_LABEL=1" >> $GITHUB_ENV
-      - name: Check for Not-Yet-Enabled label
-        if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
-        id: not-yet-enabled
-        run: echo "NOT_YET_ENABLED_LABEL=1" >> $GITHUB_ENV
-      - name: Check for Skip-Release-Notes label
-        if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
-        id: skip-release-notes
-        run: echo "SKIP_RELEASE_NOTES_LABEL=1" >> $GITHUB_ENV
-
-      - name: Adding up all labels
-        run: |
-          echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
-
       - name: Missing or too many github pr labels
-        if: env.LABELS_COUNT != 1
-        run: |
-          echo "Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'."
-          echo "## Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'." >> GITHUB_STEP_SUMMARY
-          exit 1
+        uses: mheap/github-action-required-labels@v2
+        with:
+          mode: exactly
+          count: 1
+          labels: "New Feature, Enhancement, Bug-Fix, Not-Yet-Enabled, Skip-Release-Notes"
+
+      # - name: Check for New Feature label
+      #   if: contains(github.event.pull_request.labels.*.name, 'New Feature')
+      #   id: new-feature
+      #   run: echo "NEW_FEATURE_LABEL=1" >> $GITHUB_ENV
+      # - name: Check for Enhancement label
+      #   if: contains(github.event.pull_request.labels.*.name, 'Enhancement')
+      #   id: enhancement
+      #   run: echo "ENHANCEMENT_LABEL=1" >> $GITHUB_ENV
+      # - name: Check for Bug-Fix label
+      #   if: contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+      #   id: bug-fix
+      #   run: echo "BUG_FIX_LABEL=1" >> $GITHUB_ENV
+      # - name: Check for Not-Yet-Enabled label
+      #   if: contains(github.event.pull_request.labels.*.name, 'Not-Yet-Enabled')
+      #   id: not-yet-enabled
+      #   run: echo "NOT_YET_ENABLED_LABEL=1" >> $GITHUB_ENV
+      # - name: Check for Skip-Release-Notes label
+      #   if: contains(github.event.pull_request.labels.*.name, 'Skip-Release-Notes')
+      #   id: skip-release-notes
+      #   run: echo "SKIP_RELEASE_NOTES_LABEL=1" >> $GITHUB_ENV
+
+      # - name: Adding up all labels
+      #   run: |
+      #     echo "LABELS_COUNT=$((${{env.NEW_FEATURE_LABEL}}+${{env.ENHANCEMENT_LABEL}}+${{env.BUG_FIX_LABEL}}+${{env.NOT_YET_ENABLED_LABEL}}+${{env.SKIP_RELEASE_NOTES_LABEL}}))" >> $GITHUB_ENV
+
+      # - name: Missing or too many github pr labels
+      #   if: env.LABELS_COUNT != 1
+      #   run: |
+      #     echo "Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'."
+      #     echo "## Please add EXACTLY one of the following labels to this PR: 'New Feature', 'Enhancement', 'Bug-Fix', 'Not-Yet-Enabled', or 'Skip-Release-Notes'." >> GITHUB_STEP_SUMMARY
+      #     exit 1
 
       - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'."
-        if: env.SKIP_RELEASE_NOTES_LABEL != 1
         run: |
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
             echo "## PR Category is missing from PR title. Please add it like '<category>: <pr title>'." >> GITHUB_STEP_SUMMARY
             exit 1
           fi
-
-      - name: "Found at least one PR Type label and Category in the title. Good job!"
-        run: exit 0
