@@ -35,13 +35,13 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 12.0.1
+      xcode: 13.4.1
     resource_class: medium
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 12.0.1
+      xcode: 13.4.1
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
