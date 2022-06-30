@@ -143,6 +143,8 @@ class summary:
         self.tpsMeanSum = 0
         self.txBpsMeanSum = 0
         self.rxBpsMeanSum = 0
+        self.tpsSum = 0
+        self.blockTimeSum = 0
         self.sumsCount = 0
         self.nodes = {}
 
@@ -154,6 +156,8 @@ class summary:
         self.tpsMeanSum += meanOrZero(ttr.tpsList)
         self.txBpsMeanSum += meanOrZero(ttr.txBpsList)
         self.rxBpsMeanSum += meanOrZero(ttr.rxBpsList)
+        self.tpsSum += ttr.tps
+        self.blockTimeSum += ttr.blockTime
         self.sumsCount += 1
 
     def byMsg(self):
@@ -209,14 +213,17 @@ class summary:
     def __str__(self):
         if not self.sumsCount:
             tps, txbps, rxbps = math.nan, math.nan, math.nan
+            blockTimes = math.nan
         else:
-            tps = self.tpsMeanSum/self.sumsCount
+            #tps = self.tpsMeanSum/self.sumsCount
+            tps = self.tpsSum/self.sumsCount
+            blockTimes = self.blockTimeSum/self.sumsCount
             txbps = self.txBpsMeanSum/self.sumsCount
             rxbps = self.rxBpsMeanSum/self.sumsCount
         labelspace = ""
         if self.label:
             labelspace = self.label + " "
-        return '{byMsg}\n{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps))
+        return '{byMsg}\n{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes)
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -373,6 +380,9 @@ class nodestats:
         self.txPSums = {}
         # algod_tx_pool_count{}
         self.txPool = []
+        # total across all measurements
+        self.tps = 0
+        self.blockTime = 0
 
     def process_files(self, args, nick=None, metrics_files=None):
         "returns self, a nodestats object"
@@ -398,6 +408,8 @@ class nodestats:
         prevtime = None
         prevPath = None
         prevbi = None
+        firstTime = None
+        firstBi = None
 
         for path in sorted(metrics_files):
             with open(path, 'rt', encoding="utf-8") as fin:
@@ -451,10 +463,18 @@ class nodestats:
                         tps,
                         blocktime,
                     ))
+            else:
+                firstTime = curtime
+                firstBi = bi
             prev = cur
             prevPath = path
             prevtime = curtime
             prevbi = bi
+        txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
+        rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
+        totalDt = prevtime - firstTime
+        self.tps = txnCount / totalDt
+        self.blockTime = totalDt / rounds
         if writer and self.txBpsList:
             writer.writerow([])
             for bsum, msg in sorted([(bsum,msg) for msg,bsum in self.txPSums.items()]):

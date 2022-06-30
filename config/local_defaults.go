@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    22,
+	Version:                                    24,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        7,
@@ -100,7 +100,7 @@ var defaultLocal = Local{
 	PeerConnectionsUpdateInterval:              3600,
 	PeerPingPeriodSeconds:                      0,
 	PriorityPeers:                              map[string]bool{},
-	ProposalAssemblyTime:                       250000000,
+	ProposalAssemblyTime:                       700000000,
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
 	ReservedFDs:                                256,
@@ -117,7 +117,7 @@ var defaultLocal = Local{
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
 	TxPoolExponentialIncreaseFactor:            2,
-	TxPoolSize:                                 15000,
+	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,
 	TxSyncServeResponseSize:                    1000000,
 	TxSyncTimeoutSeconds:                       30,

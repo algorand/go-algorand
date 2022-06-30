@@ -231,7 +231,20 @@ var protoCmd = &cobra.Command{
 	Long:  "Dump standard consensus protocols as json to stdout.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		os.Stdout.Write(protocol.EncodeJSON(config.Consensus))
+		dirs := getDataDirs()
+		if len(dirs) == 0 {
+			os.Stdout.Write(protocol.EncodeJSON(config.Consensus))
+		} else {
+			for _, dir := range dirs {
+				cons, err := config.PreloadConfigurableConsensusProtocols(dir)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%s: consensus error %v", dir, err)
+				} else {
+					os.Stdout.Write(protocol.EncodeJSON(cons))
+					return
+				}
+			}
+		}
 	},
 }
 

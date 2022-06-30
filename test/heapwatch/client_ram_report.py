@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import configparser
+import csv
 import glob
 import json
 import logging
@@ -8,8 +10,7 @@ import os
 import re
 import sys
 import subprocess
-
-from metrics_delta import parse_metrics, gather_metrics_files_by_nick
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -78,14 +79,52 @@ def get_heap_inuse_totals(dirpath):
         else:
             cached[nick] = sorted(old + recs)
     if cached and bynick:
-        with open(cache_path, 'wb') as fout:
+        with open(cache_path, 'wt') as fout:
             json.dump(cached, fout)
     return cached
+
+
+def maybe_load_tf_nicks(args):
+    tf_inventory_path = os.path.join(args.dir, 'terraform-inventory.host')
+    if not os.path.exists(tf_inventory_path):
+        return None
+    tf_inventory = configparser.ConfigParser(allow_no_value=True)
+    tf_inventory.read(tf_inventory_path)
+    ip_to_name = {}
+    for k, sub in tf_inventory.items():
+        if k.startswith('name_'):
+            nick = k[5:]
+            for ip in sub:
+                if ip in ip_to_name:
+                    logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
+                ip_to_name[ip] = nick
+    return ip_to_name
+
+
+def hostports_to_nicks(args, hostports):
+    ip_to_nick = maybe_load_tf_nicks(args)
+    if not ip_to_nick:
+        return hostports
+    out = []
+    for hp in hostports:
+        hit = None
+        for ip, nick in ip_to_nick.items():
+            if ip in hp:
+                if hit is None:
+                    hit = nick
+                else:
+                    logger.warning('nick collision in ip=%r, hit=%r nick=%r', ip, hit, nick)
+                    hit = nick
+        if not hit:
+            hit = hp
+        out.append(hit)
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('-d', '--dir', required=True, help='dir path to find /*.metrics in')
+    ap.add_argument('--csv')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -94,10 +133,40 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    metrics_files = glob.glob(os.path.join(args.dir, '*.metrics'))
-    filesByNick = gather_metrics_files_by_nick(metrics_files)
-
     heap_totals = get_heap_inuse_totals(args.dir)
+
+    if args.csv:
+        if args.csv == '-':
+            csvf = sys.stdout
+        else:
+            csvf = open(args.csv, 'wt')
+        writer = csv.writer(csvf)
+        whens = set()
+        for nick, recs in heap_totals.items():
+            for ts, n in recs:
+                whens.add(ts)
+        whens = sorted(whens)
+        nodes = sorted(heap_totals.keys())
+        writer.writerow(['when','dt','round'] + hostports_to_nicks(args, nodes))
+        first = None
+        for ts in whens:
+            tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
+            if first is None:
+                first = tv
+            nick = nodes[0]
+            bipath = os.path.join(args.dir, '{}.{}.blockinfo.json'.format(nick, ts))
+            try:
+                bi = json.load(open(bipath))
+                rnd = str(bi['block']['rnd'])
+            except:
+                rnd = ''
+            row = [ts, tv-first, rnd]
+            for nick in nodes:
+                for rec in heap_totals[nick]:
+                    if rec[0] == ts:
+                        row.append(rec[1])
+                        break
+            writer.writerow(row)
 
     return 0
 
