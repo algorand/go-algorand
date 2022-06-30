@@ -2483,16 +2483,6 @@
             },
             "description": "Invalid API Token"
           },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Application Not Found"
-          },
           "500": {
             "content": {
               "application/json": {

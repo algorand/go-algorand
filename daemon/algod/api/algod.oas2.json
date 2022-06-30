@@ -1352,12 +1352,6 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
-          "404": {
-            "description": "Application Not Found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
           "500": {
             "description": "Internal Error",
             "schema": {
