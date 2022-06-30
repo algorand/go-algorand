@@ -1976,6 +1976,7 @@ type persistedValue struct {
 func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
 	err = db.Retry(func() error {
 		var v sql.NullString
+		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
 		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &v)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
@@ -1996,14 +1997,12 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 }
 
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
-	err = db.Retry(func() (_err error) {
-		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
-		if _err != nil {
-			if _err == sql.ErrNoRows {
-				// we just found nothing, not an error I guess?
-				_err = nil
-				return
-			}
+	err = db.Retry(func() error {
+		var rows *sql.Rows
+		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
+		rows, err = qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
+		if err != nil {
+			return err
 		}
 		defer rows.Close()
 
@@ -2011,11 +2010,11 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 
 		for rows.Next() {
 			if maxKeyNum > 0 && resultCount == maxKeyNum {
-				return
+				return nil
 			}
-			_err = rows.Scan(&round, &v)
-			if _err != nil {
-				return
+			err = rows.Scan(&round, &v)
+			if err != nil {
+				return err
 			}
 			if v.Valid {
 				if _, ok := results[v.String]; ok {
@@ -2025,7 +2024,7 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 				resultCount++
 			}
 		}
-		return
+		return nil
 	})
 	return
 }
@@ -2544,6 +2543,7 @@ func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
 }
 
 func (w accountsSQLWriter) deleteKvPair(key string) error {
+	// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
 	result, err := w.deleteKvPairStmt.Exec([]byte(key))
 	if err != nil {
 		return err

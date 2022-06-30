@@ -2509,7 +2509,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, it returns the box names of that application.",
+        "description": "Given an application ID, it returns the box names of that application. No particular ordering is guaranteed.",
         "operationId": "GetApplicationBoxes",
         "parameters": [
           {
@@ -2522,7 +2522,7 @@
             }
           },
           {
-            "description": "Number of box names to return. If max is not set, or max == 0, returns all box-names.",
+            "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "in": "query",
             "name": "max",
             "schema": {
@@ -2581,7 +2581,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get boxes for a given application."
+        "summary": "Get box names for a given application."
       }
     },
     "/v2/assets/{asset-id}": {

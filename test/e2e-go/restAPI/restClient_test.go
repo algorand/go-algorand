@@ -1379,6 +1379,9 @@ end:
 		return
 	}
 
+	// helper function, take operation and a slice of box names
+	// then submit transaction group containing all operations on box names
+	// Then we check these boxes are appropriately created/deleted
 	operateAndMatchRes := func(operation string, boxNames []string) {
 		boxValues := make([]string, len(boxNames))
 		if operation == "create" {
@@ -1464,6 +1467,7 @@ end:
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
+		// grouping box names to operate, and create such boxes
 		if i+16 >= len(testingBoxNames) {
 			strSliceTest = testingBoxNames[i:]
 		} else {
@@ -1474,6 +1478,7 @@ end:
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
+		// grouping box names to operate, and delete such boxes
 		if i+16 >= len(testingBoxNames) {
 			strSliceTest = testingBoxNames[i:]
 		} else {
