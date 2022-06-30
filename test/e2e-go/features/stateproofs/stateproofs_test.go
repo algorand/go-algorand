@@ -53,16 +53,7 @@ func TestStateProofs(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
-	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.StateProofStrengthTarget = 256
-	consensusParams.StateProofRecoveryInterval = 6
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -131,18 +122,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 3
-	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.StateProofRecoveryInterval = 4
 	consensusParams.AgreementFilterTimeout = 1000 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1000 * time.Millisecond
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
-	consensusParams.StateProofRecoveryInterval = 4
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -236,16 +223,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
-	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.StateProofStrengthTarget = 256
-	consensusParams.StateProofRecoveryInterval = 6
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -297,6 +275,21 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, singleLeafProof.ToProof())
 		r.NoError(err)
 	}
+}
+
+func getDefaultStateProofConsensusParams() config.ConsensusParams {
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.StateProofInterval = 16
+	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofVotersLookback = 2
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	consensusParams.StateProofStrengthTarget = 256
+	consensusParams.StateProofRecoveryInterval = 6
+	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+
+	return consensusParams
 }
 
 func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd uint64) {
@@ -385,9 +378,6 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -398,9 +388,6 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 4
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -483,9 +470,6 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -496,9 +480,6 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 4
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
