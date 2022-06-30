@@ -1186,7 +1186,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 		pseudo, ok := pseudoSpecs[len(args)]
 		if !ok {
 			// Could be that pseudoOp wants to handle immediates itself so check -1 key
-			pseudo, ok = pseudoSpecs[-1]
+			pseudo, ok = pseudoSpecs[anyImmediates]
 			if !ok {
 				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
 				pseudoImmediatesError(ops, name, pseudoSpecs)
@@ -1218,13 +1218,15 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
 // Immediates key of -1 means asmfunc handles number of immediates
+const anyImmediates = -1
+
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {-1: OpSpec{Name: "int", Version: 1, Proto: proto(":i"), OpDetails: assembler(asmInt)}},
-	"byte": {-1: OpSpec{Name: "byte", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Version: 1, Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {-1: OpSpec{Name: "addr", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {-1: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"method": {anyImmediates: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
 	"txn":    {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":   {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 }
@@ -1239,8 +1241,10 @@ func init() {
 				msg := ""
 				if i > 1 {
 					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
-				} else {
+				} else if i == 1 {
 					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
+				} else {
+					continue
 				}
 				desc, ok := opDocByName[spec.Name]
 				if ok {
