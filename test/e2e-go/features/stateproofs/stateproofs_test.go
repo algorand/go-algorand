@@ -228,7 +228,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
-func TestBlkMerkleProof(t *testing.T) {
+func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
