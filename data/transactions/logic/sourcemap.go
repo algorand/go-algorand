@@ -36,7 +36,9 @@ type SourceMap struct {
 	SourceRoot string   `json:"sourceRoot,omitempty"`
 	Sources    []string `json:"sources"`
 	Names      []string `json:"names"`
-	Mapping    string   `json:"mapping"`
+	// Mapping field is deprecated. Use `Mappings` field instead.
+	Mapping  string `json:"mapping"`
+	Mappings string `json:"mappings"`
 }
 
 // GetSourceMap returns a struct containing details about
@@ -49,24 +51,25 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 		}
 	}
 
-	// Array where index is the PC and value is the line.
+	// Array where index is the PC and value is the line for `mappings` field.
+	prevSourceLine := 0
 	pcToLine := make([]string, maxPC+1)
 	for pc := range pcToLine {
 		if line, ok := offsetToLine[pc]; ok {
-			pcToLine[pc] = MakeSourceMapLine(0, 0, line, 0)
+			pcToLine[pc] = MakeSourceMapLine(0, 0, line-prevSourceLine, 0)
+			prevSourceLine = line
 		} else {
 			pcToLine[pc] = ""
 		}
 	}
 
-	// Encode the source map into a string
-	encodedMapping := strings.Join(pcToLine, ";")
-
 	return SourceMap{
 		Version: sourceMapVersion,
 		Sources: sourceNames,
 		Names:   []string{}, // TEAL code does not generate any names.
-		Mapping: encodedMapping,
+		// Mapping is deprecated, and only for backwards compatibility.
+		Mapping:  strings.Join(pcToLine, ";"),
+		Mappings: strings.Join(pcToLine, ";"),
 	}
 }
 

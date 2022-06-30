@@ -353,6 +353,11 @@ func Base() Logger {
 // NewLogger returns a new Logger logging to out.
 func NewLogger() Logger {
 	l := logrus.New()
+	return NewWrappedLogger(l)
+}
+
+// NewWrappedLogger returns a new Logger that wraps an external logrus logger.
+func NewWrappedLogger(l *logrus.Logger) Logger {
 	out := logger{
 		logrus.NewEntry(l),
 		&loggerState{},
