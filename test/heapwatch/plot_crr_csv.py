@@ -3,6 +3,7 @@
 # Plot the output of test/heapwatch/client_ram_report.py --csv
 
 import csv
+import random
 
 from matplotlib import pyplot as plt
 
@@ -54,7 +55,17 @@ def main():
         for k in sorted(fvals.keys()):
             xy = fvals[k]
             #for k, xy in fvals.items():
-            ax.plot([p[0] for p in xy], [p[1] for p in xy], label=k)
+            lc = None
+            if k.startswith('r'):
+                # blueish
+                lc = (0.3*random.random(), 0.3*random.random(), 0.7+(0.3*random.random()))
+            elif k.startswith('npn'):
+                # greenish
+                lc = (0.3*random.random(), 0.7+(0.3*random.random()), 0.3*random.random())
+            elif k.startswith('n'):
+                # reddish
+                lc = (0.7+(0.3*random.random()), 0.3*random.random(), 0.3*random.random())
+            ax.plot([p[0] for p in xy], [p[1] for p in xy], label=k, color=lc)
         ax.legend(loc='upper left', ncol=2)
         plt.savefig(fname + '.svg', format='svg')
         plt.savefig(fname + '.png', format='png')
