@@ -253,9 +253,16 @@ type deferredCommitContext struct {
 
 	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
+
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
+
+	// serialized rounds deltas to be committed
+	txTailDeltas [][]byte
+
+	// txtail rounds deltas history size
+	txTailRetainSize uint64
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
@@ -286,16 +293,13 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 
 	tr.trackers = append([]ledgerTracker{}, trackers...)
 
+	// accountUpdates and onlineAccounts are needed for replaying (called in later in loadFromDisk)
 	for _, tracker := range tr.trackers {
-		if accts, ok := tracker.(*accountUpdates); ok {
-			tr.accts = accts
-			continue
-		}
-		if online, ok := tracker.(*onlineAccounts); ok {
-			tr.acctsOnline = online
-		}
-		if txtail, ok := tracker.(*txTail); ok {
-			tr.txtail = txtail
+		switch t := tracker.(type) {
+		case *accountUpdates:
+			tr.accts = t
+		case *onlineAccounts:
+			tr.acctsOnline = t
 		}
 	}
 
@@ -316,16 +320,9 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		}
 	}
 
-	err := tr.initializeTrackerCaches(l, tr.cfg)
+	err := tr.replay(l)
 	if err != nil {
-		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
-	}
-
-	// the votes have a special dependency on the account updates, so we need to initialize these separately.
-	tr.acctsOnline.voters = &votersTracker{}
-	err = tr.acctsOnline.voters.loadFromDisk(l, tr.acctsOnline)
-	if err != nil {
-		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
+		err = fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
 	return err
 }
@@ -454,7 +451,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 }
 
 // commitRound commits the given deferredCommitContext via the trackers.
-func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
+func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	defer tr.accountsWriting.Done()
 	tr.mu.RLock()
 
@@ -468,7 +465,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 			lt.handleUnorderedCommit(dcc)
 		}
 		tr.mu.RUnlock()
-		return
+		return nil
 	}
 
 	// adjust the offset according to what happened meanwhile..
@@ -479,7 +476,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 	// flush, without the commitRound have a chance of committing these rounds.
 	if offset == 0 {
 		tr.mu.RUnlock()
-		return
+		return nil
 	}
 
 	dbRound = tr.dbRound
@@ -491,18 +488,18 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
-		err = lt.prepareCommit(dcc)
+		err := lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
 			tr.mu.RUnlock()
-			return
+			return err
 		}
 	}
 	tr.mu.RUnlock()
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err = tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -516,7 +513,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 
 	if err != nil {
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
-		return
+		return err
 	}
 
 	tr.mu.Lock()
@@ -534,10 +531,10 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 	return nil
 }
 
-// initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
+// replay fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
 // the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
 // is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
-func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg config.Local) (err error) {
+func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	lastestBlockRound := l.Latest()
 	lastBalancesRound := tr.dbRound
 
@@ -556,7 +553,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
-			return fmt.Errorf("unable to load block header %d : %w", lastBalancesRound, err)
+			return fmt.Errorf("trackerRegistry.replay: unable to load block header %d : %w", lastBalancesRound, err)
 		}
 	}
 
@@ -567,7 +564,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		select {
 		case <-writeAccountCacheMessageCompleted:
 			if err == nil {
-				tr.log.Infof("initializeTrackerCaches completed initializing account data caches")
+				tr.log.Infof("trackerRegistry.replay completed initializing account data caches")
 			}
 		default:
 		}
@@ -587,7 +584,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 	go func() {
 		select {
 		case <-time.After(initializingAccountCachesMessageTimeout):
-			tr.log.Infof("initializeTrackerCaches is initializing account data caches")
+			tr.log.Infof("trackerRegistry.replay is initializing account data caches")
 			close(writeAccountCacheMessageCompleted)
 		case <-skipAccountCacheMessage:
 		}
@@ -630,11 +627,13 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		}
 	}()
 
+	maxAcctLookback := tr.cfg.MaxAcctLookback
+
 	for blk := range blocksStream {
 		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			close(blockEvalFailed)
-			err = fmt.Errorf("trackerEvalVerified failed : %w", err)
+			err = fmt.Errorf("trackerRegistry.replay: trackerEvalVerified failed : %w", err)
 			return
 		}
 		tr.newBlock(blk, delta)
@@ -643,7 +642,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(cfg.MaxAcctLookback) < lastestBlockRound)
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(maxAcctLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)
@@ -652,7 +651,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 				// switch to rebuild synchronous mode to improve performance
 				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
 				if err0 != nil {
-					tr.log.Warnf("initializeTrackerCaches was unable to switch to rbuild synchronous mode : %v", err0)
+					tr.log.Warnf("trackerRegistry.replay was unable to switch to rbuild synchronous mode : %v", err0)
 				} else {
 					// flip the switch to rollback the synchronous mode once we're done.
 					rollbackSynchronousMode = true
@@ -662,25 +661,22 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 			var roundsBehind basics.Round
 
 			// flush the account data
-			tr.scheduleCommit(blk.Round(), basics.Round(cfg.MaxAcctLookback))
+			tr.scheduleCommit(blk.Round(), basics.Round(maxAcctLookback))
 			// wait for the writing to complete.
 			tr.waitAccountsWriting()
 
-			func() {
-				tr.mu.RLock()
-				defer tr.mu.RUnlock()
-
-				// The au.dbRound after writing should be ~320 behind the block round.
-				roundsBehind = blk.Round() - tr.dbRound
-			}()
+			tr.mu.RLock()
+			// The au.dbRound after writing should be ~320 behind the block round (before shorter delta project)
+			roundsBehind = blk.Round() - tr.dbRound
+			tr.mu.RUnlock()
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)
-				tr.log.Errorf("initializeTrackerCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", blk.Round()-roundsBehind, blk.Round())
-				err = fmt.Errorf("initializeTrackerCaches failed to initialize the account data caches")
+				tr.log.Errorf("trackerRegistry.replay was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", blk.Round()-roundsBehind, blk.Round())
+				err = fmt.Errorf("trackerRegistry.replay failed to initialize the account data caches")
 				return
 			}
 
@@ -697,7 +693,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 				close(writeAccountCacheMessageCompleted)
 			default:
 			}
-			tr.log.Infof("initializeTrackerCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			tr.log.Infof("trackerRegistry.replay is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
 			lastProgressMessage = time.Now()
 		}
 
@@ -707,16 +703,6 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 
 	if blockRetrievalError != nil {
 		err = blockRetrievalError
-	}
-	return
-}
-
-func (tr *trackerRegistry) blockHeaderCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	tr.mu.RLock()
-	defer tr.mu.RUnlock()
-	hdr, ok := tr.txtail.blockHeader(rnd)
-	if !ok {
-		err = fmt.Errorf("no cached header data for round %d", rnd)
 	}
 	return
 }

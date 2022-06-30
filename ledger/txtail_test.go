@@ -63,7 +63,7 @@ func TestTxTailCheckdup(t *testing.T) {
 
 		txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, 1)
 		blk.Payset[0].Txn.Note = []byte{byte(rnd % 256), byte(rnd / 256), byte(1)}
-		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TransactionIndex: 0}
+		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, Intra: 0}
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
@@ -277,8 +277,8 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				blk.Payset[0].Txn.Lease = lease
 				deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 				deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
-					LastValid:        basics.Round(i + 50),
-					TransactionIndex: 0,
+					LastValid: basics.Round(i + 50),
+					Intra:     0,
 				}
 				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
 
@@ -290,6 +290,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						offset:               1,
 						catchpointFirstStage: true,
 					},
+					newBase: basics.Round(i),
 				}
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
@@ -310,7 +311,6 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
 					}
 				}
-				dcc.newBase = dcc.oldBase + basics.Round(dcc.offset)
 				txtail.postCommit(context.Background(), dcc)
 				if uint64(i) > proto.MaxTxnLife*2 {
 					// validate internal storage length.

@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"sort"
 	"testing"
 	"time"
 
@@ -1210,4 +1211,399 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
 	// +1 comes from the deletion before X without checking account state at X
 	require.Equal(t, maxBalLookback+1, oa.onlineAccountsCache.accounts[addrA].Len())
+}
+
+func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
+	updates := ledgercore.MakeAccountDeltas(1)
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	ao.newBlock(blk, delta)
+}
+
+func onlineAccountDataWithWeight(weight uint64) basics.AccountData {
+	var data basics.AccountData
+	data.MicroAlgos.Raw = weight + 1
+	data.Status = basics.Online
+	data.VoteLastValid = 1000
+	data.VoteFirstValid = 0
+	data.RewardsBase = 0
+	return data
+}
+
+// compareTopAccounts makes sure that accounts returned from OnlineTop function are sorted and contains the online accounts on the test
+func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.OnlineAccount, expectedAccountsBalances []basics.BalanceRecord) {
+	isSorted := sort.SliceIsSorted(testingResult, func(i, j int) bool {
+		return testingResult[i].NormalizedOnlineBalance > testingResult[j].NormalizedOnlineBalance
+	})
+	a.Equal(true, isSorted)
+
+	var onlineAccoutsFromTests []*ledgercore.OnlineAccount
+	for i := 0; i < len(expectedAccountsBalances); i++ {
+		if expectedAccountsBalances[i].Status != basics.Online {
+			continue
+		}
+		onlineAccoutsFromTests = append(onlineAccoutsFromTests, &ledgercore.OnlineAccount{
+			Address:                 expectedAccountsBalances[i].Addr,
+			MicroAlgos:              expectedAccountsBalances[i].MicroAlgos,
+			RewardsBase:             0,
+			NormalizedOnlineBalance: expectedAccountsBalances[i].NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion]),
+			VoteFirstValid:          expectedAccountsBalances[i].VoteFirstValid,
+			VoteLastValid:           expectedAccountsBalances[i].VoteLastValid})
+	}
+
+	sort.Slice(onlineAccoutsFromTests[:], func(i, j int) bool {
+		return onlineAccoutsFromTests[i].MicroAlgos.Raw > onlineAccoutsFromTests[j].MicroAlgos.Raw
+	})
+
+	for i := 0; i < len(testingResult); i++ {
+		a.Equal(*onlineAccoutsFromTests[i], *testingResult[i])
+	}
+
+}
+
+func addSinkAndPoolAccounts(genesisAccts []map[basics.Address]basics.AccountData) {
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	genesisAccts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	genesisAccts[0][testSinkAddr] = sinkdata
+}
+
+func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
+	base := genesisAccts[0]
+	newAccts := applyPartialDeltas(base, updates)
+	genesisAccts = append(genesisAccts, newAccts)
+	totals = newBlock(t, ml, totals, protocol.ConsensusCurrentVersion, config.Consensus[protocol.ConsensusCurrentVersion], basics.Round(round), base, updates, totals)
+	commitSync(t, oa, ml, basics.Round(round))
+}
+
+func TestAcctOnlineTop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	i := 0
+	for ; i < numAccts/2; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:  basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:      basics.Offline,
+				RewardsBase: 0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	for ; i < numAccts-1; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	// offline account with high balance
+	allAccts[i] = basics.BalanceRecord{
+		Addr: ledgertesting.RandomAddress(),
+		AccountData: basics.AccountData{
+			MicroAlgos:  basics.MicroAlgos{Raw: uint64(100000)},
+			Status:      basics.Offline,
+			RewardsBase: 0},
+	}
+	genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+
+	top, err := oa.onlineTop(0, 0, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// mark one of the top N accounts as offline - we expect that it will be removed form the top N
+	var updates ledgercore.AccountDeltas
+	updates.Upsert(allAccts[numAccts-3].Addr, ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 1, oa)
+
+	accountToBeUpdated := allAccts[numAccts-3]
+	accountToBeUpdated.Status = basics.Offline
+	allAccts[numAccts-3] = accountToBeUpdated
+
+	top, err = oa.onlineTop(1, 1, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	// update an account to have expired keys
+	updates = ledgercore.AccountDeltas{}
+	updates.Upsert(allAccts[numAccts-2].Addr, ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online},
+		VotingData: ledgercore.VotingData{
+			VoteFirstValid: 0,
+			VoteLastValid:  1,
+		}})
+	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 2, oa)
+
+	// we expect the previous account to be removed from the top N accounts since its keys are expired.
+	// remove it from the expected allAccts slice by marking it as offline
+	accountToBeUpdated = allAccts[numAccts-2]
+	accountToBeUpdated.Status = basics.Offline
+	allAccts[numAccts-2] = accountToBeUpdated
+
+	top, err = oa.onlineTop(2, 2, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	// mark an account with high stake as online - it should be pushed to the top of the list
+	updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[numAccts-1].MicroAlgos},
+		VotingData:      ledgercore.VotingData{VoteLastValid: basics.Round(1000)}})
+	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 3, oa)
+
+	accountToBeUpdated = allAccts[numAccts-1]
+	accountToBeUpdated.Status = basics.Online
+	accountToBeUpdated.MicroAlgos = allAccts[numAccts-1].MicroAlgos
+	accountToBeUpdated.VoteLastValid = basics.Round(1000)
+	allAccts[numAccts-1] = accountToBeUpdated
+
+	top, err = oa.onlineTop(3, 3, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	a.Equal(top[0].Address, allAccts[numAccts-1].Addr)
+
+}
+
+func TestAcctOnlineTopInBatches(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 2048
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	_, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+
+	top, err := oa.onlineTop(0, 0, 2048)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+}
+
+func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	stallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		postCommitEntryLock:           make(chan struct{}),
+		postCommitReleaseLock:         make(chan struct{}),
+		alwaysLock:                    false,
+		shouldLockPostCommit:          false,
+	}
+
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
+
+	top, err := oa.onlineTop(0, 0, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	i := 1
+	for ; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	stallingTracker.shouldLockPostCommit = true
+
+	updateAccountsRoutine := func() {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
+	// onlineAccoutsTracker to be "stuck" between commit and Post commit .
+	// thus, when we call onlineTop - it should wait for the post commit to happen.
+	// in a different go routine we will wait 2 sec and release the commit.
+	go updateAccountsRoutine()
+
+	select {
+	case <-stallingTracker.postCommitEntryLock:
+		go func() {
+			time.Sleep(2 * time.Second)
+			stallingTracker.postCommitReleaseLock <- struct{}{}
+		}()
+		top, err = oa.onlineTop(2, 2, 5)
+		a.NoError(err)
+
+		accountToBeUpdated := allAccts[numAccts-1]
+		accountToBeUpdated.Status = basics.Offline
+		allAccts[numAccts-1] = accountToBeUpdated
+
+		compareTopAccounts(a, top, allAccts)
+	case <-time.After(1 * time.Minute):
+		a.FailNow("timedout while waiting for post commit")
+	}
+}
+
+func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	stallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		postCommitEntryLock:           make(chan struct{}),
+		postCommitReleaseLock:         make(chan struct{}),
+		alwaysLock:                    false,
+		shouldLockPostCommit:          false,
+	}
+
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
+
+	top, err := oa.onlineTop(0, 0, 5)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	i := 1
+	for ; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	stallingTracker.shouldLockPostCommit = true
+
+	updateAccountsRoutine := func() {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
+	// onlineAccoutsTracker to be "stuck" between commit and Post commit .
+	// thus, when we call onlineTop - it should wait for the post commit to happen.
+	// in a different go routine we will wait 2 sec and release the commit.
+	go updateAccountsRoutine()
+
+	select {
+	case <-stallingTracker.postCommitEntryLock:
+		go func() {
+			time.Sleep(2 * time.Second)
+			// tweak the database to move backwards
+			err = oa.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
+				return
+			})
+			stallingTracker.postCommitReleaseLock <- struct{}{}
+		}()
+		top, err = oa.onlineTop(2, 2, 5)
+		a.Error(err)
+		a.Contains(err.Error(), "is behind in-memory round")
+
+	case <-time.After(1 * time.Minute):
+		a.FailNow("timedout while waiting for post commit")
+	}
 }

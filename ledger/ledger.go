@@ -192,10 +192,6 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 
-	l.accts.initialize(l.cfg)
-	l.acctsOnline.initialize(l.cfg)
-	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
-
 	// init tracker db
 	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
@@ -212,6 +208,10 @@ func (l *Ledger) reloadLedger() error {
 		&l.notifier,    // send OnNewBlocks to subscribers
 		&l.metrics,     // provides metrics reporting support
 	}
+
+	l.accts.initialize(l.cfg)
+	l.acctsOnline.initialize(l.cfg)
+	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
@@ -711,10 +711,14 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
 // the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
 // that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
-func (l *Ledger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.trackers.blockHeaderCached(rnd)
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		err = fmt.Errorf("no cached header data for round %d", rnd)
+	}
+	return hdr, err
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.

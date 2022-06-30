@@ -796,11 +796,11 @@ func (z *OnlineRoundParamsData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).RewardsLevel == 0 {
+	if (*z).CurrentProtocol.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).CurrentProtocol.MsgIsZero() {
+	if (*z).RewardsLevel == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -808,19 +808,19 @@ func (z *OnlineRoundParamsData) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "a"
-			o = append(o, 0xa1, 0x61)
+			// string "online"
+			o = append(o, 0xa6, 0x6f, 0x6e, 0x6c, 0x69, 0x6e, 0x65)
 			o = msgp.AppendUint64(o, (*z).OnlineSupply)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "b"
-			o = append(o, 0xa1, 0x62)
-			o = msgp.AppendUint64(o, (*z).RewardsLevel)
+			// string "proto"
+			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
+			o = (*z).CurrentProtocol.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "c"
-			o = append(o, 0xa1, 0x63)
-			o = (*z).CurrentProtocol.MarshalMsg(o)
+			// string "rwdlvl"
+			o = append(o, 0xa6, 0x72, 0x77, 0x64, 0x6c, 0x76, 0x6c)
+			o = msgp.AppendUint64(o, (*z).RewardsLevel)
 		}
 	}
 	return
@@ -891,19 +891,19 @@ func (z *OnlineRoundParamsData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "a":
+			case "online":
 				(*z).OnlineSupply, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "OnlineSupply")
 					return
 				}
-			case "b":
+			case "rwdlvl":
 				(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsLevel")
 					return
 				}
-			case "c":
+			case "proto":
 				bts, err = (*z).CurrentProtocol.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "CurrentProtocol")
@@ -929,7 +929,7 @@ func (_ *OnlineRoundParamsData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OnlineRoundParamsData) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).CurrentProtocol.Msgsize()
+	s = 1 + 7 + msgp.Uint64Size + 7 + msgp.Uint64Size + 6 + (*z).CurrentProtocol.Msgsize()
 	return
 }
 

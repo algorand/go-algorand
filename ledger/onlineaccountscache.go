@@ -54,10 +54,6 @@ func (o *onlineAccountsCache) full() bool {
 	return len(o.accounts) >= o.maxCacheSize
 }
 
-func (o *onlineAccountsCache) maxSize() int {
-	return o.maxCacheSize
-}
-
 // read the cachedOnlineAccount object that the cache has for the given address.
 // thread locking semantics : read lock
 func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (cachedOnlineAccount, bool) {

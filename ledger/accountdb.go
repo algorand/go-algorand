@@ -139,13 +139,13 @@ var createOnlineAccountsTable = []string{
 var createTxTailTable = []string{
 	`CREATE TABLE IF NOT EXISTS txtail (
 		round INTEGER PRIMARY KEY NOT NULL,
-		data blob)`,
+		data BLOB NOT NULL)`,
 }
 
 var createOnlineRoundParamsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
 		round INTEGER NOT NULL PRIMARY KEY,
-		data blob)`, // contains a msgp encoded OnlineRoundParamsData
+		data BLOB NOT NULL)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 // Table containing some metadata for a future catchpoint. The `info` column
@@ -153,7 +153,7 @@ var createOnlineRoundParamsTable = []string{
 const createCatchpointFirstStageInfoTable = `
 	CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
 	round integer primary key NOT NULL,
-	info blob NOT NULL)`
+	info BLOB NOT NULL)`
 
 const createUnfinishedCatchpointsTable = `
 	CREATE TABLE IF NOT EXISTS unfinishedcatchpoints (
@@ -1513,12 +1513,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 
 // IsEmpty returns true if all of the fields other than UpdateRound are zero.
 func (bv baseVotingData) IsEmpty() bool {
-	return bv.VoteID.MsgIsZero() &&
-		bv.SelectionID.MsgIsZero() &&
-		bv.StateProofID.MsgIsZero() &&
-		bv.VoteFirstValid == 0 &&
-		bv.VoteLastValid == 0 &&
-		bv.VoteKeyDilution == 0
+	return bv == baseVotingData{}
 }
 
 // SetCoreAccountData initializes baseVotingData from ledgercore.AccountData
@@ -2498,27 +2493,27 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = q.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.asset, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = q.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	qs.lookupStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupResourcesStmt, err = q.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? WHERE id='acctbase'")
+	qs.lookupResourcesStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupAllResourcesStmt, err = q.Prepare("SELECT accountbase.rowid, rnd, resources.aidx, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
+	qs.lookupAllResourcesStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, resources.aidx, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupCreatorStmt, err = q.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
+	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2530,12 +2525,12 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 	var err error
 	qs := &onlineAccountsDbQueries{}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, acctrounds.rnd, onlineaccounts.data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT onlineaccounts.rowid, updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? WHERE id='acctbase' ORDER BY updround ASC")
+	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, acctrounds.rnd, onlineaccounts.data FROM acctrounds LEFT JOIN onlineaccounts ON address=? WHERE id='acctbase' ORDER BY updround ASC")
 	if err != nil {
 		return nil, err
 	}
