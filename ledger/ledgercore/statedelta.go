@@ -182,7 +182,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
 		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
-		Txleases: make(map[Txlease]basics.Round, hint),
+		Txleases: make(map[Txlease]basics.Round),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
