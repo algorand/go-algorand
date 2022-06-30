@@ -176,53 +176,15 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 	return string(key)
 }
 
-// GetAppAndNameFromKey extracts an appid and box name from a string that was created by MakeBoxKey()
-func GetAppAndNameFromKey(key string) (basics.AppIndex, string, error) {
-	// no assertion that prefix is "bx:"
+// SplitBoxKey extracts an appid and box name from a string that was created by MakeBoxKey()
+func SplitBoxKey(key string) (basics.AppIndex, string, error) {
 	if len(key) < boxNameIndex {
-		return 0, "", fmt.Errorf("GetAppNameFromKey() cannot extract AppIndex as key too short (length=%d)", len(key))
+		return 0, "", fmt.Errorf("GetAppNameFromKey() cannot extract AppIndex as key (%s) too short (length=%d)", key, len(key))
 	}
-	// WARNING: even junk such as "this is definitely NOT a box key" will return without error
+	if key[:boxPrefixLength] != boxPrefix {
+		return 0, "", fmt.Errorf("GetAppNameFromKey() illegal app box prefix in key (%s). Expected prefix '%s'", key, boxPrefix)
+	}
 	keyBytes := []byte(key)
-	app := (basics.AppIndex)(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
+	app := basics.AppIndex(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
 	return app, key[boxNameIndex:], nil
 }
-
-// TODO: convert the following to a unit test
-// func main() {
-// 	var app AppIndex = 42
-// 	fmt.Printf("Hello app %d\n", app)
-
-// 	name := "yo yo mama"
-
-// 	key := MakeBoxKey(app, name)
-// 	fmt.Printf("app->%d\nname->%s\nkey=>%s", app, name, key)
-
-// 	fmt.Println("\n\n\nNOW FOR GetAppNameFromkey()\n\n")
-
-// 	testCases := []struct {
-// 		app  AppIndex
-// 		name string
-// 	}{
-// 		{42, "yo yo mother"}, {0, "stranger"}, {131231, "348-8uj"}, {0, ""},
-// 	}
-// 	fmt.Printf("TEST CASES: %+v\n\n", testCases)
-// 	for i, testCase := range testCases {
-// 		fmt.Printf("%d. %d + %s -->\n", i+1, testCase.app, testCase.name)
-// 		key = MakeBoxKey(testCase.app, testCase.name)
-// 		fmt.Printf("-->[%s] of length <%d>\n", key, len(key))
-// 		app2, name2, _ := GetAppNameFromKey(key)
-// 		fmt.Printf("BACK TO app=[%d] and box=<%s>\n", app2, name2)
-// 	}
-
-// 	errorCases := []string{"too short", "this is uttter nonsense"}
-// OOPS - the second case doesn't actually error
-
-// 	fmt.Printf("\n\n\nERRORING CASES: %#v\n\b\n", errorCases)
-// 	for i, errorCase := range errorCases {
-// 		fmt.Printf("%d. %s -->\n", i+1, errorCase)
-// 		app, name, err := GetAppNameFromKey(errorCase)
-// 		fmt.Printf("app=%d\nbox=%s\nerr=%v\n", app, name, err)
-// 	}
-
-// }
