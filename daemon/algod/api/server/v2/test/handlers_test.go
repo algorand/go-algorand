@@ -946,19 +946,10 @@ func TestGetProofDefault(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	// TODO: Use the method from libgoalFixture
-	// Build merklearray.Proof from ProofResponse
 	var proof merklearray.Proof
 	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha512_256}
 	proof.TreeDepth = uint8(resp.Treedepth)
-	a.NotEqual(proof.TreeDepth, 0)
-	proofconcat := resp.Proof
-	for len(proofconcat) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcat)
-		proof.Path = append(proof.Path, d[:])
-		proofconcat = proofconcat[len(d):]
-	}
+	proof.Path = merklearray.ProofBytesToPath(resp.Proof)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])
