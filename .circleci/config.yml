@@ -73,6 +73,7 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
+                - cicd/add-m1-to-intergration-tests
 
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -84,6 +85,8 @@ workflows:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
+                - cicd/add-m1-to-intergration-tests
+          context: slack-secrets
 
       - test:
           name: << matrix.platform >>_test
@@ -164,6 +167,7 @@ workflows:
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
