@@ -74,12 +74,12 @@ workflows:
                 - /rel\/.*/
                 - /hotfix\/.*/
 
-      - build:
+      - build_nightly:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
               platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-          filters: &filters-mac-arm64
+          filters: &filters-nightly
             branches:
               only:
                 - /rel\/.*/
@@ -156,7 +156,7 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
-      - tests_verification_job:
+      - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
@@ -499,6 +499,21 @@ jobs:
       - prepare_go
       - generic_build
 
+  build_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
+      - generic_build
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
+
   test:
     parameters:
       platform:
@@ -530,9 +545,8 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+      - slack/notify:
+          <<: *slack-fail-event
 
   integration:
     parameters:
@@ -674,6 +688,23 @@ jobs:
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  tests_verification_job_nightly:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+        type: string
+      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+      - slack/notify:
+          <<: *slack-fail-event
 
   upload_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
