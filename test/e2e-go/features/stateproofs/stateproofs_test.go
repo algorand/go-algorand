@@ -344,7 +344,7 @@ func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, r
 		}
 	}
 
-	return sp.StateProof{}, stateproofmsg.Message{}, fmt.Errorf("No state proof with latest round %d found.\n", stateProofLatestRound)
+	return sp.StateProof{}, stateproofmsg.Message{}, fmt.Errorf("no state proof with latest round %d found", stateProofLatestRound)
 }
 
 func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {

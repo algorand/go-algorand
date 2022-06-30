@@ -503,6 +503,7 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 	return params.MinTxnFee, minBalance, nil
 }
 
+// ProofRespToProof returns a proof for usage in merkle array verification from the inputted API proof query response.
 func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (proof merklearray.Proof, err error) {
 	if proofResp.Treedepth == 0 {
 		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
@@ -524,6 +525,8 @@ func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (
 	return
 }
 
+// LightBlockProofRespToProof return a proof for usage in merkle array verification for the inputted light
+// block header proof query response.
 func (f *LibGoalFixture) LightBlockProofRespToProof(proofResp generatedV2.LightBlockHeaderProofResponse) (proof merklearray.Proof, err error) {
 	if proofResp.Treedepth == 0 {
 		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
