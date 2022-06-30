@@ -269,7 +269,6 @@ func TestBlkMerkleProof(t *testing.T) {
 
 		_, err := libgoalClient.WaitForRound(rnd)
 		r.NoError(err)
-		t.Logf("Finished waiting for round %d.\n", rnd)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
 		r.NoError(err)
@@ -294,10 +293,8 @@ func TestBlkMerkleProof(t *testing.T) {
 		lightBlockHeader := blk.ToLightBlockHeader()
 
 		elems := make(map[uint64]crypto.Hashable)
-		leafIndex := rnd - stateProofMessage.FirstAttestedRound
-		elems[leafIndex] = &lightBlockHeader
+		elems[proofResp.Index] = &lightBlockHeader
 		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, singleLeafProof.ToProof())
-		t.Logf("Successfully verified block at round %d.\n", rnd)
 		r.NoError(err)
 	}
 }
