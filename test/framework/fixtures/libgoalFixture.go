@@ -503,30 +503,40 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 	return params.MinTxnFee, minBalance, nil
 }
 
-// ProofRespToProof returns a proof for usage in merkle array verification from the inputted API proof query response.
-func (f *LibGoalFixture) ProofRespToProof(proofResp generatedV2.ProofResponse) (merklearray.Proof, error) {
-	if proofResp.Treedepth == 0 {
-		return merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
+// TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
+func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.ProofResponse, merklearray.Proof, error) {
+	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
+	if err != nil {
+		return generatedV2.ProofResponse{}, merklearray.Proof{}, err
 	}
 
-	hashType, err := crypto.UnmarshalHashType(proofResp.Hashtype)
+	if proofResp.Treedepth == 0 {
+		return generatedV2.ProofResponse{}, merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
+	}
+
+	respHashType, err := crypto.UnmarshalHashType(proofResp.Hashtype)
 	if err != nil {
-		return merklearray.Proof{}, err
+		return generatedV2.ProofResponse{}, merklearray.Proof{}, err
 	}
 
 	var proof merklearray.Proof
 	proof.Path = merklearray.ProofBytesToPath(proofResp.Proof)
-	proof.HashFactory = crypto.HashFactory{HashType: hashType}
+	proof.HashFactory = crypto.HashFactory{HashType: respHashType}
 	proof.TreeDepth = uint8(proofResp.Treedepth)
 
-	return proof, nil
+	return proofResp, proof, nil
 }
 
-// LightBlockProofRespToProof return a proof for usage in merkle array verification for the inputted light
-// block header proof query response.
-func (f *LibGoalFixture) LightBlockProofRespToProof(proofResp generatedV2.LightBlockHeaderProofResponse) (merklearray.SingleLeafProof, error) {
+// LightBlockHeaderProof return a proof for usage in merkle array verification for the provided block's light block.
+func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (generatedV2.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
+	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
+
+	if err != nil {
+		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
+	}
+
 	if proofResp.Treedepth == 0 {
-		return merklearray.SingleLeafProof{}, fmt.Errorf("proof Treedepth is 0")
+		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, fmt.Errorf("proof Treedepth is 0")
 	}
 
 	var proof merklearray.SingleLeafProof
@@ -534,5 +544,5 @@ func (f *LibGoalFixture) LightBlockProofRespToProof(proofResp generatedV2.LightB
 	proof.TreeDepth = uint8(proofResp.Treedepth)
 	proof.Path = merklearray.ProofBytesToPath(proofResp.Proof)
 
-	return proof, nil
+	return proofResp, proof, nil
 }

@@ -98,16 +98,10 @@ func TestTxnMerkleProof(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	proofresp, err := client.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
+	proofresp, proof, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
-	proofrespSHA256, err := client.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
-	a.NoError(err)
-
-	proof, err := fixture.ProofRespToProof(proofresp)
-	a.NoError(err)
-
-	proofSHA256, err := fixture.ProofRespToProof(proofrespSHA256)
+	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}

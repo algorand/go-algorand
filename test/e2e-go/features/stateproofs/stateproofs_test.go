@@ -259,10 +259,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
-		proofResp, err := libgoalClient.LightHeaderBlockProof(rnd)
-		r.NoError(err)
-
-		singleLeafProof, err := fixture.LightBlockProofRespToProof(proofResp)
+		proofResp, singleLeafProof, err := fixture.LightBlockHeaderProof(rnd)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
