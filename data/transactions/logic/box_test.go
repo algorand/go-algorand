@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBoxNewDel(t *testing.T) {
@@ -299,4 +300,48 @@ func TestIOBudgetGrow(t *testing.T) {
                       byte "other"; int 1; int 7; box_extract; pop;
                       int 350; byte "another"; box_create;
                       int 1`, ep)
+}
+
+func TestMakeBoxKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type testCase struct {
+		description string
+		name string
+		app  basics.AppIndex
+		key string
+		err string
+	}
+
+	pp := func(tc testCase) string {
+		return fmt.Sprintf("<<<%s>>> (name, app) = (%#v, %d) --should--> key = %#v (err = [%s])", tc.description, tc.name, tc.app, tc.key, tc.err)
+	}
+
+  	var testCases = []testCase{
+		// COPACETIC:
+		{"zero appid",  	"stranger", 0,  		"bx:\x00\x00\x00\x00\x00\x00\x00\x00stranger", 	""},
+		{"typical",  		"348-8uj",  131231, 	"bx:\x00\x00\x00\x00\x00\x02\x00\x9f348-8uj", 	""},
+		{"empty box name", 	"", 		42,         "bx:\x00\x00\x00\x00\x00\x00\x00*", 			""},
+		{"random byteslice", "{\xbb\x04\a\xd1\xe2\xc6I\x81{", 13475904583033571713,  "bx:\xbb\x04\a\xd1\xe2\xc6I\x81{\xbb\x04\a\xd1\xe2\xc6I\x81{", ""},
+
+		// ERRORS:
+		{ "too short"	, 	"", 		0, 			"stranger",					"GetAppNameFromKey() cannot extract AppIndex as key (stranger) too short (length=8)" }, 
+		{ "wrong prefix", 	"", 		0, 			"strangersINTHEdark",		"GetAppNameFromKey() illegal app box prefix in key (strangersINTHEdark). Expected prefix 'bx:'" }, 
+	}
+
+	for _, tc := range testCases {
+		app, name, err := logic.SplitBoxKey(tc.key)
+
+		if tc.err == "" {
+			key := logic.MakeBoxKey(tc.app, tc.name)
+			require.Equal(t, tc.app, app, pp(tc))
+			require.Equal(t, tc.name, name, pp(tc))
+			require.Equal(t, tc.key, key, pp(tc))
+		} else {
+			require.EqualError(t, err, tc.err, pp(tc))
+		}
+	}
+
+
 }
