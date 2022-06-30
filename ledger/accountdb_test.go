@@ -3793,7 +3793,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		err = protocol.Decode(encodedAcctData, &ba)
 		require.NoError(t, err)
 		if ba.Status != basics.Online {
-			require.Equal(t, merklesignature.Verifier{}, ba.StateProofID)
+			require.True(t, ba.StateProofID.IsEmpty())
 		}
 	}
 }

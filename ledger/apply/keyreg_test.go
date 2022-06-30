@@ -230,14 +230,14 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, acct.StateProofID.IsEmpty())
 
-	// go offline in current consensus version: StateProofID should not be empty
+	// go offline in current consensus version: StateProofID should be empty
 	emptyKeyreg := transactions.KeyregTxnFields{}
 	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.False(t, acct.StateProofID.IsEmpty())
+	require.True(t, acct.StateProofID.IsEmpty())
 
 	// run same test using vFuture
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
