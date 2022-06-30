@@ -326,8 +326,8 @@ func TestMakeBoxKey(t *testing.T) {
 		{"random byteslice", "{\xbb\x04\a\xd1\xe2\xc6I\x81{", 13475904583033571713, "bx:\xbb\x04\a\xd1\xe2\xc6I\x81{\xbb\x04\a\xd1\xe2\xc6I\x81{", ""},
 
 		// ERRORS:
-		{"too short", "", 0, "stranger", "GetAppNameFromKey() cannot extract AppIndex as key (stranger) too short (length=8)"},
-		{"wrong prefix", "", 0, "strangersINTHEdark", "GetAppNameFromKey() illegal app box prefix in key (strangersINTHEdark). Expected prefix 'bx:'"},
+		{"too short", "", 0, "stranger", "SplitBoxKey() cannot extract AppIndex as key (stranger) too short (length=8)"},
+		{"wrong prefix", "", 0, "strangersINTHEdark", "SplitBoxKey() illegal app box prefix in key (strangersINTHEdark). Expected prefix 'bx:'"},
 	}
 
 	for _, tc := range testCases {
