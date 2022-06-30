@@ -179,10 +179,10 @@ func MakeBoxKey(appIdx basics.AppIndex, name string) string {
 // SplitBoxKey extracts an appid and box name from a string that was created by MakeBoxKey()
 func SplitBoxKey(key string) (basics.AppIndex, string, error) {
 	if len(key) < boxNameIndex {
-		return 0, "", fmt.Errorf("GetAppNameFromKey() cannot extract AppIndex as key (%s) too short (length=%d)", key, len(key))
+		return 0, "", fmt.Errorf("SplitBoxKey() cannot extract AppIndex as key (%s) too short (length=%d)", key, len(key))
 	}
 	if key[:boxPrefixLength] != boxPrefix {
-		return 0, "", fmt.Errorf("GetAppNameFromKey() illegal app box prefix in key (%s). Expected prefix '%s'", key, boxPrefix)
+		return 0, "", fmt.Errorf("SplitBoxKey() illegal app box prefix in key (%s). Expected prefix '%s'", key, boxPrefix)
 	}
 	keyBytes := []byte(key)
 	app := basics.AppIndex(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
