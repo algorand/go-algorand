@@ -2580,15 +2580,15 @@ done:
 func TestMergeProtos(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	oneIntArgOneIntRet := OpSpec{Proto: proto("i:i")}
-	oneBytesArgOneBytesRet := OpSpec{Proto: proto("b:b")}
-	twoAnyArgsOneAnyRet := OpSpec{Proto: proto("aa:a")}
-	oneAnyArgsTwoAnyRets := OpSpec{Proto: proto("a:aa")}
-	p, _, _ := mergeProtos(map[int]OpSpec{0: oneIntArgOneIntRet, 1: oneBytesArgOneBytesRet})
+	iVi := OpSpec{Proto: proto("i:i")}
+	bVb := OpSpec{Proto: proto("b:b")}
+	aaVa := OpSpec{Proto: proto("aa:a")}
+	aVaa := OpSpec{Proto: proto("a:aa")}
+	p, _, _ := mergeProtos(map[int]OpSpec{0: i_i, 1: b_b})
 	require.Equal(t, proto("a:a"), p)
-	_, _, ok := mergeProtos(map[int]OpSpec{0: twoAnyArgsOneAnyRet, 1: oneIntArgOneIntRet})
+	_, _, ok := mergeProtos(map[int]OpSpec{0: aa_a, 1: i_i})
 	require.Equal(t, false, ok)
-	_, _, ok = mergeProtos(map[int]OpSpec{0: oneAnyArgsTwoAnyRets, 1: oneIntArgOneIntRet})
+	_, _, ok = mergeProtos(map[int]OpSpec{0: a_aa, 1: i_i})
 	require.Equal(t, false, ok)
 	medley := OpSpec{Proto: proto("aibibabai:aibibabai")}
 	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}

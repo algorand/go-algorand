@@ -1179,7 +1179,7 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 }
 
 // getSpec finds the OpSpec we need during assembly based on it's name, our current version, and the immediates passed in
-// Note getSpec handles both normal OpSpecs and those supplied by pseduoOps
+// Note getSpec handles both normal OpSpecs and those supplied by pseudoOps
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 	pseudoSpecs, ok := pseudoOps[name]
 	if ok {
@@ -1243,6 +1243,8 @@ func init() {
 					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
 				} else if i == 1 {
 					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
+				} else if i == 0 {
+					msg = fmt.Sprintf("%s can be called using %s without immediates", spec.Name, name)
 				} else {
 					continue
 				}

@@ -771,7 +771,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F of the current transaction\u003cbr /\u003etxna can be called using txn with 2 immediates.",
+      "Doc": "Ith value of the array field F of the current transaction\ntxna can be called using txn with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -792,7 +792,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group\u003cbr /\u003egtxna can be called using gtxn with 3 immediates.",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group\ngtxna can be called using gtxn with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"

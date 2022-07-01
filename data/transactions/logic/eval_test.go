@@ -3883,13 +3883,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	ep := defaultEvalParams(&txn)
 
 	for v := uint64(0); v < appsEnabledVersion; v++ {
-		var ops *OpStream
-		if v == 0 {
-			ops = testProg(t, source, 1)
-			ops.Program[0] = 0x0
-		} else {
-			ops = testProg(t, source, v)
-		}
+		ops := testProg(t, source, v)
 		e := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
 		testAppBytes(t, ops.Program, ep, e, e)
 	}
@@ -4098,13 +4092,7 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			var ops *OpStream
-			if v == 0 {
-				ops = testProg(t, "int 1", 1)
-				ops.Program[0] = 0x0
-			} else {
-				ops = testProg(t, "int 1", v)
-			}
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
 			ep := defaultEvalParams(&txn)
