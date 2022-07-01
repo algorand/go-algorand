@@ -37,6 +37,10 @@ func TestMetricGauge(t *testing.T) {
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),
 	}
+
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener(":0")
 
@@ -45,10 +49,13 @@ func TestMetricGauge(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
 	gauge := MakeGauge(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	gauge.Deregister(nil)
+	gauge.Register(registry)
 
 	for i := 0; i < 20; i++ {
 		gauge.Set(float64(i*10), map[string]string{"pid": "123", "data_host": fmt.Sprintf("host%d", i%5)})
@@ -60,7 +67,7 @@ func TestMetricGauge(t *testing.T) {
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()
-	gauge.Deregister(nil)
+	gauge.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
