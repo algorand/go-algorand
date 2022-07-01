@@ -637,7 +637,7 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 		}
 		return err
 	}
-	updates.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback, config.Consensus[blk.CurrentProtocol].MaxTxnLife)
+	updates.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback)
 	vb := ledgercore.MakeValidatedBlock(blk, updates)
 
 	return l.AddValidatedBlock(vb, cert)

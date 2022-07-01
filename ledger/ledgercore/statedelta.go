@@ -394,7 +394,7 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 // If provided maxBalLookback or maxTxnLife are zero, dependent optimizations will not occur.
-func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback, maxTxnLife uint64) {
+func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback uint64) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
 	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
 		accts := make([]NewBalanceRecord, len(sd.Accts.accts))
@@ -411,16 +411,6 @@ func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback, maxTxnLife uint64)
 			acctsCache[k] = v
 		}
 		sd.Accts.acctsCache = acctsCache
-	}
-
-	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
-	if sd.initialTransactionsCount > len(sd.Txleases) &&
-		uint64(sd.initialTransactionsCount-len(sd.Txleases))*txleasesEntrySize*maxTxnLife > stateDeltaTargetOptimizationThreshold {
-		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
-		for k, v := range sd.Txleases {
-			txLeases[k] = v
-		}
-		sd.Txleases = txLeases
 	}
 }
 
