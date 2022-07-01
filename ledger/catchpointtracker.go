@@ -382,8 +382,6 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 
 	if config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints {
 		atomic.StoreInt32(&ct.reenableGeneratingCatchpointFiles, 1)
-	} else {
-		atomic.StoreInt32(&ct.reenableGeneratingCatchpointFiles, 0)
 	}
 }
 

@@ -3777,9 +3777,6 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	}
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
-	err = removeOfflineStateProofID(context.Background(), tx, nil)
-	require.NoError(t, err)
-
 	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
 	require.NoError(t, err)
 	defer rows.Close()

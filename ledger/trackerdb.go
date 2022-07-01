@@ -461,17 +461,6 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 
 	var lastProgressInfoMsg time.Time
 	const progressLoggingInterval = 5 * time.Second
-	processLog := func(processed, total uint64) {
-		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
-			return
-		}
-		lastProgressInfoMsg = time.Now()
-		tu.log.Infof("upgradeDatabaseSchema6 checked stateproof for offline accounts %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
-	}
-	err = removeOfflineStateProofID(ctx, tx, processLog)
-	if err != nil {
-		return err
-	}
 
 	migrationProcessLog := func(processed, total uint64) {
 		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
