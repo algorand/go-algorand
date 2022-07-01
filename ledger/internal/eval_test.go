@@ -575,6 +575,10 @@ func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return ledger.genesisProtoVersion
 }
 
+func (ledger *evalTestLedger) MaxAcctLookback() uint64 {
+	return config.GetDefaultLocal().MaxAcctLookback
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)

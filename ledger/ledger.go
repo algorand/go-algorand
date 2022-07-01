@@ -700,6 +700,11 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
+// MaxAcctLookback is used by LedgerForEvaluator to learn the configured max lookback.
+func (l *Ledger) MaxAcctLookback() uint64 {
+	return l.cfg.MaxAcctLookback
+}
+
 // BlockHdrCached returns the block header if available.
 // Expected availability range is [Latest - MaxTxnLife, Latest]
 // allowing (MaxTxnLife + 1) = 1001 rounds back loopback.

@@ -232,6 +232,10 @@ func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.Acco
 	return ml.accts
 }
 
+func (ml *mockLedgerForTracker) MaxAcctLookback() uint64 {
+	return config.GetDefaultLocal().MaxAcctLookback
+}
+
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
 // function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
 // not work if we have large number of balances. On these unit testing, however, it's not the case, and it's

@@ -391,6 +391,39 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 	ad.assetResourcesCache[key] = last
 }
 
+// OptimizeAllocatedMemory by reallocating maps to needed capacity
+// For each data structure, reallocate if it would save us at least 50MB aggregate
+// If provided maxBalLookback or maxTxnLife are zero, dependent optimizations will not occur.
+func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback, maxTxnLife uint64) {
+	// accts takes up 232 bytes per entry, and is saved for 320 rounds
+	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
+		accts := make([]NewBalanceRecord, len(sd.Accts.acctsCache))
+		copy(accts, sd.Accts.accts)
+		sd.Accts.accts = accts
+	}
+
+	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
+	// realloc if original allocation capacity greater than length of data, and space difference is significant
+	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
+		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
+		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
+		for k, v := range sd.Accts.acctsCache {
+			acctsCache[k] = v
+		}
+		sd.Accts.acctsCache = acctsCache
+	}
+
+	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
+	if sd.initialTransactionsCount > len(sd.Txleases) &&
+		uint64(sd.initialTransactionsCount-len(sd.Txleases))*txleasesEntrySize*maxTxnLife > stateDeltaTargetOptimizationThreshold {
+		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
+		for k, v := range sd.Txleases {
+			txLeases[k] = v
+		}
+		sd.Txleases = txLeases
+	}
+}
+
 // GetBasicsAccountData returns basics account data for some specific address
 // Currently is only used in tests
 func (ad AccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.AccountData, bool) {
