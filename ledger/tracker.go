@@ -195,10 +195,12 @@ type trackerRegistry struct {
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
 // next.
 type deferredCommitRange struct {
-	offset      uint64
-	oldBase     basics.Round
-	lookback    basics.Round
-	lowestRound basics.Round // lowest history required by voters
+	offset   uint64
+	oldBase  basics.Round
+	lookback basics.Round
+	// lowestRound defines how many rounds of history the voters trackers want to preserve.
+	// This value overruns the MaxBalLookback if greater. See lowestRound() for details.
+	lowestRound basics.Round
 
 	// catchpointLookback determines the offset from round number to take a snapshot for.
 	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
