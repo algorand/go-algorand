@@ -439,10 +439,9 @@ var OpSpecs = []OpSpec{
 	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(modeSig)},
 	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
 	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
+	// Both txn and gtxn are also implemented as pseudoOps to choose
+	// between scalar and array version based on number of immediates.
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
-	// It is ok to have the same opcode for different TEAL versions.
-	// This 'txn' asm command supports additional argument in version 2 and
-	// generates 'txna' opcode in that particular case
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
 	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},

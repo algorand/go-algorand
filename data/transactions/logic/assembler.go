@@ -1239,13 +1239,14 @@ func init() {
 					continue
 				}
 				msg := ""
-				if i > 1 {
+				switch {
+				case i > 1:
 					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
-				} else if i == 1 {
+				case i == 1:
 					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
-				} else if i == 0 {
+				case i == 0:
 					msg = fmt.Sprintf("%s can be called using %s without immediates", spec.Name, name)
-				} else {
+				default:
 					continue
 				}
 				desc, ok := opDocByName[spec.Name]
