@@ -24,7 +24,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -65,6 +64,7 @@ type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) (*string, error)
+	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1114,26 +1114,89 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// GetApplicationBoxByName returns the value of an application's box
-// (GET /v2/applications/{application-id}/boxes/{box-name})
-func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, boxName string) error {
+// GetApplicationBoxes returns the box names of an application
+// (GET /v2/applications/{application-id}/boxes)
+func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxesParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
+	lastRound := ledger.Latest()
+	keyPrefix := logic.MakeBoxKey(appIdx, "")
 
+	// cast param.Max to zero, if param.Max points to some value, we keep the value
+	castedMax := nilToZero(params.Max)
+	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
+
+	// compute `maxReturnNum` from `castedMax` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
+	// `maxReturnNum == 0` for returning everything
+	// - `castedMax == 0` and `maxBoxThreshold == 0`,
+	//       return everything
+	// - `castedMax == 0` and `maxBoxThreshold > 0`,
+	//       returns up to `maxBoxThreshold`, check if exceeds
+	// - `castedMax > 0` and `maxBoxThreshold == 0`,
+	//       return up to `castedMax`
+	// - `castedMax > 0` and `maxBoxThreshold > 0`,
+	//       return up to min(castedMax, maxBoxThreshold),
+	//       if return size is `maxBoxThreshold`, check if exceeds
+
+	var boxKeys []string
+	var err error
+
+	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || maxBoxThreshold == 0)
+	returnsAll := castedMax == 0 && maxBoxThreshold == 0
+
+	if dominatedByQryParams || returnsAll {
+		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, castedMax)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	} else {
+		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxBoxThreshold+1)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		if uint64(len(boxKeys)) > maxBoxThreshold {
+			v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
+			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data:    nil,
+			})
+		}
+	}
+
+	prefixLen := len(keyPrefix)
+	responseBoxes := make([][]byte, len(boxKeys))
+	for i, boxKey := range boxKeys {
+		responseBoxes[i] = []byte(boxKey[prefixLen:])
+	}
+	response := generated.BoxesResponse(responseBoxes)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetApplicationBoxByName returns the value of an application's box
+// (GET /v2/applications/{application-id}/box)
+func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxByNameParams) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
 
-	boxName, err := url.PathUnescape(boxName)
+	encodedBoxName := params.Name
+	boxNameBytes, err := logic.NewAppCallBytes(encodedBoxName)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, boxName))
+	boxName, err := boxNameBytes.Raw()
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, string(boxName)))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-
 	if value == nil {
 		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
 	}
+
 	response := generated.BoxResponse{
 		Name:  []byte(boxName),
 		Value: []byte(*value),

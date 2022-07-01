@@ -86,6 +86,13 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
+func nilToZero(numPtr *uint64) uint64 {
+	if numPtr == nil {
+		return 0
+	}
+	return *numPtr
+}
+
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	offset := -1
