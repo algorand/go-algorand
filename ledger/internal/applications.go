@@ -202,7 +202,7 @@ func (cs *roundCowState) kvDel(key string) error {
 	return nil
 }
 
-func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr basics.Address) error {
+func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
 	// Use same limit on key length as for global/local storage
 	if len(key) > cs.proto.MaxAppKeyLen {
 		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
@@ -213,6 +213,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64,
 		return fmt.Errorf("box names may not be zero length")
 	}
 
+	size := uint64(len(value))
 	if size > cs.proto.MaxBoxSize {
 		return fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
 	}
@@ -237,7 +238,6 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64,
 		return err
 	}
 
-	value := string(make([]byte, size))
 	return cs.kvPut(fullKey, value)
 }
 

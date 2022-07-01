@@ -50,13 +50,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	return nil
 }
 
-func opBoxCreate(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // name
-	prev := last - 1          // size
-
-	name := string(cx.stack[last].Bytes)
-	size := cx.stack[prev].Uint
-
+func createBox(cx *EvalContext, name string, value string, appAddr basics.Address) error {
 	// Enforce length rules. Currently these are the same as enforced by
 	// ledger. If these were ever to change in proto, we would need to isolate
 	// changes to different program versions. (so a v7 app could not see a
@@ -67,23 +61,29 @@ func opBoxCreate(cx *EvalContext) error {
 	if len(name) > cx.Proto.MaxAppKeyLen {
 		return fmt.Errorf("name too long: length was %d, maximum is %d", len(name), cx.Proto.MaxAppKeyLen)
 	}
+	size := uint64(len(value))
 	if size > cx.Proto.MaxBoxSize {
 		return fmt.Errorf("box size too large: %d, maximum is %d", size, cx.Proto.MaxBoxSize)
 	}
 
-	err := cx.availableBox(name, boxCreate, size)
+	err := cx.availableBox(name, boxCreate, size) // annotate size for write budget check
 	if err != nil {
 		return err
 	}
 
+	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
+}
+
+func opBoxCreate(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // name
+	prev := last - 1          // size
+
+	name := string(cx.stack[last].Bytes)
+	size := cx.stack[prev].Uint
 	appAddr := cx.getApplicationAddress(cx.appID)
-	err = cx.Ledger.NewBox(cx.appID, name, size, appAddr)
-	if err != nil {
-		return err
-	}
 
 	cx.stack = cx.stack[:prev]
-	return nil
+	return createBox(cx, name, string(make([]byte, size)), appAddr)
 }
 
 func opBoxExtract(cx *EvalContext) error {
@@ -154,6 +154,76 @@ func opBoxDel(cx *EvalContext) error {
 	cx.stack = cx.stack[:last]
 	appAddr := cx.getApplicationAddress(cx.appID)
 	return cx.Ledger.DelBox(cx.appID, name, appAddr)
+}
+
+func opBoxLen(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // name
+	name := string(cx.stack[last].Bytes)
+
+	err := cx.availableBox(name, boxRead, 0)
+	if err != nil {
+		return err
+	}
+	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
+	if err != nil {
+		return err
+	}
+
+	cx.stack[last] = stackValue{Uint: uint64(len(box))}
+	cx.stack = append(cx.stack, stackValue{Uint: boolToUint(ok)})
+	return nil
+}
+
+func opBoxGet(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // name
+	name := string(cx.stack[last].Bytes)
+
+	err := cx.availableBox(name, boxRead, 0)
+	if err != nil {
+		return err
+	}
+	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
+	if err != nil {
+		return err
+	}
+
+	cx.stack[last].Bytes = []byte(box) // Will rightly panic if too big
+	cx.stack = append(cx.stack, stackValue{Uint: boolToUint(ok)})
+	return nil
+}
+
+func opBoxPut(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // value
+	prev := last - 1          // name
+
+	value := string(cx.stack[last].Bytes)
+	name := string(cx.stack[prev].Bytes)
+
+	err := cx.availableBox(name, boxWrite, 0 /* unused for write */)
+	if err != nil {
+		return err
+	}
+	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
+	if err != nil {
+		return err
+	}
+
+	cx.stack = cx.stack[:prev]
+
+	if ok {
+		/* the box exists, so the replacement must match size */
+		if len(box) != len(value) {
+			return fmt.Errorf("attempt to box_put wrong size %d != %d", len(box), len(value))
+		}
+
+		cx.stack = cx.stack[:prev]
+		return cx.Ledger.SetBox(cx.appID, name, value)
+	}
+	/* The box did not exist, so create it. */
+	appAddr := cx.getApplicationAddress(cx.appID)
+
+	return createBox(cx, name, value, appAddr)
+
 }
 
 // MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.

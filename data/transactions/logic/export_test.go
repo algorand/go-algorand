@@ -32,12 +32,12 @@ func (ep *EvalParams) Reset() {
 	ep.reset()
 }
 
-// Inefficient, just a testing convenience
+// Inefficient (hashing), just a testing convenience
 func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
-	l.NewBox(app, name, size, app.Address())
+	l.NewBox(app, name, string(make([]byte, size)), app.Address())
 }
 
-// Inefficient, just a testing convenience
+// Inefficient (hashing), just a testing convenience
 func (l *Ledger) DeleteBox(app basics.AppIndex, name string) {
 	l.DelBox(app, name, app.Address())
 }
