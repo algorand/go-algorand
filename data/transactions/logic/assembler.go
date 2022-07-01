@@ -247,6 +247,9 @@ type OpStream struct {
 	OffsetToLine map[int]int
 
 	HasStatefulOps bool
+
+	// Need new copy for each opstream
+	versionedPseudoOps map[string]map[int]OpSpec
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -1179,9 +1182,9 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 }
 
 // getSpec finds the OpSpec we need during assembly based on it's name, our current version, and the immediates passed in
-// Note getSpec handles both normal OpSpecs and those supplied by pseudoOps
+// Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
-	pseudoSpecs, ok := pseudoOps[name]
+	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
 		pseudo, ok := pseudoSpecs[len(args)]
 		if !ok {
@@ -1218,6 +1221,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
 // Immediates key of -1 means asmfunc handles number of immediates
+// These will then get transferred over into a per-opstream versioned table during assembly
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
@@ -1480,7 +1484,6 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
-	var preparedTable bool
 	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
@@ -1512,9 +1515,8 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
-		if !preparedTable {
-			pseudoOps = prepareVersionedPseudoTable(ops.Version)
-			preparedTable = true
+		if ops.versionedPseudoOps == nil {
+			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 		}
 		opstring := fields[0]
 		if opstring[len(opstring)-1] == ':' {
