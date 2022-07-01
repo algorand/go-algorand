@@ -1998,9 +1998,8 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() error {
-		var rows *sql.Rows
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		rows, err = qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
+		rows, err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
 		if err != nil {
 			return err
 		}

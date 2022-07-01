@@ -439,8 +439,8 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		// prepare result only when err != nil
 		if err == nil {
 			resultKeys = make([]string, 0, resultCount)
-			for resKey, isValid := range results {
-				if isValid {
+			for resKey, present := range results {
+				if present {
 					resultKeys = append(resultKeys, resKey)
 				}
 			}
