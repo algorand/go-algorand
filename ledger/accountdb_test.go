@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"math/rand"
 	"os"
 	"sort"
@@ -668,6 +669,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
+	defer qs.close()
 
 	// read all the balances in the database, shuffled
 	addrs := make([]basics.Address, len(accounts))
@@ -1017,6 +1019,70 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 		b.Run(fmt.Sprintf("AscendingInsertOrder-%d", size), func(b *testing.B) {
 			b.N = size
 			benchmarkWriteCatchpointStagingBalancesSub(b, true)
+		})
+	}
+}
+
+func BenchmarkLookupKeyByPrefix(b *testing.B) {
+	// learn something from BenchmarkWritingRandomBalancesDisk
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(b, 1, dbs, proto)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	require.NoError(b, err)
+	defer qs.close()
+
+	currentDBSize := 0
+	nextDBSize := 4
+	increment := 4
+
+	nameBuffer := make([]byte, 5)
+	valueBuffer := make([]byte, 5)
+
+	// from 2^2 -> 2^4 -> ... -> 2^22 sized DB
+	for bIndex := 0; bIndex < 11; bIndex++ {
+		// make writer to DB
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+
+		// writer is only for kvstore
+		writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+		if err != nil {
+			return
+		}
+
+		var prefix string
+		// how to write to dbs a bunch of stuffs?
+		for i := 0; i < nextDBSize-currentDBSize; i++ {
+			crypto.RandBytes(nameBuffer)
+			crypto.RandBytes(valueBuffer)
+			appID := basics.AppIndex(crypto.RandUint64())
+			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
+			err = writer.upsertKvPair(boxKey, string(valueBuffer))
+			require.NoError(b, err)
+
+			if i == 0 {
+				prefix = logic.MakeBoxKey(appID, "")
+			}
+		}
+		tx.Commit()
+		writer.close()
+
+		// benchmark the query against large DB, see if we have O(log N) speed
+		currentDBSize = nextDBSize
+		nextDBSize *= increment
+
+		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
+			results := make(map[string]bool)
+			_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+			require.NoError(b, err)
+			require.True(b, len(results) >= 1)
 		})
 	}
 }

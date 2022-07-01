@@ -607,6 +607,9 @@ type BlockResponse struct {
 // BoxResponse defines model for BoxResponse.
 type BoxResponse Box
 
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse [][]byte
+
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {
 
@@ -825,6 +828,20 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
+type GetApplicationBoxByNameParams struct {
+
+	// A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
+	Name string `json:"name"`
+}
+
+// GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParams struct {
+
+	// Max number of box names to return. If max is not set, or max == 0, returns all box-names.
+	Max *uint64 `json:"max,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

@@ -422,6 +422,22 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+// ApplicationBoxes gets the BoxesResponse associated with the passed application ID
+func (client RestClient) ApplicationBoxes(appID uint64) (response generatedV2.BoxesResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), nil)
+	return
+}
+
+type applicationBoxByNameParams struct {
+	Name string `url:"name"`
+}
+
+// GetApplicationBoxByName gets the BoxResponse associated with the passed application ID and box name
+func (client RestClient) GetApplicationBoxByName(appID uint64, name string) (response generatedV2.BoxResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/box", appID), applicationBoxByNameParams{name})
+	return
+}
+
 // AccountInformationV2 gets the AccountData associated with the passed address
 func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
