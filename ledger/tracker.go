@@ -188,8 +188,6 @@ type trackerRegistry struct {
 	// lastFlushTime is the time we last flushed updates to
 	// the accounts DB (bumping dbRound).
 	lastFlushTime time.Time
-
-	cfg config.Local
 }
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
