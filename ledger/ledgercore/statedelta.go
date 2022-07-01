@@ -397,7 +397,7 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback, maxTxnLife uint64) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
 	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
-		accts := make([]NewBalanceRecord, len(sd.Accts.acctsCache))
+		accts := make([]NewBalanceRecord, len(sd.Accts.accts))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
