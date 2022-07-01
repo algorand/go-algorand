@@ -289,6 +289,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.commitSyncerClosed = make(chan struct{})
 	tr.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	tr.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+	tr.cfg = cfg
 	go tr.commitSyncer(tr.deferredCommits)
 
 	tr.trackers = append([]ledgerTracker{}, trackers...)
@@ -627,7 +628,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		}
 	}()
 
-	maxAcctLookback := l.MaxAcctLookback()
+	maxAcctLookback := tr.cfg.MaxAcctLookback
 
 	for blk := range blocksStream {
 		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
