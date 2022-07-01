@@ -609,7 +609,6 @@ type BlockEvaluator struct {
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
-	maxAcctLookback     uint64 // for StateDelta.OptimizeAllocatedMemory
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -619,7 +618,6 @@ type LedgerForEvaluator interface {
 	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
-	MaxAcctLookback() uint64
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -687,7 +685,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
-		maxAcctLookback:     l.MaxAcctLookback(),
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -1269,8 +1266,6 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	if err != nil {
 		return err
 	}
-
-	eval.state.mods.OptimizeAllocatedMemory(eval.maxAcctLookback, eval.proto.MaxTxnLife)
 
 	if eval.validate {
 		// check commitments

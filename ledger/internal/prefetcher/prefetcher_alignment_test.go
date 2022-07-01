@@ -165,9 +165,6 @@ func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore
 func (l *prefetcherAlignmentTestLedger) CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
-func (l *prefetcherAlignmentTestLedger) MaxAcctLookback() uint64 {
-	return 0
-}
 
 func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedAccountDataEntry) map[basics.Address]struct{} {
 	if len(loadedAccountDataEntries) == 0 {

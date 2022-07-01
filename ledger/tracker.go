@@ -145,7 +145,6 @@ type ledgerForTracker interface {
 	GenesisProto() config.ConsensusParams
 	GenesisProtoVersion() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
-	MaxAcctLookback() uint64
 }
 
 type trackerRegistry struct {

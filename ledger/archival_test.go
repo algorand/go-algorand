@@ -105,10 +105,6 @@ func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData
 	return wl.l.GenesisAccounts()
 }
 
-func (wl *wrappedLedger) MaxAcctLookback() uint64 {
-	return wl.l.MaxAcctLookback()
-}
-
 func getInitState() (genesisInitState ledgercore.InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion

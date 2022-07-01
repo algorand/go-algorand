@@ -637,6 +637,7 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 		}
 		return err
 	}
+	updates.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback, config.Consensus[blk.CurrentProtocol].MaxTxnLife)
 	vb := ledgercore.MakeValidatedBlock(blk, updates)
 
 	return l.AddValidatedBlock(vb, cert)
@@ -698,11 +699,6 @@ func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
 // GenesisAccounts returns initial accounts for this ledger.
 func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
-}
-
-// MaxAcctLookback is used by LedgerForEvaluator to learn the configured max lookback.
-func (l *Ledger) MaxAcctLookback() uint64 {
-	return l.cfg.MaxAcctLookback
 }
 
 // BlockHdrCached returns the block header if available.

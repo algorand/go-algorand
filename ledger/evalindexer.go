@@ -196,11 +196,6 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.V
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-// MaxAcctLookback is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) MaxAcctLookback() uint64 {
-	return 0
-}
-
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:             il,

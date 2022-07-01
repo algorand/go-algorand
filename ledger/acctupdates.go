@@ -548,11 +548,6 @@ func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (v
 	return aul.ao.voters.getVoters(rnd)
 }
 
-// MaxAcctLookback implements LedgerForEvaluator.
-func (aul *accountUpdatesLedgerEvaluator) MaxAcctLookback() uint64 {
-	return aul.au.ledger.MaxAcctLookback()
-}
-
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
 // are providing here. Any attempt to access a different header would get denied.
 func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
