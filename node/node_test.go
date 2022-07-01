@@ -554,7 +554,7 @@ func TestAsyncRecord(t *testing.T) {
 	require.Equal(t, 20000, int(records[0].LastBlockProposal))
 }
 
-// OfflineOnlineClosedBitStatusTest a test that validates that the correct bits are being set 
+// OfflineOnlineClosedBitStatusTest a test that validates that the correct bits are being set
 func OfflineOnlineClosedBitStatusTest(t *testing.T) {
 	tests := []struct {
 		name        string
