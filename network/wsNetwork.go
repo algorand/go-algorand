@@ -917,7 +917,7 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localTelemetryGUID := wn.log.GetTelemetryGUID()
 	localInstanceName := wn.log.GetInstanceName()
 	header.Set(TelemetryIDHeader, localTelemetryGUID)
 	header.Set(InstanceNameHeader, localInstanceName)
@@ -970,11 +970,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -985,11 +985,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Remote IP Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Remote IP Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -1154,10 +1154,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      trackedRequest.remoteHost,
-			HostName:     trackedRequest.otherTelemetryGUID,
-			Incoming:     true,
-			InstanceName: trackedRequest.otherInstanceName,
+			Address:       trackedRequest.remoteHost,
+			TelemetryGUID: trackedRequest.otherTelemetryGUID,
+			Incoming:      true,
+			InstanceName:  trackedRequest.otherInstanceName,
 		})
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
@@ -1750,7 +1750,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
 			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
-			HostName:           peer.TelemetryGUID,
+			TelemetryGUID:      peer.TelemetryGUID,
 			InstanceName:       peer.InstanceName,
 		}
 		if peer.outgoing {
@@ -2094,11 +2094,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      justHost(conn.RemoteAddr().String()),
-			HostName:     peer.TelemetryGUID,
-			Incoming:     false,
-			InstanceName: peer.InstanceName,
-			Endpoint:     peer.GetAddress(),
+			Address:       justHost(conn.RemoteAddr().String()),
+			TelemetryGUID: peer.TelemetryGUID,
+			Incoming:      false,
+			InstanceName:  peer.InstanceName,
+			Endpoint:      peer.GetAddress(),
 		})
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
@@ -2202,10 +2202,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		}
 	}
 	eventDetails := telemetryspec.PeerEventDetails{
-		Address:      peerAddr,
-		HostName:     peer.TelemetryGUID,
-		Incoming:     !peer.outgoing,
-		InstanceName: peer.InstanceName,
+		Address:       peerAddr,
+		TelemetryGUID: peer.TelemetryGUID,
+		Incoming:      !peer.outgoing,
+		InstanceName:  peer.InstanceName,
 	}
 	if peer.outgoing {
 		eventDetails.Endpoint = peer.GetAddress()
