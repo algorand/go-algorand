@@ -598,6 +598,10 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	return status
 }
 
+// In this test, we have five nodes, where we only need four to create a StateProof.
+// After making the first Stateproof, we transfer three-quarters of the stake of the
+// rich node to the poor node. For both cases, we assert different stakes, that is, to
+// conclude whether the poor node is used to create the StateProof or the rich node.
 func TestAttestorsChangeTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -608,7 +612,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofTopVoters = 4 // taking only four out of five nodes to create the state proof.
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 51 / 100
 	consensusParams.StateProofStrengthTarget = 256
@@ -639,12 +643,12 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		paymentMaker.amount = 1 // When we set the amount value to 1, it's a dummy payment, so we do not have an empty block.
 
 		// Changing the amount to pay. This should transfer most of the money from the rich node to the poort node.
 		if consensusParams.StateProofInterval*2 == rnd {
 			balance := paymentMaker.from.getBalance(a, &fixture)
 			paymentMaker.amount = uint64(float64(balance*3) / 4) // taking 3/4 of the balance.
+			paymentMaker.sendPayment(a, &fixture, rnd)
 		}
 
 		// ensuring that before the test, the rich node (from) has a significantly larger balance.
@@ -657,10 +661,8 @@ func TestAttestorsChangeTest(t *testing.T) {
 			a.True(paymentMaker.to.getBalance(a, &fixture) > paymentMaker.from.getBalance(a, &fixture))
 		}
 
-		paymentMaker.sendPayment(a, &fixture, rnd)
-
 		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
-
+		fmt.Println("round: ", rnd)
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -668,6 +670,23 @@ func TestAttestorsChangeTest(t *testing.T) {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+
+			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+
+			// the main part of the test (computing the total stake of the nodes):
+			sum := uint64(0)
+			for i := 1; i <= 3; i++ {
+				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
+			}
+
+			// including the stake of the rich node:
+			if blk.Round() < basics.Round(consensusParams.StateProofInterval*3) {
+				sum += accountFetcher{"richNode", 0}.getBalance(a, &fixture)
+			} else { // including the stake of the poor node (which is different)
+				sum += accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
+			}
+
+			a.Equal(sum, stake)
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
