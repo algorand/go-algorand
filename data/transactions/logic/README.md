@@ -180,6 +180,9 @@ _available_.
    associated account of a contract that was created earlier in the
    group is _available_.
 
+ * Since v7, the account associated with any contract present in the
+   `txn.ForeignApplications` field is _available_.
+
 ## Constants
 
 Constants can be pushed onto the stack in two different ways:
@@ -274,6 +277,9 @@ return stack matches the name of the input value.
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
 | `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
+| `bn256_add` | for (curve points A and B) return the curve point A + B |
+| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
+| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -322,6 +328,8 @@ return stack matches the name of the input value.
 | `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
+| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A) |
+| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A) |
 | `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
 | `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
 
@@ -482,6 +490,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
+| 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

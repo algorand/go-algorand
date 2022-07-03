@@ -85,6 +85,8 @@ type BlockAcceptedEventDetails struct {
 	Round        uint64
 	ValidatedAt  time.Duration
 	PreValidated bool
+	PropBufLen   uint64
+	VoteBufLen   uint64
 }
 
 // TopAccountsEvent event
@@ -189,10 +191,10 @@ const ConnectPeerEvent Event = "ConnectPeer"
 
 // PeerEventDetails contains details for the ConnectPeerEvent
 type PeerEventDetails struct {
-	Address      string
-	HostName     string
-	Incoming     bool
-	InstanceName string
+	Address       string
+	TelemetryGUID string `json:"HostName"`
+	Incoming      bool
+	InstanceName  string
 	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
@@ -204,11 +206,11 @@ const ConnectPeerFailEvent Event = "ConnectPeerFail"
 
 // ConnectPeerFailEventDetails contains details for the ConnectPeerFailEvent
 type ConnectPeerFailEventDetails struct {
-	Address      string
-	HostName     string
-	Incoming     bool
-	InstanceName string
-	Reason       string
+	Address       string
+	TelemetryGUID string `json:"HostName"`
+	Incoming      bool
+	InstanceName  string
+	Reason        string
 }
 
 // DisconnectPeerEvent event
@@ -280,8 +282,8 @@ type PeersConnectionDetails struct {
 type PeerConnectionDetails struct {
 	// Address is the IP address of the remote connected socket
 	Address string
-	// The HostName is the TelemetryGUID passed via the X-Algorand-TelId header during the http connection handshake.
-	HostName string
+	// The TelemetryGUID is the TelemetryGUID passed via the X-Algorand-TelId header during the http connection handshake.
+	TelemetryGUID string `json:"HostName"`
 	// InstanceName is the node-specific hashed instance name that was passed via X-Algorand-InstanceName header during the http connection handshake.
 	InstanceName string
 	// ConnectionDuration is the duration of the connection, in seconds.

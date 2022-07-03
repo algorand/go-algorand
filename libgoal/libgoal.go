@@ -18,10 +18,12 @@ package libgoal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -938,6 +940,30 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// VerifyParticipationKey checks if a given participationID is installed in a loop until timeout has elapsed.
+func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID string) error {
+	start := time.Now()
+
+	for {
+		keysResp, err := c.GetParticipationKeys()
+		if err != nil {
+			return err
+		}
+		for _, key := range keysResp {
+			if key.Id == participationID {
+				// Installation successful.
+				return nil
+			}
+		}
+
+		if time.Since(start) > timeout {
+			return errors.New("timeout waiting for key to appear")
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
@@ -1185,10 +1211,10 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 }
 
 // TxnProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TxnProof(txid string, round uint64) (resp generatedV2.ProofResponse, err error) {
+func (c *Client) TxnProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		return algod.Proof(txid, round)
+		return algod.Proof(txid, round, hashType)
 	}
 	return
 }

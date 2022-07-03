@@ -96,7 +96,7 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 	}
 
 	var err error
-	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(tb, err)
 
 	if params.SupportGenesisHash {

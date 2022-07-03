@@ -380,6 +380,11 @@
                 "result": {
                   "description": "base64 encoded program bytes",
                   "type": "string"
+                },
+                "sourcemap": {
+                  "description": "JSON of the source map",
+                  "properties": {},
+                  "type": "object"
                 }
               },
               "required": [
@@ -391,6 +396,25 @@
           }
         },
         "description": "Teal compile Result"
+      },
+      "DisassembleResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "result": {
+                  "description": "disassembled Teal code",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal disassembly Result"
       },
       "DryrunResponse": {
         "content": {
@@ -601,10 +625,10 @@
             "schema": {
               "properties": {
                 "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
                   "enum": [
-                    "sumhash",
-                    "sha512_256"
+                    "sha512_256",
+                    "sha256"
                   ],
                   "type": "string"
                 },
@@ -1304,8 +1328,16 @@
             },
             "type": "array"
           },
+          "budget-added": {
+            "description": "Budget added during execution of app call transaction.",
+            "type": "integer"
+          },
+          "budget-consumed": {
+            "description": "Budget consumed during execution of app call transaction.",
+            "type": "integer"
+          },
           "cost": {
-            "description": "Execution cost of app call transaction",
+            "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
             "type": "integer"
           },
           "disassembly": {
@@ -2588,6 +2620,18 @@
             }
           },
           {
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "in": "query",
+            "name": "hashtype",
+            "schema": {
+              "enum": [
+                "sha512_256",
+                "sha256"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded.",
             "in": "query",
             "name": "format",
@@ -2607,10 +2651,10 @@
                 "schema": {
                   "properties": {
                     "hashtype": {
-                      "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                      "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
                       "enum": [
-                        "sumhash",
-                        "sha512_256"
+                        "sha512_256",
+                        "sha256"
                       ],
                       "type": "string"
                     },
@@ -3615,6 +3659,16 @@
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealCompile",
+        "parameters": [
+          {
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
+            "in": "query",
+            "name": "sourcemap",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "text/plain": {
@@ -3640,6 +3694,11 @@
                     "result": {
                       "description": "base64 encoded program bytes",
                       "type": "string"
+                    },
+                    "sourcemap": {
+                      "description": "JSON of the source map",
+                      "properties": {},
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -3692,6 +3751,85 @@
           }
         },
         "summary": "Compile TEAL source code to binary, produce its hash",
+        "x-codegen-request-body-name": "source"
+      }
+    },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "operationId": "TealDisassemble",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "byte",
+                "type": "string"
+              }
+            }
+          },
+          "description": "TEAL program binary to be disassembled",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "result": {
+                      "description": "disassembled Teal code",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Teal disassembly Result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Teal Compile Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {},
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Disassemble program bytes into the TEAL source code.",
         "x-codegen-request-body-name": "source"
       }
     },

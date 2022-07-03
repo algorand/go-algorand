@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -161,6 +162,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
+	// These are all `Txid` which is equivalent to `crypto.Digest`
 	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
@@ -179,6 +181,13 @@ func (tx Transaction) ID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
+}
+
+// IDSha256 returns the digest (i.e., hash) of the transaction.
+func (tx Transaction) IDSha256() crypto.Digest {
+	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
+	defer protocol.PutEncodingBuf(enc)
+	return sha256.Sum256(enc)
 }
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the
@@ -717,9 +726,9 @@ func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
 // matching versions between approval and clearstate.
 const syncProgramsVersion = 6
 
-// CheckContractVersions ensures that for v6 and higher two programs are version
-// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
-// no downgrades are allowed, regardless of version.
+// CheckContractVersions ensures that for syncProgramsVersion and higher, two programs are version
+// matched, and that they are not a downgrade.  If either program version is
+// >= proto.MinInnerApplVersion, downgrade of that program is not allowed.
 func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {

@@ -25,7 +25,7 @@ import (
 )
 
 // listDNSRecordRequest creates a new http request for listing of DNS records.
-func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recordType string, name string, content string, page uint, perPage uint, order string, direction string, match string) (*http.Request, error) {
+func listDNSRecordRequest(zoneID string, authToken string, recordType string, name string, content string, page uint, perPage uint, order string, direction string, match string) (*http.Request, error) {
 	// verify and validate input parameters.
 	if page == 0 {
 		page = 1
@@ -73,7 +73,7 @@ func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recor
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 

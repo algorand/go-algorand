@@ -54,6 +54,7 @@ func init() {
 
 	appExecuteCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID (if omitted, zero, which creates an application)")
 	appExecuteCmd.Flags().StringVarP(&account, "from", "f", "", "Account to execute interaction from")
+	appExecuteCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from \"from\" address due to rekeying")
 	appExecuteCmd.Flags().SetInterspersed(false)
 	appExecuteCmd.MarkFlagRequired("from")
 }
@@ -611,7 +612,7 @@ var appExecuteCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}

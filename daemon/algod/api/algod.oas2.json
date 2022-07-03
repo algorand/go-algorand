@@ -550,6 +550,17 @@
             "required": true
           },
           {
+            "type": "string",
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "name": "hashtype",
+            "in": "query",
+            "required": false
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -1385,12 +1396,76 @@
               "type": "string",
               "format": "binary"
             }
+          }, 
+          {
+            "name": "sourcemap",
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
+            "in": "query",
+            "type": "boolean"
           }
         ],
         "responses": {
           "200": {
             "description": "Successful compilation",
             "$ref": "#/responses/CompileResponse"
+          },
+          "400": {
+            "description": "Bad Request - Teal Compile Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Disassemble program bytes into the TEAL source code.",
+        "operationId": "TealDisassemble",
+        "parameters": [
+          {
+            "description": "TEAL program binary to be disassembled",
+            "name": "source",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "byte"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful disassembly",
+            "$ref": "#/responses/DisassembleResponse"
           },
           "400": {
             "description": "Bad Request - Teal Compile Error",
@@ -2220,8 +2295,16 @@
             "format": "byte"
           }
         },
+        "budget-added": {
+          "description": "Budget added during execution of app call transaction.",
+          "type": "integer"
+        },
+        "budget-consumed": {
+          "description": "Budget consumed during execution of app call transaction.",
+          "type": "integer"
+        },
         "cost": {
-          "description": "Execution cost of app call transaction",
+          "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
           "type": "integer"
         }
       }
@@ -2743,12 +2826,12 @@
             "type": "integer"
           },
           "hashtype": {
-            "enum": [
-              "sumhash",
-              "sha512_256"
-            ],
             "type": "string",
-            "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256"
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256"
           }
         }
       }
@@ -3035,6 +3118,25 @@
           },
           "result": {
             "description": "base64 encoded program bytes",
+            "type": "string"
+          },
+          "sourcemap": {
+            "description": "JSON of the source map",
+            "type": "object"
+          }
+        }
+      }
+    },
+    "DisassembleResponse": {
+      "description": "Teal disassembly Result",
+      "schema": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "description": "disassembled Teal code",
             "type": "string"
           }
         }

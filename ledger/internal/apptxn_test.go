@@ -1890,7 +1890,7 @@ func TestInnerAppVersionCalling(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// 31 allowed inner appls. vFuture enables proto.AllowV4InnerAppls (presumed v33, below)
+	// 31 allowed inner appls. v33 lowered proto.MinInnerApplVersion
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -1994,7 +1994,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
 			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
-			// after 32 proto.AllowV4InnerAppls should be in effect, so calls and optins to v5 are ok
+			// after 32 proto.MinInnerApplVersion is lowered to 4, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
@@ -2070,6 +2070,10 @@ func TestAppDowngrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	two, err := logic.AssembleStringWithVersion("int 1", 2)
+	require.NoError(t, err)
+	three, err := logic.AssembleStringWithVersion("int 1", 3)
+	require.NoError(t, err)
 	four, err := logic.AssembleStringWithVersion("int 1", 4)
 	require.NoError(t, err)
 	five, err := logic.AssembleStringWithVersion("int 1", 5)
@@ -2078,6 +2082,40 @@ func TestAppDowngrade(t *testing.T) {
 	require.NoError(t, err)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// Confirm that in old protocol version, downgrade is legal
+	// Start at 28 because we want to v4 app to downgrade to v3
+	testConsensusRange(t, 28, 30, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		create := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   four.Program,
+			ClearStateProgram: four.Program,
+		}
+
+		vb := dl.fullBlock(&create)
+		app := vb.Block().Payset[0].ApplicationID
+
+		update := txntest.Txn{
+			Type:              "appl",
+			ApplicationID:     app,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			Sender:            addrs[0],
+			ApprovalProgram:   three.Program,
+			ClearStateProgram: three.Program,
+		}
+
+		// No change - legal
+		dl.fullBlock(&update)
+
+		update.ApprovalProgram = two.Program
+		// Also legal, and let's check mismatched version while we're at it.
+		dl.fullBlock(&update)
+	})
+
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -2112,7 +2150,7 @@ func TestAppDowngrade(t *testing.T) {
 		update.ClearStateProgram = five.Program
 		dl.fullBlock(&update)
 
-		// Downgrade (allowed for pre 6 programs until AllowV4InnerAppls)
+		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion was lowered)
 		update.ClearStateProgram = four.Program
 		if ver <= 32 {
 			dl.fullBlock(update.Noted("actually a repeat of first upgrade"))
@@ -3057,4 +3095,203 @@ check:
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fundA, &callA)
 	endBlock(t, l, eval)
+}
+
+func TestForeignAppAccountsAccessible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+	int pay;                itxn_field TypeEnum
+	int 100;     		    itxn_field Amount
+	txn Applications 1
+	app_params_get AppAddress
+	assert
+	itxn_field Receiver
+itxn_submit
+`),
+		}
+
+		vb := dl.fullBlock(&appA, &appB)
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
+
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
+
+		callTx := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+		}
+
+		dl.beginBlock()
+		if ver <= 32 {
+			dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+			dl.endBlock()
+			return
+		}
+
+		dl.txgroup("", &fund0, &fund1, &callTx)
+		vb = dl.endBlock()
+
+		require.Equal(t, index0.Address(), vb.Block().Payset[2].EvalDelta.InnerTxns[0].Txn.Receiver)
+		require.Equal(t, uint64(100), vb.Block().Payset[2].EvalDelta.InnerTxns[0].Txn.Amount.Raw)
+	})
+}
+
+// While accounts of foreign apps are available in most contexts, they still
+// cannot be used as mutable references; ie the accounts cannot be used by
+// opcodes that modify local storage.
+func TestForeignAppAccountsImmutable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+txn Applications 1
+app_params_get AppAddress
+byte "X"
+byte "ABC"
+app_local_put
+int 1
+`),
+		}
+
+		vb := dl.fullBlock(&appA, &appB)
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
+
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
+
+		callTx := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+		}
+
+		dl.beginBlock()
+		dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+		dl.endBlock()
+	})
+}
+
+// In the case where the foreign app account is also provided in the
+// transaction's account field, mutable references should be allowed.
+func TestForeignAppAccountsMutable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+	int OptIn
+	itxn_field OnCompletion
+itxn_submit
+`),
+		}
+
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+txn OnCompletion
+int OptIn
+==
+bnz done
+txn Applications 1
+app_params_get AppAddress
+assert
+byte "X"
+byte "Y"
+app_local_put
+done:
+`),
+			LocalStateSchema: basics.StateSchema{
+				NumByteSlice: 1,
+			},
+		}
+
+		vb := dl.fullBlock(&appA, &appB)
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
+
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
+		fund1.Receiver = index1.Address()
+
+		callA := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+
+		callB := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+			Accounts:      []basics.Address{index0.Address()},
+		}
+
+		vb = dl.fullBlock(&fund0, &fund1, &callA, &callB)
+
+		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
+	})
 }

@@ -418,9 +418,6 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
-	//EnableBatchVerification enable the use of the batch verification algorithm.
-	EnableBatchVerification bool
-
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 
@@ -432,6 +429,14 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
+
+	// EnableSHA256TxnCommitmentHeader enables the creation of a transaction vector commitment tree using SHA256 hash function. (vector commitment extends Merkle tree by having a position binding property).
+	// This new header is in addition to the existing SHA512_256 merkle root.
+	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
+	EnableSHA256TxnCommitmentHeader bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -902,6 +907,9 @@ func initConsensusProtocols() {
 	// Enable application support
 	v24.Application = true
 
+	// Although Inners were not allowed yet, this gates downgrade checks, which must be allowed
+	v24.MinInnerApplVersion = 6
+
 	// Enable rekeying
 	v24.SupportRekeying = true
 
@@ -1074,7 +1082,6 @@ func initConsensusProtocols() {
 
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v31.EnableBatchVerification = true
 	v31.RewardsCalculationFix = true
 	v31.MaxProposedExpiredOnlineAccounts = 32
 
@@ -1082,7 +1089,6 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
-	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1136,8 +1142,12 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	vFuture.LogicSigVersion = 7
+	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
+
+	vFuture.EnableSHA256TxnCommitmentHeader = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
@@ -1164,4 +1174,5 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
+
 }

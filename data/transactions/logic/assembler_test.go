@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -382,13 +384,22 @@ pushbytes 0x012345
 dup
 dup
 ed25519verify_bare
-` + randomnessNonsense
+` + randomnessNonsense + `
+pushbytes 0x4321
+pushbytes 0x77
+replace2 2
+pushbytes 0x88
+pushint 1
+replace3
+` + pairingNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
 const randomnessCompiled = "81ffff03d101d000"
 
-const v7Compiled = v6Compiled + "5c005d018120af060180070123456789abcd49490501988003012345494984" + randomnessCompiled
+const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
+	randomnessCompiled + "800243218001775c0280018881015d" +
+	pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -453,6 +464,19 @@ func TestAssemble(t *testing.T) {
 			// hex string can be copy pasted back in as a new expected result.
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
+	}
+}
+
+var experiments = []uint64{fidoVersion, pairingVersion}
+
+// TestExperimental forces a conscious choice to promote "experimental" opcode
+// groups. This will fail when we increment vFuture's LogicSigVersion. If we had
+// intended to release the opcodes, they should have been removed from
+// `experiments`.
+func TestExperimental(t *testing.T) {
+	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
+	for _, v := range experiments {
+		require.Equal(t, futureV, v)
 	}
 }
 
@@ -582,6 +606,7 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna i beyond 255: 256")
 	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna i beyond 255: 256")
@@ -614,6 +639,7 @@ func TestAssembleTxna(t *testing.T) {
 
 func TestAssembleGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testLine(t, "global", AssemblerMaxVersion, "global expects 1 immediate argument")
 	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: \"a\"")
@@ -627,6 +653,7 @@ func TestAssembleGlobal(t *testing.T) {
 
 func TestAssembleDefault(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	source := `byte 0x1122334455
 int 1
@@ -643,6 +670,7 @@ func mutateProgVersion(version uint64, prog string) string {
 
 func TestOpUint(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -659,8 +687,8 @@ func TestOpUint(t *testing.T) {
 
 func TestOpUint64(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
@@ -676,8 +704,8 @@ func TestOpUint64(t *testing.T) {
 
 func TestOpBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
@@ -692,7 +720,6 @@ func TestOpBytes(t *testing.T) {
 
 func TestAssembleInt(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	expectedDefaultConsts := "012001bef5fad70c22"
@@ -725,8 +752,8 @@ base64.b16encode(raw.encode())
 
 func TestAssembleBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	variations := []string{
 		"byte b32 MFRGGZDFMY",
 		"byte base32 MFRGGZDFMY",
@@ -784,6 +811,7 @@ func TestAssembleBytes(t *testing.T) {
 
 func TestAssembleBytesString(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -795,7 +823,6 @@ func TestAssembleBytesString(t *testing.T) {
 
 func TestAssembleOptimizedConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	t.Run("Bytes", func(t *testing.T) {
@@ -1004,7 +1031,6 @@ bytec_1 // 0x0103
 
 func TestAssembleOptimizedUint(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	program := `
@@ -1028,6 +1054,7 @@ int ClearState
 
 func TestFieldsFromLine(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	line := "op arg"
 	fields := fieldsFromLine(line)
@@ -1236,8 +1263,8 @@ func TestFieldsFromLine(t *testing.T) {
 
 func TestAssembleRejectNegJump(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := `wat:
 int 1
 bnz wat
@@ -1256,8 +1283,8 @@ int 2`
 
 func TestAssembleBase64(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	text := `byte base64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+0=
 byte base64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 //
@@ -1291,8 +1318,8 @@ byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 
 func TestAssembleRejectUnkLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := `int 1
 bnz nowhere
 int 2`
@@ -1305,8 +1332,8 @@ int 2`
 
 func TestAssembleJumpToTheEnd(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := `intcblock 1
 intc 0
 intc 0
@@ -1321,8 +1348,8 @@ done:`
 
 func TestMultipleErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := `int 1
 bnz nowhere
 // comment
@@ -1339,9 +1366,9 @@ int 2`
 
 func TestAssembleDisassemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// Specifically constructed program text that should be recreated by Disassemble()
-	t.Parallel()
 	text := fmt.Sprintf(`#pragma version %d
 intcblock 0 1 2 3 4 5
 bytecblock 0xcafed00d 0x1337 0x68656c6c6f 0xdeadbeef 0x70077007 0x0102030405060708091011121314151617181920212223242526272829303132
@@ -1448,6 +1475,10 @@ itxn NumLogs
 itxn CreatedAssetID
 itxn CreatedApplicationID
 itxn LastLog
+txn NumApprovalProgramPages
+txna ApprovalProgramPages 0
+txn NumClearStateProgramPages
+txna ClearStateProgramPages 0
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {
@@ -1467,11 +1498,10 @@ itxn LastLog
 
 func TestAssembleDisassembleCycle(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// Test that disassembly re-assembles to the same program bytes.
 	// Disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
-	t.Parallel()
-
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
 	// original version, unspecified version (so it should pick up
@@ -1497,7 +1527,6 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 func TestConstantDisassembly(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	ops := testProg(t, "int 47", AssemblerMaxVersion)
@@ -1530,6 +1559,7 @@ func TestConstantDisassembly(t *testing.T) {
 func TestConstantArgs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "int", v, Expect{1, "int needs one argument"})
 		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
@@ -1546,7 +1576,6 @@ func TestConstantArgs(t *testing.T) {
 
 func TestAssembleDisassembleErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	source := `txn Sender`
@@ -1664,8 +1693,8 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 
 func TestAssembleVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testLine(t, "txna Accounts 0", AssemblerMaxVersion, "")
 	testLine(t, "txna Accounts 0", 2, "")
 	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in TEAL v2")
@@ -1673,7 +1702,6 @@ func TestAssembleVersions(t *testing.T) {
 
 func TestAssembleBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	source := `byte 0x00
@@ -1690,7 +1718,6 @@ int 1
 
 func TestAssembleMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	source := `byte 0x00
@@ -1707,8 +1734,8 @@ int 1
 
 func TestAssembleAsset(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "asset_holding_get ABC 1", v,
 			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
@@ -1737,7 +1764,6 @@ func TestAssembleAsset(t *testing.T) {
 
 func TestDisassembleSingleOp(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1754,8 +1780,8 @@ func TestDisassembleSingleOp(t *testing.T) {
 
 func TestDisassembleInt(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	txnSample := fmt.Sprintf("#pragma version %d\nint 17\nint 27\nint 37\nint 47\nint 5\nint 17\n", AssemblerMaxVersion)
 	ops := testProg(t, txnSample, AssemblerMaxVersion)
 	disassembled, err := Disassemble(ops.Program)
@@ -1772,8 +1798,8 @@ func TestDisassembleInt(t *testing.T) {
 
 func TestDisassembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	// txn was 1, but this tests both
 	introduction := OpsByName[LogicVersion]["gtxna"].Version
 	for v := introduction; v <= AssemblerMaxVersion; v++ {
@@ -1801,8 +1827,8 @@ func TestDisassembleTxna(t *testing.T) {
 
 func TestDisassembleGtxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	// check gtxn and gtxna are properly disassembled
 
 	introduction := OpsByName[LogicVersion]["gtxna"].Version
@@ -1830,8 +1856,8 @@ func TestDisassembleGtxna(t *testing.T) {
 
 func TestDisassemblePushConst(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	// check pushint and pushbytes are properly disassembled
 	intSample := fmt.Sprintf("#pragma version %d\npushint 1\n", AssemblerMaxVersion)
 	expectedIntSample := intSample
@@ -1860,7 +1886,6 @@ func TestDisassemblePushConst(t *testing.T) {
 
 func TestDisassembleLastLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	// starting from TEAL v2 branching to the last line are legal
@@ -1883,8 +1908,8 @@ label1:
 
 func TestAssembleOffsets(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := "err"
 	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 2, len(ops.Program))
@@ -1983,8 +2008,8 @@ err
 
 func TestHasStatefulOps(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	source := "int 1"
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2006,8 +2031,8 @@ err
 
 func TestStringLiteralParsing(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	s := `"test"`
 	e := []byte(`test`)
 	result, err := parseStringLiteral(s)
@@ -2103,8 +2128,8 @@ func TestStringLiteralParsing(t *testing.T) {
 
 func TestPragmas(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		text := fmt.Sprintf("#pragma version %d", v)
 		ops := testProg(t, text, v)
@@ -2170,8 +2195,8 @@ func TestPragmas(t *testing.T) {
 
 func TestAssemblePragmaVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	text := `#pragma version 1
 int 1
 `
@@ -2224,8 +2249,8 @@ len
 
 func TestAssembleConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			testLine(t, "intc 1", v, "intc 1 is not defined")
@@ -2239,6 +2264,7 @@ func TestAssembleConstants(t *testing.T) {
 
 func TestErrShortBytecblock(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops, err := AssembleStringWithVersion(text, 1)
@@ -2254,6 +2280,7 @@ func TestErrShortBytecblock(t *testing.T) {
 
 func TestMethodWarning(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	tests := []struct {
 		method string
@@ -2300,6 +2327,7 @@ func TestMethodWarning(t *testing.T) {
 
 func TestBranchAssemblyTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	text := `
 	int 0             // current app id  [0]
@@ -2334,6 +2362,7 @@ flip:                 // [x]
 func TestSwapTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	/* reconfirm that we detect this type error */
 	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, Expect{3, "+ arg 1..."})
 	/* despite swap, we track types */
@@ -2400,6 +2429,29 @@ func TestSetBitTypeCheck(t *testing.T) {
 	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
 }
 
+func TestScratchTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// All scratch slots should start as uint64
+	testProg(t, "load 0; int 1; +", AssemblerMaxVersion)
+	// Check load and store accurately using the scratch space
+	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
+	// Loads should know the type it's loading if all the slots are the same type
+	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
+	// Loads doesn't know the type when slot types vary
+	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion)
+	// Stores should only set slots to StackAny if they are not the same type as what is being stored
+	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
+	// ScratchSpace should reset after hitting label in deadcode
+	testProg(t, "byte 0x01; store 0; b label1; label1:; load 0; int 1; +", AssemblerMaxVersion)
+	// But it should reset to StackAny not uint64
+	testProg(t, "int 1; store 0; b label1; label1:; load 0; btoi", AssemblerMaxVersion)
+	// Callsubs should also reset the scratch space
+	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
+	// But the scratchspace should still be tracked after the callsub
+	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{5, "btoi arg 0..."})
+}
+
 func TestCoverAsm(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2432,6 +2484,8 @@ func TestTxTypes(t *testing.T) {
 }
 
 func TestBadInnerFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
