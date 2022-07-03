@@ -16,26 +16,21 @@
 
 package crypto
 
-// #cgo CFLAGS: -Wall -std=c99
-// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
-// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
-// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
-// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
-// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
-// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
-// #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
-// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
-// #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
-// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
-// #include <stdint.h>
+// #cgo CFLAGS: -std=c99 -I${SRCDIR}/libsodium-fork/src/libsodium/include/  -I${SRCDIR}/libsodium-fork/src/libsodium/ -I${SRCDIR}/libsodium-fork/src/libsodium/include/sodium/
+// #include "crypto_vrf/ietfdraft03/convert.c"
+// #include "crypto_vrf/ietfdraft03/keypair.c"
+// #include "crypto_vrf/ietfdraft03/prove.c"
+// #include "crypto_vrf/ietfdraft03/verify.c"
+// #include "crypto_vrf/ietfdraft03/vrf.c"
+// #include "crypto_vrf/crypto_vrf.c"
 // #include "sodium.h"
 import "C"
 
-func init() {
-	if C.sodium_init() == -1 {
-		panic("sodium_init() failed")
-	}
-}
+// func init() {
+// 	if C.sodium_init() == -1 {
+// 		panic("sodium_init() failed")
+// 	}
+// }
 
 // deprecated names + wrappers -- TODO remove
 

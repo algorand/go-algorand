@@ -16,7 +16,7 @@
 # include "dolbeau/chacha20_dolbeau-ssse3.h"
 #endif
 
-static const crypto_stream_chacha20_implementation *implementation =
+static const crypto_stream_chacha20_implementation *implementation_2 =
     &crypto_stream_chacha20_ref_implementation;
 
 size_t
@@ -58,7 +58,7 @@ crypto_stream_chacha20(unsigned char *c, unsigned long long clen,
     if (clen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream(c, clen, n, k);
+    return implementation_2->stream(c, clen, n, k);
 }
 
 int
@@ -70,7 +70,7 @@ crypto_stream_chacha20_xor_ic(unsigned char *c, const unsigned char *m,
     if (mlen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream_xor_ic(c, m, mlen, n, ic, k);
+    return implementation_2->stream_xor_ic(c, m, mlen, n, ic, k);
 }
 
 int
@@ -81,7 +81,7 @@ crypto_stream_chacha20_xor(unsigned char *c, const unsigned char *m,
     if (mlen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream_xor_ic(c, m, mlen, n, 0U, k);
+    return implementation_2->stream_xor_ic(c, m, mlen, n, 0U, k);
 }
 
 int
@@ -91,7 +91,7 @@ crypto_stream_chacha20_ietf_ext(unsigned char *c, unsigned long long clen,
     if (clen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream_ietf_ext(c, clen, n, k);
+    return implementation_2->stream_ietf_ext(c, clen, n, k);
 }
 
 int
@@ -103,7 +103,7 @@ crypto_stream_chacha20_ietf_ext_xor_ic(unsigned char *c, const unsigned char *m,
     if (mlen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream_ietf_ext_xor_ic(c, m, mlen, n, ic, k);
+    return implementation_2->stream_ietf_ext_xor_ic(c, m, mlen, n, ic, k);
 }
 
 static int
@@ -114,7 +114,7 @@ crypto_stream_chacha20_ietf_ext_xor(unsigned char *c, const unsigned char *m,
     if (mlen > crypto_stream_chacha20_MESSAGEBYTES_MAX) {
         sodium_misuse();
     }
-    return implementation->stream_ietf_ext_xor_ic(c, m, mlen, n, 0U, k);
+    return implementation_2->stream_ietf_ext_xor_ic(c, m, mlen, n, 0U, k);
 }
 
 int
@@ -166,17 +166,17 @@ crypto_stream_chacha20_keygen(unsigned char k[crypto_stream_chacha20_KEYBYTES])
 int
 _crypto_stream_chacha20_pick_best_implementation(void)
 {
-    implementation = &crypto_stream_chacha20_ref_implementation;
+    implementation_2 = &crypto_stream_chacha20_ref_implementation;
 #if defined(HAVE_AVX2INTRIN_H) && defined(HAVE_EMMINTRIN_H) && \
     defined(HAVE_TMMINTRIN_H) && defined(HAVE_SMMINTRIN_H)
     if (sodium_runtime_has_avx2()) {
-        implementation = &crypto_stream_chacha20_dolbeau_avx2_implementation;
+        implementation_2 = &crypto_stream_chacha20_dolbeau_avx2_implementation;
         return 0;
     }
 #endif
 #if defined(HAVE_EMMINTRIN_H) && defined(HAVE_TMMINTRIN_H)
     if (sodium_runtime_has_ssse3()) {
-        implementation = &crypto_stream_chacha20_dolbeau_ssse3_implementation;
+        implementation_2 = &crypto_stream_chacha20_dolbeau_ssse3_implementation;
         return 0;
     }
 #endif

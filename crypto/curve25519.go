@@ -16,27 +16,31 @@
 
 package crypto
 
-// #cgo CFLAGS: -Wall -std=c99
-// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
-// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
-// #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/libs/darwin/arm64/include
-// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/libs/darwin/arm64/lib/libsodium.a
-// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
-// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
-// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
-// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
-// #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
-// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
-// #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
-// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
-// #include <stdint.h>
+// #cgo CFLAGS: -std=c99 -I${SRCDIR}/libsodium-fork/src/libsodium/include/  -I${SRCDIR}/libsodium-fork/src/libsodium/ -I${SRCDIR}/libsodium-fork/src/libsodium/include/sodium/
 // #include "sodium.h"
+// #include "crypto_hash/sha512/hash_sha512.c"
+// #include "crypto_hash/sha512/cp/hash_sha512_cp.c"
+// #include "crypto_stream/chacha20/stream_chacha20.c"
+// #include "crypto_stream/chacha20/ref/chacha20_ref.c"
+// #include "crypto_sign/crypto_sign.c"
+// #include "randombytes/randombytes.c"
+// #include "randombytes/sysrandom/randombytes_sysrandom.c"
+// #include "sodium/utils.c"
+// #include "crypto_verify/sodium/verify.c"
+// #include "crypto_core/ed25519/core_ed25519.c"
+// #include "crypto_core/ed25519/ref10/ed25519_ref10.c"
+// #include "crypto_sign/ed25519/sign_ed25519.c"
+// #include "crypto_sign/ed25519/ref10/open_bv_compat.c"
+// #include "crypto_sign/ed25519/ref10/keypair.c"
+// #include "crypto_sign/ed25519/ref10/open.c"
+// #include "crypto_sign/ed25519/ref10/sign.c"
+// #include "crypto_sign/ed25519/ref10/batch.c"
+// void sodium_misuse(){}
 import "C"
 
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -54,10 +58,10 @@ var cryptoSigSecretsVerifyBytesTotal = metrics.MakeCounter(metrics.CryptoSigSecr
 const masterDerivationKeyLenBytes = 32
 
 func init() {
-	if C.sodium_init() < 0 {
-		logging.Init()
-		logging.Base().Fatal("failed to initialize libsodium!")
-	}
+	// if C.sodium_init() < 0 {
+	// 	logging.Init()
+	// 	logging.Base().Fatal("failed to initialize libsodium!")
+	// }
 
 	// Check sizes of structs
 	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})
