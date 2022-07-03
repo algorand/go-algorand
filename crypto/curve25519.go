@@ -26,6 +26,8 @@ package crypto
 // #include "randombytes/randombytes.c"
 // #include "randombytes/sysrandom/randombytes_sysrandom.c"
 // #include "sodium/utils.c"
+// #include "sodium/core.c"
+// #include "sodium/runtime.c"
 // #include "crypto_verify/sodium/verify.c"
 // #include "crypto_core/ed25519/core_ed25519.c"
 // #include "crypto_core/ed25519/ref10/ed25519_ref10.c"
@@ -35,12 +37,12 @@ package crypto
 // #include "crypto_sign/ed25519/ref10/open.c"
 // #include "crypto_sign/ed25519/ref10/sign.c"
 // #include "crypto_sign/ed25519/ref10/batch.c"
-// void sodium_misuse(){}
 import "C"
 
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -58,10 +60,10 @@ var cryptoSigSecretsVerifyBytesTotal = metrics.MakeCounter(metrics.CryptoSigSecr
 const masterDerivationKeyLenBytes = 32
 
 func init() {
-	// if C.sodium_init() < 0 {
-	// 	logging.Init()
-	// 	logging.Base().Fatal("failed to initialize libsodium!")
-	// }
+	if C.sodium_init() < 0 {
+		logging.Init()
+		logging.Base().Fatal("failed to initialize libsodium!")
+	}
 
 	// Check sizes of structs
 	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})
