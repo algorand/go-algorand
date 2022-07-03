@@ -110,7 +110,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems := make(map[uint64]crypto.Hashable)
 
 	elems[proofresp.Idx] = &element
-	err = merklearray.Verify(blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, proof.ToProof())
 	if err != nil {
 		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
 		a.NoError(err)
@@ -122,7 +122,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems = make(map[uint64]crypto.Hashable)
 
 	elems[proofrespSHA256.Idx] = &element
-	err = merklearray.VerifyVectorCommitment(blk.TxnCommitments.Sha256Commitment.ToSlice(), elems, &proofSHA256)
+	err = merklearray.VerifyVectorCommitment(blk.TxnCommitments.Sha256Commitment.ToSlice(), elems, proofSHA256.ToProof())
 	if err != nil {
 		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.Sha256Commitment.ToSlice(), proofSHA256.Path, proofSHA256.TreeDepth, proofrespSHA256.Stibhash, proofrespSHA256.Idx)
 		a.NoError(err)

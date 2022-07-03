@@ -504,25 +504,16 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 }
 
 // TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.ProofResponse, merklearray.Proof, error) {
+func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.ProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
 	if err != nil {
-		return generatedV2.ProofResponse{}, merklearray.Proof{}, err
+		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	if proofResp.Treedepth == 0 {
-		return generatedV2.ProofResponse{}, merklearray.Proof{}, fmt.Errorf("proof Treedepth is 0")
-	}
-
-	respHashType, err := crypto.UnmarshalHashType(proofResp.Hashtype)
+	proof, err := merklearray.ProofDataToSingleLeafProof(proofResp.Hashtype, proofResp.Treedepth, proofResp.Proof)
 	if err != nil {
-		return generatedV2.ProofResponse{}, merklearray.Proof{}, err
+		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
-
-	var proof merklearray.Proof
-	proof.Path = merklearray.ProofBytesToPath(proofResp.Proof)
-	proof.HashFactory = crypto.HashFactory{HashType: respHashType}
-	proof.TreeDepth = uint8(proofResp.Treedepth)
 
 	return proofResp, proof, nil
 }
@@ -535,14 +526,10 @@ func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (generatedV2.LightB
 		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	if proofResp.Treedepth == 0 {
-		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, fmt.Errorf("proof Treedepth is 0")
+	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Treedepth, proofResp.Proof)
+	if err != nil {
+		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
-
-	var proof merklearray.SingleLeafProof
-	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha256}
-	proof.TreeDepth = uint8(proofResp.Treedepth)
-	proof.Path = merklearray.ProofBytesToPath(proofResp.Proof)
 
 	return proofResp, proof, nil
 }
