@@ -44,6 +44,7 @@ var (
 	ErrNonEmptyProofForEmptyElements = errors.New("non-empty proof for empty set of elements")
 	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
 	ErrPosOutOfBound                 = errors.New("pos out of bound")
+	ErrProofLengthDigestSizeMismatch = errors.New()
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree

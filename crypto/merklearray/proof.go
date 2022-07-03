@@ -114,7 +114,7 @@ func ProofDataToSingleLeafProof(hashTypeData string, treeDepth uint64, proofByte
 	digestSize := proof.HashFactory.NewHash().Size()
 	if len(proofBytes)%digestSize != 0 {
 		return SingleLeafProof{}, fmt.Errorf("proof bytes length is %d, which is not a multiple of "+
-			"digest size %d", len(proofBytes), digestSize)
+			"digest size %d: %w", len(proofBytes), digestSize, ErrProofLengthDigestSizeMismatch)
 	}
 
 	var proofPath []crypto.GenericDigest

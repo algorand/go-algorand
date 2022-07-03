@@ -240,8 +240,6 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	var nextStateProofRound = uint64(0)
 	var firstStateProofRound = 2 * consensusParams.StateProofInterval
 
-	t.Logf("Waiting for state proof to be committed.")
-
 	for rnd := startRound; nextStateProofRound <= firstStateProofRound; rnd++ {
 		sendPayment(r, &fixture, rnd)
 
