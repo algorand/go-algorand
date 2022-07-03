@@ -31,6 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
@@ -498,4 +501,35 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 		minBalance = 1000
 	}
 	return params.MinTxnFee, minBalance, nil
+}
+
+// TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
+func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.ProofResponse, merklearray.SingleLeafProof, error) {
+	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
+	if err != nil {
+		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
+	}
+
+	proof, err := merklearray.ProofDataToSingleLeafProof(proofResp.Hashtype, proofResp.Treedepth, proofResp.Proof)
+	if err != nil {
+		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
+	}
+
+	return proofResp, proof, nil
+}
+
+// LightBlockHeaderProof returns a proof for usage in merkle array verification for the provided block's light block header.
+func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (generatedV2.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
+	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
+
+	if err != nil {
+		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
+	}
+
+	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Treedepth, proofResp.Proof)
+	if err != nil {
+		return generatedV2.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
+	}
+
+	return proofResp, proof, nil
 }

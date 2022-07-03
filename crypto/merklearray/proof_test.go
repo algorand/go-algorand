@@ -203,6 +203,14 @@ func TestConcatenatedProofsOneLeaf(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestProofDeserializationError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	_, err := ProofDataToSingleLeafProof(crypto.Sha256.String(), 1, []byte{1})
+	a.ErrorIs(err, ErrProofLengthDigestSizeMismatch)
+}
+
 func recomputePath(p *SingleLeafProof) []crypto.GenericDigest {
 	var computedPath []crypto.GenericDigest
 	proofconcat := p.GetConcatenatedProof()

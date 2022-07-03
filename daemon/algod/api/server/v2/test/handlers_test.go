@@ -946,18 +946,8 @@ func TestGetProofDefault(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	// Build merklearray.Proof from ProofResponse
-	var proof merklearray.Proof
-	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha512_256}
-	proof.TreeDepth = uint8(resp.Treedepth)
-	a.NotEqual(proof.TreeDepth, 0)
-	proofconcat := resp.Proof
-	for len(proofconcat) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcat)
-		proof.Path = append(proof.Path, d[:])
-		proofconcat = proofconcat[len(d):]
-	}
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(resp.Hashtype, resp.Treedepth, resp.Proof)
+	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])
@@ -965,7 +955,7 @@ func TestGetProofDefault(t *testing.T) {
 	elems[0] = &element
 
 	// Verifies that the default proof is using SHA512_256
-	err = merklearray.Verify(blkHdr.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blkHdr.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, singleLeafProof.ToProof())
 	a.NoError(err)
 }
 

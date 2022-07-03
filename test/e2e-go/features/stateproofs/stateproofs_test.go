@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -51,16 +53,7 @@ func TestStateProofs(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
-	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.StateProofStrengthTarget = 256
-	consensusParams.StateProofRecoveryInterval = 6
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -129,18 +122,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 3
-	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.StateProofRecoveryInterval = 4
 	consensusParams.AgreementFilterTimeout = 1000 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1000 * time.Millisecond
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
-	consensusParams.StateProofRecoveryInterval = 4
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -226,6 +215,77 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
+func TestStateProofMessageCommitmentVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := getDefaultStateProofConsensusParams()
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	defer fixture.Shutdown()
+
+	libgoalClient := fixture.LibGoalClient
+
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	var startRound = uint64(1)
+	var nextStateProofRound = uint64(0)
+	var firstStateProofRound = 2 * consensusParams.StateProofInterval
+
+	for rnd := startRound; nextStateProofRound <= firstStateProofRound; rnd++ {
+		sendPayment(r, &fixture, rnd)
+
+		_, err := libgoalClient.WaitForRound(rnd)
+		r.NoError(err)
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoError(err)
+
+		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	}
+
+	_, stateProofMessage := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
+
+	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
+		proofResp, singleLeafProof, err := fixture.LightBlockHeaderProof(rnd)
+		r.NoError(err)
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoError(err)
+
+		lightBlockHeader := blk.ToLightBlockHeader()
+
+		elems := make(map[uint64]crypto.Hashable)
+		elems[proofResp.Index] = &lightBlockHeader
+		err = merklearray.VerifyVectorCommitment(stateProofMessage.BlockHeadersCommitment, elems, singleLeafProof.ToProof())
+		r.NoError(err)
+	}
+}
+
+func getDefaultStateProofConsensusParams() config.ConsensusParams {
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.StateProofInterval = 16
+	consensusParams.StateProofTopVoters = 1024
+	consensusParams.StateProofVotersLookback = 2
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	consensusParams.StateProofStrengthTarget = 256
+	consensusParams.StateProofRecoveryInterval = 6
+	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+
+	return consensusParams
+}
+
 func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd uint64) {
 	node0Client := fixture.GetLibGoalClientForNamedNode("Node0")
 	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
@@ -248,7 +308,7 @@ func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd
 	r.NoError(err)
 }
 
-func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
+func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
@@ -257,21 +317,29 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 
 	var stateProof sp.StateProof
 	var stateProofMessage stateproofmsg.Message
-	stateProofFound := false
 	for _, txn := range res.Transactions {
 		r.Equal(txn.Type, string(protocol.StateProofTx))
 		r.True(txn.StateProof != nil)
-		if txn.StateProof.StateProofIntervalLatestRound == nextStateProofRound {
+		if txn.StateProof.StateProofIntervalLatestRound == stateProofLatestRound {
 			err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
 			r.NoError(err)
 			err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 			r.NoError(err)
-			stateProofFound = true
+
+			return stateProof, stateProofMessage
 		}
 	}
-	r.True(stateProofFound)
 
+	r.FailNow("no state proof with latest round %d found", stateProofLatestRound)
+
+	// Should never get here
+	return sp.StateProof{}, stateproofmsg.Message{}
+}
+
+func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
+	stateProof, stateProofMessage := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
 	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
+
 	r.NoError(err)
 
 	if !prevStateProofMessage.MsgIsZero() {
@@ -306,9 +374,6 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -319,9 +384,6 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 4
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -404,9 +466,6 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 1024
-	consensusParams.StateProofVotersLookback = 2
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -417,9 +476,6 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 4
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
