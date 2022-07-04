@@ -240,7 +240,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (spw *Worker) builder() {
+func (spw *Worker) builder(latest basics.Round) {
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely

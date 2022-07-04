@@ -104,11 +104,13 @@ func (spw *Worker) Start() {
 	}
 	spw.net.RegisterHandlers(handlers)
 
+	latest := spw.ledger.Latest()
+
 	spw.wg.Add(1)
 	go spw.signer()
 
 	spw.wg.Add(1)
-	go spw.builder()
+	go spw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
