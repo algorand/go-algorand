@@ -47,11 +47,11 @@ func (spw *Worker) signer() {
 			if err != nil {
 				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
 				time.Sleep(1 * time.Second)
-			} else {
-				spw.signBlock(hdr)
-				spw.signedBlock(nextRnd)
+				nextRnd = spw.ledger.Latest()
+				continue
 			}
-
+			spw.signBlock(hdr)
+			spw.signedBlock(nextRnd)
 			nextRnd++
 
 		case <-spw.ctx.Done():
