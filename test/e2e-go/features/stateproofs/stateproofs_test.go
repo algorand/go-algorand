@@ -608,19 +608,12 @@ func TestAttestorsChangeTest(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	configurableConsensus := make(config.ConsensusProtocols)
-	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
-	consensusParams.StateProofTopVoters = 4 // taking only four out of five nodes to create the state proof.
-	consensusParams.StateProofVotersLookback = 2
-	consensusParams.StateProofWeightThreshold = (1 << 32) * 51 / 100
-	consensusParams.StateProofStrengthTarget = 256
-	consensusParams.StateProofRecoveryInterval = 6
-	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
-	configurableConsensus[consensusVersion] = consensusParams
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofTopVoters = 4
+
+	configurableConsensus := config.ConsensusProtocols{
+		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
+	}
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
@@ -643,17 +636,14 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-
 		// Changing the amount to pay. This should transfer most of the money from the rich node to the poort node.
 		if consensusParams.StateProofInterval*2 == rnd {
 			balance := paymentMaker.from.getBalance(a, &fixture)
-			paymentMaker.amount = uint64(float64(balance*3) / 4) // taking 3/4 of the balance.
-			paymentMaker.sendPayment(a, &fixture, rnd)
-		}
+			// ensuring that before the test, the rich node (from) has a significantly larger balance.
+			a.True(balance/2 > paymentMaker.to.getBalance(a, &fixture))
 
-		// ensuring that before the test, the rich node (from) has a significantly larger balance.
-		if consensusParams.StateProofInterval*2 == rnd {
-			a.True(paymentMaker.from.getBalance(a, &fixture)/2 > paymentMaker.to.getBalance(a, &fixture))
+			paymentMaker.amount = balance * 3 / 4
+			paymentMaker.sendPayment(a, &fixture, rnd)
 		}
 
 		// verifies that rich account transferred most of its money to the account that sits on poorNode.
@@ -662,7 +652,6 @@ func TestAttestorsChangeTest(t *testing.T) {
 		}
 
 		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
-		fmt.Println("round: ", rnd)
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -694,7 +683,6 @@ func TestAttestorsChangeTest(t *testing.T) {
 				lastStateProofBlock = blk
 			}
 		} else {
-			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
 		}
 
