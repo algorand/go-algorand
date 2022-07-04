@@ -45,6 +45,43 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+type accountFetcher struct {
+	nodeName      string
+	accountNumber int
+}
+
+func (a accountFetcher) getAccount(r *require.Assertions, f *fixtures.RestClientFixture) string {
+	node0Client := f.GetLibGoalClientForNamedNode(a.nodeName)
+	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	node0AccountList, err := node0Client.ListAddresses(node0Wallet)
+	r.NoError(err)
+	return node0AccountList[a.accountNumber]
+}
+
+func (a accountFetcher) getBalance(r *require.Assertions, f *fixtures.RestClientFixture) uint64 {
+	balance, _ := f.GetBalanceAndRound(a.getAccount(r, f))
+	return balance
+}
+
+type paymentSender struct {
+	from   accountFetcher
+	to     accountFetcher
+	amount uint64
+}
+
+func (p paymentSender) sendPayment(a *require.Assertions, f *fixtures.RestClientFixture, round uint64) {
+	account0 := p.from.getAccount(a, f)
+	account1 := p.to.getAccount(a, f)
+
+	minTxnFee, _, err := f.CurrentMinFeeAndBalance()
+	a.NoError(err)
+
+	client0 := f.GetLibGoalClientForNamedNode(p.from.nodeName)
+	_, err = client0.SendPaymentFromUnencryptedWallet(account0, account1, minTxnFee, p.amount, []byte{byte(round)})
+	a.NoError(err)
+}
+
 func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -72,7 +109,11 @@ func TestStateProofs(t *testing.T) {
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// send a dummy payment transaction to create non-empty blocks.
-		sendPayment(r, &fixture, rnd)
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)
@@ -181,7 +222,11 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		}
 
 		// send a dummy payment transaction.
-		sendPayment(r, &fixture, rnd)
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)
@@ -241,7 +286,11 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	var firstStateProofRound = 2 * consensusParams.StateProofInterval
 
 	for rnd := startRound; nextStateProofRound <= firstStateProofRound; rnd++ {
-		sendPayment(r, &fixture, rnd)
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
 
 		_, err := libgoalClient.WaitForRound(rnd)
 		r.NoError(err)
@@ -284,28 +333,6 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 
 	return consensusParams
-}
-
-func sendPayment(r *require.Assertions, fixture *fixtures.RestClientFixture, rnd uint64) {
-	node0Client := fixture.GetLibGoalClientForNamedNode("Node0")
-	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
-	r.NoError(err)
-	node0AccountList, err := node0Client.ListAddresses(node0Wallet)
-	r.NoError(err)
-	node0Account := node0AccountList[0]
-
-	node1Client := fixture.GetLibGoalClientForNamedNode("Node1")
-	node1Wallet, err := node1Client.GetUnencryptedWalletHandle()
-	r.NoError(err)
-	node1AccountList, err := node1Client.ListAddresses(node1Wallet)
-	r.NoError(err)
-	node1Account := node1AccountList[0]
-
-	minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
-	r.NoError(err)
-
-	_, err = node0Client.SendPaymentFromUnencryptedWallet(node0Account, node1Account, minTxnFee, 1, []byte{byte(rnd)})
-	r.NoError(err)
 }
 
 func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
@@ -419,7 +446,11 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 		}
 
 		// send a dummy payment transaction to create non-empty blocks
-		sendPayment(r, &fixture, rnd)
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)
@@ -501,8 +532,13 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			dir, err = fixture.GetNodeDir("Node4")
 			fixture.StartNode(dir)
 		}
+
 		// send a dummy payment transaction to create non-empty blocks
-		sendPayment(r, &fixture, rnd)
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)
@@ -560,4 +596,107 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	status, err := client.WaitForRound(currentRnd + 1)
 	require.NoError(t, err)
 	return status
+}
+
+// In this test, we have five nodes, where we only need four to create a StateProof.
+// After making the first Stateproof, we transfer three-quarters of the stake of the
+// rich node to the poor node. For both cases, we assert different stakes, that is, to
+// conclude whether the poor node is used to create the StateProof or the rich node.
+func TestAttestorsChangeTest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofTopVoters = 4
+
+	configurableConsensus := config.ConsensusProtocols{
+		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
+	}
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
+	defer fixture.Shutdown()
+
+	restClient, err := fixture.NC.AlgodClient()
+	a.NoError(err)
+
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoal := fixture.LibGoalClient
+
+	expectedNumberOfStateProofs := uint64(4)
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
+
+	paymentMaker := paymentSender{
+		from: accountFetcher{nodeName: "richNode", accountNumber: 0},
+		to:   accountFetcher{nodeName: "poorNode", accountNumber: 0},
+	}
+
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		// Changing the amount to pay. This should transfer most of the money from the rich node to the poort node.
+		if consensusParams.StateProofInterval*2 == rnd {
+			balance := paymentMaker.from.getBalance(a, &fixture)
+			// ensuring that before the test, the rich node (from) has a significantly larger balance.
+			a.True(balance/2 > paymentMaker.to.getBalance(a, &fixture))
+
+			paymentMaker.amount = balance * 3 / 4
+			paymentMaker.sendPayment(a, &fixture, rnd)
+		}
+
+		// verifies that rich account transferred most of its money to the account that sits on poorNode.
+		if consensusParams.StateProofInterval*3 == rnd {
+			a.True(paymentMaker.to.getBalance(a, &fixture) > paymentMaker.from.getBalance(a, &fixture))
+		}
+
+		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			// Must have a merkle commitment for participants
+			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+
+			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+
+			// the main part of the test (computing the total stake of the nodes):
+			sum := uint64(0)
+			for i := 1; i <= 3; i++ {
+				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
+			}
+
+			// including the stake of the rich node:
+			if blk.Round() < basics.Round(consensusParams.StateProofInterval*3) {
+				sum += accountFetcher{"richNode", 0}.getBalance(a, &fixture)
+			} else { // including the stake of the poor node (which is different)
+				sum += accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
+			}
+
+			a.Equal(sum, stake)
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		} else {
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+		}
+
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
