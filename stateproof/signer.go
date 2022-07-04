@@ -47,7 +47,7 @@ func (spw *Worker) signer() {
 			if err != nil {
 				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
 				time.Sleep(1 * time.Second)
-				nextRnd = spw.ledger.Latest()
+				nextRnd = spw.nextStateProofRound()
 				continue
 			}
 			spw.signBlock(hdr)
