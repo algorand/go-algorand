@@ -16,10 +16,26 @@
 
 package merklesignature
 
-import "github.com/algorand/go-algorand/crypto"
+import (
+	"github.com/algorand/go-algorand/crypto"
+)
 
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
 	MerkleSignatureSchemeHashFunction = crypto.Sumhash
 	MerkleSignatureSchemeRootSize     = crypto.SumhashDigestSize
 )
+
+// EmptyMerkleSignatureID is the hash of the empty MerkleSignature Commitment.
+// When fetching an online account from the ledger, the code must ensure that the account's commitment is not an array of zeros.
+// If it is, we replace that commitment with the empty EmptyMerkleSignatureID (a specific hash value).
+var EmptyMerkleSignatureID = Commitment{}
+
+func init() {
+	// no keys generated, inner tree of merkle siganture scheme is empty.
+	o, err := New(0, 0, 1)
+	if err != nil {
+		panic("initializing empty merkle signature scheme failed")
+	}
+	copy(EmptyMerkleSignatureID[:], o.GetVerifier().Commitment[:])
+}
