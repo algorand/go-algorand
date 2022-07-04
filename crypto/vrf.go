@@ -28,11 +28,11 @@ package crypto
 // #include "crypto_vrf/crypto_vrf.c"
 import "C"
 
-func init() {
-	if C.sodium_init() == -1 {
-		panic("sodium_init() failed")
-	}
-}
+// func init() {
+// 	if C.sodium_init() == -1 {
+// 		panic("sodium_init() failed")
+// 	}
+// }
 
 // deprecated names + wrappers -- TODO remove
 

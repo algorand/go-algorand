@@ -16,6 +16,12 @@
 
 package crypto
 
+import "C"
+import (
+	"fmt"
+	"github.com/algorand/go-algorand/util/metrics"
+)
+
 // sdafsdf // #cgo CFLAGS: -DHAVE_PTHREAD_PRIO_INHERIT=1 -DHAVE_PTHREAD=1 -DHAVE_STDIO_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_STRINGS_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_UNISTD_H=1 -DHAVE_WCHAR_H=1 -DSTDC_HEADERS=1 -D_ALL_SOURCE=1 -D_DARWIN_C_SOURCE=1 -D_GNU_SOURCE=1 -D_HPUX_ALT_XOPEN_SOCKET_API=1 -D_NETBSD_SOURCE=1 -D_OPENBSD_SOURCE=1 -D_POSIX_PTHREAD_SEMANTICS=1 -D__STDC_WANT_IEC_60559_ATTRIBS_EXT__=1 -D__STDC_WANT_IEC_60559_BFP_EXT__=1 -D__STDC_WANT_IEC_60559_DFP_EXT__=1 -D__STDC_WANT_IEC_60559_FUNCS_EXT__=1 -D__STDC_WANT_IEC_60559_TYPES_EXT__=1 -D__STDC_WANT_LIB_EXT2__=1 -D__STDC_WANT_MATH_SPEC_FUNCS__=1 -D_TANDEM_SOURCE=1 -D__EXTENSIONS__=1 -DHAVE_C_VARARRAYS=1 -DHAVE_CATCHABLE_ABRT=1 -DTLS=_Thread_local -DHAVE_DLFCN_H=1  -DHAVE_MMINTRIN_H=1 -DHAVE_EMMINTRIN_H=1 -DHAVE_PMMINTRIN_H=1 -DHAVE_TMMINTRIN_H=1 -DHAVE_SMMINTRIN_H=1 -DHAVE_AVXINTRIN_H=1 -DHAVE_AVX2INTRIN_H=1 -DHAVE_AVX512FINTRIN_H=1 -DHAVE_WMMINTRIN_H=1 -DHAVE_RDRAND=1 -DHAVE_SYS_MMAN_H=1 -DNATIVE_LITTLE_ENDIAN=1 -DHAVE_INLINE_ASM=1 -DHAVE_AMD64_ASM=1 -DHAVE_AVX_ASM=1 -DHAVE_TI_MODE=1 -DHAVE_CPUID=1 -DASM_HIDE_SYMBOL=.private_extern -DHAVE_WEAK_SYMBOLS=1 -DCPU_UNALIGNED_ACCESS=1 -DHAVE_ATOMIC_OPS=1 -DHAVE_ALLOCA_H=1 -DHAVE_ALLOCA=1 -DHAVE_ARC4RANDOM=1 -DHAVE_ARC4RANDOM_BUF=1 -DHAVE_MMAP=1 -DHAVE_MLOCK=1 -DHAVE_MADVISE=1 -DHAVE_MPROTECT=1 -DHAVE_MEMSET_S=1 -DHAVE_NANOSLEEP=1 -DHAVE_POSIX_MEMALIGN=1 -DHAVE_GETPID=1 -DCONFIGURED=1
 
 //  sadasd #include "crypto_stream/chacha20/dolbeau/chacha20_dolbeau-avx2.c"
@@ -27,15 +33,8 @@ package crypto
 // #include "sodium.h"
 // #include "crypto_hash/sha512/hash_sha512.c"
 // #include "crypto_hash/sha512/cp/hash_sha512_cp.c"
-// #include "crypto_stream/chacha20/dolbeau/chacha20_dolbeau-avx2.c"
-// #include "crypto_stream/chacha20/stream_chacha20.c"
-// #include "crypto_stream/chacha20/ref/chacha20_ref.c"
 // #include "crypto_sign/crypto_sign.c"
-// #include "randombytes/randombytes.c"
-// #include "randombytes/sysrandom/randombytes_sysrandom.c"
-// #include "sodium/utils.c"
-// #include "sodium/core.c"
-// #include "sodium/runtime.c"
+// #include "sodium/utils_mini.c"
 // #include "crypto_verify/sodium/verify.c"
 // #include "crypto_core/ed25519/core_ed25519.c"
 // #include "crypto_core/ed25519/ref10/ed25519_ref10.c"
@@ -46,13 +45,6 @@ package crypto
 // #include "crypto_sign/ed25519/ref10/sign.c"
 // #include "crypto_sign/ed25519/ref10/batch.c"
 import "C"
-
-import (
-	"fmt"
-
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/metrics"
-)
 
 // TODO: Remove metrics from crypto package
 var cryptoVRFGenerateTotal = metrics.MakeCounter(metrics.CryptoVRFGenerateTotal)
@@ -68,10 +60,10 @@ var cryptoSigSecretsVerifyBytesTotal = metrics.MakeCounter(metrics.CryptoSigSecr
 const masterDerivationKeyLenBytes = 32
 
 func init() {
-	if C.sodium_init() < 0 {
-		logging.Init()
-		logging.Base().Fatal("failed to initialize libsodium!")
-	}
+	//if C.sodium_init() < 0 {
+	//	logging.Init()
+	//	logging.Base().Fatal("failed to initialize libsodium!")
+	//}
 
 	// Check sizes of structs
 	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})

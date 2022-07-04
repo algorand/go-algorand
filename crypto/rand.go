@@ -16,9 +16,11 @@
 
 package crypto
 
+import "C"
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"unsafe"
 
 	"github.com/davidlazar/go-crypto/drbg"
 
@@ -42,6 +44,12 @@ type PRNG struct {
 var SystemRNG = &systemRNG{}
 
 type systemRNG struct{}
+
+//export randombytes_buf
+func randombytes_buf(p unsafe.Pointer, len C.size_t) {
+	randBuf := (*[1 << 30]byte)(p)[:len:len]
+	RandBytes(randBuf)
+}
 
 // RandUint64 returns a random 64-bit unsigned integer
 func RandUint64() uint64 {
