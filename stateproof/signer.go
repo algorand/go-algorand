@@ -85,18 +85,6 @@ func (spw *Worker) nextStateProofRound() basics.Round {
 	return nextrnd
 }
 
-			spw.signBlock(hdr)
-			spw.signedBlock(nextrnd)
-
-			nextrnd++
-
-		case <-spw.ctx.Done():
-			spw.wg.Done()
-			return
-		}
-	}
-}
-
 func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
