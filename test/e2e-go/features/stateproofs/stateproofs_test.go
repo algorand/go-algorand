@@ -162,10 +162,9 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := getDefaultStateProofConsensusParams()
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 3
-	consensusParams.StateProofRecoveryInterval = 4
 	consensusParams.AgreementFilterTimeout = 1000 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1000 * time.Millisecond
 	consensusParams.SeedLookback = 2
@@ -400,7 +399,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := getDefaultStateProofConsensusParams()
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -496,7 +495,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := getDefaultStateProofConsensusParams()
 	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
 	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
 	// we want the network to fail in generating stateproof if one node is not working correctly.
@@ -609,6 +608,15 @@ func TestAttestorsChangeTest(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
+	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
+	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
+	// we want the network to fail in generating stateproof if one node is not working correctly.
+	// For that we will increase the proven Weight to be close to 100%. However, this change might not be enough.
+	// if the signed Weight and the Proven Weight are very close to each other the number of reveals in the state proof
+	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
+	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofTopVoters = 4
 
 	configurableConsensus := config.ConsensusProtocols{
