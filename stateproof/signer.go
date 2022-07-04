@@ -38,40 +38,52 @@ type sigFromAddr struct {
 	Sig           merklesignature.Signature `codec:"s"`
 }
 
-func (spw *Worker) signer(latest basics.Round) {
-	var nextrnd basics.Round
-	restart := true // for the first iteration
-	for {
-		if restart {
-			for {
-				latestHdr, err := spw.ledger.BlockHdr(latest)
-				if err != nil {
-					spw.log.Warnf("spw.signer(): BlockHdr(latest %d): %v", latest, err)
-					time.Sleep(1 * time.Second)
-					latest = spw.ledger.Latest()
-					continue
-				}
-
-				nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-				if nextrnd == 0 {
-					// State proofs are not enabled yet.  Keep monitoring new blocks.
-					nextrnd = latest + 1
-				}
-				break
+func (spw *Worker) signer() {
+	nextRnd := spw.nextStateProofRound()
+	for { // Start signing StateProofs from nextRnd onwards
+		select {
+		case <-spw.ledger.Wait(nextRnd):
+			hdr, err := spw.ledger.BlockHdr(nextRnd)
+			if err != nil {
+				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
+				time.Sleep(1 * time.Second)
+			} else {
+				spw.signBlock(hdr)
+				spw.signedBlock(nextRnd)
 			}
-			restart = false
+
+			nextRnd++
+
+		case <-spw.ctx.Done():
+			spw.wg.Done()
+			return
+		}
+	}
+}
+
+func (spw *Worker) nextStateProofRound() basics.Round {
+	latest := spw.ledger.Latest()
+	var nextrnd basics.Round
+
+	for {
+		latestHdr, err := spw.ledger.BlockHdr(latest)
+		if err != nil {
+			spw.log.Warnf("spw.signer(): BlockHdr(latest %d): %v", latest, err)
+			time.Sleep(1 * time.Second)
+			latest = spw.ledger.Latest()
+			continue
 		}
 
-		select {
-		case <-spw.ledger.Wait(nextrnd):
-			hdr, err := spw.ledger.BlockHdr(nextrnd)
-			if err != nil {
-				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextrnd, err)
-				time.Sleep(1 * time.Second)
-				latest = spw.ledger.Latest()
-				restart = true
-				continue
-			}
+		nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+		if nextrnd == 0 {
+			// State proofs are not enabled yet.  Keep monitoring new blocks.
+			nextrnd = latest + 1
+		}
+		break
+	}
+
+	return nextrnd
+}
 
 			spw.signBlock(hdr)
 			spw.signedBlock(nextrnd)

@@ -240,7 +240,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (spw *Worker) builder(latest basics.Round) {
+func (spw *Worker) builder() {
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely
@@ -248,6 +248,7 @@ func (spw *Worker) builder(latest basics.Round) {
 	// will settle for a larger proof.  New blocks also tell us
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
+	latest := spw.ledger.Latest()
 	for {
 		spw.tryBuilding()
 
