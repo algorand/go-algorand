@@ -1235,7 +1235,7 @@ var pseudoOps = map[string]map[int]OpSpec{
 	"gtxn":   {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 }
 
-func init() {
+func addPseudoDocTags() {
 	for name, specs := range pseudoOps {
 		if len(specs) > 1 {
 			for i, spec := range specs {
@@ -1249,7 +1249,7 @@ func init() {
 				case i == 1:
 					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
 				case i == 0:
-					msg = fmt.Sprintf("%s can be called using %s without immediates", spec.Name, name)
+					msg = fmt.Sprintf("%s can be called using %s without immediates.", spec.Name, name)
 				default:
 					continue
 				}
@@ -1262,6 +1262,10 @@ func init() {
 			}
 		}
 	}
+}
+
+func init() {
+	addPseudoDocTags()
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
@@ -1305,13 +1309,8 @@ func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
 		m[name] = make(map[int]OpSpec)
 		for numImmediates, spec := range specs {
 			if spec.Version != 0 {
-				// If a version is specified, we will use it
-				fullSpec, ok := OpsByName[spec.Version][spec.Name]
-				if ok {
-					m[name][numImmediates] = fullSpec
-				} else {
-					m[name][numImmediates] = spec
-				}
+				// If a version is specified, then we assume it is a custom spec
+				m[name][numImmediates] = spec
 				continue
 			}
 			newSpec, ok := OpsByName[version][spec.Name]

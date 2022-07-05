@@ -2594,4 +2594,41 @@ func TestMergeProtos(t *testing.T) {
 	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}
 	p, _, _ = mergeProtos(map[int]OpSpec{0: medley, 1: medley2})
 	require.Equal(t, proto("aiaabaaaa:aiaabaaaa"), p)
+	v1 := OpSpec{Version: 1, Proto: proto(":")}
+	v2 := OpSpec{Version: 2, Proto: proto(":")}
+	_, v, _ := mergeProtos(map[int]OpSpec{0: v2, 1: v1})
+	require.Equal(t, uint64(1), v)
+}
+
+// Extra tests for features of getSpec that are currently not tested elsewhere
+func TestGetSpec(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ops, _ := AssembleStringWithVersion("int 1", AssemblerMaxVersion)
+	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
+	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
+	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
+	_, ok := getSpec(ops, "dummyPseudo", []string{})
+	require.Equal(t, false, ok)
+	_, ok = getSpec(ops, "nonsense", []string{})
+	require.Equal(t, false, ok)
+	require.Equal(t, 2, len(ops.Errors))
+	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
+}
+
+func TestAddPseudoDocTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// Not parallel because it modifies pseudoOps and opDocByName which are global maps
+	// t.Parallel()
+	pseudoOps["tests"] = map[int]OpSpec{2: OpSpec{Name: "multiple"}, 1: OpSpec{Name: "single"}, 0: OpSpec{Name: "none"}, anyImmediates: OpSpec{Name: "any"}}
+	addPseudoDocTags()
+	require.Equal(t, "multiple can be called using tests with 2 immediates.", opDocByName["multiple"])
+	require.Equal(t, "single can be called using tests with 1 immediate.", opDocByName["single"])
+	require.Equal(t, "none can be called using tests without immediates.", opDocByName["none"])
+	require.Equal(t, "", opDocByName["any"])
+	delete(pseudoOps, "tests")
+	delete(opDocByName, "multiple")
+	delete(opDocByName, "single")
+	delete(opDocByName, "none")
+	delete(opDocByName, "any")
 }
