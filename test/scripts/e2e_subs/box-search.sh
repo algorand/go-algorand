@@ -55,4 +55,11 @@ base64"
 # shellcheck disable=SC2059
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
+# Confirm that we are informed if no application boxes exist
+APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
+EXPECTED="No application boxes found"
+
+[ "$BOX_LIST" = "$EXPECTED" ]
+
 date "+${scriptname} OK %Y%m%d_%H%M%S"
