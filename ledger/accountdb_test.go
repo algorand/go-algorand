@@ -2733,5 +2733,5 @@ func TestAccountWithNoStateProofKeysReturnsNonZeroStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	onlineAccount := accountDataToOnline(basics.Address{}, &ledgercore.AccountData{}, config.ConsensusParams{}) // *ledgercore.OnlineAccount
-	require.Equal(t, merklesignature.EmptyMerkleSignatureID, onlineAccount.StateProofID.Commitment)
+	require.Equal(t, merklesignature.NoKeysMerkleSignatureID, onlineAccount.StateProofID.Commitment)
 }

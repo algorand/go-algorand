@@ -1804,7 +1804,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	stateProofID := ad.StateProofID
 	// check whether a key is stored at all.
 	if ad.StateProofID.IsEmpty() {
-		stateProofID = merklesignature.EmptyMerkleSignatureID
+		stateProofID = merklesignature.NoKeysMerkleSignatureID
 	}
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
