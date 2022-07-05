@@ -141,13 +141,13 @@ var createOnlineAccountsTable = []string{
 
 var createTxTailTable = []string{
 	`CREATE TABLE IF NOT EXISTS txtail (
-		round INTEGER PRIMARY KEY NOT NULL,
+		rnd INTEGER PRIMARY KEY NOT NULL,
 		data BLOB NOT NULL)`,
 }
 
 var createOnlineRoundParamsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
-		round INTEGER NOT NULL PRIMARY KEY,
+		rnd INTEGER NOT NULL PRIMARY KEY,
 		data BLOB NOT NULL)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
@@ -2280,7 +2280,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 
 		// insert entries into online accounts table
 		if ba.Status == basics.Online {
-			if !normBal.Valid {
+			if ba.MicroAlgos.Raw > 0 && !normBal.Valid {
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
@@ -3014,7 +3014,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 }
 
 func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
-	rows, err := tx.Query("SELECT round, data FROM onlineroundparamstail ORDER BY round ASC")
+	rows, err := tx.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -3039,7 +3039,7 @@ func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 }
 
 func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
-	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (round, data) VALUES (?, ?)")
+	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
@@ -3054,7 +3054,7 @@ func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore
 }
 
 func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
-	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE round<?",
+	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
 		deleteBeforeRound,
 	)
 	return err
@@ -4709,7 +4709,7 @@ func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
 }
 
 func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(round, data) VALUES(?, ?)")
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(rnd, data) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
@@ -4722,12 +4722,12 @@ func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, rou
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, "DELETE FROM txtail WHERE round < ?", forgetBeforeRound)
+	_, err = tx.ExecContext(ctx, "DELETE FROM txtail WHERE rnd < ?", forgetBeforeRound)
 	return err
 }
 
 func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
-	rows, err := tx.QueryContext(ctx, "SELECT round, data FROM txtail ORDER BY round DESC")
+	rows, err := tx.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
 	if err != nil {
 		return nil, nil, 0, err
 	}

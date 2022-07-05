@@ -403,7 +403,7 @@ func calculateFirstStageRounds(oldBase basics.Round, offset uint64, reenableCatc
 			reenableCatchpointsRound - basics.Round(catchpointLookback)
 	}
 
-	// The smallest integer r >= dcr.minFirstStageRound such that
+	// The smallest integer r >= minFirstStageRound such that
 	// (r + catchpointLookback) % ct.catchpointInterval == 0.
 	first := (int64(minFirstStageRound)+int64(catchpointLookback)+
 		int64(catchpointInterval)-1)/

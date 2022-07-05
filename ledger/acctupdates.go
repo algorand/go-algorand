@@ -409,7 +409,6 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 	defer au.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	// lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
 	lookback = basics.Round(au.acctLookback)
 	if committedRound < lookback {
 		return

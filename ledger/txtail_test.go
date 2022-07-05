@@ -171,7 +171,6 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 		encoded, _ := tail.encode()
 		roundData = append(roundData, encoded)
 	}
-	fmt.Printf("%d\n", len(roundData))
 	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
