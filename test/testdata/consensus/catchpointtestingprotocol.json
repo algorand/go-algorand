@@ -26,6 +26,7 @@
     "EnableFeePooling": true,
     "EnableKeyregCoherencyCheck": true,
     "EnableAccountDataResourceSeparation": true,
+    "EnableOnlineAccountCatchpoints": true,
     "FastRecoveryLambda": 300000000000,
     "FixTransactionLeases": true,
     "ForceNonParticipatingFeeSink": true,
