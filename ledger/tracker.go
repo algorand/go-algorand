@@ -152,7 +152,6 @@ type trackerRegistry struct {
 	// these trackers have some exceptional usages in the tracker registry.
 	accts       *accountUpdates
 	acctsOnline *onlineAccounts
-	txtail      *txTail
 
 	// ctx is the context for the committing go-routine.
 	ctx context.Context

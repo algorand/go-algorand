@@ -2283,7 +2283,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 
 		// insert entries into online accounts table
 		if ba.Status == basics.Online {
-			if !normBal.Valid {
+			if ba.MicroAlgos.Raw > 0 && !normBal.Valid {
 				var addr basics.Address
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
