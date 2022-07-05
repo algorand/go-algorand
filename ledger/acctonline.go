@@ -38,6 +38,9 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+
 type modifiedOnlineAccount struct {
 	// data stores the most recent ledgercore.AccountData for this modified
 	// account.
@@ -210,14 +213,14 @@ func (ao *onlineAccounts) close() {
 // which invokes the internal implementation after taking the lock.
 func (ao *onlineAccounts) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	ao.accountsMu.Lock()
-	ao.newBlockImpl(blk, delta)
+	ao.newBlockInner(blk, delta)
 	ao.accountsMu.Unlock()
 	ao.accountsReadCond.Broadcast()
 }
 
-// newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
+// newBlockInner is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
 // which assumes that no lock need to be taken.
-func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+func (ao *onlineAccounts) newBlockInner(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
 	if rnd <= ao.latest() {
@@ -588,39 +591,38 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 }
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
-	ao.accountsMu.RLock()
-	needUnlock := true
-	defer func() {
-		if needUnlock {
-			ao.accountsMu.RUnlock()
-		}
-	}()
-	var err error
-
-	var offset uint64
-	var paramsOffset uint64
+func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (out ledgercore.OnlineAccountData, err error) {
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData persistedOnlineAccountData
+	var currentDbRound basics.Round
+	var currentDeltaLen int
 
-	for {
-		currentDbRound := ao.cachedDBRoundOnline
-		currentDeltaLen := len(ao.deltas)
+	// retry loop in case db fetch from disk takes too long and the data needs updating after we get it
+slowDbRetry:
+	// unnamed function for lock defer context
+	done := func() bool {
+		ao.accountsMu.RLock()
+		defer ao.accountsMu.RUnlock()
+
+		currentDbRound = ao.cachedDBRoundOnline
+		currentDeltaLen = len(ao.deltas)
+
 		inHistory := false
+		var offset uint64
 		offset, err = ao.roundOffset(rnd)
 		if err != nil {
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
-				return ledgercore.OnlineAccountData{}, err
+				return true
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
 			err = nil
 		}
+		var paramsOffset uint64
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
-			return ledgercore.OnlineAccountData{}, err
+			return true
 		}
 
 		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
@@ -633,7 +635,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				// Check if this is the most recent round, in which case, we can
 				// use a cache of the most recent account state.
 				if offset == uint64(len(ao.deltas)) {
-					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+					out = macct.data.OnlineAccountData(rewardsProto, rewardsLevel)
+					return true
 				}
 				// the account appears in the deltas, but we don't know if it appears in the
 				// delta range of [0..offset], so we'll need to check :
@@ -644,81 +647,97 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					offset--
 					d, ok := ao.deltas[offset].GetData(addr)
 					if ok {
-						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+						out = d.OnlineAccountData(rewardsProto, rewardsLevel)
+						return true
 					}
 				}
 			}
 		}
 
 		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
-			return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			out = macct.GetOnlineAccountData(rewardsProto, rewardsLevel)
+			return true
 		}
+		return false
+	}()
+	if done {
+		return
+	}
 
-		ao.accountsMu.RUnlock()
-		needUnlock = false
+	// No updates of this account in the in-memory deltas; use on-disk DB.
+	// As an optimization, we avoid creating
+	// a separate transaction here, and directly use a prepared SQL query
+	// against the database.
+	var persistedData persistedOnlineAccountData
+	persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
+	if err != nil || persistedData.rowid == 0 {
+		// no such online account, return empty
+		return ledgercore.OnlineAccountData{}, err
+	}
+	// Now we load the entire history of this account to fill the onlineAccountsCache, so that the
+	// next lookup for this online account will not hit the on-disk DB.
+	//
+	// lookupOnlineHistory fetches the account DB round from the acctrounds table (validThrough) to
+	// distinguish between different cases involving the last-observed value of ao.cachedDBRoundOnline.
+	// 1. Updates to ao.onlineAccountsCache happen with ao.accountsMu taken below, as well as in postCommit()
+	// 2. If we started reading the history (lookupOnlineHistory)
+	//   1. before commitRound or while it is running => OK, read what is in DB and then add new entries in postCommit
+	//     * if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
+	//   2. after commitRound but before postCommit => OK, read full history, ignore the update from postCommit in writeFront's updRound comparison
+	//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
+	var persistedDataHistory []persistedOnlineAccountData
+	var validThrough basics.Round
+	persistedDataHistory, validThrough, err = ao.accountsq.lookupOnlineHistory(addr)
+	if err != nil || len(persistedDataHistory) == 0 {
+		return ledgercore.OnlineAccountData{}, err
+	}
+	// 3. After we finished reading the history (lookupOnlineHistory), either
+	//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
+	//   2. after commitRound but before postCommit (currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas)) => OK
+	//      the cache gets populated and postCommit updates the new entry
+	//   3. after commitRound and after postCommit => problem
+	//      postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
+	// In order to resolve this lookupOnlineHistory returns dbRound value (as validThrough) and determine what happened
+	// So handle cases 3.1 and 3.2 here, and 3.3 below
+	out, err = ao.lookupOnlineAccountDataHandleData(addr, currentDbRound, currentDeltaLen, &persistedData, persistedDataHistory, validThrough, rewardsProto, rewardsLevel)
+	if err == errNotDoneYet {
+		// case 3.3: retry (for loop iterates and queries again)
+		goto slowDbRetry
+	}
+	return
+}
 
-		// No updates of this account in the in-memory deltas; use on-disk DB.
-		// As an optimization, we avoid creating
-		// a separate transaction here, and directly use a prepared SQL query
-		// against the database.
-		persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
-		if err != nil || persistedData.rowid == 0 {
-			// no such online account, return empty
-			return ledgercore.OnlineAccountData{}, err
-		}
-		// Now we load the entire history of this account to fill the onlineAccountsCache, so that the
-		// next lookup for this online account will not hit the on-disk DB.
-		//
-		// lookupOnlineHistory fetches the account DB round from the acctrounds table (validThrough) to
-		// distinguish between different cases involving the last-observed value of ao.cachedDBRoundOnline.
-		// 1. Updates to ao.onlineAccountsCache happen with ao.accountsMu taken below, as well as in postCommit()
-		// 2. If we started reading the history (lookupOnlineHistory)
-		//   1. before commitRound or while it is running => OK, read what is in DB and then add new entries in postCommit
-		//     * if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
-		//   2. after commitRound but before postCommit => OK, read full history, ignore the update from postCommit in writeFront's updRound comparison
-		//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
-		persistedDataHistory, validThrough, err := ao.accountsq.lookupOnlineHistory(addr)
-		if err != nil || len(persistedDataHistory) == 0 {
-			return ledgercore.OnlineAccountData{}, err
-		}
-		// 3. After we finished reading the history (lookupOnlineHistory), either
-		//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
-		//   2. after commitRound but before postCommit (currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas)) => OK
-		//      the cache gets populated and postCommit updates the new entry
-		//   3. after commitRound and after postCommit => problem
-		//      postCommit does not add a new entry, but the cache that would get constructed would miss the latest entry, retry
-		// In order to resolve this lookupOnlineHistory returns dbRound value (as validThrough) and determine what happened
-		// So handle cases 3.1 and 3.2 here, and 3.3 below
-		ao.accountsMu.Lock()
-		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
-			// not advanced or postCommit not called yet, write to the cache and return the value
-			ao.onlineAccountsCache.clear(addr)
-			if !ao.onlineAccountsCache.full() {
-				for _, data := range persistedDataHistory {
-					written := ao.onlineAccountsCache.writeFront(
-						data.addr,
-						cachedOnlineAccount{
-							baseOnlineAccountData: data.accountData,
-							updRound:              data.updRound,
-						})
-					if !written {
-						ao.accountsMu.Unlock()
-						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
-						return ledgercore.OnlineAccountData{}, err
-					}
+var errNotDoneYet error = errors.New("Not Done Yet")
+
+func (ao *onlineAccounts) lookupOnlineAccountDataHandleData(addr basics.Address, currentDbRound basics.Round, currentDeltaLen int, persistedData *persistedOnlineAccountData, persistedDataHistory []persistedOnlineAccountData, validThrough basics.Round, rewardsProto config.ConsensusParams, rewardsLevel uint64) (ledgercore.OnlineAccountData, error) {
+	ao.accountsMu.Lock()
+	defer ao.accountsMu.Unlock()
+	if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
+		// not advanced or postCommit not called yet, write to the cache and return the value
+		ao.onlineAccountsCache.clear(addr)
+		if !ao.onlineAccountsCache.full() {
+			for _, data := range persistedDataHistory {
+				written := ao.onlineAccountsCache.writeFront(
+					data.addr,
+					cachedOnlineAccount{
+						baseOnlineAccountData: data.accountData,
+						updRound:              data.updRound,
+					})
+				if !written {
+					err := fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
+					return ledgercore.OnlineAccountData{}, err
 				}
 			}
-			ao.accountsMu.Unlock()
-			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
-		// case 3.3: retry (for loop iterates and queries again)
-		ao.accountsMu.Unlock()
-
-		if validThrough < currentDbRound {
-			ao.log.Errorf("onlineAccounts.lookupOnlineAccountData: database round %d is behind in-memory round %d", validThrough, currentDbRound)
-			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
-		}
+		return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 	}
+
+	if validThrough < currentDbRound {
+		ao.log.Errorf("onlineAccounts.lookupOnlineAccountData: database round %d is behind in-memory round %d", validThrough, currentDbRound)
+		return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
+	}
+
+	return ledgercore.OnlineAccountData{}, errNotDoneYet
 }
 
 // onlineTop returns the top n online accounts, sorted by their normalized
@@ -866,6 +885,3 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		return res, nil
 	}
 }
-
-var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
-var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
