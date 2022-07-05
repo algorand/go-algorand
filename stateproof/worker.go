@@ -110,7 +110,7 @@ func (spw *Worker) Start() {
 	go spw.signer(latest)
 
 	spw.wg.Add(1)
-	spw.builder(latest)
+	go spw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
