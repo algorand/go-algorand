@@ -38,8 +38,8 @@ type sigFromAddr struct {
 	Sig           merklesignature.Signature `codec:"s"`
 }
 
-func (spw *Worker) signer() {
-	nextRnd := spw.nextStateProofRound()
+func (spw *Worker) signer(latest basics.Round) {
+	nextRnd := spw.nextStateProofRound(latest)
 	for { // Start signing StateProofs from nextRnd onwards
 		select {
 		case <-spw.ledger.Wait(nextRnd):
@@ -47,7 +47,7 @@ func (spw *Worker) signer() {
 			if err != nil {
 				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
 				time.Sleep(1 * time.Second)
-				nextRnd = spw.nextStateProofRound()
+				nextRnd = spw.nextStateProofRound(spw.ledger.Latest())
 				continue
 			}
 			spw.signBlock(hdr)
@@ -61,8 +61,7 @@ func (spw *Worker) signer() {
 	}
 }
 
-func (spw *Worker) nextStateProofRound() basics.Round {
-	latest := spw.ledger.Latest()
+func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 	var nextrnd basics.Round
 
 	for {

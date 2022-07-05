@@ -107,10 +107,10 @@ func (spw *Worker) Start() {
 	latest := spw.ledger.Latest()
 
 	spw.wg.Add(1)
-	go spw.signer()
+	go spw.signer(latest)
 
 	spw.wg.Add(1)
-	go spw.builder(latest)
+	spw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
