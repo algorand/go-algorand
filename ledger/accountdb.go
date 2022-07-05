@@ -1802,7 +1802,11 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // cause us to run out of memory.
 func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	stateProofID := ad.StateProofID
-	// check whether a key is stored at all.
+	// Some accounts might not have StateProof keys commitment. As a result,
+	// the commitment would be an array filled with zeroes: [0x0...0x0].
+	// Since the commitment is created using the subset-sum hash function, for which the
+	// value [0x0..0x0] might be known, we avoid using such empty commitments.
+	// We replace it with a commitment for zero keys..
 	if ad.StateProofID.IsEmpty() {
 		stateProofID = merklesignature.NoKeysMerkleSignatureID
 	}
