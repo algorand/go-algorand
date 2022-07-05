@@ -32,6 +32,9 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+const merkleSignatureSchemaVersion = 1
+const merkleSignatureTableSchemaName = "merklesignaturescheme"
+
 // Errors for the persistent merkle signature scheme
 var (
 	errSelectKeysError = errors.New("failed to fetch stateproof keys from DB")

@@ -31,8 +31,9 @@ const (
 	// SchemeSaltVersion is the current salt version of merkleSignature
 	SchemeSaltVersion = byte(0)
 
-	merkleSignatureSchemaVersion   = 1
-	merkleSignatureTableSchemaName = "merklesignaturescheme"
+	// CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
+	// and a falcon signature scheme.
+	CryptoPrimitivesID = uint16(0)
 )
 
 // NoKeysCommitment is a const hash value of the empty MerkleSignature Commitment.

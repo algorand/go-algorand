@@ -93,10 +93,6 @@ type (
 	}
 )
 
-// CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
-// and a falcon signature scheme.
-var CryptoPrimitivesID = uint16(0)
-
 // Errors for the merkle signature scheme
 var (
 	ErrStartBiggerThanEndRound           = errors.New("cannot create Merkle Signature Scheme because end round is smaller then start round")
