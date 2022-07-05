@@ -93,7 +93,20 @@ func TestValidateStateProof(t *testing.T) {
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
-	sp.SignedWeight = 101
+	// Require 100% of the weight to be signed in order to accept stateproof before interval/2 rounds has passed from the latest round attested (optimal case)
+	sp.SignedWeight = 99 // suboptimal signed weight
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	t.Log(err)
+	require.ErrorIs(t, err, errInsufficientWeight)
+
+	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
+	atRound = latestRoundInProof + basics.Round(proto.StateProofInterval/2)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	t.Log(err)
+	require.ErrorIs(t, err, errInsufficientWeight)
+
+	// This suboptimal signed weight should be enough for this round
+	atRound++
 	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
