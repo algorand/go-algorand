@@ -27,10 +27,10 @@ const (
 	MerkleSignatureSchemeRootSize     = crypto.SumhashDigestSize
 )
 
-// MssNoKeysCommitment is the hash of the empty MerkleSignature Commitment.
+// NoKeysCommitment is the hash of the empty MerkleSignature Commitment.
 // When fetching an online account from the ledger, the code must ensure that the account's commitment is not an array of zeros.
-// If it is, we replace that commitment with the empty MssNoKeysCommitment (a specific hash value).
-var MssNoKeysCommitment = Commitment{}
+// If it is, we replace that commitment with the empty NoKeysCommitment (a specific hash value).
+var NoKeysCommitment = Commitment{}
 
 func init() {
 	// no keys generated, inner tree of merkle siganture scheme is empty.
@@ -41,5 +41,5 @@ func init() {
 	if len(o.GetAllKeys()) > 0 {
 		panic("mss tree has more than just root.")
 	}
-	copy(MssNoKeysCommitment[:], o.GetVerifier().Commitment[:])
+	copy(NoKeysCommitment[:], o.GetVerifier().Commitment[:])
 }

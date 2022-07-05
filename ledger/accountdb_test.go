@@ -2733,7 +2733,7 @@ func TestAccountWithNoStateProofKeysReturnsNonZeroStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	onlineAccount := accountDataToOnline(basics.Address{}, &ledgercore.AccountData{}, config.ConsensusParams{}) // *ledgercore.OnlineAccount
-	require.Equal(t, merklesignature.MssNoKeysCommitment, onlineAccount.StateProofID.Commitment)
+	require.Equal(t, merklesignature.NoKeysCommitment, onlineAccount.StateProofID.Commitment)
 }
 
 func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
@@ -2764,6 +2764,6 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, account := range topn {
-		require.Equal(t, merklesignature.MssNoKeysCommitment, account.StateProofID.Commitment)
+		require.Equal(t, merklesignature.NoKeysCommitment, account.StateProofID.Commitment)
 	}
 }

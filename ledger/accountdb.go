@@ -1808,7 +1808,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	// value [0x0..0x0] might be known, we avoid using such empty commitments.
 	// We replace it with a commitment for zero keys..
 	if ad.StateProofID.IsEmpty() {
-		stateProofID = merklesignature.MssNoKeysCommitment
+		stateProofID = merklesignature.NoKeysCommitment
 	}
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
