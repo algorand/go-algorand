@@ -67,7 +67,7 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = accountsCreateTxTailTable(context.Background(), tx)
 	require.NoError(tb, err)
 
-	err = performOnlineAccountsTableMigration(context.Background(), tx, nil)
+	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
 	require.NoError(tb, err)
 
 	// since this is a test that starts from genesis, there is no tail that needs to be migrated.

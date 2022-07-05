@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -32,10 +33,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -2192,7 +2195,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
 }
 
-func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
 
 	var insertOnlineAcct *sql.Stmt
 	insertOnlineAcct, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance, updround, votelastvalid) VALUES(?, ?, ?, ?, ?)")
@@ -2247,6 +2250,15 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		return nil
 	}
 
+	type acctState struct {
+		old    baseAccountData
+		oldEnc []byte
+		new    baseAccountData
+		newEnc []byte
+	}
+	acctRehash := make(map[basics.Address]acctState)
+	var addr basics.Address
+
 	for rows.Next() {
 		var addrid sql.NullInt64
 		var addrbuf []byte
@@ -2269,7 +2281,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		// insert entries into online accounts table
 		if ba.Status == basics.Online {
 			if !normBal.Valid {
-				var addr basics.Address
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
@@ -2287,8 +2298,14 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 
 		// remove stateproofID field for offline accounts
 		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
+			// store old data for account hash update
+			state := acctState{old: ba, oldEnc: encodedAcctData}
 			ba.StateProofID = merklesignature.Verifier{}
 			encodedOnlineAcctData := protocol.Encode(&ba)
+			copy(addr[:], addrbuf)
+			state.new = ba
+			state.newEnc = encodedOnlineAcctData
+			acctRehash[addr] = state
 			updateRes, err = updateAcct.ExecContext(ctx, encodedOnlineAcctData, addrid.Int64)
 			err = checkSQLResult(err, updateRes)
 			if err != nil {
@@ -2297,12 +2314,54 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		}
 
 		processedAccounts++
-		if log != nil {
-			log(processedAccounts, totalOnlineBaseAccounts)
+		if progress != nil {
+			progress(processedAccounts, totalOnlineBaseAccounts)
 		}
 	}
 	if err = rows.Err(); err != nil {
 		return err
+	}
+
+	// update accounthashes for the modified accounts
+	if len(acctRehash) > 0 {
+		hashRound, err := accountsHashRound(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if hashRound == 0 {
+			// no account hashes, done
+			return nil
+		}
+
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			return nil
+		}
+
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		if err != nil {
+			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
+		}
+		for addr, state := range acctRehash {
+			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleted, err := trie.Delete(deleteHash)
+			if err != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
+			}
+			if !deleted && log != nil {
+				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			}
+
+			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			added, err := trie.Add(addHash)
+			if err != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+			}
+			if !added && log != nil {
+				log.Warnf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			}
+		}
+		_, err = trie.Commit()
 	}
 
 	return err
