@@ -3786,7 +3786,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		var encodedAcctData []byte
 		err = rows.Scan(&addrid, &encodedAcctData)
 		require.NoError(t, err)
-		var ba baseAccountDataMigrate
+		var ba baseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		require.NoError(t, err)
 		if ba.Status != basics.Online {

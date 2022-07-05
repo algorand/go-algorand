@@ -1970,33 +1970,6 @@ func accountDataResources(
 	return nil
 }
 
-type baseAccountDataMigrate struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	baseAccountData
-}
-
-func (ba *baseAccountDataMigrate) SetAccountData(ad *basics.AccountData) {
-	ba.Status = ad.Status
-	ba.baseAccountData.MicroAlgos = ad.MicroAlgos
-	ba.baseAccountData.RewardsBase = ad.RewardsBase
-	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
-	ba.VoteID = ad.VoteID
-	ba.SelectionID = ad.SelectionID
-	ba.StateProofID = ad.StateProofID
-	ba.VoteFirstValid = ad.VoteFirstValid
-	ba.VoteLastValid = ad.VoteLastValid
-	ba.VoteKeyDilution = ad.VoteKeyDilution
-	ba.AuthAddr = ad.AuthAddr
-	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
-	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
-	ba.TotalExtraAppPages = ad.TotalExtraAppPages
-	ba.TotalAssetParams = uint64(len(ad.AssetParams))
-	ba.TotalAssets = uint64(len(ad.Assets))
-	ba.TotalAppParams = uint64(len(ad.AppParams))
-	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
-}
-
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	now := time.Now().UnixNano()
@@ -2077,8 +2050,8 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		var newAccountData baseAccountDataMigrate
-		newAccountData.SetAccountData(&accountData)
+		var newAccountData baseAccountData
+		newAccountData.SetAccountData(accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
 
 		if normBal.Valid {
@@ -2283,7 +2256,11 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		if err != nil {
 			return err
 		}
-		var ba baseAccountDataMigrate
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return err
+		}
+		var ba baseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		if err != nil {
 			return err
@@ -2298,8 +2275,8 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 			}
 			var baseOnlineAD baseOnlineAccountData
 			baseOnlineAD.baseVotingData = ba.baseVotingData
-			baseOnlineAD.MicroAlgos = ba.baseAccountData.MicroAlgos
-			baseOnlineAD.RewardsBase = ba.baseAccountData.RewardsBase
+			baseOnlineAD.MicroAlgos = ba.MicroAlgos
+			baseOnlineAD.RewardsBase = ba.RewardsBase
 			encodedOnlineAcctData := protocol.Encode(&baseOnlineAD)
 			insertRes, err = insertOnlineAcct.ExecContext(ctx, addrbuf, encodedOnlineAcctData, normBal.Int64, ba.UpdateRound, baseOnlineAD.VoteLastValid)
 			err = checkSQLResult(err, insertRes)
