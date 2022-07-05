@@ -45,6 +45,17 @@ executors:
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
+  mac_arm64: &executor-mac-arm64
+    machine: true
+    resource_class: algorand/macstadium-m1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+  # these are required b/c jobs explicitly assign sizes to the executors
+  # for `mac_arm64` there is only one size
+  mac_arm64_medium:
+    <<: *executor-mac-arm64
+  mac_arm64_large:
+    <<: *executor-mac-arm64
 
 workflows:
   version: 2
@@ -57,6 +68,23 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64", "mac_amd64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
+
+      - build_nightly:
+          name: << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
 
       - test:
           name: << matrix.platform >>_test
@@ -64,23 +92,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - integration:
@@ -89,17 +107,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_expect:
@@ -108,17 +122,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_subs:
@@ -127,17 +137,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context:
             - slack-secrets
             - aws-secrets
@@ -147,14 +153,24 @@ workflows:
           matrix:
             parameters:
               platform: ["amd64", "arm64", "mac_amd64"]
-              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+              job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+
+      - tests_verification_job_nightly:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
             - << matrix.platform >>_test_nightly_verification
             - << matrix.platform >>_integration_nightly_verification
@@ -168,6 +184,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+
       #- windows_x64_build
 
 commands:
@@ -187,6 +204,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
 
@@ -483,6 +501,21 @@ jobs:
       - prepare_go
       - generic_build
 
+  build_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
+      - generic_build
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
+
   test:
     parameters:
       platform:
@@ -514,9 +547,8 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+      - slack/notify:
+          <<: *slack-fail-event
 
   integration:
     parameters:
@@ -658,6 +690,23 @@ jobs:
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  tests_verification_job_nightly:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+        type: string
+      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+      - slack/notify:
+          <<: *slack-fail-event
 
   upload_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
