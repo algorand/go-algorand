@@ -84,7 +84,7 @@ var appBoxListCmd = &cobra.Command{
 
 		// Print if no boxes found
 		if len(boxes) == 0 {
-			reportInfof("No application boxes found")
+			reportErrorf("No application boxes found")
 			return
 		}
 
