@@ -248,7 +248,6 @@ func (spw *Worker) builder(latest basics.Round) {
 	// will settle for a larger proof.  New blocks also tell us
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
-	latest := spw.ledger.Latest()
 	for {
 		spw.tryBuilding()
 
