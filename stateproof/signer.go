@@ -39,9 +39,31 @@ type sigFromAddr struct {
 }
 
 func (spw *Worker) signer(latest basics.Round) {
+	nextRnd := spw.nextStateProofRound(latest)
+	for { // Start signing StateProofs from nextRnd onwards
+		select {
+		case <-spw.ledger.Wait(nextRnd):
+			hdr, err := spw.ledger.BlockHdr(nextRnd)
+			if err != nil {
+				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
+				time.Sleep(1 * time.Second)
+				nextRnd = spw.nextStateProofRound(spw.ledger.Latest())
+				continue
+			}
+			spw.signBlock(hdr)
+			spw.signedBlock(nextRnd)
+			nextRnd++
+
+		case <-spw.ctx.Done():
+			spw.wg.Done()
+			return
+		}
+	}
+}
+
+func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 	var nextrnd basics.Round
 
-restart:
 	for {
 		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
@@ -59,27 +81,7 @@ restart:
 		break
 	}
 
-	for {
-		select {
-		case <-spw.ledger.Wait(nextrnd):
-			hdr, err := spw.ledger.BlockHdr(nextrnd)
-			if err != nil {
-				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextrnd, err)
-				time.Sleep(1 * time.Second)
-				latest = spw.ledger.Latest()
-				goto restart
-			}
-
-			spw.signBlock(hdr)
-			spw.signedBlock(nextrnd)
-
-			nextrnd++
-
-		case <-spw.ctx.Done():
-			spw.wg.Done()
-			return
-		}
-	}
+	return nextrnd
 }
 
 func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
