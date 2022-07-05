@@ -35,9 +35,7 @@ const (
 	merkleSignatureTableSchemaName = "merklesignaturescheme"
 )
 
-// NoKeysCommitment is the hash of the empty MerkleSignature Commitment.
-// When fetching an online account from the ledger, the code must ensure that the account's commitment is not an array of zeros.
-// If it is, we replace that commitment with the empty NoKeysCommitment (a specific hash value).
+// NoKeysCommitment is a const hash value of the empty MerkleSignature Commitment.
 var NoKeysCommitment = Commitment{}
 
 func init() {
