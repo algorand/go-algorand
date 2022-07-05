@@ -57,7 +57,7 @@ base64"
 
 # Confirm that we are informed if no application boxes exist
 APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
-BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID" 2>&1 || true)
 EXPECTED="No application boxes found"
 
 [ "$BOX_LIST" = "$EXPECTED" ]
