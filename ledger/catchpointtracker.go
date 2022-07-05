@@ -157,10 +157,6 @@ type catchpointTracker struct {
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
 
-	// reenableGeneratingCatchpointFiles is used for signaling when catchpoint generation
-	// should be turned back on after a consensus upgrade.
-	reenableGeneratingCatchpointFiles int32
-
 	// catchpointsMu protects `roundDigest`, `accountDataResourceSeparationRound` and
 	// `lastCatchpointLabel`.
 	catchpointsMu deadlock.RWMutex
@@ -372,16 +368,12 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if config.Consensus[blk.CurrentProtocol].EnableAccountDataResourceSeparation && ct.accountDataResourceSeparationRound == 0 {
+	if config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints && ct.accountDataResourceSeparationRound == 0 {
 		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
 		if catchpointLookback == 0 {
 			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
 		}
 		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
-	}
-
-	if config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints {
-		atomic.StoreInt32(&ct.reenableGeneratingCatchpointFiles, 1)
 	}
 }
 
@@ -1423,7 +1415,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 func (ct *catchpointTracker) catchpointEnabled() bool {
-	return ct.catchpointInterval != 0 && atomic.LoadInt32(&ct.reenableGeneratingCatchpointFiles) != 0
+	return ct.catchpointInterval != 0
 }
 
 // accountsInitializeHashes initializes account hashes.
