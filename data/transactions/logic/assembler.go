@@ -1237,28 +1237,26 @@ var pseudoOps = map[string]map[int]OpSpec{
 
 func addPseudoDocTags() {
 	for name, specs := range pseudoOps {
-		if len(specs) > 1 {
-			for i, spec := range specs {
-				if spec.Name == name {
-					continue
-				}
-				msg := ""
-				switch {
-				case i > 1:
-					msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
-				case i == 1:
-					msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
-				case i == 0:
-					msg = fmt.Sprintf("%s can be called using %s without immediates.", spec.Name, name)
-				default:
-					continue
-				}
-				desc, ok := opDocByName[spec.Name]
-				if ok {
-					opDocByName[spec.Name] = desc + "<br />" + msg
-				} else {
-					opDocByName[spec.Name] = msg
-				}
+		for i, spec := range specs {
+			if spec.Name == name {
+				continue
+			}
+			msg := ""
+			switch {
+			case i > 1:
+				msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
+			case i == 1:
+				msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
+			case i == 0:
+				msg = fmt.Sprintf("%s can be called using %s without immediates.", spec.Name, name)
+			default:
+				continue
+			}
+			desc, ok := opDocByName[spec.Name]
+			if ok {
+				opDocByName[spec.Name] = desc + "<br />" + msg
+			} else {
+				opDocByName[spec.Name] = msg
 			}
 		}
 	}
