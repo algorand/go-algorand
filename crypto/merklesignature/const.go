@@ -25,6 +25,14 @@ import (
 const (
 	MerkleSignatureSchemeHashFunction = crypto.Sumhash
 	MerkleSignatureSchemeRootSize     = crypto.SumhashDigestSize
+	// KeyLifetimeDefault defines the default lifetime of a key in the merkle signature scheme (in rounds).
+	KeyLifetimeDefault = 256
+
+	// SchemeSaltVersion is the current salt version of merkleSignature
+	SchemeSaltVersion = byte(0)
+
+	merkleSignatureSchemaVersion   = 1
+	merkleSignatureTableSchemaName = "merklesignaturescheme"
 )
 
 // NoKeysCommitment is the hash of the empty MerkleSignature Commitment.
