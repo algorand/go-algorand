@@ -107,7 +107,7 @@ func TestValidateStateProof(t *testing.T) {
 
 	// This suboptimal signed weight should be enough for this round
 	atRound++
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, latestRoundInProof+basics.Round(proto.StateProofInterval/2+1), msg)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofCrypto)
