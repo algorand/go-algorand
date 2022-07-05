@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -3777,7 +3778,72 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		rand.Read(acct.StateProofID[:])
 		accts[addr] = acct
 	}
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	// this is the same seq as accountsInitTest makes but it stops
+	// before the online accounts table creation to generate a trie and commit it
+	_, err = accountsInit(tx, accts, config.Consensus[protocol.ConsensusCurrentVersion])
+	require.NoError(t, err)
+
+	err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+	require.NoError(t, err)
+
+	err = accountsCreateResourceTable(context.Background(), tx)
+	require.NoError(t, err)
+
+	err = performResourceTableMigration(context.Background(), tx, nil)
+	require.NoError(t, err)
+
+	// create account hashes
+	getRootHash := func(commit bool) (crypto.Digest, error) {
+		rows, err := tx.Query("SELECT address, data FROM accountbase")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		mc, err := MakeMerkleCommitter(tx, false)
+		require.NoError(t, err)
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		require.NoError(t, err)
+
+		var addr basics.Address
+		for rows.Next() {
+			var addrbuf []byte
+			var encodedAcctData []byte
+			err = rows.Scan(&addrbuf, &encodedAcctData)
+			require.NoError(t, err)
+			copy(addr[:], addrbuf)
+			var ba baseAccountData
+			err = protocol.Decode(encodedAcctData, &ba)
+			require.NoError(t, err)
+			addHash := accountHashBuilderV6(addr, &ba, encodedAcctData)
+			added, err := trie.Add(addHash)
+			require.NoError(t, err)
+			require.True(t, added)
+		}
+		if commit {
+			trie.Evict(true)
+		}
+		return trie.RootHash()
+	}
+	oldRoot, err := getRootHash(true)
+	require.NoError(t, err)
+	require.NotEmpty(t, oldRoot)
+
+	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
+	require.NoError(t, err)
+	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
+	require.NoError(t, err)
+
+	// get the new hash and ensure it does not match to the old one (data migrated)
+	mc, err := MakeMerkleCommitter(tx, false)
+	require.NoError(t, err)
+	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+	require.NoError(t, err)
+
+	newRoot, err := trie.RootHash()
+	require.NoError(t, err)
+	require.NotEmpty(t, newRoot)
+
+	require.NotEqual(t, oldRoot, newRoot)
 
 	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
 	require.NoError(t, err)

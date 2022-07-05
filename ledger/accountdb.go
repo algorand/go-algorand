@@ -2226,7 +2226,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 
 	totalOnlineBaseAccounts, err = totalAccounts(ctx, tx)
 	var total uint64
-	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return err
@@ -2324,12 +2324,12 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 
 	// update accounthashes for the modified accounts
 	if len(acctRehash) > 0 {
-		var hashRound basics.Round
-		hashRound, err := accountsHashRound(ctx, tx)
+		var count uint64
+		err := tx.QueryRow("SELECT count(1) FROM accounthashes").Scan(&count)
 		if err != nil {
 			return err
 		}
-		if hashRound == 0 {
+		if count == 0 {
 			// no account hashes, done
 			return nil
 		}
@@ -3797,7 +3797,7 @@ func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.R
 
 // totalAccounts returns the total number of accounts
 func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
 		err = nil
