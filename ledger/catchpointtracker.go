@@ -72,7 +72,7 @@ const (
 	CatchpointFileVersionV5 = uint64(0200)
 	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
 	// This version introduced accounts and resources separation. The first catchpoint
-	// round of this version is >= `accountDataResourceSeparationRound`.
+	// round of this version is >= `reenableCatchpointsRound`.
 	CatchpointFileVersionV6 = uint64(0201)
 )
 
@@ -144,20 +144,20 @@ type catchpointTracker struct {
 	// roundDigest stores the digest of the block for every round starting with dbRound+1 and every round after it.
 	roundDigest []crypto.Digest
 
-	// accountDataResourceSeparationRound is a round where the EnableAccountDataResourceSeparation feature was enabled via the consensus.
+	// reenableCatchpointsRound is a round where the EnableOnlineAccountCatchpoints feature was enabled via the consensus.
 	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
 	// label being produced. This variable could be "wrong" in two cases -
-	// 1. It's zero, meaning that the EnableAccountDataResourceSeparation has yet to be seen.
-	// 2. It's non-zero meaning that it the given round is after the EnableAccountDataResourceSeparation was enabled ( it might be exact round
+	// 1. It's zero, meaning that the EnableOnlineAccountCatchpoints has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the EnableOnlineAccountCatchpoints was enabled ( it might be exact round
 	//    but that's only if newBlock was called with that round ), plus the lookback.
-	accountDataResourceSeparationRound basics.Round
+	reenableCatchpointsRound basics.Round
 
 	// forceCatchpointFileWriting used for debugging purpose by bypassing the test against
-	// accountDataResourceSeparationRound in isCatchpointRound(), so that we could generate
+	// reenableCatchpointsRound in isCatchpointRound(), so that we could generate
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
 
-	// catchpointsMu protects `roundDigest`, `accountDataResourceSeparationRound` and
+	// catchpointsMu protects `roundDigest`, `reenableCatchpointsRound` and
 	// `lastCatchpointLabel`.
 	catchpointsMu deadlock.RWMutex
 }
@@ -368,12 +368,12 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints && ct.accountDataResourceSeparationRound == 0 {
+	if (config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
 		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
 		if catchpointLookback == 0 {
 			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
 		}
-		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
+		ct.reenableCatchpointsRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
 	}
 }
 
@@ -388,19 +388,19 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 
 // Calculate whether we have intermediate first stage catchpoint rounds and the
 // new offset.
-func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataResourceSeparationRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (hasIntermediateFirstStageRound bool, hasMultipleIntermediateFirstStageRounds bool, newOffset uint64) {
+func calculateFirstStageRounds(oldBase basics.Round, offset uint64, reenableCatchpointsRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (hasIntermediateFirstStageRound bool, hasMultipleIntermediateFirstStageRounds bool, newOffset uint64) {
 	newOffset = offset
 
-	if accountDataResourceSeparationRound == 0 {
+	if reenableCatchpointsRound == 0 {
 		return
 	}
 
 	minFirstStageRound := oldBase + 1
-	if (accountDataResourceSeparationRound > basics.Round(catchpointLookback)) &&
-		(accountDataResourceSeparationRound-basics.Round(catchpointLookback) >
+	if (reenableCatchpointsRound > basics.Round(catchpointLookback)) &&
+		(reenableCatchpointsRound-basics.Round(catchpointLookback) >
 			minFirstStageRound) {
 		minFirstStageRound =
-			accountDataResourceSeparationRound - basics.Round(catchpointLookback)
+			reenableCatchpointsRound - basics.Round(catchpointLookback)
 	}
 
 	// The smallest integer r >= dcr.minFirstStageRound such that
@@ -432,7 +432,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	}
 
 	ct.catchpointsMu.Lock()
-	accountDataResourceSeparationRound := ct.accountDataResourceSeparationRound
+	reenableCatchpointsRound := ct.reenableCatchpointsRound
 	ct.catchpointsMu.Unlock()
 
 	// Check if we need to do the first stage of catchpoint generation.
@@ -440,7 +440,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	var hasMultipleIntermediateFirstStageRounds bool
 	hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, dcr.offset =
 		calculateFirstStageRounds(
-			dcr.oldBase, dcr.offset, accountDataResourceSeparationRound,
+			dcr.oldBase, dcr.offset, reenableCatchpointsRound,
 			ct.catchpointInterval, dcr.catchpointLookback)
 
 	// if we're still writing the previous balances, we can't move forward yet.
