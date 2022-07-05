@@ -1801,6 +1801,15 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
 func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+	stateProofID := ad.StateProofID
+	// Some accounts might not have StateProof keys commitment. As a result,
+	// the commitment would be an array filled with zeroes: [0x0...0x0].
+	// Since the commitment is created using the subset-sum hash function, for which the
+	// value [0x0..0x0] might be known, we avoid using such empty commitments.
+	// We replace it with a commitment for zero keys..
+	if ad.StateProofID.IsEmpty() {
+		stateProofID = merklesignature.NoKeysCommitment
+	}
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
@@ -1812,7 +1821,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
 		// registered by the Account.
 		// TODO Stateproof: update when supporting different KeyLifetime.
-		StateProofID: merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
+		StateProofID: merklesignature.Verifier{Commitment: stateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
 	}
 }
 

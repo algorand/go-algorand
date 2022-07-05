@@ -72,6 +72,9 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 	}
 
 	signature, err := keyForRound.SignBytes(messageToSign)
+	if err != nil {
+		return mssKat{}, fmt.Errorf("error while formating mss signature %w", err)
+	}
 	verifier := stateProofSecrets.GetVerifier()
 	ctSignature, pk, proof, proofDepth, err := extractMssSignatureParts(signature)
 	if err != nil {

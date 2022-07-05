@@ -2728,3 +2728,42 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
 }
+
+func TestAccountWithNoStateProofKeysReturnsNonZeroStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	onlineAccount := accountDataToOnline(basics.Address{}, &ledgercore.AccountData{}, config.ConsensusParams{}) // *ledgercore.OnlineAccount
+	require.Equal(t, merklesignature.NoKeysCommitment, onlineAccount.StateProofID.Commitment)
+}
+
+func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, true)
+	for address, data := range accts {
+		data.StateProofID = merklesignature.Commitment{}
+		accts[address] = data
+	}
+
+	newDB := accountsInitTest(t, tx, accts, proto)
+	require.True(t, newDB)
+
+	checkAccounts(t, tx, 0, accts)
+
+	topn, err := accountsOnlineTop(tx, 0, uint64(len(accts)), proto)
+	require.NoError(t, err)
+
+	for _, account := range topn {
+		require.Equal(t, merklesignature.NoKeysCommitment, account.StateProofID.Commitment)
+	}
+}
