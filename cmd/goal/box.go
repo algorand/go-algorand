@@ -26,7 +26,7 @@ func init() {
 	appCmd.AddCommand(appBoxCmd)
 
 	appBoxCmd.AddCommand(appBoxInfoCmd)
-	// appBoxCmd.AddCommand(appBoxListCmd)
+	appBoxCmd.AddCommand(appBoxListCmd)
 	appBoxCmd.PersistentFlags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	appBoxCmd.MarkFlagRequired("app-id")
 
@@ -69,12 +69,22 @@ var appBoxInfoCmd = &cobra.Command{
 	},
 }
 
-// TODO: Implement box list command
-// var appBoxListCmd = &cobra.Command{
-// 	Use:   "list",
-// 	Short: "List all application boxes belonging to an application",
-// 	Args:  cobra.MinimumNArgs(1),
-// 	Run: func(cmd *cobra.Command, args []string) {
+var appBoxListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all application boxes belonging to an application",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		_, client := getDataDirAndClient()
 
-// 	},
-// }
+		// Get app boxes
+		boxes, err := client.ApplicationBoxes(appIdx)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		// Print app boxes
+		for _, box := range boxes {
+			reportInfof("%s", box)
+		}
+	},
+}

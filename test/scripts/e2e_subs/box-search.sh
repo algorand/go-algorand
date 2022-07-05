@@ -23,11 +23,11 @@ printf '#pragma version 7\nint 1' > "${TEMPDIR}/clear.teal"
 APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
 # Fund the app account 10 algos
-APP_ACCOUNT=$(goal app info --app-id "$APPID" | grep "Application account" | awk '{print $3}')
+APP_ACCOUNT=$(${gcmd} app info --app-id "$APPID" | grep "Application account" | awk '{print $3}')
 ${gcmd} clerk send --to "$APP_ACCOUNT" --from "$ACCOUNT" --amount 10000000
 
 # Create several boxes
-BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0")
+BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0") # b64:YmFzZTY0 == str:base64
 BOX_VALUE="box value"
 
 for BOX_NAME in "${BOX_NAMES[@]}"
@@ -46,6 +46,13 @@ do
   [ "$VALUE" = "$BOX_VALUE" ]
 done
 
-# TODO: Confirm that we can get a list of boxes belonging to a particular application
+# Confirm that we can get a list of boxes belonging to a particular application
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
+EXPECTED="box1
+with spaces
+base64"
+
+# shellcheck disable=SC2059
+[ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
