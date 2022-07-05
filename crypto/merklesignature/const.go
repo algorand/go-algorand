@@ -17,8 +17,8 @@
 package merklesignature
 
 import (
+	"fmt"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
 // HashType/ hashSize relate to the type of hash this package uses.
@@ -34,13 +34,12 @@ var MssNoKeysCommitment = Commitment{}
 
 func init() {
 	// no keys generated, inner tree of merkle siganture scheme is empty.
-	t, err := merklearray.BuildVectorCommitmentTree(&committablePublicKeyArray{nil, 0, 0}, crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction})
+	o, err := New(KeyLifetimeDefault+1, KeyLifetimeDefault+2, KeyLifetimeDefault)
 	if err != nil {
-		panic("initializing empty merkle signature scheme failed")
+		panic(fmt.Errorf("initializing empty merkle signature scheme failed, err: %w", err))
 	}
-
-	if len(t.Levels) > 1 {
+	if len(o.GetAllKeys()) > 0 {
 		panic("mss tree has more than just root.")
 	}
-	copy(MssNoKeysCommitment[:], t.Root()[:])
+	copy(MssNoKeysCommitment[:], o.GetVerifier().Commitment[:])
 }
