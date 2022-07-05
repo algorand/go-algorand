@@ -2324,6 +2324,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 
 	// update accounthashes for the modified accounts
 	if len(acctRehash) > 0 {
+		var hashRound basics.Round
 		hashRound, err := accountsHashRound(ctx, tx)
 		if err != nil {
 			return err
@@ -2362,9 +2363,12 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			}
 		}
 		_, err = trie.Commit()
+		if err != nil {
+			return err
+		}
 	}
 
-	return err
+	return nil
 }
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
