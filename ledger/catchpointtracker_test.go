@@ -826,6 +826,8 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 }
 
 func TestCalculateCatchpointRounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	type TestCase struct {
 		// input
 		min                basics.Round

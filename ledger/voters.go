@@ -147,7 +147,6 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 			tr.BroadcastError(err)
 		}
 	}()
-	return
 }
 
 // close waits until all the internal spawned go-routines are done before returning, allowing clean

@@ -220,8 +220,7 @@ type CatchpointCatchupAccessorProgress struct {
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
-	cachedTrie     *merkletrie.Trie
-	evictFrequency uint64
+	cachedTrie *merkletrie.Trie
 
 	BalancesWriteDuration   time.Duration
 	CreatablesWriteDuration time.Duration
@@ -601,7 +600,6 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		if err != nil {
 			errChan <- err
 		}
-		return
 	}()
 
 	wg.Wait()

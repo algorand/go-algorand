@@ -1213,22 +1213,6 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.Equal(t, maxBalLookback+1, oa.onlineAccountsCache.accounts[addrA].Len())
 }
 
-func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
-	updates := ledgercore.MakeAccountDeltas(1)
-	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-	ao.newBlock(blk, delta)
-}
-
-func onlineAccountDataWithWeight(weight uint64) basics.AccountData {
-	var data basics.AccountData
-	data.MicroAlgos.Raw = weight + 1
-	data.Status = basics.Online
-	data.VoteLastValid = 1000
-	data.VoteFirstValid = 0
-	data.RewardsBase = 0
-	return data
-}
-
 // compareTopAccounts makes sure that accounts returned from OnlineTop function are sorted and contains the online accounts on the test
 func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.OnlineAccount, expectedAccountsBalances []basics.BalanceRecord) {
 	isSorted := sort.SliceIsSorted(testingResult, func(i, j int) bool {
@@ -1274,8 +1258,6 @@ func addSinkAndPoolAccounts(genesisAccts []map[basics.Address]basics.AccountData
 
 func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, totals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) {
 	base := genesisAccts[0]
-	newAccts := applyPartialDeltas(base, updates)
-	genesisAccts = append(genesisAccts, newAccts)
 	totals = newBlock(t, ml, totals, protocol.ConsensusCurrentVersion, config.Consensus[protocol.ConsensusCurrentVersion], basics.Round(round), base, updates, totals)
 	commitSync(t, oa, ml, basics.Round(round))
 }
@@ -1599,7 +1581,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			})
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		top, err = oa.onlineTop(2, 2, 5)
+		_, err = oa.onlineTop(2, 2, 5)
 		a.Error(err)
 		a.Contains(err.Error(), "is behind in-memory round")
 

@@ -129,6 +129,8 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 }
 
 func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var oac onlineAccountsCache
 	const maxCacheSize = 10
 	oac.init(nil, maxCacheSize)

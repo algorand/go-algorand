@@ -805,7 +805,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	wl.l.trackerMu.RLock()
 	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		if au, ok := trk.(*accountUpdates); ok {
+		if _, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
 			minSave, _ = trk.committedUpTo(rnd)
 			wl.l.trackers.committedUpTo(rnd)
@@ -818,7 +818,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			trackerType = reflect.TypeOf(trk).Elem()
 			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 
-			au = cleanTracker.(*accountUpdates)
+			au := cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
 			au.initialize(cfg)
