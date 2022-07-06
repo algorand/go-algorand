@@ -65,6 +65,8 @@ type txTail struct {
 	//                /|\
 	//                 │
 	//              dbRound
+	// roundTailHashes is planned for catchpoints in order to include it into catchpoint file,
+	// and currently disabled by enableTxTailHashes switch.
 	roundTailHashes []crypto.Digest
 
 	// blockHeaderData contains the recent (MaxTxnLife + DeeperBlockHeaderHistory + len(deltas)) block header data.

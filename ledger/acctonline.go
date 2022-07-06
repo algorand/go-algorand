@@ -605,6 +605,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	var rewardsLevel uint64
 	var persistedData persistedOnlineAccountData
 
+	// the loop serves retrying logic if the database advanced while
+	// the function was analyzing deltas or caches.
+	// a similar approach is used in other lookup- methods in acctupdates as well.
 	for {
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
