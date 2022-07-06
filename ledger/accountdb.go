@@ -140,7 +140,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(6)
+var accountDBVersion = int32(6) // NOTE once 320 merged, this number goes to 8
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -943,17 +943,25 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 	return
 }
 
+func createTables(tx *sql.Tx) error {
+	for _, schema := range accountsSchema {
+		_, err := tx.Exec(schema)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // accountsInit fills the database using tx with initAccounts if the
 // database has not been initialized yet.
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
 func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	for _, tableCreate := range accountsSchema {
-		_, err = tx.Exec(tableCreate)
-		if err != nil {
-			return
-		}
+	err = createTables(tx)
+	if err != nil {
+		return
 	}
 
 	// Run creatables migration if it hasn't run yet

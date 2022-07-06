@@ -167,6 +167,12 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
 					return
 				}
+			case 7:
+				err = tu.upgradeDatabaseSchema7(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 7 : %v", err)
+					return
+				}
 			default:
 				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -410,6 +416,16 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 
 	// update version
 	return tu.setVersion(ctx, tx, 6)
+}
+
+// upgradeDatabaseSchema7 upgrades the database schema from version 7 to version 8.
+// adding the kvstore table for box feature support.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context, tx *sql.Tx) (err error) {
+	err = createTables(tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema7 unable to create kvstore through createTables : %v", err)
+	}
+	return tu.setVersion(ctx, tx, 8) // version 7 saved for round-320
 }
 
 // isDirEmpty returns if a given directory is empty or not.
