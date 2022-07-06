@@ -101,7 +101,7 @@ var creatablesMigration = []string{
 // createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
 func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
 	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
-		ON %s ( normalizedonlinebalance, address ) WHERE normalizedonlinebalance>0`, idxname, tablename)
+		ON %s ( normalizedonlinebalance, address, data ) WHERE normalizedonlinebalance>0`, idxname, tablename)
 }
 
 // createNormalizedOnlineBalanceIndexOnline handles onlineaccounts/catchpointonlineaccounts tables
@@ -300,8 +300,10 @@ type compactAccountDeltas struct {
 	misses []int
 }
 
-// onlineAccountDelta track all changes of account state within a range
-// used in conjunction wih compactOnlineAccountDeltas to group and represent per-account changes
+// onlineAccountDelta track all changes of account state within a range,
+// used in conjunction wih compactOnlineAccountDeltas to group and represent per-account changes.
+// oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
+// to determine if the acct became online or went offline.
 type onlineAccountDelta struct {
 	oldAcct           persistedOnlineAccountData
 	newAcct           []baseOnlineAccountData
@@ -2958,7 +2960,7 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 
 	result := make([]persistedOnlineAccountData, 0, maxAccounts)
 	var numAccounts uint64
-	var seenAddr []byte
+	seenAddr := make([]byte, len(basics.Address{}))
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -2977,6 +2979,7 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 				if numAccounts > maxAccounts {
 					break
 				}
+				copy(seenAddr, addrbuf)
 			}
 		}
 		copy(data.addr[:], addrbuf)

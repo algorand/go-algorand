@@ -2921,6 +2921,15 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 // Start with two online accounts A, B at round 1
 // At round 2 make A offline.
 // At round 3 make B offline and add a new online account C.
+//
+// addr | rnd | status
+// -----|-----|--------
+//    A |   1 |      1
+//    B |   1 |      1
+//    A |   2 |      0
+//    B |   3 |      0
+//    C |   3 |      1
+//
 // Ensure
 // - for round 1 A and B returned
 // - for round 2 only B returned
@@ -3155,23 +3164,61 @@ func TestAccountOnlineQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(paods))
 
-	require.Equal(t, int64(2), paods[0].rowid)
-	require.Equal(t, basics.Round(1), paods[0].updRound)
-	require.Equal(t, addrB, paods[0].addr)
-	require.Equal(t, int64(4), paods[1].rowid)
-	require.Equal(t, basics.Round(3), paods[1].updRound)
-	require.Equal(t, addrB, paods[1].addr)
+	// expect:
+	//
+	// addr | rnd | status
+	// -----|-----|--------
+	//    B |   1 |      1
+	//    B |   3 |      0
+	//    C |   3 |      1
+	//    A |   1 |      1
+	//    A |   2 |      0
 
-	require.Equal(t, int64(5), paods[2].rowid)
-	require.Equal(t, basics.Round(3), paods[2].updRound)
-	require.Equal(t, addrC, paods[2].addr)
+	checkAddrB := func() {
+		require.Equal(t, int64(2), paods[0].rowid)
+		require.Equal(t, basics.Round(1), paods[0].updRound)
+		require.Equal(t, addrB, paods[0].addr)
+		require.Equal(t, int64(4), paods[1].rowid)
+		require.Equal(t, basics.Round(3), paods[1].updRound)
+		require.Equal(t, addrB, paods[1].addr)
+	}
 
-	require.Equal(t, int64(1), paods[3].rowid)
-	require.Equal(t, basics.Round(1), paods[3].updRound)
-	require.Equal(t, addrA, paods[3].addr)
-	require.Equal(t, int64(3), paods[4].rowid)
-	require.Equal(t, basics.Round(2), paods[4].updRound)
-	require.Equal(t, addrA, paods[4].addr)
+	checkAddrC := func() {
+		require.Equal(t, int64(5), paods[2].rowid)
+		require.Equal(t, basics.Round(3), paods[2].updRound)
+		require.Equal(t, addrC, paods[2].addr)
+	}
+
+	checkAddrA := func() {
+		require.Equal(t, int64(1), paods[3].rowid)
+		require.Equal(t, basics.Round(1), paods[3].updRound)
+		require.Equal(t, addrA, paods[3].addr)
+		require.Equal(t, int64(3), paods[4].rowid)
+		require.Equal(t, basics.Round(2), paods[4].updRound)
+		require.Equal(t, addrA, paods[4].addr)
+	}
+
+	checkAddrB()
+	checkAddrC()
+	checkAddrA()
+
+	paods, err = onlineAccountsAll(tx, 3)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(paods))
+	checkAddrB()
+	checkAddrC()
+	checkAddrA()
+
+	paods, err = onlineAccountsAll(tx, 2)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(paods))
+	checkAddrB()
+	checkAddrC()
+
+	paods, err = onlineAccountsAll(tx, 1)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(paods))
+	checkAddrB()
 
 	paods, rnd, err = queries.lookupOnlineHistory(addrA)
 	require.NoError(t, err)

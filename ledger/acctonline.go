@@ -123,7 +123,7 @@ func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.acctLookback = cfg.MaxAcctLookback
 }
 
-// loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
+// loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
 // The close function is expected to be call in pair with loadFromDisk
 func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {
 	ao.accountsMu.Lock()
@@ -146,7 +146,7 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
-// and preparing the accountUpdates for operation.
+// and preparing the onlineAccounts for operation.
 func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
