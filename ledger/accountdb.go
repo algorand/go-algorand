@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -32,10 +33,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -1970,33 +1973,6 @@ func accountDataResources(
 	return nil
 }
 
-type baseAccountDataMigrate struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	baseAccountData
-}
-
-func (ba *baseAccountDataMigrate) SetAccountData(ad *basics.AccountData) {
-	ba.Status = ad.Status
-	ba.baseAccountData.MicroAlgos = ad.MicroAlgos
-	ba.baseAccountData.RewardsBase = ad.RewardsBase
-	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
-	ba.VoteID = ad.VoteID
-	ba.SelectionID = ad.SelectionID
-	ba.StateProofID = ad.StateProofID
-	ba.VoteFirstValid = ad.VoteFirstValid
-	ba.VoteLastValid = ad.VoteLastValid
-	ba.VoteKeyDilution = ad.VoteKeyDilution
-	ba.AuthAddr = ad.AuthAddr
-	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
-	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
-	ba.TotalExtraAppPages = ad.TotalExtraAppPages
-	ba.TotalAssetParams = uint64(len(ad.AssetParams))
-	ba.TotalAssets = uint64(len(ad.Assets))
-	ba.TotalAppParams = uint64(len(ad.AppParams))
-	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
-}
-
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	now := time.Now().UnixNano()
@@ -2077,8 +2053,8 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		var newAccountData baseAccountDataMigrate
-		newAccountData.SetAccountData(&accountData)
+		var newAccountData baseAccountData
+		newAccountData.SetAccountData(accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
 
 		if normBal.Valid {
@@ -2219,7 +2195,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
 }
 
-func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
 
 	var insertOnlineAcct *sql.Stmt
 	insertOnlineAcct, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance, updround, votelastvalid) VALUES(?, ?, ?, ?, ?)")
@@ -2227,6 +2203,13 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		return err
 	}
 	defer insertOnlineAcct.Close()
+
+	var updateAcct *sql.Stmt
+	updateAcct, err = tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE addrid = ?")
+	if err != nil {
+		return err
+	}
+	defer updateAcct.Close()
 
 	var rows *sql.Rows
 	rows, err = tx.QueryContext(ctx, "SELECT addrid, address, data, normalizedonlinebalance FROM accountbase")
@@ -2236,13 +2219,14 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 	defer rows.Close()
 
 	var insertRes sql.Result
+	var updateRes sql.Result
 	var rowsAffected int64
 	var processedAccounts uint64
 	var totalOnlineBaseAccounts uint64
 
 	totalOnlineBaseAccounts, err = totalAccounts(ctx, tx)
 	var total uint64
-	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return err
@@ -2266,6 +2250,15 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		return nil
 	}
 
+	type acctState struct {
+		old    baseAccountData
+		oldEnc []byte
+		new    baseAccountData
+		newEnc []byte
+	}
+	acctRehash := make(map[basics.Address]acctState)
+	var addr basics.Address
+
 	for rows.Next() {
 		var addrid sql.NullInt64
 		var addrbuf []byte
@@ -2275,7 +2268,11 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		if err != nil {
 			return err
 		}
-		var ba baseAccountDataMigrate
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return err
+		}
+		var ba baseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		if err != nil {
 			return err
@@ -2284,14 +2281,13 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		// insert entries into online accounts table
 		if ba.Status == basics.Online {
 			if ba.MicroAlgos.Raw > 0 && !normBal.Valid {
-				var addr basics.Address
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
 			var baseOnlineAD baseOnlineAccountData
 			baseOnlineAD.baseVotingData = ba.baseVotingData
-			baseOnlineAD.MicroAlgos = ba.baseAccountData.MicroAlgos
-			baseOnlineAD.RewardsBase = ba.baseAccountData.RewardsBase
+			baseOnlineAD.MicroAlgos = ba.MicroAlgos
+			baseOnlineAD.RewardsBase = ba.RewardsBase
 			encodedOnlineAcctData := protocol.Encode(&baseOnlineAD)
 			insertRes, err = insertOnlineAcct.ExecContext(ctx, addrbuf, encodedOnlineAcctData, normBal.Int64, ba.UpdateRound, baseOnlineAD.VoteLastValid)
 			err = checkSQLResult(err, insertRes)
@@ -2300,16 +2296,79 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 			}
 		}
 
+		// remove stateproofID field for offline accounts
+		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
+			// store old data for account hash update
+			state := acctState{old: ba, oldEnc: encodedAcctData}
+			ba.StateProofID = merklesignature.Verifier{}
+			encodedOnlineAcctData := protocol.Encode(&ba)
+			copy(addr[:], addrbuf)
+			state.new = ba
+			state.newEnc = encodedOnlineAcctData
+			acctRehash[addr] = state
+			updateRes, err = updateAcct.ExecContext(ctx, encodedOnlineAcctData, addrid.Int64)
+			err = checkSQLResult(err, updateRes)
+			if err != nil {
+				return err
+			}
+		}
+
 		processedAccounts++
-		if log != nil {
-			log(processedAccounts, totalOnlineBaseAccounts)
+		if progress != nil {
+			progress(processedAccounts, totalOnlineBaseAccounts)
 		}
 	}
 	if err = rows.Err(); err != nil {
 		return err
 	}
 
-	return err
+	// update accounthashes for the modified accounts
+	if len(acctRehash) > 0 {
+		var count uint64
+		err := tx.QueryRow("SELECT count(1) FROM accounthashes").Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			// no account hashes, done
+			return nil
+		}
+
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			return nil
+		}
+
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		if err != nil {
+			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
+		}
+		for addr, state := range acctRehash {
+			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleted, err := trie.Delete(deleteHash)
+			if err != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
+			}
+			if !deleted && log != nil {
+				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			}
+
+			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			added, err := trie.Add(addHash)
+			if err != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+			}
+			if !added && log != nil {
+				log.Warnf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			}
+		}
+		_, err = trie.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
@@ -3523,9 +3582,8 @@ func onlineAccountsNewRoundImpl(
 								prevAcct = updated
 							}
 						}
-						// TODO: restore after migrating offline accounts and clearing state proof PK
-						// } else if !newAcct.IsVotingEmpty() {
-						// 	err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
+					} else if !newAcct.IsVotingEmpty() {
+						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 					}
 				}
 			} else {
@@ -3739,7 +3797,7 @@ func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.R
 
 // totalAccounts returns the total number of accounts
 func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
 		err = nil

@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -67,7 +68,7 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = accountsCreateTxTailTable(context.Background(), tx)
 	require.NoError(tb, err)
 
-	err = performOnlineAccountsTableMigration(context.Background(), tx, nil)
+	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
 	require.NoError(tb, err)
 
 	// since this is a test that starts from genesis, there is no tail that needs to be migrated.
@@ -3297,13 +3298,12 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
-	// TODO: restore after migrating offline accounts and clearing state proof PK
-	// // check errors: new non-online with non-empty voting data
-	// deltaB.newStatus[0] = basics.Offline
-	// deltaB.newAcct[0].VoteFirstValid = 1
-	// updates.deltas = []onlineAccountDelta{deltaB}
-	// _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	// require.Error(t, err)
+	// check errors: new non-online with non-empty voting data
+	deltaB.newStatus[0] = basics.Offline
+	deltaB.newAcct[0].VoteFirstValid = 1
+	updates.deltas = []onlineAccountDelta{deltaB}
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
@@ -3760,4 +3760,131 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 		},
 	}
 	require.Equal(t, expected, ret)
+}
+
+func TestRemoveOfflineStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := ledgertesting.RandomAccounts(20, true)
+	expectedAccts := make(map[basics.Address]basics.AccountData)
+	for addr, acct := range accts {
+		rand.Read(acct.StateProofID[:])
+		accts[addr] = acct
+
+		expectedAcct := acct
+		if acct.Status != basics.Online {
+			expectedAcct.StateProofID = merklesignature.Verifier{}
+		}
+		expectedAccts[addr] = expectedAcct
+
+	}
+
+	buildDB := func(accounts map[basics.Address]basics.AccountData) (db.Pair, *sql.Tx) {
+		dbs, _ := dbOpenTest(t, true)
+		setDbLogging(t, dbs)
+
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+
+		// this is the same seq as accountsInitTest makes but it stops
+		// before the online accounts table creation to generate a trie and commit it
+		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.NoError(t, err)
+
+		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.NoError(t, err)
+
+		err = accountsCreateResourceTable(context.Background(), tx)
+		require.NoError(t, err)
+
+		err = performResourceTableMigration(context.Background(), tx, nil)
+		require.NoError(t, err)
+
+		return dbs, tx
+	}
+
+	dbs, tx := buildDB(accts)
+	defer dbs.Close()
+	defer tx.Rollback()
+
+	// make second copy of DB to prepare exepected/fixed merkle trie
+	expectedDBs, expectedTx := buildDB(expectedAccts)
+	defer expectedDBs.Close()
+	defer expectedTx.Rollback()
+
+	// create account hashes
+	computeRootHash := func(tx *sql.Tx, expected bool) (crypto.Digest, error) {
+		rows, err := tx.Query("SELECT address, data FROM accountbase")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		mc, err := MakeMerkleCommitter(tx, false)
+		require.NoError(t, err)
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		require.NoError(t, err)
+
+		var addr basics.Address
+		for rows.Next() {
+			var addrbuf []byte
+			var encodedAcctData []byte
+			err = rows.Scan(&addrbuf, &encodedAcctData)
+			require.NoError(t, err)
+			copy(addr[:], addrbuf)
+			var ba baseAccountData
+			err = protocol.Decode(encodedAcctData, &ba)
+			require.NoError(t, err)
+			if expected && ba.Status != basics.Online {
+				require.Equal(t, merklesignature.Verifier{}, ba.StateProofID)
+			}
+			addHash := accountHashBuilderV6(addr, &ba, encodedAcctData)
+			added, err := trie.Add(addHash)
+			require.NoError(t, err)
+			require.True(t, added)
+		}
+		_, err = trie.Evict(true)
+		require.NoError(t, err)
+		return trie.RootHash()
+	}
+	oldRoot, err := computeRootHash(tx, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, oldRoot)
+
+	expectedRoot, err := computeRootHash(expectedTx, true)
+	require.NoError(t, err)
+	require.NotEmpty(t, expectedRoot)
+
+	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
+	require.NoError(t, err)
+	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
+	require.NoError(t, err)
+
+	// get the new hash and ensure it does not match to the old one (data migrated)
+	mc, err := MakeMerkleCommitter(tx, false)
+	require.NoError(t, err)
+	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+	require.NoError(t, err)
+
+	newRoot, err := trie.RootHash()
+	require.NoError(t, err)
+	require.NotEmpty(t, newRoot)
+
+	require.NotEqual(t, oldRoot, newRoot)
+	require.Equal(t, expectedRoot, newRoot)
+
+	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var addrid sql.NullInt64
+		var encodedAcctData []byte
+		err = rows.Scan(&addrid, &encodedAcctData)
+		require.NoError(t, err)
+		var ba baseAccountData
+		err = protocol.Decode(encodedAcctData, &ba)
+		require.NoError(t, err)
+		if ba.Status != basics.Online {
+			require.True(t, ba.StateProofID.IsEmpty())
+		}
+	}
 }

@@ -461,6 +461,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 
 	var lastProgressInfoMsg time.Time
 	const progressLoggingInterval = 5 * time.Second
+
 	migrationProcessLog := func(processed, total uint64) {
 		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
 			return
@@ -468,7 +469,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		lastProgressInfoMsg = time.Now()
 		tu.log.Infof("upgradeDatabaseSchema6 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
 	}
-	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog)
+	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog, tu.log)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online account data migration : %w", err)
 	}

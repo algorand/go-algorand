@@ -411,6 +411,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -631,7 +632,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.EnableAccountDataResourceSeparation = true
+	protoParams.EnableOnlineAccountCatchpoints = true
 	protoParams.CatchpointLookback = protoParams.MaxBalLookback
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -863,6 +864,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStageInfoPruning")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -961,6 +963,7 @@ func TestFirstStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1066,6 +1069,7 @@ func TestSecondStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1204,6 +1208,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1296,6 +1301,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
+	protoParams.EnableOnlineAccountCatchpoints = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
