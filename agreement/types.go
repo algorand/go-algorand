@@ -39,7 +39,10 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 }
 
 // DeadlineTimeout is the duration of the second agreement step.
-func DeadlineTimeout() time.Duration {
+func DeadlineTimeout(p period, v protocol.ConsensusVersion) time.Duration {
+	if p == 0 {
+		return config.Consensus[v].AgreementDeadlineTimeoutPeriod0
+	}
 	return deadlineTimeout
 }
 

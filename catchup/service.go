@@ -114,7 +114,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
-	s.deadlineTimeout = agreement.DeadlineTimeout()
+	s.deadlineTimeout = agreement.DeadlineTimeout(1, protocol.ConsensusCurrentVersion)
 	s.blockValidationPool = blockValidationPool
 
 	return s

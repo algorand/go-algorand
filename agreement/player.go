@@ -87,7 +87,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 		switch p.Step {
 		case soft:
 			// precondition: nap = false
-			actions = p.issueSoftVote(r)
+			actions = p.issueSoftVote(r, e)
 			p.Step = cert
 			// update tracer state to match player
 			r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -142,9 +142,13 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 	return p.issueFastVote(r)
 }
 
-func (p *player) issueSoftVote(r routerHandle) (actions []action) {
+func (p *player) issueSoftVote(r routerHandle, timeoutE timeoutEvent) (actions []action) {
+	if timeoutE.Proto.Err != nil {
+		r.t.log.Errorf("failed to read protocol version for soft timeout event (proto %v): %v", timeoutE.Proto.Version, timeoutE.Proto.Err)
+		return nil
+	}
 	defer func() {
-		p.Deadline = deadlineTimeout
+		p.Deadline = DeadlineTimeout(p.Period, timeoutE.Proto.Version)
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)

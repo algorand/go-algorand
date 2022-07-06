@@ -160,6 +160,8 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
+	AgreementDeadlineTimeoutPeriod0 time.Duration
+
 	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// how to commit to the payset: flat or merkle tree
@@ -701,6 +703,8 @@ func initConsensusProtocols() {
 
 		AgreementFilterTimeout:        4 * time.Second,
 		AgreementFilterTimeoutPeriod0: 4 * time.Second,
+
+		AgreementDeadlineTimeoutPeriod0: 17 * time.Second, // BigLambda + SmallLambda
 
 		FastRecoveryLambda: 5 * time.Minute,
 
