@@ -479,7 +479,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 
 	// clear the backing array to let GC collect data
-	const deltasClearThreshold = 1000
+	// see the comment in acctupdates.go
+	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
 		for i := uint64(0); i < offset; i++ {
 			ao.deltas[i] = ledgercore.AccountDeltas{}
