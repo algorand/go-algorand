@@ -3258,6 +3258,8 @@ func (w *mockOnlineAccountsWriter) insertOnlineAccount(addr basics.Address, norm
 func (w *mockOnlineAccountsWriter) close() {}
 
 func TestAccountOnlineAccountsNewRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	writer := &mockOnlineAccountsWriter{rowid: 100}
 
@@ -3360,6 +3362,8 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 }
 
 func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	writer := &mockOnlineAccountsWriter{rowid: 100}
 
@@ -3718,6 +3722,8 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 
 // Test functions operating on catchpointfirststageinfo table.
 func TestCatchpointFirstStageInfoTable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
