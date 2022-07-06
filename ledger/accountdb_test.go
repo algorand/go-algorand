@@ -3765,36 +3765,55 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 func TestRemoveOfflineStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
-	defer dbs.Close()
-
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-
 	accts := ledgertesting.RandomAccounts(20, true)
+	expectedAccts := make(map[basics.Address]basics.AccountData)
 	for addr, acct := range accts {
 		rand.Read(acct.StateProofID[:])
 		accts[addr] = acct
+
+		expectedAcct := acct
+		if acct.Status != basics.Online {
+			expectedAcct.StateProofID = merklesignature.Verifier{}
+		}
+		expectedAccts[addr] = expectedAcct
+
 	}
 
-	// this is the same seq as accountsInitTest makes but it stops
-	// before the online accounts table creation to generate a trie and commit it
-	_, err = accountsInit(tx, accts, config.Consensus[protocol.ConsensusCurrentVersion])
-	require.NoError(t, err)
+	buildDB := func(accounts map[basics.Address]basics.AccountData) (db.Pair, *sql.Tx) {
+		dbs, _ := dbOpenTest(t, true)
+		setDbLogging(t, dbs)
 
-	err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
-	require.NoError(t, err)
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
 
-	err = accountsCreateResourceTable(context.Background(), tx)
-	require.NoError(t, err)
+		// this is the same seq as accountsInitTest makes but it stops
+		// before the online accounts table creation to generate a trie and commit it
+		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.NoError(t, err)
 
-	err = performResourceTableMigration(context.Background(), tx, nil)
-	require.NoError(t, err)
+		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.NoError(t, err)
+
+		err = accountsCreateResourceTable(context.Background(), tx)
+		require.NoError(t, err)
+
+		err = performResourceTableMigration(context.Background(), tx, nil)
+		require.NoError(t, err)
+
+		return dbs, tx
+	}
+
+	dbs, tx := buildDB(accts)
+	defer dbs.Close()
+	defer tx.Rollback()
+
+	// make second copy of DB to prepare exepected/fixed merkle trie
+	expectedDBs, expectedTx := buildDB(expectedAccts)
+	defer expectedDBs.Close()
+	defer expectedTx.Rollback()
 
 	// create account hashes
-	computeRootHash := func() (crypto.Digest, error) {
+	computeRootHash := func(tx *sql.Tx, expected bool) (crypto.Digest, error) {
 		rows, err := tx.Query("SELECT address, data FROM accountbase")
 		require.NoError(t, err)
 		defer rows.Close()
@@ -3814,6 +3833,9 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			var ba baseAccountData
 			err = protocol.Decode(encodedAcctData, &ba)
 			require.NoError(t, err)
+			if expected && ba.Status != basics.Online {
+				require.Equal(t, merklesignature.Verifier{}, ba.StateProofID)
+			}
 			addHash := accountHashBuilderV6(addr, &ba, encodedAcctData)
 			added, err := trie.Add(addHash)
 			require.NoError(t, err)
@@ -3823,9 +3845,13 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		require.NoError(t, err)
 		return trie.RootHash()
 	}
-	oldRoot, err := computeRootHash()
+	oldRoot, err := computeRootHash(tx, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, oldRoot)
+
+	expectedRoot, err := computeRootHash(expectedTx, true)
+	require.NoError(t, err)
+	require.NotEmpty(t, expectedRoot)
 
 	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
 	require.NoError(t, err)
@@ -3843,6 +3869,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	require.NotEmpty(t, newRoot)
 
 	require.NotEqual(t, oldRoot, newRoot)
+	require.Equal(t, expectedRoot, newRoot)
 
 	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
 	require.NoError(t, err)
