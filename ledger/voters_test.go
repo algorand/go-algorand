@@ -39,9 +39,9 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-	numOfIntervals := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval - 1
-	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
+	numOfIntervals := config.Consensus[protocol.ConsensusCurrentVersion].StateProofRecoveryInterval - 1
+	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
@@ -55,7 +55,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture, accts)
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -67,7 +67,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
+		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 		addBlockToAccountsUpdate(block.block, ao)
 	}
 
@@ -76,7 +76,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 
 	block := randomBlock(basics.Round(i))
 	i++
-	block.block.CurrentProtocol = protocol.ConsensusFuture
+	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 	// committing stateproof that confirm the (numOfIntervals - 1)th interval
 	var stateTracking bookkeeping.StateProofTrackingData
@@ -93,7 +93,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block = randomBlock(basics.Round(i))
-	block.block.CurrentProtocol = protocol.ConsensusFuture
+	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	stateTracking.StateProofNextRound = basics.Round(numOfIntervals * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
@@ -107,10 +107,10 @@ func TestLimitVoterTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-	recoveryIntervalForTests := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval
+	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
+	recoveryIntervalForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofRecoveryInterval
 	numOfIntervals := recoveryIntervalForTests
-	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
@@ -124,7 +124,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture, accts)
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -136,7 +136,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
+		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 		addBlockToAccountsUpdate(block.block, ao)
 	}
 
@@ -146,7 +146,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
+		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 		addBlockToAccountsUpdate(block.block, ao)
 	}
 
@@ -156,7 +156,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
+		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 		addBlockToAccountsUpdate(block.block, ao)
 	}
 

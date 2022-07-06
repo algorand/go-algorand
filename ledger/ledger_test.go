@@ -22,9 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-deadlock"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -34,10 +31,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -48,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -1658,9 +1658,9 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval + 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusCurrentVersion].StateProofRecoveryInterval + 1) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10000000000)
 
 	// place real values on the participation period, so we would create a commitment with some stake.
 	accountsWithValid := make(map[basics.Address]basics.AccountData)

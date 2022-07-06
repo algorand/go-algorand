@@ -1283,7 +1283,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 func TestTStateProofLogging(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
@@ -1330,7 +1330,7 @@ func TestTStateProofLogging(t *testing.T) {
 	logger.SetOutput(&buf)
 
 	// Set the ledger and the transaction pool
-	mockLedger := makeMockLedgerFuture(t, initAccounts)
+	mockLedger := makeMockLedger(t, initAccounts)
 	transactionPool := MakeTransactionPool(mockLedger, cfg, logger)
 	transactionPool.logAssembleStats = true
 
@@ -1338,7 +1338,7 @@ func TestTStateProofLogging(t *testing.T) {
 	var b bookkeeping.Block
 	b.BlockHeader.GenesisID = "pooltest"
 	b.BlockHeader.GenesisHash = mockLedger.GenesisHash()
-	b.CurrentProtocol = protocol.ConsensusFuture
+	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	b.BlockHeader.Round = 1
 
 	phdr, err := mockLedger.BlockHdr(0)
@@ -1472,7 +1472,7 @@ func generateProofForTesting(
 	}
 
 	// Prepare the builder
-	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusFuture].StateProofStrengthTarget
+	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofStrengthTarget
 	b, err := stateproof.MkBuilder(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)

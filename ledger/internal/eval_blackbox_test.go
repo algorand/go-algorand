@@ -879,6 +879,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV30, // teal v5 (inner txs)
 	protocol.ConsensusV31, // teal v6 (inner txs with appls)
 	protocol.ConsensusV32, // unlimited assets and apps
+	protocol.ConsensusV33, // StateProofs
 	protocol.ConsensusFuture,
 }
 

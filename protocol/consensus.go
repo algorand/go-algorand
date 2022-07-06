@@ -176,6 +176,11 @@ const ConsensusV32 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7",
 )
 
+// ConsensusV33 enables StateProofs.
+const ConsensusV33 = ConsensusVersion(
+	"stateproofs", // TODO Stateproofs: change to relevant spec
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -188,7 +193,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV32
+const ConsensusCurrentVersion = ConsensusV33
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

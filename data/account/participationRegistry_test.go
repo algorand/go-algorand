@@ -45,8 +45,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO: change to ConsensusCurrentVersion when updated
-var stateProofIntervalForTests = config.Consensus[protocol.ConsensusFuture].StateProofInterval
+var stateProofIntervalForTests = config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 
 func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
 	return getRegistryImpl(t, true, false)

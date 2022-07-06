@@ -78,7 +78,7 @@ func (s *workerForStateProofMessageTests) BlockHdr(round basics.Round) (bookkeep
 
 func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round) (*ledgercore.VotersForRound, error) {
 	voters := &ledgercore.VotersForRound{
-		Proto:     config.Consensus[protocol.ConsensusFuture],
+		Proto:     config.Consensus[protocol.ConsensusCurrentVersion],
 		AddrToPos: make(map[basics.Address]uint64),
 	}
 
@@ -121,7 +121,7 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.w.latest
-	hdr.CurrentProtocol = protocol.ConsensusFuture
+	hdr.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 	var ccBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
@@ -193,19 +193,18 @@ func TestStateProofMessage(t *testing.T) {
 	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
 
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	var lastMessage stateproofmsg.Message
 
 	for iter := uint64(0); iter < 5; iter++ {
 		s.advanceLatest(proto.StateProofInterval)
-
 		for {
 			tx, err := s.w.waitOnTxnWithTimeout(time.Second * 5)
 			a.NoError(err)
@@ -263,7 +262,7 @@ func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
 	_, err := GenerateStateProofMessage(s, 240, s.w.blocks[s.w.latest])
 	a.ErrorIs(err, errInvalidParams)
@@ -284,9 +283,9 @@ func TestMessageLnApproxError(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
-	s.advanceLatest(2*config.Consensus[protocol.ConsensusFuture].StateProofInterval + config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
+	s.advanceLatest(2*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval + config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval/2)
 	tracking := s.w.blocks[512].StateProofTracking[protocol.StateProofBasic]
 	tracking.StateProofVotersTotalWeight = basics.MicroAlgos{}
 	newtracking := tracking
@@ -311,9 +310,9 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
-	s.advanceLatest(2*config.Consensus[protocol.ConsensusFuture].StateProofInterval + config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
+	s.advanceLatest(2*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval + config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval/2)
 	delete(s.w.blocks, 510)
 
 	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
@@ -338,12 +337,12 @@ func TestGenerateBlockProof(t *testing.T) {
 	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
 
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	for iter := uint64(0); iter < 5; iter++ {
@@ -391,9 +390,9 @@ func TestGenerateBlockProofOnSmallArray(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys, len(keys))
 	s.w.latest--
-	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(2 * proto.StateProofInterval)
 	headers, err := FetchLightHeaders(s, proto.StateProofInterval, basics.Round(2*proto.StateProofInterval))
 	a.NoError(err)

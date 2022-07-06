@@ -1142,14 +1142,31 @@ func initConsensusProtocols() {
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
 	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
 
+	v33 := v32
+	v33.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable state proofs.
+	v33.StateProofInterval = 256
+	v33.StateProofTopVoters = 1024 * 1024
+	v33.StateProofVotersLookback = 16
+	v33.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	v33.StateProofStrengthTarget = 256
+	v33.StateProofRecoveryInterval = 10
+
+	Consensus[protocol.ConsensusV33] = v33
+
+	// v32 can be upgraded to v33, with an update delay of 7 days ( see calculation above )
+	v32.ApprovedUpgrades[protocol.ConsensusV33] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v32
+	vFuture := v33
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
+	vFuture.LogicSigVersion = 7
 	// Make the accounts snapshot for round X at X-CatchpointLookback
 	vFuture.CatchpointLookback = 320
 
@@ -1197,5 +1214,4 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
-
 }

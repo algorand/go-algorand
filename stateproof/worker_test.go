@@ -78,7 +78,7 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
 	}
 	s.latest--
-	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 	return s
 }
 
@@ -87,7 +87,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
-	hdr.CurrentProtocol = protocol.ConsensusFuture
+	hdr.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
@@ -162,7 +162,7 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	voters := &ledgercore.VotersForRound{
-		Proto:       config.Consensus[protocol.ConsensusFuture],
+		Proto:       config.Consensus[protocol.ConsensusCurrentVersion],
 		AddrToPos:   make(map[basics.Address]uint64),
 		TotalWeight: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
 	}
@@ -266,7 +266,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part
@@ -289,7 +289,7 @@ func TestWorkerAllSigs(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	// Go through several iterations, making sure that we get
@@ -357,7 +357,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 	s.advanceLatest(proto.StateProofInterval)
 
@@ -421,7 +421,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
@@ -452,7 +452,7 @@ func TestWorkerRestart(t *testing.T) {
 
 	s := newWorkerStubs(t, keys, 10)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(3*proto.StateProofInterval - 1)
 
 	dbRand := crypto.RandUint64()
@@ -498,7 +498,7 @@ func TestWorkerHandleSig(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
@@ -534,7 +534,7 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
@@ -565,7 +565,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 
 	w.Start()
 	defer w.Shutdown()
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
@@ -600,7 +600,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	for iter := 0; iter < expectedStateProofs; iter++ {
@@ -623,7 +623,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 
 	// add block that confirm a state proof for interval: expectedStateProofs - 1
 	s.mu.Lock()
-	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 	s.mu.Unlock()
 
 	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
@@ -642,7 +642,7 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	expectedStateProofs := proto.StateProofRecoveryInterval + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
@@ -806,7 +806,7 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcasted map[basics.Address]int,
 	fromThisNode map[basics.Address]bool, spw *Worker, periods int) {
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// Collect the broadcast messages
 	var wg sync.WaitGroup
@@ -857,7 +857,7 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	s.advanceLatest(proto.StateProofInterval)
@@ -881,7 +881,7 @@ func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 
 	_, _, tns, spw := getSignaturesInDatabase(t, 10, sigNotFromThisNode)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 		select {
@@ -900,7 +900,7 @@ func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
 
 	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, sigAlternateOrigin)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 		select {
@@ -928,7 +928,7 @@ func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
 }
 
 func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStubs, w *Worker, msg sigFromAddr, msgBytes []byte) {
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -955,7 +955,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 func TestWorkerHandleSigOldRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound)
 
@@ -973,7 +973,7 @@ func TestWorkerHandleSigOldRounds(t *testing.T) {
 func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
 
@@ -996,7 +996,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 
@@ -1017,7 +1017,7 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.StateProofTopVoters = 2
 
 	addresses := make([]basics.Address, 0)
@@ -1062,7 +1062,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 
@@ -1105,7 +1105,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
@@ -1134,13 +1134,13 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	origProto := proto
 	defer func() {
-		config.Consensus[protocol.ConsensusFuture] = origProto
+		config.Consensus[protocol.ConsensusCurrentVersion] = origProto
 	}()
 	proto.StateProofInterval = 512
-	config.Consensus[protocol.ConsensusFuture] = proto
+	config.Consensus[protocol.ConsensusCurrentVersion] = proto
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -1182,13 +1182,13 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 func TestWorkerHandleSigIntervalZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	origProto := proto
 	defer func() {
-		config.Consensus[protocol.ConsensusFuture] = origProto
+		config.Consensus[protocol.ConsensusCurrentVersion] = origProto
 	}()
 	proto.StateProofInterval = 0
-	config.Consensus[protocol.ConsensusFuture] = proto
+	config.Consensus[protocol.ConsensusCurrentVersion] = proto
 
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
@@ -1209,7 +1209,7 @@ func TestWorkerHandleSigIntervalZero(t *testing.T) {
 func TestWorkerHandleSigNotOnInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	_, w, msg, msgBytes := setBlocksAndMessage(t, basics.Round(600))
 
 	reply := w.handleSigMessage(network.IncomingMessage{
