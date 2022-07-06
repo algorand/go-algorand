@@ -230,7 +230,16 @@ func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) erro
 }
 
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, basics.Address{})
+	var authAddr basics.Address
+	var err error
+	if signerAddress != "" {
+		authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+		if err != nil {
+			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+		}
+	}
+
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
 	if err != nil {
 		return err
 	}
@@ -433,7 +442,17 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, basics.Address{})
+			var authAddr basics.Address
+			if signerAddress != "" {
+				if !signTx {
+					reportErrorf("Signer specified when txn won't be signed")
+				}
+				authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+				if err != nil {
+					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+				}
+			}
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, authAddr)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
