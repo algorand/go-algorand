@@ -18,9 +18,11 @@ package testing
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -47,7 +49,7 @@ func RandomNote() []byte {
 }
 
 // RandomAccountData generates a random AccountData
-func RandomAccountData(rewardsLevel uint64) basics.AccountData {
+func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	var data basics.AccountData
 
 	// Avoid overflowing totals
@@ -56,15 +58,27 @@ func RandomAccountData(rewardsLevel uint64) basics.AccountData {
 	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
+		data.VoteLastValid = 1000
 	case 1:
 		data.Status = basics.Offline
+		data.VoteLastValid = 0
 	default:
 		data.Status = basics.NotParticipating
 	}
 
-	data.RewardsBase = rewardsLevel
 	data.VoteFirstValid = 0
+	data.RewardsBase = rewardsBase
+	return data
+}
+
+// RandomOnlineAccountData is similar to RandomAccountData but always creates online account
+func RandomOnlineAccountData(rewardsBase uint64) basics.AccountData {
+	var data basics.AccountData
+	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+	data.Status = basics.Online
 	data.VoteLastValid = 1000
+	data.VoteFirstValid = 0
+	data.RewardsBase = rewardsBase
 	return data
 }
 
@@ -190,12 +204,21 @@ func RandomAppLocalState() basics.AppLocalState {
 func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.CreatableIndex, assets map[basics.AssetIndex]struct{}, apps map[basics.AppIndex]struct{}) basics.AccountData {
 	data := RandomAccountData(rewardsLevel)
 
-	crypto.RandBytes(data.VoteID[:])
-	crypto.RandBytes(data.SelectionID[:])
-	crypto.RandBytes(data.StateProofID[:])
-	data.VoteFirstValid = basics.Round(crypto.RandUint64())
-	data.VoteLastValid = basics.Round(crypto.RandUint64())
-	data.VoteKeyDilution = crypto.RandUint64()
+	if data.Status == basics.Online {
+		crypto.RandBytes(data.VoteID[:])
+		crypto.RandBytes(data.SelectionID[:])
+		crypto.RandBytes(data.StateProofID[:])
+		data.VoteFirstValid = basics.Round(crypto.RandUint64())
+		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
+		data.VoteKeyDilution = crypto.RandUint64()
+	} else {
+		data.VoteID = crypto.OneTimeSignatureVerifier{}
+		data.SelectionID = crypto.VRFVerifier{}
+		data.StateProofID = merklesignature.Verifier{}
+		data.VoteFirstValid = 0
+		data.VoteLastValid = 0
+		data.VoteKeyDilution = 0
+	}
 	if (crypto.RandUint64() % 2) == 1 {
 		// if account has created assets, have these defined.
 		createdAssetsCount := crypto.RandUint64()%20 + 1

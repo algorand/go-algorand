@@ -72,15 +72,17 @@ type Ledger struct {
 
 	genesisAccounts map[basics.Address]basics.AccountData
 
-	genesisProto config.ConsensusParams
+	genesisProto        config.ConsensusParams
+	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
-	accts      accountUpdates
-	catchpoint catchpointTracker
-	txTail     txTail
-	bulletin   bulletin
-	notifier   blockNotifier
-	metrics    metricsTracker
+	accts       accountUpdates
+	acctsOnline onlineAccounts
+	catchpoint  catchpointTracker
+	txTail      txTail
+	bulletin    bulletin
+	notifier    blockNotifier
+	metrics     metricsTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -91,6 +93,8 @@ type Ledger struct {
 	verifiedTxnCache verify.VerifiedTransactionCache
 
 	cfg config.Local
+
+	dbPathPrefix string
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -113,10 +117,12 @@ func OpenLedger(
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
+		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
+		dbPathPrefix:                   dbPathPrefix,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -153,9 +159,6 @@ func OpenLedger(
 	if l.genesisAccounts == nil {
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
-
-	l.accts.initialize(cfg)
-	l.catchpoint.initialize(cfg, dbPathPrefix)
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -197,13 +200,18 @@ func (l *Ledger) reloadLedger() error {
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,      // update the balances
-		&l.catchpoint, // catchpoints tracker : update catchpoint labels, create catchpoint files
-		&l.txTail,     // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,   // provide closed channel signaling support for completed rounds
-		&l.notifier,   // send OnNewBlocks to subscribers
-		&l.metrics,    // provides metrics reporting support
+		&l.accts,       // update the balances
+		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline, // update online account balances history
+		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,    // provide closed channel signaling support for completed rounds
+		&l.notifier,    // send OnNewBlocks to subscribers
+		&l.metrics,     // provides metrics reporting support
 	}
+
+	l.accts.initialize(l.cfg)
+	l.acctsOnline.initialize(l.cfg)
+	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
@@ -436,7 +444,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.voters.getVoters(rnd)
+	return l.acctsOnline.voters.getVoters(rnd)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -469,7 +477,6 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -491,7 +498,6 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -527,7 +533,7 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupOnlineAccountData(rnd, addr)
+	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}
@@ -541,12 +547,14 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	var result ledgercore.AccountData
+
+	result, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
 
-	return data, validThrough, nil
+	return result, validThrough, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
@@ -560,7 +568,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.OnlineTotals(rnd)
+	return l.acctsOnline.OnlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -629,6 +637,7 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 		}
 		return err
 	}
+	updates.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback)
 	vb := ledgercore.MakeValidatedBlock(blk, updates)
 
 	return l.AddValidatedBlock(vb, cert)
@@ -682,9 +691,35 @@ func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return l.genesisProto
 }
 
+// GenesisProtoVersion returns the initial protocol version for this ledger.
+func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
+}
+
 // GenesisAccounts returns initial accounts for this ledger.
 func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
+}
+
+// BlockHdrCached returns the block header if available.
+// Expected availability range is [Latest - MaxTxnLife, Latest]
+// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+// and currently set to 1.
+// Explanation:
+// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+// and because a txn is alive when the current round <= txn.LastValid
+// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		err = fmt.Errorf("no cached header data for round %d", rnd)
+	}
+	return hdr, err
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
@@ -725,12 +760,13 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger int
 	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
-// to avoid memory pressure until the catchpoint file writing is complete.
-func (l *Ledger) IsWritingCatchpointFile() bool {
+// IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
+// The function is used by the catchup service to avoid memory pressure until the
+// catchpoint data file writing is complete.
+func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointFile()
+	return l.catchpoint.IsWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache
