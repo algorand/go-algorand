@@ -105,7 +105,7 @@ func TestStateProofs(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
 
-	expectedNumberOfStateProofs := uint64(4)
+	expectedNumberOfStateProofs := uint64(6)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// send a dummy payment transaction to create non-empty blocks.
@@ -707,4 +707,110 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestTopNAccountChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofTopVoters = 4
+
+	// params to update:
+	consensusParams.UpgradeVoteRounds = 5
+	consensusParams.UpgradeThreshold = 3
+	consensusParams.DefaultUpgradeWaitRounds = 3 + consensusParams.StateProofInterval*2
+	consensusParams.MinUpgradeWaitRounds = 0
+	consensusParams.MaxUpgradeWaitRounds = 0
+	consensusParams.MaxVersionStringLen += 100
+	consensusParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
+
+	// setting up to whom one should upgrade
+	consensusParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		"next-test-fast-stateproofs": 0,
+	}
+
+	nextConsensus := consensusParams
+	nextConsensus.StateProofTopVoters = 5
+	configurableConsensus := config.ConsensusProtocols{
+		"test-fast-stateproofs":      consensusParams, // starting protocol
+		"next-test-fast-stateproofs": nextConsensus,   // next protocol
+	}
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	defer fixture.Shutdown()
+
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoal := fixture.LibGoalClient
+
+	expectedNumberOfStateProofs := uint64(4)
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
+	stakeOfFirstStateProof := uint64(0)
+	rnd := uint64(1)
+	for ; rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		// send a dummy payment transaction to create non-empty blocks.
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
+
+		err = fixture.WaitForRound(rnd, 30*time.Second)
+		r.NoError(err)
+
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if rnd == consensusParams.StateProofInterval*1 {
+			r.Equal("test-fast-stateproofs", string(blk.CurrentProtocol))
+		}
+
+		// ensuring that there is a stateproof with less stake.
+		if consensusParams.StateProofInterval*2 == rnd {
+			r.Equal("test-fast-stateproofs", string(blk.CurrentProtocol))
+		}
+		// ensuring that there is a stateproof with new protocol version which includes more votres..
+		if consensusParams.StateProofInterval*3 == rnd {
+			r.Equal("next-test-fast-stateproofs", string(blk.CurrentProtocol))
+		}
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+
+			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+			if rnd > consensusParams.StateProofInterval*3 {
+				r.Greater(stake, stakeOfFirstStateProof)
+			}
+			if rnd <= consensusParams.StateProofInterval {
+				stakeOfFirstStateProof = stake // the first stateproof stake
+			}
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		}
+
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
