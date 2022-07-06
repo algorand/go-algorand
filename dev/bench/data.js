@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1657142212756,
+  "lastUpdate": 1657148845019,
   "repoUrl": "https://github.com/algorand/go-algorand",
   "entries": {
     "Go Benchmark": [
@@ -5616,6 +5616,114 @@ window.BENCHMARK_DATA = {
             "value": 434.5,
             "unit": "ns/op\t         4.000 extra/op\t     110 B/op\t       5 allocs/op",
             "extra": "2767237 times\n2 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "65323360+algorandskiy@users.noreply.github.com",
+            "name": "Pavel Zbitskiy",
+            "username": "algorandskiy"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "90b1c055732980bc2130991c505065d030246de1",
+          "message": "ledger: shorter deltas lookback implementation (320 rounds project) (#4003)\n\nReduce deltas size from 320 to 8 by introducing a new online accounts tracker\r\nthat preserves history of state (online/offline, stake, protos) for at least\r\nMaxBalLookback = 2 x SeedRefreshInterval x SeedLookback rounds back from Latest.\r\nNew data are stores in new tables and they are excluded from catchpoints.\r\n\r\nTxTail stores its data into a table as well in order to prevent full blocks loading on startup\r\nand preserves up to MaxTxnLife + DeeperBlockHistory blocks and caches their headers.\r\n\r\nCatchpoint generation is made in two stages: data file at X-320 and catchpoint itself at round X.\r\n\r\nRegular nodes see ~3x memory consumption decrease on high 6,000 TPS load.\r\n\r\nCo-authored-by: Tsachi Herman <tsachi.herman@algorand.com>\r\nCo-authored-by: nicholasguoalgorand <67928479+nicholasguoalgorand@users.noreply.github.com>\r\nCo-authored-by: chris erway <chris.erway@algorand.com>",
+          "timestamp": "2022-07-06T19:01:21-04:00",
+          "tree_id": "55e55e727ce7b84e34759269587bec393acb995b",
+          "url": "https://github.com/algorand/go-algorand/commit/90b1c055732980bc2130991c505065d030246de1"
+        },
+        "date": 1657148843183,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkUintMath/dup",
+            "value": 59.42,
+            "unit": "ns/op\t         1.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "17782666 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1",
+            "value": 52.38,
+            "unit": "ns/op\t         1.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "24956677 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop",
+            "value": 97.43,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "11860310 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add",
+            "value": 103.6,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "10051486 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw",
+            "value": 130.6,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "9766570 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub",
+            "value": 104.4,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "11762828 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul",
+            "value": 102,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "11335546 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw",
+            "value": 128.8,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "9376203 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div",
+            "value": 119.1,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "9754654 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw",
+            "value": 176.3,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "6749580 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw",
+            "value": 1201,
+            "unit": "ns/op\t         8.000 extra/op\t     311 B/op\t      11 allocs/op",
+            "extra": "1020786 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt",
+            "value": 120.2,
+            "unit": "ns/op\t         2.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "9776172 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp",
+            "value": 154.6,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "7758939 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw",
+            "value": 574.8,
+            "unit": "ns/op\t         4.000 extra/op\t     111 B/op\t       5 allocs/op",
+            "extra": "2042680 times\n2 procs"
           }
         ]
       }
