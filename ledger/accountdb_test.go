@@ -3794,7 +3794,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	require.NoError(t, err)
 
 	// create account hashes
-	getRootHash := func(commit bool) (crypto.Digest, error) {
+	computeRootHash := func() (crypto.Digest, error) {
 		rows, err := tx.Query("SELECT address, data FROM accountbase")
 		require.NoError(t, err)
 		defer rows.Close()
@@ -3819,12 +3819,11 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, added)
 		}
-		if commit {
-			trie.Evict(true)
-		}
+		_, err = trie.Evict(true)
+		require.NoError(t, err)
 		return trie.RootHash()
 	}
-	oldRoot, err := getRootHash(true)
+	oldRoot, err := computeRootHash()
 	require.NoError(t, err)
 	require.NotEmpty(t, oldRoot)
 
