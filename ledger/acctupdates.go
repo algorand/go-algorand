@@ -1450,8 +1450,12 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	// clear the backing array to let GC collect data
-	const deltasClearThreshold = 1000
+	// clear the backing array to let GC collect data.
+	// this is catchpoint-related optimization if for whatever reason catchpoint generation
+	// takes longer than 500 rounds.
+	// the number chosen out of the following calculation:
+	// 300 bytes per acct in delta * 50,000 accts (full block)  * 500 rounds = 7.5 GB
+	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
 		for i := uint64(0); i < offset; i++ {
 			au.deltas[i] = ledgercore.AccountDeltas{}

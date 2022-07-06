@@ -123,7 +123,7 @@ func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.acctLookback = cfg.MaxAcctLookback
 }
 
-// loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
+// loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
 // The close function is expected to be call in pair with loadFromDisk
 func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {
 	ao.accountsMu.Lock()
@@ -146,7 +146,7 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
-// and preparing the accountUpdates for operation.
+// and preparing the onlineAccounts for operation.
 func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
@@ -479,7 +479,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 
 	// clear the backing array to let GC collect data
-	const deltasClearThreshold = 1000
+	// see the comment in acctupdates.go
+	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
 		for i := uint64(0); i < offset; i++ {
 			ao.deltas[i] = ledgercore.AccountDeltas{}
@@ -604,6 +605,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	var rewardsLevel uint64
 	var persistedData persistedOnlineAccountData
 
+	// the loop serves retrying logic if the database advanced while
+	// the function was analyzing deltas or caches.
+	// a similar approach is used in other lookup- methods in acctupdates as well.
 	for {
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
