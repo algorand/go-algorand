@@ -778,7 +778,7 @@ func TestTopNAccountChange(t *testing.T) {
 			r.Equal("test-fast-stateproofs", string(blk.CurrentProtocol))
 		}
 		// ensuring that there is a stateproof with new protocol version which includes more votres..
-		if consensusParams.StateProofInterval*3 == rnd {
+		if consensusParams.StateProofInterval*3 <= rnd {
 			r.Equal("next-test-fast-stateproofs", string(blk.CurrentProtocol))
 		}
 
