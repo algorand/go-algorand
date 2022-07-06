@@ -2806,3 +2806,11 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
 }
+
+// TestTrackerDBSchemaVer8BringKVStore
+func TestTrackerDBSchemaVer8BringKVStore(t *testing.T) {
+	// tests if accountDBVersion is lower (e.g., 6/7),
+	// drop the kvstore table build from JJ updated accountsSchema
+	// and set accountDBVersion to 8
+	// then start trackDBInitialize, and see if new table kvstore is there
+}

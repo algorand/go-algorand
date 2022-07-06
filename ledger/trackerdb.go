@@ -167,6 +167,7 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
 					return
 				}
+				// NOTE wait until 320 round PR merge in master/`feature/avm-box`.
 			case 7:
 				err = tu.upgradeDatabaseSchema7(ctx, tx)
 				if err != nil {
