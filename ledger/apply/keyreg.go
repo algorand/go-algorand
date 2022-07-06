@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -52,6 +51,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
+	if params.EnableStateProofKeyregCheck {
+		record.StateProofID = keyreg.StateProofPK
+	}
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
 		if keyreg.Nonparticipation {
 			if params.SupportBecomeNonParticipatingTransactions {
@@ -65,9 +67,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
-		if params.EnableStateProofKeyregCheck {
-			record.StateProofID = merklesignature.Verifier{}
-		}
 	} else {
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
@@ -81,9 +80,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if params.EnableStateProofKeyregCheck {
-			record.StateProofID = keyreg.StateProofPK
-		}
 	}
 
 	// Write the updated entry
