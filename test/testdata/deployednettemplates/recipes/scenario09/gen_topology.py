@@ -1,5 +1,5 @@
 node_types = {"R":8, "N":20, "NPN":10}
-node_size = {"R":"-m5d.4xl", "N":"-m5d.4xl", "NPN":"-m5d.4xl"}
+node_size = {"R":"-m5d.4xl", "N":"-m5d.2xl", "NPN":"-m5d.2xl"}
 regions = [
     "AWS-US-EAST-2"
 ]
@@ -9,7 +9,7 @@ f.write("{ \"Hosts\":\n  [")
 
 region_count = len(regions)
 first = True
-for  x in node_types:
+for x in sorted(node_types.keys()):
     node_type = x
     node_count = node_types[x]
     region_size = node_size[x]
@@ -24,4 +24,3 @@ for  x in node_types:
 
 f.write("\n  ]\n}\n")
 f.close()
-
