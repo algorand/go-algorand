@@ -471,10 +471,12 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
-	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife
-	if lookback < config.Consensus[topBlock.CurrentProtocol].MaxBalLookback {
-		lookback = config.Consensus[topBlock.CurrentProtocol].MaxBalLookback
+	// pick the lookback with the greater of either (MaxTxnLife+DeeperBlockHeaderHistory)
+	// or MaxBalLookback
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+	if lookback < proto.MaxBalLookback {
+		lookback = proto.MaxBalLookback
 	}
 	// in case the effective lookback is going before our rounds count, trim it there.
 	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
