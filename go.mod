@@ -20,6 +20,7 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
 	github.com/getkin/kin-openapi v0.22.0
 	github.com/gofrs/flock v0.7.0
+	github.com/golang/snappy v0.0.4
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.6.2
 	github.com/jmoiron/sqlx v1.2.0
