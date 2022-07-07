@@ -294,6 +294,11 @@ func TestTxnFirstValidTime(t *testing.T) {
 	tx.FirstValid = 1
 	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
 
+	// glassbox test - we know available range depends on LastValid - Lifetime - 1
+	tx.FirstValid = 1
+	tx.LastValid = tx.FirstValid + basics.Round(ep.Proto.MaxTxnLife)
+	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
+
 	// Same, for even weirder case of asking for a wraparound, high round
 	tx.FirstValid = 0 // I *guess* this is a legal txn early in chain's life
 	testLogic(t, "txn FirstValidTime; int 4; ==", 7, ep, "round 18446744073709551615 is not available")

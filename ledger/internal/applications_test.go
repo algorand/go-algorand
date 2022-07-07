@@ -155,7 +155,7 @@ func (c *mockCowForLogicLedger) incTxnCount() {
 }
 
 // No unit tests care about this yet, so this is a lame implementation
-func (c *mockCowForLogicLedger) blockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+func (c *mockCowForLogicLedger) blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{Round: round}, nil
 }
 

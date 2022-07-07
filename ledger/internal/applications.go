@@ -50,8 +50,8 @@ type cowForLogicLedger interface {
 	txnCounter() uint64
 	incTxnCount()
 
-	// Not correct to expose this. After 320 round work, rework to use TxTail
-	blockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+	// The method should use the txtail to ensure MaxTxnLife+1 headers back are available
+	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func newLogicLedger(cow cowForLogicLedger) *logicLedger {
@@ -157,8 +157,8 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return al.cow.blockHdr(round)
+func (al *logicLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return al.cow.blockHdrCached(round)
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {

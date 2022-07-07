@@ -201,7 +201,7 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -2304,7 +2304,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.Ledger.BlockHdr(rnd)
+		hdr, err := cx.Ledger.BlockHdrCached(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -4845,14 +4845,14 @@ func opVrfVerify(cx *EvalContext) error {
 }
 
 func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
-	first := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
-	if first > cx.txn.Txn.LastValid { // wraparound, early in chain's life
-		first = 1
+	firstAvail := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
+	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
+		firstAvail = 1
 	}
 	current := cx.Ledger.Round()
 	round := basics.Round(r)
-	if round < first || round >= current {
-		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, first, current-1)
+	if round < firstAvail || round >= current {
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
 	}
 	return round, nil
 }
@@ -4869,7 +4869,7 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.Ledger.BlockHdr(round)
+	hdr, err := cx.Ledger.BlockHdrCached(round)
 	if err != nil {
 		return err
 	}
