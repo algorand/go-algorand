@@ -2806,3 +2806,74 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
 }
+
+func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
+	totalBoxes := 100000
+	batchCount := 1000
+	boxSize := 4 * 8096
+	initDatabase := func() (db.Pair, func(), error) {
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		dbs, fn := dbOpenTest(b, false)
+		setDbLogging(b, dbs)
+		cleanup := func() {
+			cleanupTestDb(dbs, fn, false)
+		}
+
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
+		require.NoError(b, err)
+		err = tx.Commit()
+		require.NoError(b, err)
+		err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+		require.NoError(b, err)
+
+		// insert 1M boxes, in batches of 1000
+		for batch := 0; batch <= batchCount; batch++ {
+			fmt.Printf("%d / %d boxes written\n", totalBoxes*batch/batchCount, totalBoxes)
+
+			tx, err = dbs.Wdb.Handle.Begin()
+			require.NoError(b, err)
+			writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
+			require.NoError(b, err)
+			for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
+				err = writer.upsertKvPair(fmt.Sprintf("%d-%d", batch, boxIdx), string(make([]byte, boxSize)))
+				require.NoError(b, err)
+			}
+
+			err = tx.Commit()
+			require.NoError(b, err)
+			writer.close()
+		}
+		err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		return dbs, cleanup, err
+	}
+
+	dbs, cleanup, err := initDatabase()
+	require.NoError(b, err)
+	defer cleanup()
+
+	b.ResetTimer()
+	b.StopTimer()
+	cnt := 0
+	for i := 0; i < batchCount; i++ {
+		for j := 0; j < totalBoxes/batchCount; j++ {
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(b, err)
+			lookupStmt, err := tx.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+			require.NoError(b, err)
+
+			b.StartTimer()
+			_, err = lookupStmt.Exec(fmt.Sprintf("%d-%d", i, j))
+			require.NoError(b, err)
+			err = tx.Commit()
+			require.NoError(b, err)
+			b.StopTimer()
+			cnt++
+			if cnt >= b.N {
+				i = batchCount
+				break
+			}
+		}
+	}
+}
