@@ -1516,7 +1516,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 	}
 }
 
-// IsEmpty returns true if all of the fields other than UpdateRound are zero.
+// IsEmpty returns true if all of the fields are zero.
 func (bv *baseVotingData) IsEmpty() bool {
 	return bv.VoteID == crypto.OneTimeSignatureVerifier{} &&
 		bv.SelectionID == crypto.VRFVerifier{} &&
