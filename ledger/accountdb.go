@@ -1522,6 +1522,7 @@ func (bv *baseVotingData) IsEmpty() bool {
 		bv.SelectionID == crypto.VRFVerifier{} &&
 		bv.VoteFirstValid == basics.Round(0) &&
 		bv.VoteLastValid == basics.Round(0) &&
+		bv.VoteKeyDilution == 0 &&
 		bv.StateProofID == merklesignature.Verifier{}
 }
 
