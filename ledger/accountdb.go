@@ -943,25 +943,17 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 	return
 }
 
-func createTables(tx *sql.Tx) error {
-	for _, schema := range accountsSchema {
-		_, err := tx.Exec(schema)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // accountsInit fills the database using tx with initAccounts if the
 // database has not been initialized yet.
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
 func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	err = createTables(tx)
-	if err != nil {
-		return
+	for _, tableCreate := range accountsSchema {
+		_, err = tx.Exec(tableCreate)
+		if err != nil {
+			return
+		}
 	}
 
 	// Run creatables migration if it hasn't run yet

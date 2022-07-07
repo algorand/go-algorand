@@ -422,7 +422,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 // upgradeDatabaseSchema7 upgrades the database schema from version 7 to version 8.
 // adding the kvstore table for box feature support.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context, tx *sql.Tx) (err error) {
-	err = createTables(tx)
+	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, tu.initProto)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema7 unable to create kvstore through createTables : %v", err)
 	}
