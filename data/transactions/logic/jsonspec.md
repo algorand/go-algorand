@@ -12,7 +12,7 @@ Additional specifications used by **json_ref** that are extensions to the RFC715
 - The byte order mark (BOM), "\uFEFF", is not allowed at the beginning of a JSON text
 - Raw non-unicode characters not accepted
 
-## Invalid JSON text
+### Invalid JSON text
 
 ```json
 \uFEFF{"key0": 1}
@@ -102,10 +102,6 @@ Comment blocks are not accepted.
 
 ```json
 {"key0": /*comment*/"algo"}
-```
-
-```json
-{"key0": "algo"}/*comment*/
 ```
 
 ```json

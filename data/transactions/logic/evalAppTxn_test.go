@@ -948,12 +948,64 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "3 is larger than max=2")
 }
 
+// TestBigApplCreation focues on testing the new fields that allow constructing big programs.
+func TestBigApplCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, _ := MakeSampleEnv()
+
+	p := "itxn_begin;"
+	s := "; int 1"
+
+	// Recall that in test proto, max possible program size is 2700, because
+	// MaxAppProgramLen:   900
+	// MaxExtraAppProgramPages: 2
+
+	// First, test normal accummulation
+	for _, pgm := range []string{"Approval", "ClearState"} {
+		t.Run(pgm, func(t *testing.T) {
+			basic := "itxn_field " + pgm + "Program"
+			pages := "itxn_field " + pgm + "ProgramPages"
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 700; bzero; `+pages+`
+                 `+s, ep)
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 701; bzero; `+pages+`
+                 `+s, ep, "may not exceed 2700")
+
+			// Test the basic ApprovalProgram field resets
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 701; bzero; `+pages+`
+                 `+s, ep)
+			// Test that the 100 of the Approval program stayed around
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 600; bzero; `+pages+`
+                 `+s, ep)
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 601; bzero; `+pages+`
+                 `+s, ep, "may not exceed 2700")
+		})
+	}
+}
+
 // TestApplSubmission tests for checking of illegal appl transaction in form
 // only.  Things where interactions between two different fields causes the
 // error.  These are not exhaustive, but certainly demonstrate that
 // transactions.WellFormed is getting a crack at the txn.
 func TestApplSubmission(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
