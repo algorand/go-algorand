@@ -1173,6 +1173,13 @@ func initConsensusProtocols() {
 	vFuture.EnableOnlineAccountCatchpoints = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
+
+	// bolson's hackery -- 20220622_144944
+	vFuWat := v32
+	vFuWat.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuWat.MaxTxnBytesPerBlock = 5000000
+	vFuWat.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+	Consensus[protocol.ConsensusVersion("wat")] = vFuWat
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

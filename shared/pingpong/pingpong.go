@@ -1087,7 +1087,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, sender, to)
 		}
 	} else {
-		txn, err = pps.constructPayment(from, to, fee, amt, noteField, "", lease)
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField, "", lease, 0, 0)
 		if !cfg.Quiet {
 			_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
 		}
@@ -1113,87 +1113,6 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		}
 	}
 	return
-}
-
-// ConstructPayment builds a payment transaction to be signed
-// If the fee is 0, the function will use the suggested one form the network
-// Although firstValid and lastValid come pre-computed in a normal flow,
-// additional validation is done by computeValidityRounds:
-// if the lastValid is 0, firstValid + maxTxnLifetime will be used
-// if the firstValid is 0, lastRound + 1 will be used
-func (pps *WorkerState) constructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte) (transactions.Transaction, error) {
-	fromAddr, err := basics.UnmarshalChecksumAddress(from)
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
-
-	var toAddr basics.Address
-	if to != "" {
-		toAddr, err = basics.UnmarshalChecksumAddress(to)
-		if err != nil {
-			return transactions.Transaction{}, err
-		}
-	}
-
-	// Get current round, protocol, genesis ID
-	var params v1.TransactionParams
-	for params.LastRound == 0 {
-		params = pps.getSuggestedParams()
-	}
-
-	cp, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
-	if !ok {
-		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
-	}
-	fv := params.LastRound + 1
-	lv := fv + cp.MaxTxnLife - 1
-
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     fromAddr,
-			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: basics.Round(fv),
-			LastValid:  basics.Round(lv),
-			Lease:      lease,
-			Note:       note,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: toAddr,
-			Amount:   basics.MicroAlgos{Raw: amount},
-		},
-	}
-
-	// If requesting closing, put it in the transaction.  The protocol might
-	// not support it, but in that case, better to fail the transaction,
-	// because the user explicitly asked for it, and it's not supported.
-	if closeTo != "" {
-		closeToAddr, err := basics.UnmarshalChecksumAddress(closeTo)
-		if err != nil {
-			return transactions.Transaction{}, err
-		}
-
-		tx.PaymentTxnFields.CloseRemainderTo = closeToAddr
-	}
-
-	tx.Header.GenesisID = params.GenesisID
-
-	// Check if the protocol supports genesis hash
-	if cp.SupportGenesisHash {
-		copy(tx.Header.GenesisHash[:], params.GenesisHash)
-	}
-
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
-	// Then, we multiply it by the suggested fee per byte.
-	if fee == 0 {
-		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
-	}
-	if tx.Fee.Raw < cp.MinTxnFee {
-		tx.Fee.Raw = cp.MinTxnFee
-	}
-
-	return tx, nil
 }
 
 func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {

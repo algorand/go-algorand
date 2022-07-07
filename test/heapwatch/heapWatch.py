@@ -79,9 +79,17 @@ def jsonable(ob):
         return {jsonable(k):jsonable(v) for k,v in ob.items()}
     return ob
 
+def nmax(a,b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return max(a,b)
+
 class algodDir:
     def __init__(self, path, net=None, token=None, admin_token=None):
         self.path = path
+        self.isdir = os.path.isdir(path)
         self.nick = os.path.basename(self.path)
         if net is None:
             net, token, admin_token = read_algod_dir(self.path)
@@ -94,6 +102,8 @@ class algodDir:
 
     def pid(self):
         if self._pid is None:
+            if not self.isdir:
+                return None
             with open(os.path.join(self.path, 'algod.pid')) as fin:
                 self._pid = int(fin.read())
         return self._pid
@@ -108,9 +118,13 @@ class algodDir:
 
     def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/' + name
-        response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
+        except Exception as e:
+            logger.error('could not fetch %s from %s via %r (%s)', name, self.path, url, e)
+            return
         if response.code != 200:
-            logger.error('could not fetch %s from %s via %r', name, self.path. url)
+            logger.error('could not fetch %s from %s via %r (%r)', name, self.path, url, response.code)
             return
         blob = response.read()
         if snapshot_name is None:
@@ -163,6 +177,8 @@ class algodDir:
         #txncount = bi['block']['tc']
 
     def psHeap(self):
+        if not self.isdir:
+            return None, None
         # return rss, vsz (in kilobytes)
         # ps -o rss,vsz $(cat ${ALGORAND_DATA}/algod.pid)
         subp = subprocess.Popen(['ps', '-o', 'rss,vsz', str(self.pid())], stdout=subprocess.PIPE)
@@ -183,6 +199,7 @@ class watcher:
         self.prevsnapshots = {}
         self.they = []
         self.netseen = set()
+        self.latest_round = None
         os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
             cp = configparser.ConfigParser(allow_no_value=True)
@@ -235,7 +252,8 @@ class watcher:
         if self.args.heaps:
             for ad in self.they:
                 snappath = ad.get_heap_snapshot(snapshot_name, outdir=self.args.out)
-                newsnapshots[ad.path] = snappath
+                if snappath:
+                    newsnapshots[ad.path] = snappath
                 rss, vsz = ad.psHeap()
                 if rss and vsz:
                     psheaps[ad.nick] = (rss, vsz)
@@ -251,7 +269,8 @@ class watcher:
                 ad.get_metrics(snapshot_name, outdir=self.args.out)
         if self.args.blockinfo:
             for ad in self.they:
-                ad.get_blockinfo(snapshot_name, outdir=self.args.out)
+                bi = ad.get_blockinfo(snapshot_name, outdir=self.args.out)
+                self.latest_round = nmax(self.latest_round, bi['block'].get('rnd',0))
         if self.args.svg:
             logger.debug('snapped, processing pprof...')
             # make absolute and differential plots
@@ -273,6 +292,7 @@ def main():
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
     ap.add_argument('--runtime', default=None, help='(\d+)[hm]? time in hour/minute (default second) to gather info then exit')
+    ap.add_argument('--rounds', default=None, type=int, help='number of rounds to run')
     ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
@@ -305,6 +325,9 @@ def main():
 
     app.do_snap(now)
     endtime = None
+    end_round = None
+    if (app.latest_round is not None) and (args.rounds is not None):
+        end_round = app.latest_round + args.rounds
     if args.runtime:
         rts = args.runtime
         if rts.endswith('h'):
@@ -343,6 +366,8 @@ def main():
             nextt += periodSecs
             app.do_snap(now)
             if (endtime is not None) and (now > endtime):
+                return
+            if (end_round is not None) and (app.latest_round is not None) and (app.latest_round >= end_round):
                 return
     return 0
 
