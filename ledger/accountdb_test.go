@@ -2807,10 +2807,48 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	}
 }
 
-// TestTrackerDBSchemaVer8BringKVStore
+// TestTrackerDBSchemaVer8BringKVStore checks that if an earlier DB (without kvstore table)
+// can be updated with kvstore table, once accountDBVersion >= 8
 func TestTrackerDBSchemaVer8BringKVStore(t *testing.T) {
-	// tests if accountDBVersion is lower (e.g., 6/7),
+	partitiontest.PartitionTest(t)
+
+	// Don't think we can do parallel test, for it gets involved with `accountDBVersion`
+	prevAccountDBVersion := accountDBVersion
+	accountDBVersion = int32(6)
+
+	// bring up a ledger, and do something with
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
 	// drop the kvstore table build from JJ updated accountsSchema
-	// and set accountDBVersion to 8
-	// then start trackDBInitialize, and see if new table kvstore is there
+	tx, err := l.trackerDBs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	_, err = tx.Exec(`DROP TABLE IF EXISTS kvstore`)
+	require.NoError(t, err)
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	// and set accountDBVersion to 8, then start trackDBInitialize in `l.reloadLedger()`
+	accountDBVersion = int32(8)
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	// and see if new table kvstore is there
+	tx, err = l.trackerDBs.Rdb.Handle.Begin()
+	require.NoError(t, err)
+	row, err := tx.Query(`SELECT * FROM kvstore`)
+	require.NoError(t, err)
+	err = tx.Commit()
+	require.NoError(t, err)
+	err = row.Close()
+	require.NoError(t, err)
+
+	accountDBVersion = prevAccountDBVersion
 }
