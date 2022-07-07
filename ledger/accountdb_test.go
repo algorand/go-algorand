@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"math/rand"
 	"os"
 	"sort"
@@ -32,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/stretchr/testify/require"
 
@@ -2809,7 +2810,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 
 func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 	totalBoxes := 100000
-	batchCount := 1000
+	batchCount := 100
 	boxSize := 4 * 8096
 	initDatabase := func() (db.Pair, func(), error) {
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -2828,7 +2829,7 @@ func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 		err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 		require.NoError(b, err)
 
-		// insert 1M boxes, in batches of 1000
+		// insert 100k boxes, in batches of 1000
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("%d / %d boxes written\n", totalBoxes*batch/batchCount, totalBoxes)
 
@@ -2853,27 +2854,53 @@ func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 	require.NoError(b, err)
 	defer cleanup()
 
-	b.ResetTimer()
-	b.StopTimer()
-	cnt := 0
-	for i := 0; i < batchCount; i++ {
-		for j := 0; j < totalBoxes/batchCount; j++ {
-			tx, err := dbs.Wdb.Handle.Begin()
-			require.NoError(b, err)
-			lookupStmt, err := tx.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-			require.NoError(b, err)
+	b.Run("ReadBoxes", func(b *testing.B) {
+		cnt := 0
+		for i := 0; i < batchCount; i++ {
+			for j := 0; j < totalBoxes/batchCount; j++ {
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
 
-			b.StartTimer()
-			_, err = lookupStmt.Exec(fmt.Sprintf("%d-%d", i, j))
-			require.NoError(b, err)
-			err = tx.Commit()
-			require.NoError(b, err)
-			b.StopTimer()
-			cnt++
-			if cnt >= b.N {
-				i = batchCount
-				break
+				var pv persistedValue
+				var v sql.NullString
+
+				b.StartTimer()
+				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
+				b.StopTimer()
+				require.NoError(b, err)
+				require.True(b, v.Valid)
+				cnt++
+				if cnt >= b.N {
+					return
+				}
 			}
 		}
-	}
+	})
+
+	b.Run("ReadBoxesDuplicate", func(b *testing.B) {
+		cnt := 0
+		for i := 0; i < batchCount; i++ {
+			for j := 0; j < totalBoxes/batchCount; j++ {
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
+
+				var pv persistedValue
+				var v sql.NullString
+
+				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
+				require.NoError(b, err)
+				require.True(b, v.Valid)
+
+				b.StartTimer()
+				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
+				b.StopTimer()
+				require.NoError(b, err)
+				require.True(b, v.Valid)
+				cnt++
+				if cnt >= b.N {
+					return
+				}
+			}
+		}
+	})
 }
