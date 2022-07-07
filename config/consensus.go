@@ -1152,6 +1152,8 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusFuture] = vFuture
 
 	vAlpha1 := v32
+	vAlpha1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
 	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
 	vAlpha1.MaxTxnBytesPerBlock = 5000000
 
