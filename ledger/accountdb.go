@@ -382,7 +382,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].accountData.SetAccountData(accountDataV5)
+		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
 		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
@@ -707,7 +707,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				updEntry.newAcct.SetCoreAccountData(acctDelta)
+				updEntry.newAcct.SetCoreAccountData(&acctDelta)
 				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
 				outAccountDeltas.update(idx, updEntry)
 			} else {
@@ -719,7 +719,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					},
 					address: addr,
 				}
-				newEntry.newAcct.SetCoreAccountData(acctDelta)
+				newEntry.newAcct.SetCoreAccountData(&acctDelta)
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.oldAcct = baseAccountData
 					outAccountDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
@@ -823,7 +823,7 @@ func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
 
 func (c *onlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
 	var baseEntry baseOnlineAccountData
-	baseEntry.SetCoreAccountData(acctDelta)
+	baseEntry.SetCoreAccountData(&acctDelta)
 	c.newAcct = append(c.newAcct, baseEntry)
 	c.updRound = append(c.updRound, uint64(deltaRound))
 	c.newStatus = append(c.newStatus, acctDelta.Status)
@@ -1398,7 +1398,7 @@ type baseAccountData struct {
 }
 
 // IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
-func (ba baseAccountData) IsEmpty() bool {
+func (ba *baseAccountData) IsEmpty() bool {
 	return ba.Status == 0 &&
 		ba.MicroAlgos.Raw == 0 &&
 		ba.RewardsBase == 0 &&
@@ -1414,11 +1414,11 @@ func (ba baseAccountData) IsEmpty() bool {
 		ba.baseVotingData.IsEmpty()
 }
 
-func (ba baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+func (ba *baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
 
-func (ba *baseAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
+func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1435,7 +1435,7 @@ func (ba *baseAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
 	ba.baseVotingData.SetCoreAccountData(ad)
 }
 
-func (ba *baseAccountData) SetAccountData(ad basics.AccountData) {
+func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1457,14 +1457,14 @@ func (ba *baseAccountData) SetAccountData(ad basics.AccountData) {
 	ba.baseVotingData.VoteKeyDilution = ad.VoteKeyDilution
 }
 
-func (ba baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
+func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	return ledgercore.AccountData{
 		AccountBaseData: ba.GetLedgerCoreAccountBaseData(),
 		VotingData:      ba.GetLedgerCoreVotingData(),
 	}
 }
 
-func (ba baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
+func (ba *baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
 	return ledgercore.AccountBaseData{
 		Status:             ba.Status,
 		MicroAlgos:         ba.MicroAlgos,
@@ -1483,7 +1483,7 @@ func (ba baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseD
 	}
 }
 
-func (ba baseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
+func (ba *baseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	return ledgercore.VotingData{
 		VoteID:          ba.VoteID,
 		SelectionID:     ba.SelectionID,
@@ -1517,12 +1517,16 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 }
 
 // IsEmpty returns true if all of the fields other than UpdateRound are zero.
-func (bv baseVotingData) IsEmpty() bool {
-	return bv == baseVotingData{}
+func (bv *baseVotingData) IsEmpty() bool {
+	return bv.VoteID == crypto.OneTimeSignatureVerifier{} &&
+		bv.SelectionID == crypto.VRFVerifier{} &&
+		bv.VoteFirstValid == basics.Round(0) &&
+		bv.VoteLastValid == basics.Round(0) &&
+		bv.StateProofID == merklesignature.Verifier{}
 }
 
 // SetCoreAccountData initializes baseVotingData from ledgercore.AccountData
-func (bv *baseVotingData) SetCoreAccountData(ad ledgercore.AccountData) {
+func (bv *baseVotingData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bv.VoteID = ad.VoteID
 	bv.SelectionID = ad.SelectionID
 	bv.StateProofID = ad.StateProofID
@@ -1532,12 +1536,12 @@ func (bv *baseVotingData) SetCoreAccountData(ad ledgercore.AccountData) {
 }
 
 // IsVotingEmpty checks if voting data fields are empty
-func (bo baseOnlineAccountData) IsVotingEmpty() bool {
+func (bo *baseOnlineAccountData) IsVotingEmpty() bool {
 	return bo.baseVotingData.IsEmpty()
 }
 
 // IsEmpty return true if any of the fields are non-zero.
-func (bo baseOnlineAccountData) IsEmpty() bool {
+func (bo *baseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&
 		bo.RewardsBase == 0
@@ -1545,7 +1549,7 @@ func (bo baseOnlineAccountData) IsEmpty() bool {
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
 // TODO: unify
-func (bo baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
+func (bo *baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
 	return ledgercore.OnlineAccount{
 		Address:                 addr,
 		MicroAlgos:              bo.MicroAlgos,
@@ -1559,7 +1563,7 @@ func (bo baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalanc
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (bo baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
+func (bo *baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
@@ -1577,11 +1581,11 @@ func (bo baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParam
 	}
 }
 
-func (bo baseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+func (bo *baseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
 }
 
-func (bo *baseOnlineAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
+func (bo *baseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bo.baseVotingData.SetCoreAccountData(ad)
 
 	// MicroAlgos/RewardsBase are updated by the evaluator when accounts are touched
@@ -2056,7 +2060,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			return err
 		}
 		var newAccountData baseAccountData
-		newAccountData.SetAccountData(accountData)
+		newAccountData.SetAccountData(&accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
 
 		if normBal.Valid {
