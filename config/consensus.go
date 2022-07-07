@@ -1175,9 +1175,9 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusFuture] = vFuture
 
 	// bolson's hackery -- 20220622_144944
-	vFuWat := v32
+	vFuWat := vFuture
 	vFuWat.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	vFuWat.MaxTxnBytesPerBlock = 5000000
+	vFuWat.MaxTxnBytesPerBlock = 5*1024*1024
 	vFuWat.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
 	Consensus[protocol.ConsensusVersion("wat")] = vFuWat
 }
