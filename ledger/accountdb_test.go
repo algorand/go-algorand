@@ -2827,11 +2827,11 @@ func TestTrackerDBSchemaVer8BringKVStore(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	// drop the kvstore table build from JJ updated accountsSchema
-	tx, err := l.trackerDBs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	_, err = tx.Exec(`DROP TABLE IF EXISTS kvstore`)
-	require.NoError(t, err)
+	// kvstore table from box-storage, should not exist in earlier accountDBVersion
+	tx, err := l.trackerDBs.Rdb.Handle.Begin()
+	var exists bool
+	err = tx.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
+	require.Error(t, err, sql.ErrNoRows)
 	err = tx.Commit()
 	require.NoError(t, err)
 
@@ -2843,11 +2843,9 @@ func TestTrackerDBSchemaVer8BringKVStore(t *testing.T) {
 	// and see if new table kvstore is there
 	tx, err = l.trackerDBs.Rdb.Handle.Begin()
 	require.NoError(t, err)
-	row, err := tx.Query(`SELECT * FROM kvstore`)
+	err = tx.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
 	require.NoError(t, err)
 	err = tx.Commit()
-	require.NoError(t, err)
-	err = row.Close()
 	require.NoError(t, err)
 
 	accountDBVersion = prevAccountDBVersion

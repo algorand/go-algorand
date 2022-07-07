@@ -73,9 +73,6 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
-	`CREATE TABLE IF NOT EXISTS kvstore (
-		key blob primary key,
-		value blob)`,
 	`CREATE TABLE IF NOT EXISTS assetcreators (
 		asset integer primary key,
 		creator blob)`,
@@ -125,6 +122,12 @@ var createResourcesTable = []string{
 		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
+var createBoxTable = []string{
+	`CREATE TABLE IF NOT EXISTS kvstore (
+		key blob primary key,
+		value blob)`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -140,7 +143,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(6) // NOTE once 320 merged, this number goes to 8
+var accountDBVersion = int32(8) // NOTE once 320 merged, this number goes to 8
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -1081,6 +1084,26 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// accountsCreateBoxTable creates the KVStore table for box-storage in the database.
+func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
+	if err == nil {
+		// already exists
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	for _, stmt := range createBoxTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type baseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -1878,14 +1901,20 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupKvPairStmt, err = r.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-	if err != nil {
-		return nil, err
+	qs.lookupKvPairStmt = nil
+	if accountDBVersion >= int32(8) {
+		qs.lookupKvPairStmt, err = r.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (key, 1, ?) = ? WHERE id='acctbase'")
-	if err != nil {
-		return nil, err
+	qs.lookupKeysByPrefixStmt = nil
+	if accountDBVersion >= int32(8) {
+		qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (key, 1, ?) = ? WHERE id='acctbase'")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
