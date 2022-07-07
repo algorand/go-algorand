@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -25,8 +27,8 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
