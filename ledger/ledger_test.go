@@ -1658,7 +1658,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval + 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
 
@@ -1666,8 +1666,13 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	accountsWithValid := make(map[basics.Address]basics.AccountData)
 	for addr, elem := range genesisInitState.Accounts {
 		newAccount := elem
-		newAccount.VoteFirstValid = 0
+		newAccount.Status = basics.Online
+		newAccount.VoteFirstValid = 1
 		newAccount.VoteLastValid = 10000
+		newAccount.VoteKeyDilution = 10
+		crypto.RandBytes(newAccount.VoteID[:])
+		crypto.RandBytes(newAccount.SelectionID[:])
+		crypto.RandBytes(newAccount.StateProofID[:])
 		accountsWithValid[addr] = newAccount
 	}
 	genesisInitState.Accounts = accountsWithValid
@@ -1723,7 +1728,7 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
-	sp := stateproof.StateProof{SignedWeight: 3000000000000000}
+	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
