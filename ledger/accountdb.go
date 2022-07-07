@@ -3944,7 +3944,8 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 type encodedAccountsBatchIter struct {
 	accountsRows  *sql.Rows
 	resourcesRows *sql.Rows
-	nextRow       pendingRow
+	nextBaseRow           pendingBaseRow
+	nextResourceRow       pendingResourceRow
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
@@ -3976,6 +3977,8 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	}
 
 	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
+	var encodedRecords []encodedBalanceRecordV6
+
 	// emptyCount := 0
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
@@ -3997,7 +4000,6 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			if resData.IsAsset() && resData.IsHolding() {
 				totalAssets++
 			}
-
 		}
 
 		if baseAcct.TotalAppParams == totalAppParams &&
@@ -4005,20 +4007,28 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			baseAcct.TotalAssetParams == totalAssetParams &&
 			baseAcct.TotalAssets == totalAssets {
 
-			bals = append(bals, encodedRecord)
+			encodedRecord.IsLastEntry = true
+			encodedRecords = append(encodedRecords, encodedRecord)
+
+			bals = append(bals, encodedRecords...)
 			totalAppParams = 0
 			totalAppLocalStates = 0
 			totalAssetParams = 0
 			totalAssets = 0
 		}
 
+		// TODO determine whether to cut off this chunk due to to many resources
+		// if condition met
+		//     add record to bals
+		//     return flag indicating that we should stop processing rows for now
+
 		return nil
 	}
 
-	_, iterator.nextRow, err = processAllBaseAccountRecords(
+	_, iterator.nextBaseRow, iterator.nextResourceRow, err = processAllBaseAccountRecords(
 		iterator.accountsRows, iterator.resourcesRows,
 		baseCb, resCb,
-		iterator.nextRow, accountCount,
+		iterator.nextBaseRow, iterator.nextResourceRow, accountCount,
 	)
 	if err != nil {
 		iterator.Close()
@@ -4086,7 +4096,7 @@ type orderedAccountsIter struct {
 	hashesRows      *sql.Rows
 	resourcesRows   *sql.Rows
 	tx              *sql.Tx
-	pendingRow      pendingRow
+	pendingResourceRow      pendingResourceRow
 	accountCount    int
 	insertStmt      *sql.Stmt
 }
@@ -4101,7 +4111,14 @@ func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 	}
 }
 
-type pendingRow struct {
+type pendingBaseRow struct {
+	addr basics.Address
+	rowid int64
+	accountData *baseAccountData
+	encodedAccountData []byte
+}
+
+type pendingResourceRow struct {
 	addrid int64
 	aidx   basics.CreatableIndex
 	buf    []byte
@@ -4109,9 +4126,9 @@ type pendingRow struct {
 
 func processAllResources(
 	resRows *sql.Rows,
-	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
+	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingResourceRow,
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
-) (pendingRow, error) {
+) (pendingResourceRow, bool, error) {
 	var err error
 
 	// Declare variabled outside of the loop to prevent allocations per iteration.
@@ -4128,47 +4145,48 @@ func processAllResources(
 			// and we need to skip accounts without resources
 			if pr.addrid > acctRowid {
 				err = callback(addr, 0, nil, nil)
-				return pr, err
+				return pr, false, err
 			}
 			if pr.addrid < acctRowid {
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", pr.addrid, acctRowid)
-				return pendingRow{}, err
+				return pendingResourceRow{}, false, err
 			}
 			addrid = pr.addrid
 			buf = pr.buf
 			aidx = pr.aidx
-			pr = pendingRow{}
+			pr = pendingResourceRow{}
 		} else {
 			if !resRows.Next() {
 				err = callback(addr, 0, nil, nil)
 				if err != nil {
-					return pendingRow{}, err
+					return pendingResourceRow{}, false, err
 				}
 				break
 			}
 			err = resRows.Scan(&addrid, &aidx, &buf)
 			if err != nil {
-				return pendingRow{}, err
+				return pendingResourceRow{}, false, err
 			}
 			if addrid < acctRowid {
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
-				return pendingRow{}, err
+				return pendingResourceRow{}, false, err
 			} else if addrid > acctRowid {
 				err = callback(addr, 0, nil, nil)
-				return pendingRow{addrid, aidx, buf}, err
+				return pendingResourceRow{addrid, aidx, buf}, false, err
 			}
 		}
 		resData = resourcesData{}
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
-			return pendingRow{}, err
+			return pendingResourceRow{}, false, err
 		}
+		// TODO check if too many resources were found in callback. If so, save a pending row.
 		err = callback(addr, aidx, &resData, buf)
 		if err != nil {
-			return pendingRow{}, err
+			return pendingResourceRow{}, false, err
 		}
 	}
-	return pendingRow{}, nil
+	return pendingResourceRow{}, false, nil
 }
 
 func processAllBaseAccountRecords(
@@ -4176,8 +4194,8 @@ func processAllBaseAccountRecords(
 	resRows *sql.Rows,
 	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
 	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
-	pending pendingRow, accountCount int,
-) (int, pendingRow, error) {
+	pendingBase pendingBaseRow, pendingResource pendingResourceRow, accountCount int,
+) (int, pendingBaseRow, pendingResourceRow, error) {
 	var addr basics.Address
 	var prevAddr basics.Address
 	var err error
@@ -4187,44 +4205,68 @@ func processAllBaseAccountRecords(
 	var addrbuf []byte
 	var buf []byte
 	var rowid int64
-	for baseRows.Next() {
-		err = baseRows.Scan(&rowid, &addrbuf, &buf)
-		if err != nil {
-			return 0, pendingRow{}, err
+	for {
+		if pendingBase.rowid != 0 {
+			addr = pendingBase.addr
+			rowid = pendingBase.rowid
+			accountData = *pendingBase.accountData
+			buf = pendingBase.encodedAccountData
+		} else {
+			if !baseRows.Next() {
+				return count, pendingBaseRow{}, pendingResource, nil
+			}
+
+			err = baseRows.Scan(&rowid, &addrbuf, &buf)
+			if err != nil {
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
+
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
+
+			copy(addr[:], addrbuf)
+
+			accountData = baseAccountData{}
+			err = protocol.Decode(buf, &accountData)
+			if err != nil {
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
 		}
 
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return 0, pendingRow{}, err
-		}
-
-		copy(addr[:], addrbuf)
-
-		accountData = baseAccountData{}
-		err = protocol.Decode(buf, &accountData)
-		if err != nil {
-			return 0, pendingRow{}, err
-		}
 		err = baseCb(addr, rowid, &accountData, buf)
 		if err != nil {
-			return 0, pendingRow{}, err
+			return 0, pendingBaseRow{}, pendingResourceRow{}, err
 		}
 
-		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
+		var rowsRemaining bool
+		pendingResource, rowsRemaining, err = processAllResources(resRows, addr, &accountData, rowid, pendingResource, resCb)
 		if err != nil {
 			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
-			return 0, pendingRow{}, err
+			return 0, pendingBaseRow{}, pendingResourceRow{}, err
+		}
+
+		if rowsRemaining {
+			// TODO save pending baseRow
+			pendingBase := pendingBaseRow{
+				addr: addr,
+				rowid: rowid,
+				accountData: &accountData,
+				encodedAccountData: buf,
+			}
+			return count, pendingBase, pendingResource, nil
 		}
 
 		count++
 		if accountCount > 0 && count == accountCount {
 			// we're done with this iteration.
-			return count, pending, nil
+			return count, pendingBaseRow{}, pendingResource, nil
 		}
 		prevAddr = addr
 	}
 
-	return count, pending, nil
+	return count, pendingBaseRow{}, pendingResource, nil
 }
 
 // loadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
@@ -4452,10 +4494,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		count := 0
-		count, iterator.pendingRow, err = processAllBaseAccountRecords(
+		count, iterator.pendingResourceRow, err = processAllBaseAccountRecords(
 			iterator.accountBaseRows, iterator.resourcesRows,
 			baseCb, resCb,
-			iterator.pendingRow, iterator.accountCount,
+			iterator.pendingResourceRow, iterator.accountCount,
 		)
 		if err != nil {
 			iterator.Close(ctx)

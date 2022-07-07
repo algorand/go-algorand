@@ -336,6 +336,22 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
 	}
 
+	// TODO check counter
+
+	//if resData.IsApp() && resData.IsOwning() {
+	//	totalAppParams++
+	//}
+	//if resData.IsApp() && resData.IsHolding() {
+	//	totalAppLocalStates++
+	//}
+	//
+	//if resData.IsAsset() && resData.IsOwning() {
+	//	totalAssetParams++
+	//}
+	//if resData.IsAsset() && resData.IsHolding() {
+	//	totalAssets++
+	//}
+
 	wg := sync.WaitGroup{}
 
 	var errBalances error
