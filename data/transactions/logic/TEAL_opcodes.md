@@ -431,8 +431,6 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
-FirstValidTime causes the program to fail. The field is reserved for future use.
-
 ## global f
 
 - Opcode: 0x32 {uint8 global field index}

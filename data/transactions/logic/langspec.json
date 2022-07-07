@@ -616,7 +616,6 @@
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of current transaction",
-      "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"

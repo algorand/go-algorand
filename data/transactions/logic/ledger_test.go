@@ -214,6 +214,7 @@ func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	seed[6] = byte(round >> 48)
 	seed[7] = byte(round >> 56)
 	hdr.Seed = seed
+	hdr.TimeStamp = 100 + (9 * int64(round) / 2)
 	return hdr, nil
 	// perhaps should add an error when requesting old round for better testing
 }

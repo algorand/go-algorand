@@ -66,7 +66,7 @@ const appAddressAvailableVersion = 7
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const fidoVersion = 7       // base64, json, secp256r1
-const pairingVersion = 7    // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
+const pairingVersion = 7    // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 const randomnessVersion = 7 // vrf_verify, block
 
 type linearCost struct {

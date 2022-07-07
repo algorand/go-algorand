@@ -2300,7 +2300,11 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
 	case FirstValidTime:
-		hdr, err := cx.Ledger.BlockHdr(txn.FirstValid - 1)
+		rnd, err := cx.availableRound(uint64(txn.FirstValid) - 1)
+		if err != nil {
+			return sv, err
+		}
+		hdr, err := cx.Ledger.BlockHdr(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -4840,18 +4844,25 @@ func opVrfVerify(cx *EvalContext) error {
 	return nil
 }
 
-func opBlock(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // round
-	round := basics.Round(cx.stack[last].Uint)
+func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	first := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
-	if first > cx.txn.Txn.LastValid { // wraparound
+	if first > cx.txn.Txn.LastValid { // wraparound, early in chain's life
 		first = 1
 	}
 	current := cx.Ledger.Round()
+	round := basics.Round(r)
 	if round < first || round >= current {
-		return fmt.Errorf("block %d is not available. It's outside [%d-%d)", round, first, current)
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, first, current-1)
 	}
+	return round, nil
+}
 
+func opBlock(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // round
+	round, err := cx.availableRound(cx.stack[last].Uint)
+	if err != nil {
+		return err
+	}
 	f := BlockField(cx.program[cx.pc+1])
 	fs, ok := blockFieldSpecByField(f)
 	if !ok || fs.version > cx.version {
