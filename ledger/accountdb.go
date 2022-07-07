@@ -1517,13 +1517,8 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 }
 
 // IsEmpty returns true if all of the fields are zero.
-func (bv *baseVotingData) IsEmpty() bool {
-	return bv.VoteID == crypto.OneTimeSignatureVerifier{} &&
-		bv.SelectionID == crypto.VRFVerifier{} &&
-		bv.VoteFirstValid == basics.Round(0) &&
-		bv.VoteLastValid == basics.Round(0) &&
-		bv.VoteKeyDilution == 0 &&
-		bv.StateProofID == merklesignature.Verifier{}
+func (bv baseVotingData) IsEmpty() bool {
+	return bv == baseVotingData{}
 }
 
 // SetCoreAccountData initializes baseVotingData from ledgercore.AccountData
