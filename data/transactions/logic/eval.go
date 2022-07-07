@@ -1310,17 +1310,17 @@ func opLt(cx *EvalContext) error {
 // opSwap, opLt, and opNot always succeed (return nil). So error checking elided in Gt,Le,Ge
 
 func opGt(cx *EvalContext) error {
-	opSwap(cx)
+	_ = opSwap(cx)
 	return opLt(cx)
 }
 
 func opLe(cx *EvalContext) error {
-	opGt(cx)
+	_ = opGt(cx)
 	return opNot(cx)
 }
 
 func opGe(cx *EvalContext) error {
-	opLt(cx)
+	_ = opLt(cx)
 	return opNot(cx)
 }
 

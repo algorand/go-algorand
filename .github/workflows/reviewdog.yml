@@ -24,6 +24,7 @@ jobs:
           tool_name: "Lint Errors"
           level: "error"
           fail_on_error: true
+          filter_mode: "nofilter"
   # Non-Blocking Warnings Section
   reviewdog-warnings:
     runs-on: ubuntu-latest

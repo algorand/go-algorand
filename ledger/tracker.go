@@ -434,7 +434,10 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			if !ok {
 				return
 			}
-			tr.commitRound(commit)
+			err := tr.commitRound(commit)
+			if err != nil {
+				tr.log.Errorf("commitSyncer: commitRound error %s", err.Error())
+			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
 			drained := false

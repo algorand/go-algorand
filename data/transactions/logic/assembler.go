@@ -1305,7 +1305,7 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 
 func (ops *OpStream) typeError(err error) {
 	if ops.typeTracking {
-		ops.error(err)
+		_ = ops.error(err)
 	}
 }
 
@@ -1413,7 +1413,7 @@ func (ops *OpStream) assemble(text string) error {
 			// bail out on the assembly as a whole.
 			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
 			if ok {
-				ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+				_ = ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 			} else {
 				spec, ok = keywords[opstring]
 			}
