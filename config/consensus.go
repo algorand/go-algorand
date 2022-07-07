@@ -1166,7 +1166,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusVAlpha2] = vAlpha2
 
 	// vAlpha1 can be upgraded to vAlpha2, with a short update delay of a few hours
-	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 5000
+	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
