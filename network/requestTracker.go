@@ -482,11 +482,11 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      trackedRequest.remoteHost,
-				HostName:     trackedRequest.otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: trackedRequest.otherInstanceName,
-				Reason:       "Remote IP Connection Rate Limit",
+				Address:       trackedRequest.remoteHost,
+				TelemetryGUID: trackedRequest.otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  trackedRequest.otherInstanceName,
+				Reason:        "Remote IP Connection Rate Limit",
 			})
 		response.Header().Add(TooManyRequestsRetryAfterHeader, fmt.Sprintf("%d", rt.config.ConnectionsRateLimitingWindowSeconds))
 		response.WriteHeader(http.StatusTooManyRequests)

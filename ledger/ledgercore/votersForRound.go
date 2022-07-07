@@ -18,6 +18,7 @@ package ledgercore
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -78,6 +79,27 @@ func MakeVotersForRound() *VotersForRound {
 	return vr
 }
 
+func onlineAccountToStateProofParticipant(account *OnlineAccount, money basics.MicroAlgos) basics.Participant {
+	var retPart basics.Participant
+	retPart.Weight = money.ToUint64()
+	// Some accounts might not have StateProof keys commitment. As a result,
+	// the commitment would be an array filled with zeroes: [0x0...0x0].
+	// Since the commitment is created using the subset-sum hash function, for which the
+	// value [0x0..0x0] might be known, we avoid using such empty commitments.
+	// We replace it with a commitment for zero keys..
+	if account.StateProofID.IsEmpty() {
+		copy(retPart.PK.Commitment[:], merklesignature.NoKeysCommitment[:])
+	} else {
+		copy(retPart.PK.Commitment[:], account.StateProofID[:])
+
+	}
+	// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
+	// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
+	// registered by the Account.
+	retPart.PK.KeyLifetime = merklesignature.KeyLifetimeDefault
+	return retPart
+}
+
 // LoadTree todo
 func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
@@ -108,10 +130,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
-		participants[i] = basics.Participant{
-			PK:     acct.StateProofID,
-			Weight: money.ToUint64(),
-		}
+		participants[i] = onlineAccountToStateProofParticipant(acct, money)
 		addrToPos[acct.Address] = uint64(i)
 	}
 

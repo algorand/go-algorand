@@ -425,6 +425,10 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
+| 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
 FirstValidTime causes the program to fail. The field is reserved for future use.
@@ -746,12 +750,26 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
+## replace2 s
+
+- Opcode: 0x5c {uint8 start position}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)
+- Availability: v7
+
+## replace3
+
+- Opcode: 0x5d
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)
+- Availability: v7
+
 ## base64_decode e
 
-- Opcode: 0x5c {uint8 encoding index}
+- Opcode: 0x5e {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 1 + 1 per 16 bytes
+- **Cost**: 1 + 1 per 16 bytes of A
 - Availability: v7
 
 `base64` Encodings:
@@ -766,9 +784,10 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 
 ## json_ref r
 
-- Opcode: 0x5d {string return type}
+- Opcode: 0x5f {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
 `json_ref` Types:

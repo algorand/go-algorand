@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -114,7 +115,7 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := 1000 * 1000 // Allow long run times
+	bigBudget := 2 * 1000 * 1000 // Allow long run times
 	clone.LogicSigMaxCost = uint64(bigBudget)
 	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
@@ -256,6 +257,22 @@ func TestWrongProtoVersion(t *testing.T) {
 			ops := testProg(t, "int 1", v)
 			ep := defaultEvalParamsWithVersion(nil, 0)
 			testAppBytes(t, ops.Program, ep, "LogicSig not supported", "LogicSig not supported")
+		})
+	}
+}
+
+func TestBlankStackSufficient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := 0; v <= LogicVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			for i := 0; i < 256; i++ {
+				spec := opsByOpcode[v][i]
+				argLen := len(spec.Arg.Types)
+				blankStackLen := len(blankStack)
+				require.GreaterOrEqual(t, blankStackLen, argLen)
+			}
 		})
 	}
 }
@@ -1451,7 +1468,31 @@ assert
 int 1
 `
 
-const testTxnProgramTextV7 = testTxnProgramTextV6
+const testTxnProgramTextV7 = testTxnProgramTextV6 + `
+assert
+
+txn NumApprovalProgramPages
+int 1
+==
+assert
+
+txna ApprovalProgramPages 0
+txn ApprovalProgram
+==
+assert
+
+txn NumClearStateProgramPages
+int 1
+==
+assert
+
+txna ClearStateProgramPages 0
+txn ClearStateProgram
+==
+assert
+
+int 1
+`
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -1614,7 +1655,7 @@ func TestTxn(t *testing.T) {
 			if v < txnEffectsVersion {
 				testLogicFull(t, ops.Program, 3, ep)
 			} else {
-				// Starting in txnEffectsVersion, there are fields we can't access all fields in Logic mode
+				// Starting in txnEffectsVersion, there are fields we can't access in Logic mode
 				testLogicFull(t, ops.Program, 3, ep, "not allowed in current mode")
 				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
 				lastArg := strings.Index(source, "arg 10\n==\n&&")
@@ -2063,6 +2104,40 @@ global ZeroAddress
 	testLogicBytes(t, ops.Program, defaultEvalParams(&txn2))
 }
 
+func TestTxnBigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+txna ApprovalProgramPages 0
+len
+int 4096
+==
+assert
+
+txna ApprovalProgramPages 1
+byte 0x01020304					// 4096 % 7 == 1, so the last four bytes start with 0x01
+==
+assert
+
+int 1
+`
+	var txn transactions.SignedTxn
+	txn.Txn.ApprovalProgram = make([]byte, 4100) // 4 bytes more than a page
+	for i := range txn.Txn.ApprovalProgram {
+		txn.Txn.ApprovalProgram[i] = byte(i % 7)
+	}
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(&txn))
+
+	testLogic(t, `txna ApprovalProgramPages 2`, AssemblerMaxVersion, defaultEvalParams(&txn),
+		"invalid ApprovalProgramPages index")
+
+	// ClearStateProgram is not in the txn at all
+	testLogic(t, `txn NumClearStateProgramPages; !`, AssemblerMaxVersion, defaultEvalParams(&txn))
+	testLogic(t, `txna ClearStateProgramPages 0`, AssemblerMaxVersion, defaultEvalParams(&txn),
+		"invalid ClearStateProgramPages index")
+}
+
 func TestTxnas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2309,6 +2384,35 @@ func TestExtractFlop(t *testing.T) {
 	int 1
 	extract_uint64`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
+}
+
+func TestReplace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 0; byte 0x22221111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 1; byte 0x11222211; ==`, 7)
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 2; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; byte 0x2222; replace2 3; byte 0x11112222; ==`, 7)
+
+	testAccepts(t, `byte 0x11111111; int 0; byte 0x2222; replace3; byte 0x22221111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 1; byte 0x2222; replace3; byte 0x11222211; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 2; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; int 3; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
+
+	testAccepts(t, `byte 0x11111111; int 0; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 1; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 2; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 3; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	// unusual, perhaps, but legal. inserts 0 bytes at len(A)
+	testAccepts(t, `byte 0x11111111; int 4; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	// but can't replace a byte there
+	testPanics(t, `byte 0x11111111; int 4; byte 0x22; replace3; len`, 7)
+	// even a zero byte replace fails after len(A)
+	testPanics(t, `byte 0x11111111; int 5; byte 0x; replace3; len`, 7)
+
+	testAccepts(t, `byte 0x; byte 0x; replace2 0; byte 0x; ==`, 7)
+	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
 }
 
 func TestLoadStore(t *testing.T) {
@@ -3564,9 +3668,89 @@ func BenchmarkCheckx5(b *testing.B) {
 	}
 }
 
+func makeNestedKeys(depth int) string {
+	if depth <= 0 {
+		return `{\"key0\":\"value0\"}`
+	}
+	return fmt.Sprintf(`{\"key0\":%s}`, makeNestedKeys(depth-1))
+}
+
+func BenchmarkJsonRef(b *testing.B) {
+	// base case
+	oneKey := `{\"key0\":\"value0\"}`
+
+	// many keys
+	sb := &strings.Builder{}
+	sb.WriteString(`{`)
+	for i := 0; i < 100; i++ {
+		sb.WriteString(fmt.Sprintf(`\"key%d\":\"value%d\",`, i, i))
+	}
+	sb.WriteString(`\"key100\":\"value100\"}`) // so there is no trailing comma
+	manyKeys := sb.String()
+
+	lenOfManyKeys := len(manyKeys)
+	longTextLen := lenOfManyKeys - 36 // subtract the difference
+	mediumText := strings.Repeat("a", longTextLen/2)
+	longText := strings.Repeat("a", longTextLen)
+
+	// medium key
+	mediumKey := fmt.Sprintf(`{\"%s\":\"value\",\"key1\":\"value2\"}`, mediumText)
+
+	// long key
+	longKey := fmt.Sprintf(`{\"%s\":\"value\",\"key1\":\"value2\"}`, longText)
+
+	// long value
+	longValue := fmt.Sprintf(`{\"key0\":\"%s\",\"key1\":\"value2\"}`, longText)
+
+	// nested keys
+	nestedKeys := makeNestedKeys(200)
+
+	jsonLabels := []string{"one key", "many keys", "medium key", "long key", "long val", "nested keys"}
+	jsonSamples := []string{oneKey, manyKeys, mediumKey, longKey, longValue, nestedKeys}
+	keys := [][]string{
+		{"key0"},
+		{"key0", "key100"},
+		{mediumText, "key1"},
+		{longText, "key1"},
+		{"key0", "key1"},
+		{"key0"},
+	}
+	valueFmt := [][]string{
+		{"JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONObject"},
+	}
+	benches := [][]string{}
+	for i, label := range jsonLabels {
+		for j, key := range keys[i] {
+			prog := fmt.Sprintf(`byte "%s"; byte "%s"; json_ref %s; pop;`, jsonSamples[i], key, valueFmt[i][j])
+
+			// indicate long key
+			keyLabel := key
+			if len(key) > 50 {
+				keyLabel = fmt.Sprintf("long_key_%d", len(key))
+			}
+
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", label, keyLabel), // label
+				"",                                    // prefix
+				prog,                                  // operation
+				"int 1",                               // suffix
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
 func TestEvalVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	text := `intcblock 1
@@ -4534,6 +4718,8 @@ func TestLog(t *testing.T) {
 		source      string
 		runMode     runMode
 		errContains string
+		// For cases where assembly errors, we manually put in the bytes
+		assembledBytes []byte
 	}{
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
@@ -4561,9 +4747,10 @@ func TestLog(t *testing.T) {
 			runMode:     modeApp,
 		},
 		{
-			source:      `load 0; log`,
-			errContains: "log arg 0 wanted []byte but got uint64",
-			runMode:     modeApp,
+			source:         `load 0; log`,
+			errContains:    "log arg 0 wanted []byte but got uint64",
+			runMode:        modeApp,
+			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
@@ -4575,7 +4762,11 @@ func TestLog(t *testing.T) {
 	for _, c := range failCases {
 		switch c.runMode {
 		case modeApp:
-			testApp(t, c.source, ep, c.errContains)
+			if c.assembledBytes == nil {
+				testApp(t, c.source, ep, c.errContains)
+			} else {
+				testAppBytes(t, c.assembledBytes, ep, c.errContains)
+			}
 		default:
 			testLogic(t, c.source, AssemblerMaxVersion, ep, c.errContains, c.errContains)
 		}
@@ -4780,40 +4971,53 @@ int ` + fmt.Sprintf("%d", 20_000-3-6) + ` // base64_decode cost = 6 (68 bytes ->
 	testAccepts(t, source, fidoVersion)
 }
 
-func TestHasDuplicateKeys(t *testing.T) {
+func TestIsPrimitive(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testCases := []struct {
 		text []byte
 	}{
 		{
-			text: []byte(`{"key0": "1","key0": "2", "key1":1}`),
+			text: []byte(`null`),
 		},
 		{
-			text: []byte(`{"key0": "1","key1": [1], "key0":{"key2": "a"}}`),
+			text: []byte(`[1, 2, 3]`),
+		},
+		{
+			text: []byte(`2`),
 		},
 	}
 	for _, s := range testCases {
-		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+		isPrimitive, err := isPrimitiveJSON(s.text)
 		require.Nil(t, err)
-		require.True(t, hasDuplicates)
+		require.True(t, isPrimitive)
 	}
 
-	noDuplicates := []struct {
+	notPrimitive := []struct {
 		text []byte
 	}{
 		{
 			text: []byte(`{"key0": "1","key1": "2", "key2":3}`),
 		},
 		{
-			text: []byte(`{"key0": "1","key1": [{"key0":1,"key0":2},{"key0":1,"key0":2}], "key2":{"key5": "a","key5": "b"}}`),
+			text: []byte(`{}`),
 		},
 	}
-	for _, s := range noDuplicates {
-		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+	for _, s := range notPrimitive {
+		primitive, err := isPrimitiveJSON(s.text)
 		require.Nil(t, err)
-		require.False(t, hasDuplicates)
+		require.False(t, primitive)
 	}
+}
+
+func TestProtocolParseDuplicateErrMsg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	text := `{"key0": "algo", "key0": "algo"}`
+	var parsed map[string]json.RawMessage
+	err := protocol.DecodeJSON([]byte(text), &parsed)
+	require.Contains(t, err.Error(), "cannot decode into a non-pointer value")
+	require.Error(t, err)
 }
 
 func TestOpJSONRef(t *testing.T) {
@@ -4953,6 +5157,33 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		// JavaScript MAX_SAFE_INTEGER
+		{
+			source: `byte "{\"maxSafeInt\": 9007199254740991}";
+			byte "maxSafeInt";
+			json_ref JSONUint64;
+			int 9007199254740991;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		// maximum uint64
+		{
+			source: `byte "{\"maxUint64\": 18446744073709551615}";
+			byte "maxUint64";
+			json_ref JSONUint64;
+			int 18446744073709551615;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		// larger-than-uint64s are allowed if not requested
+		{
+			source: `byte "{\"maxUint64\": 18446744073709551616, \"smallUint64\": 0}";
+			byte "smallUint64";
+			json_ref JSONUint64;
+			int 0;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range testCases {
@@ -4978,6 +5209,9 @@ func TestOpJSONRef(t *testing.T) {
 		pass, _, err := EvalContract(ops.Program, 0, 888, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
+
+		// reset pooled budget for new "app call"
+		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost
 	}
 
 	failedCases := []struct {
@@ -5096,11 +5330,11 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONObject;
 			byte "key4";
 			json_ref JSONObject;
-			byte "key40"
+			byte "key40";
 			json_ref JSONString
 			`,
 			error:              "error while parsing JSON text, invalid json text, duplicate keys not allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {12, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {13, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "[1,2,3]";
@@ -5142,6 +5376,25 @@ func TestOpJSONRef(t *testing.T) {
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		{
+			source: `byte "{noquotes: \"shouldn't work\"}";
+			byte "noquotes";
+			json_ref JSONString;
+			byte "shouldn't work";
+			==`,
+			error:              "error while parsing JSON text, invalid json text",
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		// max uint64 + 1 should fail
+		{
+			source: `byte "{\"tooBig\": 18446744073709551616}";
+			byte "tooBig";
+			json_ref JSONUint64;
+			int 1;
+			return`,
+			error:              "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range failedCases {
@@ -5170,6 +5423,9 @@ func TestOpJSONRef(t *testing.T) {
 		require.False(t, pass)
 		require.Error(t, err)
 		require.EqualError(t, err, s.error)
+
+		// reset pooled budget for new "app call"
+		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost
 	}
 
 }

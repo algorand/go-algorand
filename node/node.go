@@ -166,7 +166,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
-	node.genesisHash = crypto.HashObj(genesis)
+	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 
 	if node.devMode {
@@ -195,8 +195,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
 	}
-	var genalloc bookkeeping.GenesisBalances
-	genalloc, err = bootstrapData(genesis, log)
+	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
 		return nil, err
@@ -311,40 +310,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.stateProof = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
-}
-
-func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (bookkeeping.GenesisBalances, error) {
-	genalloc := make(map[basics.Address]basics.AccountData)
-	for _, entry := range genesis.Allocation {
-		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
-		if err != nil {
-			log.Errorf("Cannot parse genesis addr %s: %v", entry.Address, err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		_, present := genalloc[addr]
-		if present {
-			err = fmt.Errorf("repeated allocation to %s", entry.Address)
-			log.Error(err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		genalloc[addr] = entry.State
-	}
-
-	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
-	if err != nil {
-		log.Errorf("Cannot parse fee sink addr %s: %v", genesis.FeeSink, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
-	if err != nil {
-		log.Errorf("Cannot parse rewards pool addr %s: %v", genesis.RewardsPool, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	return bookkeeping.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
 }
 
 // Config returns a copy of the node's Local configuration

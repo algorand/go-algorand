@@ -58,8 +58,9 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
@@ -69,8 +70,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(numOfIntervals, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(numOfIntervals, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block := randomBlock(basics.Round(i))
 	i++
@@ -87,8 +88,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	//  - voters to confirm the numOfIntervals - 1 th interval
 	//  - voters to confirm the numOfIntervals th interval
 	//  - voters to confirm the numOfIntervals + 1  th interval
-	a.Equal(uint64(3), uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(3), uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block = randomBlock(basics.Round(i))
 	block.block.CurrentProtocol = protocol.ConsensusFuture
@@ -97,8 +98,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	addBlockToAccountsUpdate(block.block, au)
 
-	a.Equal(uint64(2), uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(2), uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
 func TestLimitVoterTracker(t *testing.T) {
@@ -126,8 +127,9 @@ func TestLimitVoterTracker(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
@@ -137,8 +139,8 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
@@ -147,8 +149,8 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
@@ -157,6 +159,6 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }

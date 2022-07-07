@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -376,18 +378,17 @@ pushbytes 0x012345
 dup
 dup
 ed25519verify_bare
-pushbytes 0x012345
-dup
-bn256_add
-dup
-bn256_scalar_mul
-dup
-bn256_pairing
-`
+pushbytes 0x4321
+pushbytes 0x77
+replace2 2
+pushbytes 0x88
+pushint 1
+replace3
+` + pairingNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
-const v7Compiled = v6Compiled + "5c005d018120af060180070123456789abcd4949050198800301234549498480030123454999499a499b"
+const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984800243218001775c0280018881015d" + pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -452,6 +453,19 @@ func TestAssemble(t *testing.T) {
 			// hex string can be copy pasted back in as a new expected result.
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
+	}
+}
+
+var experiments = []uint64{fidoVersion, pairingVersion}
+
+// TestExperimental forces a conscious choice to promote "experimental" opcode
+// groups. This will fail when we increment vFuture's LogicSigVersion. If we had
+// intended to release the opcodes, they should have been removed from
+// `experiments`.
+func TestExperimental(t *testing.T) {
+	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
+	for _, v := range experiments {
+		require.Equal(t, futureV, v)
 	}
 }
 
@@ -1450,6 +1464,10 @@ itxn NumLogs
 itxn CreatedAssetID
 itxn CreatedApplicationID
 itxn LastLog
+txn NumApprovalProgramPages
+txna ApprovalProgramPages 0
+txn NumClearStateProgramPages
+txna ClearStateProgramPages 0
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {
@@ -2398,6 +2416,29 @@ func TestSetBitTypeCheck(t *testing.T) {
 	t.Parallel()
 	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
 	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
+}
+
+func TestScratchTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// All scratch slots should start as uint64
+	testProg(t, "load 0; int 1; +", AssemblerMaxVersion)
+	// Check load and store accurately using the scratch space
+	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
+	// Loads should know the type it's loading if all the slots are the same type
+	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
+	// Loads doesn't know the type when slot types vary
+	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion)
+	// Stores should only set slots to StackAny if they are not the same type as what is being stored
+	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
+	// ScratchSpace should reset after hitting label in deadcode
+	testProg(t, "byte 0x01; store 0; b label1; label1:; load 0; int 1; +", AssemblerMaxVersion)
+	// But it should reset to StackAny not uint64
+	testProg(t, "int 1; store 0; b label1; label1:; load 0; btoi", AssemblerMaxVersion)
+	// Callsubs should also reset the scratch space
+	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
+	// But the scratchspace should still be tracked after the callsub
+	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{5, "btoi arg 0..."})
 }
 
 func TestCoverAsm(t *testing.T) {

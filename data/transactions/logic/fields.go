@@ -201,6 +201,18 @@ const (
 	// StateProofPK Transaction.StateProofPK
 	StateProofPK
 
+	// ApprovalProgramPages [][]byte
+	ApprovalProgramPages
+
+	// NumApprovalProgramPages = len(ApprovalProgramPages) // 4096
+	NumApprovalProgramPages
+
+	// ClearStateProgramPages [][]byte
+	ClearStateProgramPages
+
+	// NumClearStateProgramPages = len(ClearStateProgramPages) // 4096
+	NumClearStateProgramPages
+
 	invalidTxnField // compile-time constant for number of fields
 )
 
@@ -333,6 +345,13 @@ var txnFieldSpecs = [...]txnFieldSpec{
 
 	// Not an effect. Just added after the effects fields.
 	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key commitment"},
+
+	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
+	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories
+	{ApprovalProgramPages, StackBytes, true, 7, 7, false, "Approval Program as an array of pages"},
+	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
+	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
+	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
@@ -1040,7 +1059,7 @@ var AppParamsFields = FieldGroup{
 type AcctParamsField int
 
 const (
-	// AcctBalance is the blance, with pending rewards
+	// AcctBalance is the balance, with pending rewards
 	AcctBalance AcctParamsField = iota
 	// AcctMinBalance is algos needed for this accounts apps and assets
 	AcctMinBalance

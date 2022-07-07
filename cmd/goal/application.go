@@ -478,7 +478,7 @@ var createAppCmd = &cobra.Command{
 		if outFilename == "" {
 			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -553,7 +553,7 @@ var updateAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -623,7 +623,7 @@ var optInAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -693,7 +693,7 @@ var closeOutAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -763,7 +763,7 @@ var clearAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -833,7 +833,7 @@ var callAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -903,7 +903,7 @@ var deleteAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -927,7 +927,6 @@ var deleteAppCmd = &cobra.Command{
 				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-
 			}
 			if err != nil {
 				reportErrorf(err.Error())

@@ -251,16 +251,28 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 
 // MakeRegistrationTransactionWithGenesisID Generates a Registration transaction with the genesis ID set from the suggested parameters of the client
 func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participation, fee, txnFirstValid, txnLastValid uint64, leaseBytes [32]byte, includeStateProofKeys bool) (transactions.Transaction, error) {
+
+	// Get current round, protocol, genesis ID
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
+	if !ok {
+		return transactions.Transaction{}, errors.New("unknown consensus version")
+	}
+
+	txnFirstValid, txnLastValid, err = computeValidityRounds(txnFirstValid, txnLastValid, 0, params.LastRound, cparams.MaxTxnLife)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
 	goOnlineTx := part.GenerateRegistrationTransaction(
 		basics.MicroAlgos{Raw: fee},
 		basics.Round(txnFirstValid),
 		basics.Round(txnLastValid),
 		leaseBytes, includeStateProofKeys)
-
-	params, err := c.SuggestedParams()
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
 
 	goOnlineTx.Header.GenesisID = params.GenesisID
 

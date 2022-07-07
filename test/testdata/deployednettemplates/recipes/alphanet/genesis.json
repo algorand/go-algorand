@@ -1,0 +1,64 @@
+{
+	"NetworkName": "alphanet",
+	"VersionModifier": "",
+	"ConsensusProtocol": "alpha1",
+	"FirstPartKeyRound": 0,
+	"LastPartKeyRound": 3000000,
+	"PartKeyDilution": 0,
+	"Wallets": [
+		{
+			"Name": "Wallet1",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet2",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet3",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet4",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet5",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet6",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet7",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet8",
+			"Stake": 6.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet9",
+			"Stake": 25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet10",
+			"Stake": 25,
+			"Online": false
+		}
+	],
+	"FeeSink": "OOZZ32IHB6SS6ZTARKJ2PQP3QKE7R3IWQTOPXRGLTAGPVCDS3FHJOEOYVM",
+	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"DevMode": false,
+	"Comment": ""
+}
