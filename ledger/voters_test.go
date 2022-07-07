@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -28,10 +29,10 @@ import (
 	"testing"
 )
 
-func addBlockToAccountsUpdate(blk bookkeeping.Block, au *accountUpdates) {
+func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-	au.newBlock(blk, delta)
+	ao.newBlock(blk, delta)
 }
 
 func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
@@ -67,7 +68,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToAccountsUpdate(block.block, ao)
 	}
 
 	a.Equal(numOfIntervals, uint64(len(ao.voters.votersForRoundCache)))
@@ -82,7 +83,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	stateTracking.StateProofNextRound = basics.Round((numOfIntervals - 1) * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, au)
+	addBlockToAccountsUpdate(block.block, ao)
 
 	// the tracker should have 3 entries
 	//  - voters to confirm the numOfIntervals - 1 th interval
@@ -96,7 +97,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	stateTracking.StateProofNextRound = basics.Round(numOfIntervals * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, au)
+	addBlockToAccountsUpdate(block.block, ao)
 
 	a.Equal(uint64(2), uint64(len(ao.voters.votersForRoundCache)))
 	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
@@ -136,7 +137,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToAccountsUpdate(block.block, ao)
 	}
 
 	a.Equal(recoveryIntervalForTests, uint64(len(ao.voters.votersForRoundCache)))
@@ -146,7 +147,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToAccountsUpdate(block.block, ao)
 	}
 
 	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
@@ -156,9 +157,50 @@ func TestLimitVoterTracker(t *testing.T) {
 	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToAccountsUpdate(block.block, ao)
 	}
 
 	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
 	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
+}
+
+func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
+	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, ao := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+	defer ao.close()
+
+	i := uint64(1)
+	for ; i < (intervalForTest)+1; i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, ao)
+	}
+
+	top, err := ao.voters.getVoters(basics.Round(intervalForTest - lookbackForTest))
+	a.NoError(err)
+	for j := 0; j < len(top.Participants); j++ {
+		a.Equal(merklesignature.NoKeysCommitment, top.Participants[j].PK.Commitment)
+	}
 }

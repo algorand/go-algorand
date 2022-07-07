@@ -79,7 +79,7 @@ func MakeVotersForRound() *VotersForRound {
 	return vr
 }
 
-func onlineAccountToStateProofParticipant(account *OnlineAccount, money basics.MicroAlgos) basics.Participant {
+func createStateProofParticipant(stateProofID *merklesignature.Commitment, money basics.MicroAlgos) basics.Participant {
 	var retPart basics.Participant
 	retPart.Weight = money.ToUint64()
 	// Some accounts might not have StateProof keys commitment. As a result,
@@ -87,10 +87,10 @@ func onlineAccountToStateProofParticipant(account *OnlineAccount, money basics.M
 	// Since the commitment is created using the subset-sum hash function, for which the
 	// value [0x0..0x0] might be known, we avoid using such empty commitments.
 	// We replace it with a commitment for zero keys..
-	if account.StateProofID.IsEmpty() {
+	if stateProofID.IsEmpty() {
 		copy(retPart.PK.Commitment[:], merklesignature.NoKeysCommitment[:])
 	} else {
-		copy(retPart.PK.Commitment[:], account.StateProofID[:])
+		copy(retPart.PK.Commitment[:], stateProofID[:])
 
 	}
 	// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
@@ -130,7 +130,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
-		participants[i] = onlineAccountToStateProofParticipant(acct, money)
+		participants[i] = createStateProofParticipant(&acct.StateProofID, money)
 		addrToPos[acct.Address] = uint64(i)
 	}
 

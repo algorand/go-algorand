@@ -3887,7 +3887,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			err = protocol.Decode(encodedAcctData, &ba)
 			require.NoError(t, err)
 			if expected && ba.Status != basics.Online {
-				require.Equal(t, merklesignature.Verifier{}, ba.StateProofID)
+				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
 			}
 			addHash := accountHashBuilderV6(addr, &ba, encodedAcctData)
 			added, err := trie.Add(addHash)
@@ -3939,43 +3939,5 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		if ba.Status != basics.Online {
 			require.True(t, ba.StateProofID.IsEmpty())
 		}
-	}
-}
-
-func TestAccountWithNoStateProofKeysReturnsNonZeroStateProofID(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	onlineAccount := accountDataToOnline(basics.Address{}, &ledgercore.AccountData{}, config.ConsensusParams{}) // *ledgercore.OnlineAccount
-	require.Equal(t, merklesignature.NoKeysCommitment, onlineAccount.StateProofID)
-}
-
-func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
-	defer dbs.Close()
-
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-
-	accts := ledgertesting.RandomAccounts(20, true)
-	for address, data := range accts {
-		data.StateProofID = merklesignature.Commitment{}
-		accts[address] = data
-	}
-
-	newDB := accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	require.True(t, newDB)
-
-	checkAccounts(t, tx, 0, accts)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	topn, err := accountsOnlineTop(tx, 0, 0, uint64(len(accts)), proto)
-	require.NoError(t, err)
-
-	for _, account := range topn {
-		require.Equal(t, merklesignature.NoKeysCommitment, account.StateProofID)
 	}
 }

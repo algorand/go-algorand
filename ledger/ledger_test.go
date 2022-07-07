@@ -1761,6 +1761,7 @@ func addDummyBlock(t *testing.T, addresses []basics.Address, proto config.Consen
 			LastValid:   l.Latest() + 10,
 			GenesisID:   t.Name(),
 			GenesisHash: crypto.Hash([]byte(t.Name())),
+			Note:        []byte{uint8(j)},
 		}
 
 		payment := transactions.PaymentTxnFields{
