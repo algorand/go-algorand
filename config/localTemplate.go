@@ -350,8 +350,8 @@ type Local struct {
 	// TraceServer is a host:port to report graph propagation trace info to.
 	NetworkMessageTraceServer string `version[13]:""`
 
-	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
-	VerifiedTranscationsCacheSize int `version[14]:"30000"`
+	// VerifiedTransactionsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
+	VerifiedTransactionsCacheSize int `version[14]:"30000"`
 
 	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
 	// When enabled, the catchup service would use the archive servers before falling back to the relays.

@@ -105,10 +105,10 @@ func OpenLedger(
 	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
-	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
+	verifiedCacheSize := cfg.VerifiedTransactionsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
 		verifiedCacheSize = cfg.TxPoolSize
-		log.Warnf("The VerifiedTranscationsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTranscationsCacheSize, cfg.TxPoolSize)
+		log.Warnf("The VerifiedTransactionsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTransactionsCacheSize, cfg.TxPoolSize)
 	}
 
 	l := &Ledger{
