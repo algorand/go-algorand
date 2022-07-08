@@ -60,6 +60,11 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performResourceTableMigration(context.Background(), tx, nil)
 	require.NoError(tb, err)
 
+	if accountDBVersion >= int32(8) {
+		err = accountsCreateBoxTable(context.Background(), tx)
+		require.NoError(tb, err)
+	}
+
 	return newDB
 }
 
