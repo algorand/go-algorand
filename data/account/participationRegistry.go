@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/algorand/go-deadlock"
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 const defaultTimeout = 5 * time.Second
@@ -285,6 +286,12 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 	err := db.Initialize(accessor.Wdb, migrations)
 	if err != nil {
 		accessor.Close()
+
+		var sqlError *sqlite3.Error
+		if errors.As(err, &sqlError) {
+			return nil, fmt.Errorf("unable to initialize participation registry database: %w.  Sql error - Code: %d, Extended Code: %d", err, sqlError.Code, sqlError.ExtendedCode)
+		}
+
 		return nil, fmt.Errorf("unable to initialize participation registry database: %w", err)
 	}
 
