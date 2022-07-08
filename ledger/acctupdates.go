@@ -1023,6 +1023,13 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
+	if accountDBVersion >= int32(8) {
+		err = accountsBoxesDbQueries(au.dbs.Rdb.Handle, au.accountsq)
+		if err != nil {
+			return
+		}
+	}
+
 	hdr, err := l.BlockHdr(lastBalancesRound)
 	if err != nil {
 		return
