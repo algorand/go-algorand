@@ -2830,6 +2830,7 @@ func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 		require.NoError(b, err)
 
 		// insert 100k boxes, in batches of 1000
+		cnt := 0
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("%d / %d boxes written\n", totalBoxes*batch/batchCount, totalBoxes)
 
@@ -2838,8 +2839,9 @@ func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 			writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
 			require.NoError(b, err)
 			for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
-				err = writer.upsertKvPair(fmt.Sprintf("%d-%d", batch, boxIdx), string(make([]byte, boxSize)))
+				err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), string(make([]byte, boxSize)))
 				require.NoError(b, err)
+				cnt++
 			}
 
 			err = tx.Commit()
@@ -2855,51 +2857,56 @@ func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
 	defer cleanup()
 
 	b.Run("ReadBoxes", func(b *testing.B) {
-		cnt := 0
-		for i := 0; i < batchCount; i++ {
-			for j := 0; j < totalBoxes/batchCount; j++ {
-				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-				require.NoError(b, err)
+		b.StopTimer()
+		for i := 0; i < totalBoxes; i++ {
+			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+			require.NoError(b, err)
 
-				var pv persistedValue
-				var v sql.NullString
+			var pv persistedValue
+			var v sql.NullString
 
-				b.StartTimer()
-				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
-				b.StopTimer()
-				require.NoError(b, err)
-				require.True(b, v.Valid)
-				cnt++
-				if cnt >= b.N {
-					return
-				}
+			b.StartTimer()
+			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
+			b.StopTimer()
+			require.NoError(b, err)
+			require.True(b, v.Valid)
+			if i >= b.N {
+				return
 			}
 		}
 	})
 
 	b.Run("ReadBoxesDuplicate", func(b *testing.B) {
-		cnt := 0
-		for i := 0; i < batchCount; i++ {
-			for j := 0; j < totalBoxes/batchCount; j++ {
-				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-				require.NoError(b, err)
+		b.StopTimer()
+		for i := 0; i < totalBoxes; i++ {
+			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+			require.NoError(b, err)
 
-				var pv persistedValue
-				var v sql.NullString
+			var pv persistedValue
+			var v sql.NullString
 
-				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
-				require.NoError(b, err)
-				require.True(b, v.Valid)
+			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
+			require.NoError(b, err)
+			require.True(b, v.Valid)
+			if i >= b.N {
+				return
+			}
+		}
 
-				b.StartTimer()
-				err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d-%d", i, j))).Scan(&pv.round, &v)
-				b.StopTimer()
-				require.NoError(b, err)
-				require.True(b, v.Valid)
-				cnt++
-				if cnt >= b.N {
-					return
-				}
+		for i := 0; i < totalBoxes; i++ {
+			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+			require.NoError(b, err)
+
+			var pv persistedValue
+			var v sql.NullString
+			b.StartTimer()
+			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
+			b.StopTimer()
+			require.NoError(b, err)
+			require.True(b, v.Valid)
+
+			if i >= b.N {
+				return
 			}
 		}
 	})
