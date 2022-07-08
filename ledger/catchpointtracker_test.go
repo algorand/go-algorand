@@ -774,6 +774,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 }
 
 func TestCalculateFirstStageRounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	type TestCase struct {
 		// input
 		oldBase                            basics.Round
