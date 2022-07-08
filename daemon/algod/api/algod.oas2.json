@@ -3259,10 +3259,18 @@
     "BoxesResponse": {
       "description": "Box names of an application",
       "schema": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "format": "byte"
+        "type": "object",
+        "required": [
+          "boxes"
+        ],
+        "properties": {
+          "boxes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            }
+          }
         }
       }
     },
