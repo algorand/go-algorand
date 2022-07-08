@@ -29,12 +29,21 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
+type accountPartKey struct {
+	// Persisted participation record
+	part account.PersistedParticipation
+	// If true, then this participation record was actually deleted
+	// but is recorded to ensure that duplicate participation keys
+	// are not added
+	ephemeral bool
+}
+
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
 
 	// syncronized by mu
-	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
+	partKeys map[account.ParticipationKeyIdentity]accountPartKey
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
@@ -49,7 +58,7 @@ type AccountManager struct {
 func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partKeys = make(map[account.ParticipationKeyIdentity]account.PersistedParticipation)
+	manager.partKeys = make(map[account.ParticipationKeyIdentity]accountPartKey)
 	manager.registeredAccounts = make(map[string]bool)
 	manager.registry = registry
 
@@ -131,9 +140,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 		return false
 	}
 
-	if !ephemeral {
-		manager.partKeys[partkeyID] = participation
-	}
+	manager.partKeys[partkeyID] = accountPartKey{participation, ephemeral}
 
 	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
@@ -160,12 +167,17 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
 
-	partKeys := make([]account.PersistedParticipation, 0, len(manager.partKeys))
+	accountPartKeys := make([]accountPartKey, 0, len(manager.partKeys))
 	for _, part := range manager.partKeys {
-		partKeys = append(partKeys, part)
+		accountPartKeys = append(accountPartKeys, part)
 	}
 	manager.mu.Unlock()
-	for _, part := range partKeys {
+	for _, accountPartKey := range accountPartKeys {
+		if accountPartKey.ephemeral {
+			continue
+		}
+
+		part := accountPartKey.part
 		// We need a key for round r+1 for agreement.
 		nextRound := latestHdr.Round + 1
 
