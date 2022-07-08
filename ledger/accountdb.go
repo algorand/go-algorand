@@ -3977,10 +3977,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	}
 
 	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
-	var encodedRecords []encodedBalanceRecordV6
 
 	// emptyCount := 0
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) (bool, error) {
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {
 			if encodedRecord.Resources == nil {
@@ -4008,9 +4007,8 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			baseAcct.TotalAssets == totalAssets {
 
 			encodedRecord.IsLastEntry = true
-			encodedRecords = append(encodedRecords, encodedRecord)
 
-			bals = append(bals, encodedRecords...)
+			bals = append(bals, encodedRecord)
 			totalAppParams = 0
 			totalAppLocalStates = 0
 			totalAssetParams = 0
@@ -4018,11 +4016,13 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 
 		// TODO determine whether to cut off this chunk due to to many resources
-		// if condition met
-		//     add record to bals
-		//     return flag indicating that we should stop processing rows for now
+		if true {
+			bals = append(bals, encodedRecord)
+			encodedRecord.Resources = nil
+			return true, nil
+		}
 
-		return nil
+		return false, nil
 	}
 
 	_, iterator.nextBaseRow, iterator.nextResourceRow, err = processAllBaseAccountRecords(
@@ -4127,7 +4127,7 @@ type pendingResourceRow struct {
 func processAllResources(
 	resRows *sql.Rows,
 	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingResourceRow,
-	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) (bool, error),
 ) (pendingResourceRow, bool, error) {
 	var err error
 
@@ -4144,7 +4144,7 @@ func processAllResources(
 			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
 			// and we need to skip accounts without resources
 			if pr.addrid > acctRowid {
-				err = callback(addr, 0, nil, nil)
+				_, err = callback(addr, 0, nil, nil)
 				return pr, false, err
 			}
 			if pr.addrid < acctRowid {
@@ -4157,7 +4157,7 @@ func processAllResources(
 			pr = pendingResourceRow{}
 		} else {
 			if !resRows.Next() {
-				err = callback(addr, 0, nil, nil)
+				_, err = callback(addr, 0, nil, nil)
 				if err != nil {
 					return pendingResourceRow{}, false, err
 				}
@@ -4171,7 +4171,7 @@ func processAllResources(
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
 				return pendingResourceRow{}, false, err
 			} else if addrid > acctRowid {
-				err = callback(addr, 0, nil, nil)
+				_, err = callback(addr, 0, nil, nil)
 				return pendingResourceRow{addrid, aidx, buf}, false, err
 			}
 		}
@@ -4181,9 +4181,12 @@ func processAllResources(
 			return pendingResourceRow{}, false, err
 		}
 		// TODO check if too many resources were found in callback. If so, save a pending row.
-		err = callback(addr, aidx, &resData, buf)
+		chunkFull, err := callback(addr, aidx, &resData, buf)
 		if err != nil {
 			return pendingResourceRow{}, false, err
+		}
+		if chunkFull {
+			return pendingResourceRow{addrid, aidx, buf}, true, err
 		}
 	}
 	return pendingResourceRow{}, false, nil
@@ -4193,7 +4196,7 @@ func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
 	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
-	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) (bool, error),
 	pendingBase pendingBaseRow, pendingResource pendingResourceRow, accountCount int,
 ) (int, pendingBaseRow, pendingResourceRow, error) {
 	var addr basics.Address
