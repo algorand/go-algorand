@@ -35,6 +35,9 @@ const (
 	// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
+
+	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
+	DefaultMaxResourcesPerChunk = 10000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -42,19 +45,20 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
-	ctx              context.Context
-	tx               *sql.Tx
-	filePath         string
-	totalAccounts    uint64
-	totalChunks      uint64
-	file             *os.File
-	tar              *tar.Writer
-	compressor       io.WriteCloser
-	balancesChunk    catchpointFileBalancesChunkV6
-	balancesChunkNum uint64
-	writtenBytes     int64
-	biggestChunkLen  uint64
-	accountsIterator encodedAccountsBatchIter
+	ctx                  context.Context
+	tx                   *sql.Tx
+	filePath             string
+	totalAccounts        uint64
+	totalChunks          uint64
+	file                 *os.File
+	tar                  *tar.Writer
+	compressor           io.WriteCloser
+	balancesChunk        catchpointFileBalancesChunkV6
+	balancesChunkNum     uint64
+	writtenBytes         int64
+	biggestChunkLen      uint64
+	accountsIterator     encodedAccountsBatchIter
+	maxResourcesPerChunk uint64
 }
 
 type encodedBalanceRecordV5 struct {
@@ -109,14 +113,15 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	tar := tar.NewWriter(compressor)
 
 	res := &catchpointWriter{
-		ctx:           ctx,
-		tx:            tx,
-		filePath:      filePath,
-		totalAccounts: totalAccounts,
-		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
-		file:          file,
-		compressor:    compressor,
-		tar:           tar,
+		ctx:                  ctx,
+		tx:                   tx,
+		filePath:             filePath,
+		totalAccounts:        totalAccounts,
+		totalChunks:          (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		file:                 file,
+		compressor:           compressor,
+		tar:                  tar,
+		maxResourcesPerChunk: DefaultMaxResourcesPerChunk,
 	}
 	return res, nil
 }
@@ -246,7 +251,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 	return
 }
 
