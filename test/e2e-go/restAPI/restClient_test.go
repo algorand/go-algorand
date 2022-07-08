@@ -1418,8 +1418,8 @@ end:
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 		a.NoError(err)
 		a.Equal(createdBoxCount, uint64(len(resp.Boxes)))
-		for _, byteName := range resp.Boxes {
-			a.True(createdBoxName[string(byteName)])
+		for _, b := range resp.Boxes {
+			a.True(createdBoxName[string(b.Name)])
 		}
 	}
 
