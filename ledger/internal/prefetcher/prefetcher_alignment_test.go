@@ -1116,10 +1116,9 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading accounts depends on the smart contract program. Ignore the addresses
-	// not requested.
-	requested.Accounts[makeAddress(5)] = struct{}{}
-	requested.Accounts[makeAddress(3)] = struct{}{}
+	// Foreign accounts are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Accounts, makeAddress(5))
+	require.NotContains(t, prefetched.Accounts, makeAddress(3))
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1185,10 +1184,9 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading foreign apps depends on the smart contract program. Ignore the apps
-	// not requested.
-	requested.Creators[creatable{cindex: 6, ctype: basics.AppCreatable}] = struct{}{}
-	requested.Creators[creatable{cindex: 8, ctype: basics.AppCreatable}] = struct{}{}
+	// Foreign apps are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AppCreatable})
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AppCreatable})
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1254,10 +1252,9 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading foreign assets depends on the smart contract program. Ignore the assets
-	// not requested.
-	requested.Creators[creatable{cindex: 6, ctype: basics.AssetCreatable}] = struct{}{}
-	requested.Creators[creatable{cindex: 8, ctype: basics.AssetCreatable}] = struct{}{}
+	// Foreign apps are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AssetCreatable})
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AssetCreatable})
 	require.Equal(t, requested, prefetched)
 }
 
