@@ -549,7 +549,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 
 // Test for error from LookupAsset
 func TestAssetLookupError(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	rnd := basics.Round(5)
@@ -607,7 +606,6 @@ func TestAssetLookupError(t *testing.T) {
 
 // Test for error from GetCreatorForRound
 func TestGetCreatorForRoundError(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	rnd := basics.Round(5)

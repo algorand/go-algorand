@@ -395,7 +395,6 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)
@@ -448,7 +447,6 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -504,7 +502,6 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -571,7 +568,6 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -811,7 +807,6 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)
@@ -866,7 +861,6 @@ func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -925,7 +919,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -990,7 +983,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1055,7 +1047,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1119,11 +1110,11 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 	// Foreign accounts are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Accounts, makeAddress(5))
 	require.NotContains(t, prefetched.Accounts, makeAddress(3))
+
 	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1191,7 +1182,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
