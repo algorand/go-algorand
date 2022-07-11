@@ -221,7 +221,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 
 	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, DefaultMaxResourcesPerChunk)
 		if err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	var accountsRnd basics.Round
 	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx)
+		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, DefaultMaxResourcesPerChunk)
 		if err != nil {
 			return err
 		}
@@ -410,4 +410,87 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}
+}
+
+func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll(temporaryDirectory)
+	}()
+
+	maxResourcesPerChunk := 5
+
+	accts := ledgertesting.RandomAccounts(5, false)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
+	//catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
+	readDb := ml.trackerDB().Rdb
+
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		expectedTotalAccounts, err := totalAccounts(ctx, tx)
+		if err != nil {
+			return err
+		}
+		fmt.Println(expectedTotalAccounts)
+		totalAccountsWritten := uint64(0)
+		totalResources := 0
+		var expectedTotalResources int
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, uint64(maxResourcesPerChunk))
+		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		if err != nil {
+			return err
+		}
+		// repeat this until read all accts
+		for totalAccountsWritten < expectedTotalAccounts {
+			cw.balancesChunk.Balances = nil
+			numAccountsWritten, err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			if err != nil {
+				return err
+			}
+			fmt.Println(cw.accountsIterator.nextResourceRow)
+			totalAccountsWritten += numAccountsWritten
+			fmt.Println("numAccountsWritten", numAccountsWritten)
+			fmt.Println("totalAccountsWritten", totalAccountsWritten)
+			fmt.Println("num balances:", len(cw.balancesChunk.Balances))
+			numResources := 0
+			for _, balance := range cw.balancesChunk.Balances {
+				numResources += len(balance.Resources)
+				fmt.Println(len(balance.Resources))
+			}
+			fmt.Println("num res", numResources)
+			if numResources > maxResourcesPerChunk {
+				return fmt.Errorf("too many resources in this chunk: found %d resources, maximum %d resources", numResources, maxResourcesPerChunk)
+			}
+			totalResources += numResources
+			fmt.Println("totals:", totalAccountsWritten, totalResources)
+		}
+		fmt.Println("reached")
+
+		if expectedTotalResources != totalResources {
+			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
+		}
+
+		return
+	})
+
+	require.NoError(t, err)
+	fmt.Println("reached2")
+
 }

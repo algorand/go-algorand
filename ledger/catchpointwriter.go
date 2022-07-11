@@ -55,6 +55,7 @@ type catchpointWriter struct {
 	compressor           io.WriteCloser
 	balancesChunk        catchpointFileBalancesChunkV6
 	balancesChunkNum     uint64
+	numAccountsWritten   uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
@@ -92,7 +93,7 @@ type catchpointFileBalancesChunkV6 struct {
 	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*catchpointWriter, error) {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk uint64) (*catchpointWriter, error) {
 	totalAccounts, err := totalAccounts(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -121,7 +122,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
-		maxResourcesPerChunk: DefaultMaxResourcesPerChunk,
+		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
 }
@@ -165,10 +166,12 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			var numAccountsWritten uint64
+			numAccountsWritten, err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
 			}
+			cw.numAccountsWritten += numAccountsWritten
 		}
 
 		// have we timed-out / canceled by that point ?
@@ -250,8 +253,8 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (numAccountsWritten uint64, err error) {
+	cw.balancesChunk.Balances, numAccountsWritten, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 	return
 }
 

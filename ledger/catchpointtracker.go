@@ -1057,7 +1057,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx)
+		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, DefaultMaxResourcesPerChunk)
 		if err != nil {
 			return
 		}

@@ -3946,11 +3946,15 @@ type encodedAccountsBatchIter struct {
 	resourcesRows   *sql.Rows
 	nextBaseRow     pendingBaseRow
 	nextResourceRow pendingResourceRow
+	totalAppParams uint64
+	totalAppLocalStates uint64
+	totalAssetParams uint64
+	totalAssets uint64
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, maxResources uint64) (bals []encodedBalanceRecordV6, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, maxResources uint64) (bals []encodedBalanceRecordV6, numAccountsWritten uint64, err error) {
 	if iterator.accountsRows == nil {
 		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
@@ -3976,7 +3980,6 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		return nil
 	}
 
-	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
 	var totalResources uint64
 
 	// emptyCount := 0
@@ -3995,33 +3998,36 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			}
 			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
 			if resData.IsApp() && resData.IsOwning() {
-				totalAppParams++
+				iterator.totalAppParams++
 			}
 			if resData.IsApp() && resData.IsHolding() {
-				totalAppLocalStates++
+				iterator.totalAppLocalStates++
 			}
 
 			if resData.IsAsset() && resData.IsOwning() {
-				totalAssetParams++
+				iterator.totalAssetParams++
 			}
 			if resData.IsAsset() && resData.IsHolding() {
-				totalAssets++
+				iterator.totalAssets++
 			}
 			totalResources++
 		}
 
-		if baseAcct.TotalAppParams == totalAppParams &&
-			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
-			baseAcct.TotalAssetParams == totalAssetParams &&
-			baseAcct.TotalAssets == totalAssets {
+		if baseAcct.TotalAppParams == iterator.totalAppParams &&
+			baseAcct.TotalAppLocalStates == iterator.totalAppLocalStates &&
+			baseAcct.TotalAssetParams == iterator.totalAssetParams &&
+			baseAcct.TotalAssets == iterator.totalAssets {
 
 			encodedRecord.IsLastEntry = true
 
 			bals = append(bals, encodedRecord)
-			totalAppParams = 0
-			totalAppLocalStates = 0
-			totalAssetParams = 0
-			totalAssets = 0
+			numAccountsWritten++
+			fmt.Println("wrote acct")
+
+			iterator.totalAppParams = 0
+			iterator.totalAppLocalStates = 0
+			iterator.totalAssetParams = 0
+			iterator.totalAssets = 0
 		}
 
 		return false, nil
@@ -4037,10 +4043,11 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		return
 	}
 
-	if len(bals) == accountCount {
+	if len(bals) == accountCount || totalResources == maxResources {
 		// we're done with this iteration.
 		return
 	}
+	//panic(fmt.Sprintf("help me %d %d %d", len(bals), totalResources, iterator.nextBaseRow.rowid))
 
 	err = iterator.accountsRows.Err()
 	if err != nil {
@@ -4191,6 +4198,7 @@ func processAllResources(
 		if chunkFull {
 			return pendingResourceRow{addrid, aidx, buf}, true, err
 		}
+		fmt.Println("scanned", addrid, aidx)
 	}
 	return pendingResourceRow{}, false, nil
 }
@@ -4217,8 +4225,10 @@ func processAllBaseAccountRecords(
 			rowid = pendingBase.rowid
 			accountData = *pendingBase.accountData
 			buf = pendingBase.encodedAccountData
+			pendingBase = pendingBaseRow{}
 		} else {
 			if !baseRows.Next() {
+				fmt.Println("no more base rows")
 				break
 			}
 
@@ -4267,10 +4277,12 @@ func processAllBaseAccountRecords(
 		count++
 		if accountCount > 0 && count == accountCount {
 			// we're done with this iteration.
+			fmt.Println(count, accountCount)
 			return count, pendingBaseRow{}, pendingResource, nil
 		}
 		prevAddr = addr
 	}
+	fmt.Println("stopped there")
 
 	return count, pendingBaseRow{}, pendingResource, nil
 }
