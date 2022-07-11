@@ -556,6 +556,8 @@ func TestAsyncRecord(t *testing.T) {
 
 // TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set
 func TestOfflineOnlineClosedBitStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tests := []struct {
 		name        string
 		acctData    basics.OnlineAccountData
