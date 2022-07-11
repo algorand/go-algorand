@@ -145,11 +145,8 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 
 // LookupKv delegates to the Ledger and marks the box key as touched for post-processing
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
-	// TODO: remove print statements before merging!!!!
-	fmt.Printf("indexerLedgerConnector.LookupKv(rnd=%d, key=%s)", rnd, key)
 	value, err := l.il.LookupKv(rnd, key)
 	if err != nil {
-		fmt.Printf("\n<<<err !!!>>> indexerLedgerConnector.LookupKv(rnd=%d, key=%s) --err--> %v", rnd, key, err)
 		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
 	}
 	fmt.Printf("\n<<<COPACETIC>>>indexerLedgerConnector.LookupKv(round=%d, key=%s) ---> %v", rnd, key, value)
