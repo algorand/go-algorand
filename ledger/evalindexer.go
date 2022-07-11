@@ -149,7 +149,6 @@ func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string,
 	if err != nil {
 		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
 	}
-	fmt.Printf("\n<<<COPACETIC>>>indexerLedgerConnector.LookupKv(round=%d, key=%s) ---> %v", rnd, key, value)
 	return value, nil
 }
 
