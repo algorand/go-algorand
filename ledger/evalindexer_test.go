@@ -103,15 +103,14 @@ func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (
 	return nil, errors.New("GetAppCreator() not implemented")
 }
 
+func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) (*string, error) {
+	// This function is unused.
+	return nil, errors.New("LookupKv() not implemented")
+}
+
 func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTotals, err error) {
 	_, totals, err = il.l.LatestTotals()
 	return
-}
-
-func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) (*string, error) {
-	// TODO: should this function actually be "unused". I.e. should we implement and test here?
-	// This function is unused.
-	return nil, errors.New("LookupKv() not implemented")
 }
 
 // Test that overriding the consensus parameters effects the generated apply data.
