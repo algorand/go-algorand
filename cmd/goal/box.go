@@ -31,7 +31,6 @@ func init() {
 	appBoxCmd.MarkFlagRequired("app-id")
 
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")
-	appBoxInfoCmd.Flags().SetInterspersed(false)
 	appBoxInfoCmd.MarkFlagRequired("name")
 }
 
