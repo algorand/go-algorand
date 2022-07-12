@@ -2276,6 +2276,9 @@ func TestReturnTypes(t *testing.T) {
 	tx.ApplicationID = 1
 	tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
 	tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
+	tx.Boxes = []transactions.BoxRef{{
+		Name: []byte("3456"),
+	}}
 	ep.TxnGroup[0].Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),

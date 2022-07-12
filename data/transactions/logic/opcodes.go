@@ -593,6 +593,9 @@ var OpSpecs = []OpSpec{
 	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
 	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
 	{0xbc, "box_del", opBoxDel, proto("b:"), boxVersion, only(modeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(modeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(modeApp)},
+	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(modeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

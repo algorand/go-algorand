@@ -2245,6 +2245,38 @@
       ]
     },
     {
+      "Opcode": 189,
+      "Name": "box_len",
+      "Args": "B",
+      "Returns": "UU",
+      "Size": 1,
+      "Doc": "length of a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 190,
+      "Name": "box_get",
+      "Args": "B",
+      "Returns": "BU",
+      "Size": 1,
+      "Doc": "full contents of a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 191,
+      "Name": "box_put",
+      "Args": "BB",
+      "Size": 1,
+      "Doc": "write contents of box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
       "Opcode": 192,
       "Name": "txnas",
       "Args": "U",

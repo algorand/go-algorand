@@ -346,7 +346,7 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 }
 
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr basics.Address) error {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
@@ -364,8 +364,7 @@ func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr
 	} else if current, ok := params.boxes[key]; ok {
 		return fmt.Errorf("box already exists 2 %#v %d", key, len(current))
 	}
-	s := string(make([]byte, size))
-	params.boxMods[key] = &s
+	params.boxMods[key] = &value
 	l.applications[appIdx] = params
 	return nil
 }

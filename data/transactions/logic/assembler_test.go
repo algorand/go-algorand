@@ -368,6 +368,9 @@ const boxNonsense = `
   box_extract
   box_replace
   box_del
+  box_len
+  box_put
+  box_get
 `
 
 const v7Nonsense = v6Nonsense + `
@@ -397,7 +400,7 @@ const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c642107012345
 
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984800243218001775c0280018881015d" + boxCompiled + pairingCompiled
 
-const boxCompiled = "b9babbbc"
+const boxCompiled = "b9babbbcbdbfbe"
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
