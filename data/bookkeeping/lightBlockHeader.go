@@ -43,6 +43,6 @@ func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
 }
 
 // ToBeHashed implements the crypto.Hashable interface
-func (bh LightBlockHeader) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.BlockHeader256, protocol.Encode(&bh)
+func (bh *LightBlockHeader) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.BlockHeader256, protocol.Encode(bh)
 }

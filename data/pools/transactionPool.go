@@ -771,7 +771,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	return
 }
 
-func (pool *TransactionPool) getStateProofStats(txib transactions.SignedTxnInBlock, encodedLen int) (stateProofStats telemetryspec.StateProofStats) {
+func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) (stateProofStats telemetryspec.StateProofStats) {
 	lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLatestRound
 	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
 	if err == nil {
@@ -838,7 +838,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 					stats.TotalLength += uint64(encodedLen)
 					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 					if txib.Txn.Type == protocol.StateProofTx {
-						stats.StateProofStats = pool.getStateProofStats(txib, encodedLen)
+						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
 					}
 				}
 

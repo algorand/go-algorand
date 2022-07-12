@@ -246,8 +246,8 @@ func (v *Commitment) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
 
-// IsSaltVersionEqual validates that the version of the signature is matching the expected version
-func (s *Signature) IsSaltVersionEqual(version byte) error {
+// ValidateSaltVersion validates that the version of the signature is matching the expected version
+func (s *Signature) ValidateSaltVersion(version byte) error {
 	if !s.Signature.IsSaltVersionEqual(version) {
 		return ErrSignatureSaltVersionMismatch
 	}

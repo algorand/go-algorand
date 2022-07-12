@@ -46,7 +46,7 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= b.Length() {
 		return nil, fmt.Errorf("%w: pos - %d, array length - %d", errOutOfBound, pos, b.Length())
 	}
-	return b[pos], nil
+	return &b[pos], nil
 }
 
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
