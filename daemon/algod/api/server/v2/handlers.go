@@ -1164,11 +1164,13 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	}
 
 	prefixLen := len(keyPrefix)
-	responseBoxes := make([][]byte, len(boxKeys))
+	responseBoxes := make([]generated.BoxDescriptor, len(boxKeys))
 	for i, boxKey := range boxKeys {
-		responseBoxes[i] = []byte(boxKey[prefixLen:])
+		responseBoxes[i] = generated.BoxDescriptor{
+			Name: []byte(boxKey[prefixLen:]),
+		}
 	}
-	response := generated.BoxesResponse(responseBoxes)
+	response := generated.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
 }
 
