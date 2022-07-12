@@ -94,6 +94,9 @@ type CatchpointCatchupAccessorImpl struct {
 
 	// log copied from ledger
 	log logging.Logger
+
+	catchpointAccountResourceCounter
+	prevAddress basics.Address
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
@@ -299,6 +302,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
 	var normalizedAccountBalances []normalizedAccountBalance
+	var isNotLastEntry []bool
 
 	switch progress.Version {
 	default:
@@ -317,6 +321,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		isNotLastEntry = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
@@ -330,27 +335,69 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
+		isNotLastEntry = make([]bool, len(balances.Balances))
+		for i, balance := range balances.Balances {
+			isNotLastEntry[i] = !balance.IsLastEntry
+		}
 	}
 
 	if err != nil {
 		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
 	}
 
-	// TODO check counter
-
-	//if resData.IsApp() && resData.IsOwning() {
-	//	totalAppParams++
-	//}
-	//if resData.IsApp() && resData.IsHolding() {
-	//	totalAppLocalStates++
-	//}
-	//
-	//if resData.IsAsset() && resData.IsOwning() {
-	//	totalAssetParams++
-	//}
-	//if resData.IsAsset() && resData.IsHolding() {
-	//	totalAssets++
-	//}
+	// keep track of number of resources processed for each account
+	for i, balance := range normalizedAccountBalances {
+		for _, resData := range balance.resources {
+			if resData.IsApp() && resData.IsOwning() {
+				c.totalAppParams++
+			}
+			if resData.IsApp() && resData.IsHolding() {
+				c.totalAppLocalStates++
+			}
+			if resData.IsAsset() && resData.IsOwning() {
+				c.totalAssetParams++
+			}
+			if resData.IsAsset() && resData.IsHolding() {
+				c.totalAssets++
+			}
+		}
+		// check that counted resources adds up for this account
+		if !isNotLastEntry[i] {
+			if c.totalAppParams != balance.accountData.TotalAppParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d appParams for account %v, expected %d",
+					c.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAppParams,
+				)
+			}
+			if c.totalAppLocalStates != balance.accountData.TotalAppLocalStates {
+				return fmt.Errorf(
+					"processStagingBalances received %d appLocalStates for account %v, expected %d",
+					c.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAppLocalStates,
+				)
+			}
+			if c.totalAssetParams != balance.accountData.TotalAssetParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d assetParams for account %v, expected %d",
+					c.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAssetParams,
+				)
+			}
+			if c.totalAssets != balance.accountData.TotalAssets {
+				return fmt.Errorf(
+					"processStagingBalances received %d assets for account %v, expected %d",
+					c.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAssets,
+				)
+			}
+			c.catchpointAccountResourceCounter = catchpointAccountResourceCounter{}
+		}
+	}
 
 	wg := sync.WaitGroup{}
 
@@ -365,9 +412,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			start := time.Now()
-			err := writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			c.prevAddress, err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances, c.prevAddress)
 			durBalances = time.Since(start)
 			return err
 		})

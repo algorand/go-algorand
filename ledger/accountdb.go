@@ -965,52 +965,72 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccou
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) (finalAccount basics.Address, err error) {
+	var selectAcctStmt *sql.Stmt
+	selectAcctStmt, err = tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
-		return err
+		return
+	}
+
+	var insertAcctStmt *sql.Stmt
+	insertAcctStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	if err != nil {
+		return
 	}
 
 	var insertRscStmt *sql.Stmt
 	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
-		return err
+		return
 	}
 
 	var result sql.Result
 	var rowID int64
 	for _, balance := range bals {
-		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
-		if err != nil {
-			return err
-		}
-		aff, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if aff != 1 {
-			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-		}
-		rowID, err = result.LastInsertId()
-		if err != nil {
-			return err
+		if prevAccount == balance.address {
+			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(rowID)
+			if err != nil {
+				return
+			}
+		} else {
+			result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+			if err != nil {
+				return
+			}
+			var aff int64
+			aff, err = result.RowsAffected()
+			if err != nil {
+				return
+			}
+			if aff != 1 {
+				err = fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+				return
+			}
+			rowID, err = result.LastInsertId()
+			if err != nil {
+				return
+			}
 		}
 		// write resources
 		for aidx := range balance.resources {
-			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
+			var result sql.Result
+			result, err = insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
 			if err != nil {
-				return err
+				return
 			}
-			aff, err := result.RowsAffected()
+			var aff int64
+			aff, err = result.RowsAffected()
 			if err != nil {
-				return err
+				return
 			}
 			if aff != 1 {
-				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+				err = fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+				return
 			}
 		}
 	}
-	return nil
+	finalAccount = bals[len(bals)-1].address
+	return
 }
 
 // writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
@@ -3940,21 +3960,26 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
-// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
-type encodedAccountsBatchIter struct {
-	accountsRows    *sql.Rows
-	resourcesRows   *sql.Rows
-	nextBaseRow     pendingBaseRow
-	nextResourceRow pendingResourceRow
+// catchpointAccountResourceCounter keeps track of the resources processed for the current account
+type catchpointAccountResourceCounter struct {
 	totalAppParams uint64
 	totalAppLocalStates uint64
 	totalAssetParams uint64
 	totalAssets uint64
 }
 
+// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
+type encodedAccountsBatchIter struct {
+	accountsRows    *sql.Rows
+	resourcesRows   *sql.Rows
+	nextBaseRow     pendingBaseRow
+	nextResourceRow pendingResourceRow
+	catchpointAccountResourceCounter
+}
+
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, maxResources uint64) (bals []encodedBalanceRecordV6, numAccountsWritten uint64, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, maxResources uint64) (bals []encodedBalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
 		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
@@ -4021,13 +4046,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			encodedRecord.IsLastEntry = true
 
 			bals = append(bals, encodedRecord)
-			numAccountsWritten++
-			fmt.Println("wrote acct")
+			numAccountsProcessed++
 
-			iterator.totalAppParams = 0
-			iterator.totalAppLocalStates = 0
-			iterator.totalAssetParams = 0
-			iterator.totalAssets = 0
+			iterator.catchpointAccountResourceCounter = catchpointAccountResourceCounter{}
 		}
 
 		return false, nil
@@ -4047,7 +4068,6 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		// we're done with this iteration.
 		return
 	}
-	//panic(fmt.Sprintf("help me %d %d %d", len(bals), totalResources, iterator.nextBaseRow.rowid))
 
 	err = iterator.accountsRows.Err()
 	if err != nil {
@@ -4228,7 +4248,6 @@ func processAllBaseAccountRecords(
 			pendingBase = pendingBaseRow{}
 		} else {
 			if !baseRows.Next() {
-				fmt.Println("no more base rows")
 				break
 			}
 
@@ -4277,7 +4296,6 @@ func processAllBaseAccountRecords(
 		count++
 		if accountCount > 0 && count == accountCount {
 			// we're done with this iteration.
-			fmt.Println(count, accountCount)
 			return count, pendingBaseRow{}, pendingResource, nil
 		}
 		prevAddr = addr

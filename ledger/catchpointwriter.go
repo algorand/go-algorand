@@ -37,7 +37,7 @@ const (
 	BalancesPerCatchpointFileChunk = 512
 
 	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
-	DefaultMaxResourcesPerChunk = 10000
+	DefaultMaxResourcesPerChunk = 10000 // TODO compute correct value and explain
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -55,7 +55,7 @@ type catchpointWriter struct {
 	compressor           io.WriteCloser
 	balancesChunk        catchpointFileBalancesChunkV6
 	balancesChunkNum     uint64
-	numAccountsWritten   uint64
+	numAccountsProcessed   uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
@@ -166,12 +166,12 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			var numAccountsWritten uint64
-			numAccountsWritten, err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			var numAccountsProcessed uint64
+			numAccountsProcessed, err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
 			}
-			cw.numAccountsWritten += numAccountsWritten
+			cw.numAccountsProcessed += numAccountsProcessed
 		}
 
 		// have we timed-out / canceled by that point ?
@@ -253,8 +253,8 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (numAccountsWritten uint64, err error) {
-	cw.balancesChunk.Balances, numAccountsWritten, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (numAccountsProcessed uint64, err error) {
+	cw.balancesChunk.Balances, numAccountsProcessed, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 	return
 }
 

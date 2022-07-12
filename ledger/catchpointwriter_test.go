@@ -460,13 +460,12 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.balancesChunk.Balances = nil
-			numAccountsWritten, err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			numAccountsProcessed, err := cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return err
 			}
-			fmt.Println(cw.accountsIterator.nextResourceRow)
-			totalAccountsWritten += numAccountsWritten
-			fmt.Println("numAccountsWritten", numAccountsWritten)
+			totalAccountsWritten += numAccountsProcessed
+			fmt.Println("numAccountsProcessed", numAccountsProcessed)
 			fmt.Println("totalAccountsWritten", totalAccountsWritten)
 			fmt.Println("num balances:", len(cw.balancesChunk.Balances))
 			numResources := 0
