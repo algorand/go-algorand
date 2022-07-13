@@ -11,11 +11,11 @@
     txn NumAppArgs          // [24, NumAppArgs]
     int 2                   // [24, NumAppArgs, 2]
     ==                      // [24, NumAppArgs=?=2]
-    bnz default             // WARNING: Assumes that when "create" provided, NumAppArgs == 2
+    bnz default             // WARNING: Assumes that when "create" provided, NumAppArgs >= 3
     pop						// get rid of 24 // NumAppArgs != 2
-    txn ApplicationArgs 2   // [arg[2]]
+    txn ApplicationArgs 2   // [arg[2]]         // ERROR when NumAppArgs == 1
     btoi                    // [btoi(arg[2])]
-default:                    // [24] // NumAppArgs == 2
+default:                    // [24] // NumAppArgs >= 3
     txn ApplicationArgs 1   // [24, arg[1]]
     box_create              // [] // boxes: arg[1] -> [24]byte
     b end
@@ -51,7 +51,7 @@ test:						// fail unless arg[2] is the prefix of box arg[1]
     ==                      // [ boxes[arg[1]][0:len(arg[2])]=?=arg[2] ]
     assert                  // boxes[arg[1]].startwith(arg[2]) ? pop : ERROR
     b end
-bad:
+bad:                        // arg[0] ∉ {"create", "delete", "set", "check"}
     err
 end:
     int 1
