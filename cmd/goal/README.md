@@ -126,3 +126,16 @@ goal app call --from ${ACCOUNT} --app-id ${APPID} --box "str:an_ABI_box" --app-a
 # set the contents to ABI type `(uint8,uint8,uint8)` with value `[2,3,5]`
 goal app call --from ${ACCOUNT} --app-id ${APPID} --box "$str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
 ```
+
+### Q: How do I search for boxes in goal?
+
+### A:
+Assuming you followed the previous step to create `greatBox` and `an_ABI_box`:
+
+```sh
+# get all boxes for a given app
+goal app box list --app-id ${APPID}
+
+# get the box details for a given box
+goal app box info --app-id ${APPID} --box "str:an_ABI_box"
+```
