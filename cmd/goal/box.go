@@ -17,6 +17,8 @@
 package main
 
 import (
+	"encoding/base64"
+
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +48,8 @@ var appBoxCmd = &cobra.Command{
 
 var appBoxInfoCmd = &cobra.Command{
 	Use:   "info",
-	Short: "Retrieve information about an application box",
+	Short: "Retrieve information about an application box.",
+	Long:  "Retrieve information about an application box. The returned box name and value are base64 encoded.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
@@ -63,15 +66,28 @@ var appBoxInfoCmd = &cobra.Command{
 		}
 
 		// Print box info
-		reportInfof("Name:  %s", box.Name)
-		reportInfof("Value: %s", box.Value)
+		encodedName := base64.StdEncoding.EncodeToString(box.Name)
+		encodedValue := base64.StdEncoding.EncodeToString(box.Value)
+		reportInfof("Name:  %s", encodedName)
+		reportInfof("Value: %s", encodedValue)
 	},
+}
+
+func encodeValueInAppCallBytesFormat(value []byte) string {
+	if isPrintable, _ := unicodePrintable(string(value)); isPrintable {
+		return "str:" + string(value)
+	}
+
+	return "b64:" + base64.StdEncoding.EncodeToString(value)
 }
 
 var appBoxListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all application boxes belonging to an application",
-	Args:  validateNoPosArgsFn,
+	Long: "List all application boxes belonging to an application.\n" +
+		"For printable strings, the box name is formatted as 'str:hello'\n" +
+		"For everything else, the box name is formatted as 'b64:A=='. ",
+	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
 
@@ -84,12 +100,11 @@ var appBoxListCmd = &cobra.Command{
 		// Error if no boxes found
 		if len(boxes) == 0 {
 			reportErrorf("No application boxes found")
-			return
 		}
 
 		// Print app boxes
 		for _, box := range boxes {
-			reportInfof("%s", box)
+			reportInfof("%s", encodeValueInAppCallBytesFormat(box))
 		}
 	},
 }

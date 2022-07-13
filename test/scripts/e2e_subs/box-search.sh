@@ -27,8 +27,9 @@ APP_ACCOUNT=$(${gcmd} app info --app-id "$APPID" | grep "Application account" | 
 ${gcmd} clerk send --to "$APP_ACCOUNT" --from "$ACCOUNT" --amount 10000000
 
 # Create several boxes
-BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0") # b64:YmFzZTY0 == str:base64
+BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0" "b64:AQIDBA==") # b64:YmFzZTY0 == str:base64, b64:AQIDBA== is not unicode
 BOX_VALUE="box value"
+B64_BOX_VALUE="Ym94IHZhbHVlAAAAAAAAAAAAAAAAAAAA"
 
 for BOX_NAME in "${BOX_NAMES[@]}"
 do
@@ -43,14 +44,15 @@ done
 for BOX_NAME in "${BOX_NAMES[@]}"
 do
   VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | cut -d" " -f2-)
-  [ "$VALUE" = "$BOX_VALUE" ]
+  [ "$VALUE" = "$B64_BOX_VALUE" ]
 done
 
 # Confirm that we can get a list of boxes belonging to a particular application
 BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
-EXPECTED="box1
-with spaces
-base64"
+EXPECTED="str:box1
+str:with spaces
+str:base64
+b64:AQIDBA=="
 
 # shellcheck disable=SC2059
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
