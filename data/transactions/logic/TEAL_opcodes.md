@@ -377,7 +377,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
 | 15 | Type | []byte |      | Transaction type as bytes |
-| 16 | TypeEnum | uint64 |      | See table below |
+| 16 | TypeEnum | uint64 |      | Transaction type as enum |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
 | 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
@@ -431,20 +431,9 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
-TypeEnum mapping:
-
-| Index | "Type" string | Description |
-| --- | --- | --- |
-| 0 | unknown | Unknown type. Invalid transaction |
-| 1 | pay | Payment |
-| 2 | keyreg | KeyRegistration |
-| 3 | acfg | AssetConfig |
-| 4 | axfer | AssetTransfer |
-| 5 | afrz | AssetFreeze |
-| 6 | appl | ApplicationCall |
-
-
 FirstValidTime causes the program to fail. The field is reserved for future use.
+
+For TypeEnum values see <a href="https://developer.algorand.org/docs/get-details/dapps/avm/teal/specification/#typeenum-constants">Named Integer Constants</a> (TypeEnum constants).
 
 ## global f
 

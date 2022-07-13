@@ -284,7 +284,7 @@ var opDocExtras = map[string]string{
 	"bitlen":              "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
 	"divw":                "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
 	"divmodw":             "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
-	"txn":                 "FirstValidTime causes the program to fail. The field is reserved for future use.",
+	"txn":                 "FirstValidTime causes the program to fail. The field is reserved for future use.\n\nFor TypeEnum values see <a href=\"https://developer.algorand.org/docs/get-details/dapps/avm/teal/specification/#typeenum-constants\">Named Integer Constants</a> (TypeEnum constants).",
 	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":               "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
 	"gload":               "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",

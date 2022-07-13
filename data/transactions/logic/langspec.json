@@ -616,7 +616,7 @@
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of current transaction",
-      "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
+      "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.\n\nFor TypeEnum values see \u003ca href=\"https://developer.algorand.org/docs/get-details/dapps/avm/teal/specification/#typeenum-constants\"\u003eNamed Integer Constants\u003c/a\u003e (TypeEnum constants).",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
