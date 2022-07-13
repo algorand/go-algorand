@@ -18,6 +18,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 
@@ -141,6 +142,10 @@ class algodDir:
     def get_goroutine_snapshot(self, snapshot_name=None, outdir=None):
         return self.get_pprof_snapshot('goroutine', snapshot_name, outdir)
 
+    def get_cpu_profile(self, snapshot_name=None, outdir=None, seconds=90):
+        seconds = int(seconds)
+        return self.get_pprof_snapshot('profile?seconds={}'.format(seconds), snapshot_name, outdir)
+
     def get_metrics(self, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/metrics'
         try:
@@ -243,7 +248,7 @@ class watcher:
             logger.error('bad algod: %r', net, exc_info=True)
 
 
-    def do_snap(self, now):
+    def do_snap(self, now, get_cpu=False):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
         snapshot_isotime = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(now))
         logger.debug('begin snapshot %s', snapshot_name)
@@ -271,6 +276,15 @@ class watcher:
             for ad in self.they:
                 bi = ad.get_blockinfo(snapshot_name, outdir=self.args.out)
                 self.latest_round = nmax(self.latest_round, bi['block'].get('rnd',0))
+        if get_cpu:
+            cpuSample = durationToSeconds(self.args.cpu_sample) or 90
+            threads = []
+            for ad in self.they:
+                t = threading.Thread(target=ad.get_cpu_profile, kwargs={'snapshot_name':snapshot_name, 'outdir':self.args.out, 'seconds': cpuSample})
+                t.start()
+                threads.append(t)
+            for t in threads:
+                t.join()
         if self.args.svg:
             logger.debug('snapped, processing pprof...')
             # make absolute and differential plots
@@ -282,6 +296,23 @@ class watcher:
                     subprocess.call(['go', 'tool', 'pprof', '-sample_index=inuse_space', '-svg', '-output', snappath + '.inuse_diff.svg', '-base='+prev, snappath])
                     subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc_diff.svg', '-diff_base='+prev, snappath])
         self.prevsnapshots = newsnapshots
+
+def durationToSeconds(rts):
+    if rts is None:
+        return None
+    rts = rts.lower()
+    if rts.endswith('h'):
+        mult = 3600
+        rts = rts[:-1]
+    elif rts.endswith('m'):
+        mult = 60
+        rts = rts[:-1]
+    elif rts.endswith('s'):
+        mult = 1
+        rts = rts[:-1]
+    else:
+        mult = 1
+    return float(rts) * mult
 
 def main():
     ap = argparse.ArgumentParser()
@@ -301,6 +332,8 @@ def main():
     ap.add_argument('--svg', dest='svg', default=False, action='store_true', help='automatically run `go tool pprof` to generate performance profile svg from collected data')
     ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
+    ap.add_argument('--cpu-after', help='capture cpu profile after some time (e.g. 5m (after start))')
+    ap.add_argument('--cpu-sample', help='capture cpu profile for some time (e.g. 90s)')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -329,27 +362,15 @@ def main():
     if (app.latest_round is not None) and (args.rounds is not None):
         end_round = app.latest_round + args.rounds
     if args.runtime:
-        rts = args.runtime
-        if rts.endswith('h'):
-            mult = 3600
-            rts = rts[:-1]
-        elif rts.endswith('m'):
-            mult = 60
-            rts = rts[:-1]
-        else:
-            mult = 1
-        endtime = (float(rts) * mult) + start
+        endtime = durationToSeconds(args.runtime) + start
+
+    cpuAfter = durationToSeconds(args.cpu_after)
+    if cpuAfter is not None:
+        cpuAfter += start
+
 
     if args.period:
-        lastc = args.period.lower()[-1:]
-        if lastc == 's':
-            periodSecs = int(args.period[:-1])
-        elif lastc == 'm':
-            periodSecs = int(args.period[:-1]) * 60
-        elif lastc == 'h':
-            periodSecs = int(args.period[:-1]) * 3600
-        else:
-            periodSecs = int(args.period)
+        periodSecs = durationToSeconds(args.period)
 
         periodi = 1
         nextt = start + (periodi * periodSecs)
@@ -364,7 +385,12 @@ def main():
                 now = time.time()
             periodi += 1
             nextt += periodSecs
-            app.do_snap(now)
+            get_cpu = False
+            if (cpuAfter is not None) and (now > cpuAfter):
+                get_cpu = True
+                cpuAfter = None
+            app.do_snap(now, get_cpu)
+            now = time.time()
             if (endtime is not None) and (now > endtime):
                 return
             if (end_round is not None) and (app.latest_round is not None) and (app.latest_round >= end_round):
