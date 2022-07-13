@@ -1230,9 +1230,12 @@ var pseudoOps = map[string]map[int]OpSpec{
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {anyImmediates: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
-	"txn":    {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
-	"gtxn":   {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
+	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
+	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
+	"extract": {0: OpSpec{Name: "extract3"}, 2: OpSpec{Name: "extract"}},
+	"replace": {0: OpSpec{Name: "replace3"}, 1: OpSpec{Name: "replace2"}},
 }
 
 func addPseudoDocTags() {

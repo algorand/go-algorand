@@ -513,7 +513,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 - Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ..., A: uint64 &rarr; ..., any
-- Ith value of the array field F from the Ath transaction in the current group
+- Ith value of the array field F from the Ath transaction in the current group<br />gtxnsa can be called using gtxns with 2 immediates.
 - Availability: v3
 
 ## gload t i
@@ -732,7 +732,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x58
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails
+- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />extract3 can be called using extract without immediates.
 - Availability: v5
 
 ## extract_uint16
@@ -760,14 +760,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x5c {uint8 start position}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
-- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)
+- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />replace2 can be called using replace with 1 immediate.
 - Availability: v7
 
 ## replace3
 
 - Opcode: 0x5d
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
-- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)
+- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />replace3 can be called using replace without immediates.
 - Availability: v7
 
 ## base64_decode e

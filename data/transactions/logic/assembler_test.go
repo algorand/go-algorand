@@ -604,16 +604,32 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
 	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
 	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
+
+	testLine(t, "txn Accounts 256", AssemblerMaxVersion, "txn i beyond 255: 256")
+	testLine(t, "txn ApplicationArgs 256", AssemblerMaxVersion, "txn i beyond 255: 256")
+	testLine(t, "txn Sender 256", AssemblerMaxVersion, "txn unknown field: \"Sender\"")
+	testLine(t, "gtxn 0 Accounts 256", AssemblerMaxVersion, "gtxn i beyond 255: 256")
+	testLine(t, "gtxn 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxn i beyond 255: 256")
+	testLine(t, "gtxn 256 Accounts 0", AssemblerMaxVersion, "gtxn t beyond 255: 256")
+	testLine(t, "gtxn 0 Sender 256", AssemblerMaxVersion, "gtxn unknown field: \"Sender\"")
+
 	testLine(t, "txn Accounts 0", 1, "txn opcode with 2 immediates was introduced in TEAL v2")
 	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
 	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
+	testLine(t, "txn Accounts 0 1", AssemblerMaxVersion, "txn expects 1 or 2 immediate arguments")
 	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")
 	testLine(t, "txna Accounts a", AssemblerMaxVersion, "txna unable to parse...")
+	testLine(t, "txn Accounts a", AssemblerMaxVersion, "txn unable to parse...")
 	testLine(t, "gtxn 0 Sender 0", 1, "gtxn opcode with 3 immediates was introduced in TEAL v2")
 	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects 2 or 3 immediate arguments")
 	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects 3 immediate arguments")
 	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "gtxna unable to parse...")
 	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "gtxna unable to parse...")
+
+	testLine(t, "gtxn 0 Accounts 1 2", AssemblerMaxVersion, "gtxn expects 2 or 3 immediate arguments")
+	testLine(t, "gtxn a Accounts 0", AssemblerMaxVersion, "gtxn unable to parse...")
+	testLine(t, "gtxn 0 Accounts a", AssemblerMaxVersion, "gtxn unable to parse...")
+
 	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects 2 immediate arguments")
 	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
@@ -2631,4 +2647,15 @@ func TestAddPseudoDocTags(t *testing.T) {
 	delete(opDocByName, "single")
 	delete(opDocByName, "none")
 	delete(opDocByName, "any")
+}
+func TestReplacePseudo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	replaceVersion := 7
+	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
+		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace expects 3 stack arguments but stack height is 2"})
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
+	}
 }
