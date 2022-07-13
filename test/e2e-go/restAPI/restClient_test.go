@@ -1417,9 +1417,9 @@ end:
 		var resp generated.BoxesResponse
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 		a.NoError(err)
-		a.Equal(createdBoxCount, uint64(len(resp)))
-		for _, byteName := range resp {
-			a.True(createdBoxName[string(byteName)])
+		a.Equal(createdBoxCount, uint64(len(resp.Boxes)))
+		for _, b := range resp.Boxes {
+			a.True(createdBoxName[string(b.Name)])
 		}
 	}
 
@@ -1463,7 +1463,7 @@ end:
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
-	a.Empty(resp)
+	a.Empty(resp.Boxes)
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -1489,7 +1489,7 @@ end:
 
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
-	a.Empty(resp)
+	a.Empty(resp.Boxes)
 
 	// Get Box value from box name
 	encodeInt := func(n uint64) []byte {

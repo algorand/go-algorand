@@ -143,15 +143,15 @@ return`
 	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
 	// the consensus upgrade, and affects only nodes that have been updated.
 	if proto.EnableAccountDataResourceSeparation {
-		expectedCreatorBase, err = hex.DecodeString("85a16101a162ce009d2290a16704a16b01a17a01")
+		expectedCreatorBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce009d2290a16704a16b01a17a01")
 		a.NoError(err)
 		expectedCreatorResource, err = hex.DecodeString("86a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903a17a01")
 		a.NoError(err)
-		expectedUserOptInBase, err = hex.DecodeString("85a16101a162ce00a02fd0a16701a16c01a17a02")
+		expectedUserOptInBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a02fd0a16701a16c01a17a02")
 		a.NoError(err)
 		expectedUserOptInResource, err = hex.DecodeString("82a16f01a17a02")
 		a.NoError(err)
-		expectedUserLocalBase, err = hex.DecodeString("85a16101a162ce00a33540a16701a16c01a17a04")
+		expectedUserLocalBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a33540a16701a16c01a17a04")
 		a.NoError(err)
 		expectedUserLocalResource, err = hex.DecodeString("83a16f01a17081a26c6b82a27462a56c6f63616ca2747401a17a04")
 		a.NoError(err)
@@ -296,7 +296,8 @@ return`
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
 	// ensure writing into empty global state works as well
-	l.reloadLedger()
+	err = l.reloadLedger()
+	a.NoError(err)
 	txHeader.Sender = creator
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,

@@ -1381,6 +1381,30 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 - Availability: v7
 - Mode: Application
 
+## box_len
+
+- Opcode: 0xbd
+- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
+- length of a box
+- Availability: v7
+- Mode: Application
+
+## box_get
+
+- Opcode: 0xbe
+- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
+- full contents of a box
+- Availability: v7
+- Mode: Application
+
+## box_put
+
+- Opcode: 0xbf
+- Stack: ..., A: []byte, B: []byte &rarr; ...
+- write contents of box
+- Availability: v7
+- Mode: Application
+
 ## txnas f
 
 - Opcode: 0xc0 {uint8 transaction field index}

@@ -163,7 +163,7 @@ func (ef *ExpectFixture) Run() {
 				cmd.Stdout = &outBuf
 
 				// Set stderr to be a file descriptor. In other way Go's exec.Cmd::writerDescriptor
-				// attaches goroutine reading that blocks on io.Copy from stderr.
+				// attaches a goroutine reading stderr that blocks on io.Copy from stderr.
 				// Cmd::CombinedOutput sets stderr to stdout and also blocks.
 				// Cmd::Start + Cmd::Wait with manual pipes redirection etc also blocks.
 				// Wrapping 'expect' with 'expect "$@" 2>&1' also blocks on stdout reading.

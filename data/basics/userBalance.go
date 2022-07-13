@@ -97,17 +97,22 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
-// OnlineAccountData contains the voting information for a single account.
-//msgp:ignore OnlineAccountData
-type OnlineAccountData struct {
-	MicroAlgosWithRewards MicroAlgos
-
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VRFVerifier
+// VotingData holds voting-related data
+type VotingData struct {
+	VoteID       crypto.OneTimeSignatureVerifier
+	SelectionID  crypto.VRFVerifier
+	StateProofID merklesignature.Verifier
 
 	VoteFirstValid  Round
 	VoteLastValid   Round
 	VoteKeyDilution uint64
+}
+
+// OnlineAccountData contains the voting information for a single account.
+//msgp:ignore OnlineAccountData
+type OnlineAccountData struct {
+	MicroAlgosWithRewards MicroAlgos
+	VotingData
 }
 
 // AccountData contains the data associated with a given address.
@@ -538,12 +543,14 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 
 	return OnlineAccountData{
 		MicroAlgosWithRewards: u.MicroAlgos,
-
-		VoteID:          u.VoteID,
-		SelectionID:     u.SelectionID,
-		VoteFirstValid:  u.VoteFirstValid,
-		VoteLastValid:   u.VoteLastValid,
-		VoteKeyDilution: u.VoteKeyDilution,
+		VotingData: VotingData{
+			VoteID:          u.VoteID,
+			SelectionID:     u.SelectionID,
+			StateProofID:    u.StateProofID,
+			VoteFirstValid:  u.VoteFirstValid,
+			VoteLastValid:   u.VoteLastValid,
+			VoteKeyDilution: u.VoteKeyDilution,
+		},
 	}
 }
 
@@ -614,26 +621,26 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 // on how recently the account has been touched (our rewards do not implement
 // compounding).  However, online accounts have to periodically renew
 // participation keys, so the scale of the inconsistency is small.
-func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, proto config.ConsensusParams) uint64 {
+func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, genesisProto config.ConsensusParams) uint64 {
 	if status != Online {
 		return 0
 	}
 
 	// If this account had one RewardUnit of microAlgos in round 0, it would
 	// have perRewardUnit microAlgos at the account's current rewards level.
-	perRewardUnit := rewardsBase + proto.RewardUnit
+	perRewardUnit := rewardsBase + genesisProto.RewardUnit
 
 	// To normalize, we compute, mathematically,
 	// u.MicroAlgos / perRewardUnit * proto.RewardUnit, as
 	// (u.MicroAlgos * proto.RewardUnit) / perRewardUnit.
-	norm, overflowed := Muldiv(microAlgos.ToUint64(), proto.RewardUnit, perRewardUnit)
+	norm, overflowed := Muldiv(microAlgos.ToUint64(), genesisProto.RewardUnit, perRewardUnit)
 
 	// Mathematically should be impossible to overflow
 	// because perRewardUnit >= proto.RewardUnit, as long
 	// as u.RewardBase isn't huge enough to cause overflow..
 	if overflowed {
 		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)",
-			microAlgos.ToUint64(), proto.RewardUnit, rewardsBase, proto.RewardUnit)
+			microAlgos.ToUint64(), genesisProto.RewardUnit, rewardsBase, genesisProto.RewardUnit)
 	}
 
 	return norm

@@ -300,3 +300,43 @@ func TestIOBudgetGrow(t *testing.T) {
                       int 350; byte "another"; box_create;
                       int 1`, ep)
 }
+
+func TestConveniences(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+
+	// box_get of a new name reports !exists, and returns 0 length bytes.
+	logic.TestApp(t, `byte "self"; box_get; !; assert; len; !`, ep)
+
+	// box_len of a new name reports !exists, and returns 0 as the length
+	logic.TestApp(t, `byte "self"; box_len; !; assert; !`, ep)
+
+	// box_put creates the box with contents provided
+	logic.TestApp(t, `byte "self"; byte 0x3132; box_put;
+                      byte "self"; box_len; assert; int 2; ==; assert
+                      byte "self"; box_get; assert; byte 0x3132; ==`, ep)
+
+	// box_put fails if box exists and is wrong size (self exists from last test)
+	logic.TestApp(t, `byte "self"; byte 0x313233; box_put; int 1`, ep,
+		"box_put wrong size")
+	ledger.DeleteBox(888, "self")
+
+	// put and get can interact with created boxes
+	logic.TestApp(t, `int 3; byte "self"; box_create; int 1`, ep)
+	logic.TestApp(t, `byte "self"; box_get; assert; byte 0x000000; ==`, ep)
+	logic.TestApp(t, `byte "self"; byte 0xAABBCC; box_put; int 1`, ep)
+	logic.TestApp(t, `byte "self"; int 1; byte 0xDDEE; box_replace; int 1`, ep)
+	logic.TestApp(t, `byte "self"; box_get; assert; byte 0xAADDEE; ==`, ep)
+	ledger.DeleteBox(888, "self")
+
+	// box_get panics if the box is too big
+	ep.Proto.MaxBoxSize = 5000
+	ep.Proto.BytesPerBoxReference = 5000 // avoid write budget error
+	logic.TestApp(t, `int 4098; byte "self"; box_create; // bigger than maxStringSize
+                      byte "self"; box_get; assert; len`, ep,
+		"box_get produced a too big")
+
+}
