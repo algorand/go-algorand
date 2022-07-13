@@ -205,10 +205,10 @@ type Local struct {
 	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
-	EnableAssembleStats bool `version[0]:""`
+	EnableAssembleStats bool `version[0]:"" version[24]:"true"`
 
 	// Generate ProcessBlockMetrics telemetry event
-	EnableProcessBlockStats bool `version[0]:""`
+	EnableProcessBlockStats bool `version[0]:"" version[24]:"true"`
 
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
 	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
