@@ -137,5 +137,5 @@ Assuming you followed the previous step to create `greatBox` and `an_ABI_box`:
 goal app box list --app-id ${APPID}
 
 # get the box details for a given box
-goal app box info --app-id ${APPID} --box "str:an_ABI_box"
+goal app box info --app-id ${APPID} --name "str:an_ABI_box"
 ```
