@@ -2523,16 +2523,6 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
-	if err != nil {
-		return nil, err
-	}
-
 	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2560,12 +2550,12 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 func accountsBoxesDbQueries(r db.Queryable, qs *accountsDbQueries) error {
 	var err error
 
-	qs.lookupKvPairStmt, err = r.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+	qs.lookupKvPairStmt, err = r.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 	if err != nil {
 		return err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (key, 1, ?) = ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
 	if err != nil {
 		return err
 	}

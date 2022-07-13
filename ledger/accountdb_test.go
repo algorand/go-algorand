@@ -4032,7 +4032,7 @@ func TestTrackerDBSchemaVer8BringKVStore(t *testing.T) {
 
 	// Don't think we can do parallel test, for it gets involved with `accountDBVersion`
 	prevAccountDBVersion := accountDBVersion
-	accountDBVersion = int32(6)
+	accountDBVersion = int32(7)
 
 	// bring up a ledger, and do something with
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
