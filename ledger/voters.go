@@ -61,8 +61,8 @@ type votersTracker struct {
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
-	l  ledgerForTracker
-	ao *onlineAccounts
+	l                 ledgerForTracker
+	onlineTopFunction ledgercore.TopOnlineAccounts
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -79,24 +79,33 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.Round, onlineTopFunc ledgercore.TopOnlineAccounts) error {
 	vt.l = l
-	vt.ao = ao
+	vt.onlineTopFunction = onlineTopFunc
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
-	latest := l.Latest()
+	latest := latestDbRound
 	hdr, err := l.BlockHdr(latest)
 	if err != nil {
 		return err
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
+	if proto.StateProofInterval == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
+	startR := basics.Round(proto.StateProofInterval).SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	if hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != 0 {
+		startR = votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
+	}
+
+	// Sanity check: we should never underflow or even reach 0.
+	if startR == 0 {
+		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
+			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
+	}
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
@@ -139,8 +148,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
-		err := tr.LoadTree(onlineAccounts, hdr)
+		err := tr.LoadTree(vt.onlineTopFunction, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 

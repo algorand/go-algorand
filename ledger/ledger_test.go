@@ -2638,3 +2638,79 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	}
 	l.WaitForCommit(l.Latest())
 }
+
+func TestVotersReloadFromDisk(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = 230
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	for i := 0; i < 499; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	vtBefore := l.acctsOnline.voters.votersForRoundCache
+	err = l.reloadLedger()
+	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
+	for k, v := range l.acctsOnline.voters.votersForRoundCache {
+		require.NoError(t, v.Wait())
+		require.Equal(t, vtBefore[k].Tree, v.Tree)
+		require.Equal(t, vtBefore[k].Participants, v.Participants)
+	}
+}
+
+func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = 230
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	for i := 0; i < 499; i++ {
+		if i == 280 {
+			blk.BlockHeader.Round++
+			blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+			var sp bookkeeping.StateProofTrackingData
+			sp.StateProofNextRound = 512
+			blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+				protocol.StateProofBasic: sp,
+			}
+
+			err = l.AddBlock(blk, agreement.Certificate{})
+		}
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	
+	vtBefore := l.acctsOnline.voters.votersForRoundCache
+	err = l.reloadLedger()
+	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
+	for k, v := range l.acctsOnline.voters.votersForRoundCache {
+		require.NoError(t, v.Wait())
+		require.Equal(t, vtBefore[k].Tree, v.Tree)
+		require.Equal(t, vtBefore[k].Participants, v.Participants)
+	}
+}
