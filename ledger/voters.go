@@ -84,8 +84,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 	vt.onlineTopFunction = onlineTopFunc
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
-	latest := latestDbRound
-	hdr, err := l.BlockHdr(latest)
+	hdr, err := l.BlockHdr(latestDbRound)
 	if err != nil {
 		return err
 	}
@@ -107,13 +106,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
-	// Sanity check: we should never underflow or even reach 0.
-	if startR == 0 {
-		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
-	}
-
-	for r := startR; r <= latest; r += basics.Round(proto.StateProofInterval) {
+	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
 			return err

@@ -2663,6 +2663,8 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	}
 	vtBefore := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
+	require.NoError(t, err)
+
 	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
 	for k, v := range l.acctsOnline.voters.votersForRoundCache {
 		require.NoError(t, v.Wait())
@@ -2704,9 +2706,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
-	
+
 	vtBefore := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
+	require.NoError(t, err)
+
 	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
 	for k, v := range l.acctsOnline.voters.votersForRoundCache {
 		require.NoError(t, v.Wait())
