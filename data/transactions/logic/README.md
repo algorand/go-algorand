@@ -441,7 +441,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
 | 15 | Type | []byte |      | Transaction type as bytes |
-| 16 | TypeEnum | uint64 |      | See table below |
+| 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
 | 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
