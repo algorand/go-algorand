@@ -22,13 +22,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -2639,42 +2642,57 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	l.WaitForCommit(l.Latest())
 }
 
+func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.VotersForRound, actual map[basics.Round]*ledgercore.VotersForRound) {
+	require.Equal(t, len(expected), len(actual))
+	for k, v := range actual {
+		require.NoError(t, v.Wait())
+		require.Equal(t, expected[k].Tree, v.Tree)
+		require.Equal(t, expected[k].Participants, v.Participants)
+	}
+}
+
 func TestVotersReloadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	proto := config.Consensus[protocol.ConsensusFuture]
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	cfg.MaxAcctLookback = 230
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
 	blk := genesisInitState.Block
-	for i := 0; i < 499; i++ {
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < (proto.StateProofInterval*2 - proto.StateProofVotersLookback); i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
-	vtBefore := l.acctsOnline.voters.votersForRoundCache
+
+	// at this point the database should contain the voter for round 256 but for the voters for 512 should be in deltas
+	l.WaitForCommit(blk.BlockHeader.Round)
+	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
-	for k, v := range l.acctsOnline.voters.votersForRoundCache {
-		require.NoError(t, v.Wait())
-		require.Equal(t, vtBefore[k].Tree, v.Tree)
-		require.Equal(t, vtBefore[k].Participants, v.Participants)
-	}
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 }
 
 func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusFuture]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -2682,39 +2700,102 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	cfg.MaxAcctLookback = 230
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
 	blk := genesisInitState.Block
-	for i := 0; i < 499; i++ {
-		if i == 280 {
-			blk.BlockHeader.Round++
-			blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-			var sp bookkeeping.StateProofTrackingData
-			sp.StateProofNextRound = 512
-			blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-				protocol.StateProofBasic: sp,
-			}
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
 
-			err = l.AddBlock(blk, agreement.Certificate{})
-		}
+	for i := uint64(0); i < (proto.StateProofInterval*3 - proto.StateProofVotersLookback); i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	vtBefore := l.acctsOnline.voters.votersForRoundCache
+	// we simulate a  stateproof for round 512 being confirmed on chain
+	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 3)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < proto.StateProofInterval; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	l.WaitForCommit(blk.BlockHeader.Round)
+	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	require.Equal(t, len(vtBefore), len(l.acctsOnline.voters.votersForRoundCache))
-	for k, v := range l.acctsOnline.voters.votersForRoundCache {
-		require.NoError(t, v.Wait())
-		require.Equal(t, vtBefore[k].Tree, v.Tree)
-		require.Equal(t, vtBefore[k].Participants, v.Participants)
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
+}
+
+func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
 	}
+
+	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofRecoveryInterval + 1)); i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	// the voters tracker should contains all the voters for each stateproof round. nothing should be removed
+	l.WaitForCommit(blk.BlockHeader.Round)
+	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+	beforeRemoveVotersLen := len(vtSnapshot)
+	err = l.reloadLedger()
+	require.NoError(t, err)
+	_, found := l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
+	require.True(t, found)
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
+
+	for i := uint64(0); i < proto.StateProofInterval; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	// the voters tracker should give up on voters for round 512
+	l.WaitForCommit(blk.BlockHeader.Round)
+	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
+	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
+	require.False(t, found)
+	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
 }

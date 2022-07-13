@@ -90,15 +90,12 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.StateProofInterval == 0 {
+	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := basics.Round(proto.StateProofInterval).SubSaturate(basics.Round(proto.StateProofVotersLookback))
-	if hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != 0 {
-		startR = votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
-	}
+	startR := votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
@@ -108,9 +105,9 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 
 	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 
 		vt.loadTree(hdr)
 	}
