@@ -2523,6 +2523,18 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
+	if accountDBVersion > int32(7) {
+		qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+		if err != nil {
+			return nil, err
+		}
+
+		qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2545,22 +2557,6 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 		return nil, err
 	}
 	return qs, nil
-}
-
-func accountsBoxesDbQueries(r db.Queryable, qs *accountsDbQueries) error {
-	var err error
-
-	qs.lookupKvPairStmt, err = r.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-	if err != nil {
-		return err
-	}
-
-	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.

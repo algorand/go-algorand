@@ -815,7 +815,7 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
 	if err != nil {
@@ -892,13 +892,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle)
 	if err != nil {
 		return
-	}
-
-	if accountDBVersion >= int32(8) {
-		err = accountsBoxesDbQueries(au.dbs.Rdb.Handle, au.accountsq)
-		if err != nil {
-			return
-		}
 	}
 
 	hdr, err := l.BlockHdr(lastBalancesRound)

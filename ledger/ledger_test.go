@@ -1974,9 +1974,10 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	prevAccountDBVersion := accountDBVersion
 	accountDBVersion = 6
 	defer func() {
-		accountDBVersion = 7
+		accountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
