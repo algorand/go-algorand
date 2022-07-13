@@ -92,10 +92,11 @@ var appBoxListCmd = &cobra.Command{
 		_, client := getDataDirAndClient()
 
 		// Get app boxes
-		boxes, err := client.ApplicationBoxes(appIdx)
+		boxesRes, err := client.ApplicationBoxes(appIdx)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
+		boxes := boxesRes.Boxes
 
 		// Error if no boxes found
 		if len(boxes) == 0 {
@@ -103,8 +104,9 @@ var appBoxListCmd = &cobra.Command{
 		}
 
 		// Print app boxes
-		for _, box := range boxes {
-			reportInfof("%s", encodeValueInAppCallBytesFormat(box))
+		for _, descriptor := range boxes {
+			encodedName := encodeValueInAppCallBytesFormat(descriptor.Name)
+			reportInfof("%s", encodedName)
 		}
 	},
 }
