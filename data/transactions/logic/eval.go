@@ -862,6 +862,10 @@ func boolToUint(x bool) uint64 {
 	return 0
 }
 
+func boolToSV(x bool) stackValue {
+	return stackValue{Uint: boolToUint(x)}
+}
+
 func (cx *EvalContext) remainingBudget() int {
 	if cx.runModeFlags == modeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
@@ -1304,7 +1308,7 @@ func opLt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := cx.stack[prev].Uint < cx.stack[last].Uint
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1330,7 +1334,7 @@ func opAnd(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1339,7 +1343,7 @@ func opOr(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1358,8 +1362,7 @@ func opEq(cx *EvalContext) error {
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
 	}
-	cx.stack[prev].Uint = boolToUint(cond)
-	cx.stack[prev].Bytes = nil
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1374,8 +1377,7 @@ func opNeq(cx *EvalContext) error {
 
 func opNot(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	cond := cx.stack[last].Uint == 0
-	cx.stack[last].Uint = boolToUint(cond)
+	cx.stack[last] = boolToSV(cx.stack[last].Uint == 0)
 	return nil
 }
 
@@ -1676,8 +1678,7 @@ func opBytesLt(cx *EvalContext) error {
 
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) < 0)
+	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) < 0)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1713,8 +1714,7 @@ func opBytesEq(cx *EvalContext) error {
 
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) == 0)
+	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) == 0)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -3014,8 +3014,7 @@ func opEd25519Verify(cx *EvalContext) error {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig))
-	cx.stack[pprev].Bytes = nil
+	cx.stack[pprev] = boolToSV(sv.Verify(msg, sig))
 	cx.stack = cx.stack[:prev]
 	return nil
 }
@@ -3037,8 +3036,7 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
-	cx.stack[pprev].Bytes = nil
+	cx.stack[pprev] = boolToSV(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
 	cx.stack = cx.stack[:prev]
 	return nil
 }
@@ -3108,8 +3106,7 @@ func opEcdsaVerify(cx *EvalContext) error {
 		result = ecdsa.Verify(&pubkey, msg, r, s)
 	}
 
-	cx.stack[fifth].Uint = boolToUint(result)
-	cx.stack[fifth].Bytes = nil
+	cx.stack[fifth] = boolToSV(result)
 	cx.stack = cx.stack[:fourth]
 	return nil
 }
@@ -3744,9 +3741,7 @@ func opAppOptedIn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[prev].Uint = boolToUint(optedIn)
-	cx.stack[prev].Bytes = nil
-
+	cx.stack[prev] = boolToSV(optedIn)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -4195,8 +4190,6 @@ func opAcctParamsGet(cx *EvalContext) error {
 		return err
 	}
 
-	exist := boolToUint(account.MicroAlgos.Raw > 0)
-
 	var value stackValue
 
 	switch fs.field {
@@ -4208,7 +4201,7 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Bytes = account.AuthAddr[:]
 	}
 	cx.stack[last] = value
-	cx.stack = append(cx.stack, stackValue{Uint: exist})
+	cx.stack = append(cx.stack, boolToSV(account.MicroAlgos.Raw > 0))
 	return nil
 }
 
@@ -4842,8 +4835,7 @@ func opVrfVerify(cx *EvalContext) error {
 	}
 
 	cx.stack[pprev].Bytes = output[:]
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(verified)
+	cx.stack[prev] = boolToSV(verified)
 	cx.stack = cx.stack[:last] // pop 1 because we take 3 args and return 2
 	return nil
 }
