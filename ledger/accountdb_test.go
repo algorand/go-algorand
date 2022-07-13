@@ -2808,106 +2808,124 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	}
 }
 
-func BenchmarkBoxDatabaseReadWrite(b *testing.B) {
-	totalBoxes := 100000
+func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), error) {
 	batchCount := 100
-	boxSize := 4 * 8096
-	initDatabase := func() (db.Pair, func(), error) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
-		dbs, fn := dbOpenTest(b, false)
-		setDbLogging(b, dbs)
-		cleanup := func() {
-			cleanupTestDb(dbs, fn, false)
-		}
-
-		tx, err := dbs.Wdb.Handle.Begin()
-		require.NoError(b, err)
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
-		require.NoError(b, err)
-		err = tx.Commit()
-		require.NoError(b, err)
-		err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
-		require.NoError(b, err)
-
-		// insert 100k boxes, in batches of 1000
-		cnt := 0
-		for batch := 0; batch <= batchCount; batch++ {
-			fmt.Printf("%d / %d boxes written\n", totalBoxes*batch/batchCount, totalBoxes)
-
-			tx, err = dbs.Wdb.Handle.Begin()
-			require.NoError(b, err)
-			writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
-			require.NoError(b, err)
-			for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
-				err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), string(make([]byte, boxSize)))
-				require.NoError(b, err)
-				cnt++
-			}
-
-			err = tx.Commit()
-			require.NoError(b, err)
-			writer.close()
-		}
-		err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
-		return dbs, cleanup, err
+	if batchCount > totalBoxes {
+		batchCount = 1
 	}
 
-	dbs, cleanup, err := initDatabase()
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	cleanup := func() {
+		cleanupTestDb(dbs, fn, false)
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
-	defer cleanup()
+	_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
+	require.NoError(b, err)
+	err = tx.Commit()
+	require.NoError(b, err)
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+	require.NoError(b, err)
 
-	b.Run("ReadBoxes", func(b *testing.B) {
-		b.StopTimer()
-		for i := 0; i < totalBoxes; i++ {
-			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+	cnt := 0
+	for batch := 0; batch <= batchCount; batch++ {
+		tx, err = dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+		writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
+		require.NoError(b, err)
+		for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
+			err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), string(make([]byte, boxSize)))
 			require.NoError(b, err)
-
-			var pv persistedValue
-			var v sql.NullString
-
-			b.StartTimer()
-			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
-			b.StopTimer()
-			require.NoError(b, err)
-			require.True(b, v.Valid)
-			if i >= b.N {
-				return
-			}
-		}
-	})
-
-	b.Run("ReadBoxesDuplicate", func(b *testing.B) {
-		b.StopTimer()
-		for i := 0; i < totalBoxes; i++ {
-			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-			require.NoError(b, err)
-
-			var pv persistedValue
-			var v sql.NullString
-
-			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
-			require.NoError(b, err)
-			require.True(b, v.Valid)
-			if i >= b.N {
-				return
-			}
+			cnt++
 		}
 
+		err = tx.Commit()
+		require.NoError(b, err)
+		writer.close()
+	}
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+	return dbs, cleanup, err
+}
+
+func BenchmarkBoxDatabaseRead(b *testing.B) {
+	getBoxNamePermutation := func(totalBoxes int) []int {
+		rand.Seed(time.Now().UnixNano())
+		boxNames := make([]int, totalBoxes)
 		for i := 0; i < totalBoxes; i++ {
-			lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-			require.NoError(b, err)
-
-			var pv persistedValue
-			var v sql.NullString
-			b.StartTimer()
-			err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", i))).Scan(&pv.round, &v)
-			b.StopTimer()
-			require.NoError(b, err)
-			require.True(b, v.Valid)
-
-			if i >= b.N {
-				return
-			}
+			boxNames[i] = i
 		}
-	})
+		rand.Shuffle(len(boxNames), func(x, y int) { boxNames[x], boxNames[y] = boxNames[y], boxNames[x] })
+		return boxNames
+	}
+
+	boxCnt := []int{10, 1000, 100000}
+	boxSizes := []int{2, 2048, 4 * 8096}
+	for _, totalBoxes := range boxCnt {
+		for _, boxSize := range boxSizes {
+			b.Run(fmt.Sprintf("totalBoxes=%d/boxSize=%d", totalBoxes, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				var v sql.NullString
+				for i := 0; i < b.N; i++ {
+					lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+					require.NoError(b, err)
+
+					var pv persistedValue
+					boxName := boxNames[i%totalBoxes]
+					b.StartTimer()
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					b.StopTimer()
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+				}
+
+				cleanup()
+			})
+		}
+	}
+
+	lookbacks := []int{2, 32, 256, 2048}
+	for _, lookback := range lookbacks {
+		for _, boxSize := range boxSizes {
+			totalBoxes := 100000
+
+			b.Run(fmt.Sprintf("lookback=%d/boxSize=%d", lookback, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				var v sql.NullString
+				for i := 0; i < b.N+lookback; i++ {
+					lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+					require.NoError(b, err)
+
+					var pv persistedValue
+					boxName := boxNames[i%totalBoxes]
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+
+					if i >= lookback {
+						boxName = boxNames[(i-lookback)%totalBoxes]
+						b.StartTimer()
+						err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+						b.StopTimer()
+						require.NoError(b, err)
+						require.True(b, v.Valid)
+					}
+				}
+
+				cleanup()
+			})
+		}
+	}
 }
