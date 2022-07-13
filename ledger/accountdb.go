@@ -4009,18 +4009,13 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 	// emptyCount := 0
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) (bool, error) {
-		// max resources per chunk reached, stop iterating.
-		if totalResources == maxResources {
-			bals = append(bals, encodedRecord)
-			encodedRecord.Resources = nil
-			return true, nil
-		}
 
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {
 			if encodedRecord.Resources == nil {
 				encodedRecord.Resources = make(map[uint64]msgp.Raw)
 			}
+			fmt.Println("scanned", addr, cidx)
 			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
 			if resData.IsApp() && resData.IsOwning() {
 				iterator.totalAppParams++
@@ -4045,10 +4040,25 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 			encodedRecord.IsLastEntry = true
 
+			fmt.Println("debug2", len(encodedRecord.Resources), encodedRecord.Address)
 			bals = append(bals, encodedRecord)
 			numAccountsProcessed++
 
 			iterator.catchpointAccountResourceCounter = catchpointAccountResourceCounter{}
+
+			// max resources per chunk reached, stop iterating.
+			if totalResources == maxResources {
+				fmt.Println("debug", len(encodedRecord.Resources), encodedRecord.Address)
+				return true, nil
+			}
+		}
+
+		// max resources per chunk reached, stop iterating.
+		if totalResources == maxResources {
+			fmt.Println("debug3", len(encodedRecord.Resources), encodedRecord.Address)
+			bals = append(bals, encodedRecord)
+			encodedRecord.Resources = nil
+			return true, nil
 		}
 
 		return false, nil
@@ -4216,9 +4226,8 @@ func processAllResources(
 			return pendingResourceRow{}, false, err
 		}
 		if chunkFull {
-			return pendingResourceRow{addrid, aidx, buf}, true, err
+			return pendingResourceRow{}, true, err
 		}
-		fmt.Println("scanned", addrid, aidx)
 	}
 	return pendingResourceRow{}, false, nil
 }
