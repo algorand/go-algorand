@@ -619,6 +619,9 @@ Account fields used in the `acct_params_get` opcode.
 | `box_extract` | read from a box |
 | `box_replace` | write to a box |
 | `box_del` | delete a box |
+| `box_len` | length of a box |
+| `box_get` | full contents of a box |
+| `box_put` | write contents of box |
 
 ### Inner Transactions
 

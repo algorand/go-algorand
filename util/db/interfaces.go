@@ -17,6 +17,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 )
 
@@ -31,5 +32,14 @@ import (
 type Queryable interface {
 	Prepare(query string) (*sql.Stmt, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+// Executable is similar but has write methods as well.
+type Executable interface {
+	Queryable
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }

@@ -2565,6 +2565,20 @@
         }
       }
     },
+    "BoxDescriptor": {
+      "description": "Box descriptor describes a Box.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
     "Version": {
       "description": "algod version information.",
       "type": "object",
@@ -3259,10 +3273,17 @@
     "BoxesResponse": {
       "description": "Box names of an application",
       "schema": {
-        "type": "array",
-        "items": {
-          "type": "string",
-          "format": "byte"
+        "type": "object",
+        "required": [
+          "boxes"
+        ],
+        "properties": {
+          "boxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/BoxDescriptor"
+            }
+          }
         }
       }
     },
