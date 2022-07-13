@@ -323,6 +323,7 @@ func TestResourceCaching(t *testing.T) {
 		Timestamp:   0,
 	}
 	l := newTestLedger(t, genesisBalances)
+	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
