@@ -860,17 +860,6 @@ func simpleImm(value string, label string) (byte, error) {
 	return byte(res), err
 }
 
-func asmGtxns(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 1 {
-		return asmDefault(ops, spec, args)
-	}
-	if len(args) == 2 {
-		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
-		return asmDefault(ops, &gtxnsa, args)
-	}
-	return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-}
-
 func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return asmDefault(ops, spec, args)
@@ -1183,7 +1172,7 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 
 // getSpec finds the OpSpec we need during assembly based on it's name, our current version, and the immediates passed in
 // Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
-func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
+func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
 		pseudo, ok := pseudoSpecs[len(args)]
@@ -1195,17 +1184,26 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 				pseudoImmediatesError(ops, name, pseudoSpecs)
 				proto, version, ok := mergeProtos(pseudoSpecs)
 				if !ok {
-					return OpSpec{}, false
+					return OpSpec{}, "", false
 				}
 				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{asm: func(*OpStream, *OpSpec, []string) error { return nil }}}
 			}
 		}
 		pseudo.Name = name
 		if pseudo.Version > ops.Version && (ops.Version != 0 || pseudo.Version != 1) {
-			// For now I'm going to use the actual opspec name since it's a bit misleading to say the pseudo-op's version is wrong, but I could be convinced either way
-			ops.errorf("%s opcode with %d immediates was introduced in TEAL v%d", pseudo.Name, len(args), pseudo.Version)
+			switch {
+			case len(args) > 1:
+				ops.errorf("%s opcode with %d immediates was introduced in TEAL v%d", pseudo.Name, len(args), pseudo.Version)
+			case len(args) == 1:
+				ops.errorf("%s opcode with 1 immediate was introduced in TEAL v%d", pseudo.Name, pseudo.Version)
+			default:
+				ops.errorf("%s opcode without immediates was introduced in TEAL v%d", pseudo.Name, pseudo.Version)
+			}
 		}
-		return pseudo, true
+		if len(args) == 0 {
+			return pseudo, pseudo.Name + " without immediates", true
+		}
+		return pseudo, pseudo.Name, true
 	}
 	spec, ok := OpsByName[ops.Version][name]
 	if !ok {
@@ -1216,7 +1214,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, bool) {
 			ops.errorf("unknown opcode: %s", name)
 		}
 	}
-	return spec, ok
+	return spec, spec.Name, ok
 }
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
@@ -1247,11 +1245,11 @@ func addPseudoDocTags() {
 			msg := ""
 			switch {
 			case i > 1:
-				msg = fmt.Sprintf("%s can be called using %s with %d immediates.", spec.Name, name, i)
+				msg = fmt.Sprintf("`%s` can be called using `%s` with %d immediates.", spec.Name, name, i)
 			case i == 1:
-				msg = fmt.Sprintf("%s can be called using %s with %d immediate.", spec.Name, name, i)
+				msg = fmt.Sprintf("`%s` can be called using `%s` with %d immediate.", spec.Name, name, i)
 			case i == 0:
-				msg = fmt.Sprintf("%s can be called using %s without immediates.", spec.Name, name)
+				msg = fmt.Sprintf("`%s` can be called using `%s` without immediates.", spec.Name, name)
 			default:
 				continue
 			}
@@ -1528,7 +1526,7 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			opstring = fields[0]
 		}
-		spec, ok := getSpec(ops, opstring, fields[1:])
+		spec, trackNameString, ok := getSpec(ops, opstring, fields[1:])
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
@@ -1545,7 +1543,7 @@ func (ops *OpStream) assemble(text string) error {
 					returns = nreturns
 				}
 			}
-			ops.trackStack(args, returns, fields)
+			ops.trackStack(args, returns, append([]string{trackNameString}, fields[1:]...))
 			spec.asm(ops, &spec, fields[1:])
 			if spec.deadens() { // An unconditional branch deadens the following code
 				ops.known.deaden()

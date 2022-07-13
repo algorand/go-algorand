@@ -2624,10 +2624,10 @@ func TestGetSpec(t *testing.T) {
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
 	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
-	_, ok := getSpec(ops, "dummyPseudo", []string{})
-	require.Equal(t, false, ok)
-	_, ok = getSpec(ops, "nonsense", []string{})
-	require.Equal(t, false, ok)
+	_, _, ok := getSpec(ops, "dummyPseudo", []string{})
+	require.False(t, ok)
+	_, _, ok = getSpec(ops, "nonsense", []string{})
+	require.False(t, ok)
 	require.Equal(t, 2, len(ops.Errors))
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
 }
@@ -2638,9 +2638,9 @@ func TestAddPseudoDocTags(t *testing.T) {
 	// t.Parallel()
 	pseudoOps["tests"] = map[int]OpSpec{2: OpSpec{Name: "multiple"}, 1: OpSpec{Name: "single"}, 0: OpSpec{Name: "none"}, anyImmediates: OpSpec{Name: "any"}}
 	addPseudoDocTags()
-	require.Equal(t, "multiple can be called using tests with 2 immediates.", opDocByName["multiple"])
-	require.Equal(t, "single can be called using tests with 1 immediate.", opDocByName["single"])
-	require.Equal(t, "none can be called using tests without immediates.", opDocByName["none"])
+	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
+	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
+	require.Equal(t, "`none` can be called using `tests` without immediates.", opDocByName["none"])
 	require.Equal(t, "", opDocByName["any"])
 	delete(pseudoOps, "tests")
 	delete(opDocByName, "multiple")
@@ -2655,7 +2655,7 @@ func TestReplacePseudo(t *testing.T) {
 	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
-		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace expects 3 stack arguments but stack height is 2"})
+		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace without immediates expects 3 stack arguments but stack height is 2"})
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
 	}
 }
