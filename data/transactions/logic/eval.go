@@ -4828,6 +4828,10 @@ func opVrfVerify(cx *EvalContext) error {
 	var verified bool
 	var output []byte
 	std := VrfStandard(cx.program[cx.pc+1])
+	ss, ok := vrfStandardSpecByField(std)
+	if !ok || ss.version > cx.version {
+		return fmt.Errorf("invalid VRF standard %s", std)
+	}
 	switch std {
 	case VrfAlgorand:
 		var out crypto.VrfOutput

@@ -811,10 +811,8 @@ type VrfStandard int
 
 const (
 	// VrfAlgorand is the built-in VRF of the Algorand chain
-	VrfAlgorand VrfStandard = iota
-	// VrfChainlink is the (as yet unsupported) Chainlink standard VRF
-	VrfChainlink
-	invalidVrfStandard // compile-time constant for number of fields
+	VrfAlgorand        VrfStandard = iota
+	invalidVrfStandard             // compile-time constant for number of fields
 )
 
 var vrfStandardNames [invalidVrfStandard]string
@@ -826,7 +824,6 @@ type vrfStandardSpec struct {
 
 var vrfStandardSpecs = [...]vrfStandardSpec{
 	{VrfAlgorand, randomnessVersion},
-	{VrfChainlink, randomnessVersion},
 }
 
 func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {

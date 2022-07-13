@@ -1413,7 +1413,6 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 | Index | Name | Notes |
 | - | ------ | --------- |
 | 0 | VrfAlgorand |  |
-| 1 | VrfChainlink |  |
 
 
 ## block f

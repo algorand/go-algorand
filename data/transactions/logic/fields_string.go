@@ -300,13 +300,12 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[VrfAlgorand-0]
-	_ = x[VrfChainlink-1]
-	_ = x[invalidVrfStandard-2]
+	_ = x[invalidVrfStandard-1]
 }
 
-const _VrfStandard_name = "VrfAlgorandVrfChainlinkinvalidVrfStandard"
+const _VrfStandard_name = "VrfAlgorandinvalidVrfStandard"
 
-var _VrfStandard_index = [...]uint8{0, 11, 23, 41}
+var _VrfStandard_index = [...]uint8{0, 11, 29}
 
 func (i VrfStandard) String() string {
 	if i < 0 || i >= VrfStandard(len(_VrfStandard_index)-1) {
