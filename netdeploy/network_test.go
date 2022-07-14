@@ -17,7 +17,6 @@
 package netdeploy
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,8 +38,7 @@ func TestSaveNetworkCfg(t *testing.T) {
 		TemplateFile: "testTemplate",
 	}
 
-	tmpFolder, _ := ioutil.TempDir("", "tmp")
-	defer os.RemoveAll(tmpFolder)
+	tmpFolder := t.TempDir()
 	cfgFile := filepath.Join(tmpFolder, configFileName)
 	err := saveNetworkCfg(cfg, cfgFile)
 	a.Nil(err)
@@ -53,8 +51,7 @@ func TestSaveConsensus(t *testing.T) {
 
 	a := require.New(t)
 
-	tmpFolder, _ := ioutil.TempDir("", "tmp")
-	defer os.RemoveAll(tmpFolder)
+	tmpFolder := t.TempDir()
 	relayDir := filepath.Join(tmpFolder, "testRelayDir")
 	err := os.MkdirAll(relayDir, 0744)
 	a.NoError(err)

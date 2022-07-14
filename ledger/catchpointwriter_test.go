@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -200,10 +199,9 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectroy)
 	}()
 	accts := ledgertesting.RandomAccounts(300, false)
 
@@ -283,10 +281,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectory)
 	}()
 
 	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
