@@ -2808,6 +2808,34 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	}
 }
 
+func BenchmarkLRUResources(b *testing.B) {
+	b.StopTimer()
+	var baseResources lruResources
+	baseResources.init(nil, 1000, 850)
+
+	var data persistedResourcesData
+	var has bool
+	addrs := make([]basics.Address, 850)
+	for i := 0; i < 850; i++ {
+		data.data.ApprovalProgram = make([]byte, 8096*4)
+		data.aidx = basics.CreatableIndex(1)
+		addrBytes := ([]byte(fmt.Sprintf("%d", i)))[:32]
+		var addr basics.Address
+		for i, b := range addrBytes {
+			addr[i] = b
+		}
+		addrs[i] = addr
+		baseResources.write(data, addr)
+	}
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		pos := i % 850
+		data, has = baseResources.read(addrs[pos], basics.CreatableIndex(1))
+		require.True(b, has)
+	}
+}
+
 func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), error) {
 	batchCount := 100
 	if batchCount > totalBoxes {
@@ -2872,11 +2900,10 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 
 				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N; i++ {
-					lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-					require.NoError(b, err)
-
 					var pv persistedValue
 					boxName := boxNames[i%totalBoxes]
 					b.StartTimer()
@@ -2891,7 +2918,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 		}
 	}
 
-	lookbacks := []int{2, 32, 256, 2048}
+	lookbacks := []int{1, 32, 256, 2048}
 	for _, lookback := range lookbacks {
 		for _, boxSize := range boxSizes {
 			totalBoxes := 100000
@@ -2903,11 +2930,10 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 
 				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N+lookback; i++ {
-					lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
-					require.NoError(b, err)
-
 					var pv persistedValue
 					boxName := boxNames[i%totalBoxes]
 					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
