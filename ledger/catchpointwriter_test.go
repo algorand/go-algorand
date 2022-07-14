@@ -452,7 +452,6 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
-	//catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	readDb := ml.trackerDB().Rdb
 
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -460,7 +459,6 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		fmt.Println(expectedTotalAccounts)
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		var expectedTotalResources int
@@ -472,27 +470,20 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.balancesChunk.Balances = nil
-			numAccountsProcessed, err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			err := cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return err
 			}
-			totalAccountsWritten += numAccountsProcessed
-			fmt.Println("numAccountsProcessed", numAccountsProcessed)
-			fmt.Println("totalAccountsWritten", totalAccountsWritten)
-			fmt.Println("num balances:", len(cw.balancesChunk.Balances))
+			totalAccountsWritten += cw.balancesChunk.numAccounts
 			numResources := 0
 			for _, balance := range cw.balancesChunk.Balances {
 				numResources += len(balance.Resources)
-				fmt.Println(len(balance.Resources))
 			}
-			fmt.Println("num res", numResources)
 			if numResources > maxResourcesPerChunk {
 				return fmt.Errorf("too many resources in this chunk: found %d resources, maximum %d resources", numResources, maxResourcesPerChunk)
 			}
 			totalResources += numResources
-			fmt.Println("totals:", totalAccountsWritten, totalResources)
 		}
-		fmt.Println("reached")
 
 		if expectedTotalResources != totalResources {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
@@ -502,8 +493,6 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	fmt.Println("reached2")
-
 }
 
 func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
@@ -540,7 +529,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	var accountsRnd basics.Round
 	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, 50)
+		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, 5)
 		if err != nil {
 			return err
 		}

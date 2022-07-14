@@ -91,6 +91,7 @@ type encodedBalanceRecordV6 struct {
 type catchpointFileBalancesChunkV6 struct {
 	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
 	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	numAccounts uint64
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk uint64) (*catchpointWriter, error) {
@@ -143,7 +144,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 	writerRequest := make(chan catchpointFileBalancesChunkV6, 1)
 	writerResponse := make(chan error, 2)
-	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum)
+	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum, cw.numAccountsProcessed)
 	defer func() {
 		close(writerRequest)
 		// wait for the writerResponse to close.
@@ -166,12 +167,11 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			var numAccountsProcessed uint64
-			numAccountsProcessed, err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
 			}
-			cw.numAccountsProcessed += numAccountsProcessed
+			cw.numAccountsProcessed += cw.balancesChunk.numAccounts
 		}
 
 		// have we timed-out / canceled by that point ?
@@ -209,11 +209,13 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64) {
+func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64, initialNumAccounts uint64) {
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
+	numAccountsProcessed := initialNumAccounts
 	for bc := range balances {
 		balancesChunkNum++
+		numAccountsProcessed += bc.numAccounts
 		if len(bc.Balances) == 0 {
 			break
 		}
@@ -236,8 +238,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
 			cw.biggestChunkLen = chunkLen
 		}
-
-		if cw.numAccountsProcessed == cw.totalAccounts {
+		if numAccountsProcessed == cw.totalAccounts {
 			cw.tar.Close()
 			cw.compressor.Close()
 			cw.file.Close()
@@ -253,8 +254,8 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (numAccountsProcessed uint64, err error) {
-	cw.balancesChunk.Balances, numAccountsProcessed, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
+	cw.balancesChunk.Balances, cw.balancesChunk.numAccounts, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 	return
 }
 

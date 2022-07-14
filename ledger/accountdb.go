@@ -4305,7 +4305,6 @@ func processAllBaseAccountRecords(
 		}
 		prevAddr = addr
 	}
-	fmt.Println("stopped there")
 
 	return count, pendingBaseRow{}, pendingResource, nil
 }
