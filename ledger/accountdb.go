@@ -3962,10 +3962,10 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 
 // catchpointAccountResourceCounter keeps track of the resources processed for the current account
 type catchpointAccountResourceCounter struct {
-	totalAppParams uint64
+	totalAppParams      uint64
 	totalAppLocalStates uint64
-	totalAssetParams uint64
-	totalAssets uint64
+	totalAssetParams    uint64
+	totalAssets         uint64
 }
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.

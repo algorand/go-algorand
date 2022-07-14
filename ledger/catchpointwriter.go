@@ -55,7 +55,7 @@ type catchpointWriter struct {
 	compressor           io.WriteCloser
 	balancesChunk        catchpointFileBalancesChunkV6
 	balancesChunkNum     uint64
-	numAccountsProcessed   uint64
+	numAccountsProcessed uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
@@ -89,8 +89,8 @@ type encodedBalanceRecordV6 struct {
 }
 
 type catchpointFileBalancesChunkV6 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	_struct     struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances    []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 	numAccounts uint64
 }
 
