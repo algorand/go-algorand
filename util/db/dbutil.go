@@ -389,11 +389,12 @@ func (db *Accessor) GetPageSize(ctx context.Context) (pageSize uint64, err error
 
 // dbretry returns true if the error might be temporary
 func dbretry(obj error) bool {
-	if err := errors.Unwrap(obj); err != nil { // unwrap error if wrapped
-		obj = err
+	var sqliteErr sqlite3.Error
+	if errors.As(obj, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrLocked || sqliteErr.Code == sqlite3.ErrBusy
 	}
-	err, ok := obj.(sqlite3.Error)
-	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
+
+	return false // Not an sqlite error type
 }
 
 // IsErrBusy examine the input inerr variable of type error and determine if it's a sqlite3 error for the ErrBusy error code.
