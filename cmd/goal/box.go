@@ -18,6 +18,8 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -62,6 +64,9 @@ var appBoxInfoCmd = &cobra.Command{
 		// Get box info
 		box, err := client.GetApplicationBoxByName(appIdx, boxName)
 		if err != nil {
+			if strings.Contains(err.Error(), fmt.Sprintf("{\"message\":\"box not found\"}")) {
+				reportErrorf("No box found for appid %d with name %s", appIdx, boxName)
+			}
 			reportErrorf(errorRequestFail, err)
 		}
 

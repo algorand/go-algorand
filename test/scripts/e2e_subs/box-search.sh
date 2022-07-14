@@ -31,6 +31,13 @@ BOX_LIST=$(${gcmd} app box list --app-id "$APPID" 2>&1 || true)
 EXPECTED="No boxes found for appid $APPID"
 
 [ "$BOX_LIST" = "$EXPECTED" ]
+
+# Confirm that we are informed if a specific application box does not exist
+BOX_INFO=$(${gcmd} app box info --app-id "$APPID" --name "str:not_found" 2>&1 || true)
+EXPECTED="No box found for appid $APPID with name str:not_found"
+
+[ "$BOX_INFO" = "$EXPECTED" ]
+
 # Create several boxes
 BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0" "b64:AQIDBA==") # b64:YmFzZTY0 == str:base64, b64:AQIDBA== is not unicode
 BOX_VALUE="box value"
