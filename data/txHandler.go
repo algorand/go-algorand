@@ -219,7 +219,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 }
 
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	dec := protocol.NewDecoderBytes(rawmsg.Data)
+	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
 	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	for {

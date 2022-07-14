@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -42,6 +43,7 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	const numRounds = 10
 	const numUsers = 100
 	log := logging.TestingLog(b)
+	log.SetLevel(logging.Warn)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
@@ -118,6 +120,63 @@ func BenchmarkTimeAfter(b *testing.B) {
 			after++
 		} else {
 			before++
+		}
+	}
+}
+
+func makeRandomTransactions(num int) []byte {
+	stxns := make([]transactions.SignedTxn, num)
+	result := make([]byte, 0, num*110)
+	for i := 0; i < num; i++ {
+		var sig crypto.Signature
+		crypto.RandBytes(sig[:])
+		var addr basics.Address
+		crypto.RandBytes(addr[:])
+		stxns[i] = transactions.SignedTxn{
+			Sig:      sig,
+			AuthAddr: addr,
+		}
+
+		d2 := protocol.Encode(&stxns[i])
+		result = append(result, d2...)
+	}
+	return result
+}
+
+const benchTxnNum = 25_000
+
+func BenchmarkTxHandlerDecoder(b *testing.B) {
+	blob := makeRandomTransactions(benchTxnNum)
+	var err error
+	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
+	for i := 0; i < b.N; i++ {
+		dec := protocol.NewDecoderBytes(blob)
+		var idx int
+		for {
+			err = dec.Decode(&stxns[idx])
+			if err == io.EOF {
+				break
+			}
+			require.NoError(b, err)
+			idx++
+		}
+	}
+}
+
+func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
+	blob := makeRandomTransactions(benchTxnNum)
+	var err error
+	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
+	for i := 0; i < b.N; i++ {
+		dec := protocol.NewMsgpDecoderBytes(blob)
+		var idx int
+		for {
+			err = dec.Decode(&stxns[idx])
+			if err == io.EOF {
+				break
+			}
+			require.NoError(b, err)
+			idx++
 		}
 	}
 }
