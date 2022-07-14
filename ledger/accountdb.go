@@ -988,7 +988,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	var rowID int64
 	for _, balance := range bals {
 		if prevAccount == balance.address {
-			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(rowID)
+			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
 			if err != nil {
 				return
 			}
@@ -4015,7 +4015,6 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			if encodedRecord.Resources == nil {
 				encodedRecord.Resources = make(map[uint64]msgp.Raw)
 			}
-			fmt.Println("scanned", addr, cidx)
 			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
 			if resData.IsApp() && resData.IsOwning() {
 				iterator.totalAppParams++
@@ -4040,7 +4039,6 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 			encodedRecord.IsLastEntry = true
 
-			fmt.Println("debug2", len(encodedRecord.Resources), encodedRecord.Address)
 			bals = append(bals, encodedRecord)
 			numAccountsProcessed++
 
@@ -4048,14 +4046,12 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 			// max resources per chunk reached, stop iterating.
 			if totalResources == maxResources {
-				fmt.Println("debug", len(encodedRecord.Resources), encodedRecord.Address)
 				return true, nil
 			}
 		}
 
 		// max resources per chunk reached, stop iterating.
 		if totalResources == maxResources {
-			fmt.Println("debug3", len(encodedRecord.Resources), encodedRecord.Address)
 			bals = append(bals, encodedRecord)
 			encodedRecord.Resources = nil
 			return true, nil

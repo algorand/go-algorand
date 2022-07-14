@@ -429,6 +429,18 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	maxResourcesPerChunk := 5
 
 	accts := ledgertesting.RandomAccounts(5, false)
+	// force each acct to have overflowing number of resources
+	for addr, acct := range accts {
+		if acct.AssetParams == nil {
+			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
+			accts[addr] = acct
+		}
+		for i := uint64(0); i < 20; i++ {
+			ap := ledgertesting.RandomAssetParams()
+			acct.AssetParams[basics.AssetIndex(i+100)] = ap
+		}
+	}
+
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
 
@@ -492,4 +504,141 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println("reached2")
 
+}
+
+func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll(temporaryDirectory)
+	}()
+
+	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
+	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
+	readDb := ml.trackerDB().Rdb
+	var totalAccounts uint64
+	var totalChunks uint64
+	var biggestChunkLen uint64
+	var accountsRnd basics.Round
+	var totals ledgercore.AccountTotals
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, 50)
+		if err != nil {
+			return err
+		}
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		totalAccounts = writer.GetTotalAccounts()
+		totalChunks = writer.GetTotalChunks()
+		biggestChunkLen = writer.GetBiggestChunkLen()
+		accountsRnd, err = accountsRound(tx)
+		if err != nil {
+			return
+		}
+		totals, err = accountsTotals(ctx, tx, false)
+		return
+	})
+	require.NoError(t, err)
+	blocksRound := accountsRnd + 1
+	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
+	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	catchpointFileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     accountsRnd,
+		BlocksRound:       blocksRound,
+		Totals:            totals,
+		TotalAccounts:     totalAccounts,
+		TotalChunks:       totalChunks,
+		Catchpoint:        catchpointLabel,
+		BlockHeaderDigest: blockHeaderDigest,
+	}
+	err = repackCatchpoint(
+		context.Background(), catchpointFileHeader, biggestChunkLen,
+		catchpointDataFilePath, catchpointFilePath)
+	require.NoError(t, err)
+
+	// create a ledger.
+	var initState ledgercore.InitState
+	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
+	require.NoError(t, err)
+	defer l.Close()
+	accessor := MakeCatchpointCatchupAccessor(l, l.log)
+
+	err = accessor.ResetStagingBalances(context.Background(), true)
+	require.NoError(t, err)
+
+	// load the file from disk.
+	fileContent, err := ioutil.ReadFile(catchpointFilePath)
+	require.NoError(t, err)
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	tarReader := tar.NewReader(gzipReader)
+	var catchupProgress CatchpointCatchupAccessorProgress
+	defer gzipReader.Close()
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		balancesBlockBytes := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+		require.NoError(t, err)
+	}
+
+	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
+		return err
+	})
+	require.NoError(t, err)
+
+	// verify that the account data aligns with what we originally stored :
+	for addr, acct := range accts {
+		acctData, validThrough, _, err := l.LookupLatest(addr)
+		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
+		require.Equal(t, acct, acctData)
+		require.Equal(t, basics.Round(0), validThrough)
+	}
 }

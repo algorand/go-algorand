@@ -192,7 +192,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		if len(cw.balancesChunk.Balances) > 0 {
 			cw.balancesChunkNum++
 			writerRequest <- cw.balancesChunk
-			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.totalChunks {
+			if cw.numAccountsProcessed == cw.totalAccounts {
 				cw.accountsIterator.Close()
 				// if we're done, wait for the writer to complete it's writing.
 				err, opened := <-writerResponse
@@ -237,7 +237,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 			cw.biggestChunkLen = chunkLen
 		}
 
-		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
+		if cw.numAccountsProcessed == cw.totalAccounts {
 			cw.tar.Close()
 			cw.compressor.Close()
 			cw.file.Close()
