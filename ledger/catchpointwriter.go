@@ -37,7 +37,8 @@ const (
 	BalancesPerCatchpointFileChunk = 512
 
 	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
-	DefaultMaxResourcesPerChunk = 10000 // TODO compute correct value and explain
+	// 3000000 resources * 300B/resource => roughly max 1GB per chunk
+	DefaultMaxResourcesPerChunk = 3000000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.

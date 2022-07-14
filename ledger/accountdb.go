@@ -3993,7 +3993,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	}
 
 	// gather up to accountCount encoded accounts.
-	bals = make([]encodedBalanceRecordV6, 0) // TODO figure out correct initial size
+	bals = make([]encodedBalanceRecordV6, 0, accountCount)
 	var encodedRecord encodedBalanceRecordV6
 	var baseAcct baseAccountData
 	var numAcct int
@@ -4215,7 +4215,6 @@ func processAllResources(
 		if err != nil {
 			return pendingResourceRow{}, false, err
 		}
-		// TODO check if too many resources were found in callback. If so, save a pending row.
 		chunkFull, err := callback(addr, aidx, &resData, buf)
 		if err != nil {
 			return pendingResourceRow{}, false, err
