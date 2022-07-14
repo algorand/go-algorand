@@ -965,7 +965,7 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccou
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) (finalAccount basics.Address, err error) {
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) (err error) {
 	var selectAcctStmt *sql.Stmt
 	selectAcctStmt, err = tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
@@ -1029,7 +1029,6 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			}
 		}
 	}
-	finalAccount = bals[len(bals)-1].address
 	return
 }
 
@@ -4037,8 +4036,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			baseAcct.TotalAssetParams == iterator.totalAssetParams &&
 			baseAcct.TotalAssets == iterator.totalAssets {
 
-			encodedRecord.IsLastEntry = true
-
+			encodedRecord.IsNotFinalEntry = false
 			bals = append(bals, encodedRecord)
 			numAccountsProcessed++
 
@@ -4052,6 +4050,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 		// max resources per chunk reached, stop iterating.
 		if totalResources == maxResources {
+			encodedRecord.IsNotFinalEntry = true
 			bals = append(bals, encodedRecord)
 			encodedRecord.Resources = nil
 			return true, nil

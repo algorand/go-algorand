@@ -85,7 +85,7 @@ type encodedBalanceRecordV6 struct {
 	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
 	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
 
-	IsLastEntry bool `codec:"ile"`
+	IsNotFinalEntry bool `codec:"ile"`
 }
 
 type catchpointFileBalancesChunkV6 struct {

@@ -5,11 +5,10 @@ package ledger
 import (
 	"sort"
 
-	"github.com/algorand/msgp/msgp"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/msgp/msgp"
 )
 
 // The following msgp objects are implemented in this file:
@@ -1768,7 +1767,7 @@ func (z *catchpointFileBalancesChunkV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
-	var zb0002Mask uint8 /* 2 bits */
+	var zb0002Mask uint8 /* 3 bits */
 	if len((*z).Balances) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -2298,8 +2297,8 @@ func (z *encodedBalanceRecordV5) MsgIsZero() bool {
 func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(3)
-	var zb0003Mask uint8 /* 4 bits */
+	zb0003Len := uint32(4)
+	var zb0003Mask uint8 /* 5 bits */
 	if (*z).Address.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
@@ -2311,6 +2310,10 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 	if len((*z).Resources) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
+	}
+	if (*z).IsNotFinalEntry == false {
+		zb0003Len--
+		zb0003Mask |= 0x10
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -2344,6 +2347,11 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, zb0001)
 				o = zb0002.MarshalMsg(o)
 			}
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "ile"
+			o = append(o, 0xa3, 0x69, 0x6c, 0x65)
+			o = msgp.AppendBool(o, (*z).IsNotFinalEntry)
 		}
 	}
 	return
@@ -2420,6 +2428,14 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 			}
 		}
 		if zb0003 > 0 {
+			zb0003--
+			(*z).IsNotFinalEntry, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "IsNotFinalEntry")
+				return
+			}
+		}
+		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -2488,6 +2504,12 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					}
 					(*z).Resources[zb0001] = zb0002
 				}
+			case "ile":
+				(*z).IsNotFinalEntry, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "IsNotFinalEntry")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2516,12 +2538,13 @@ func (z *encodedBalanceRecordV6) Msgsize() (s int) {
 			s += 0 + msgp.Uint64Size + zb0002.Msgsize()
 		}
 	}
+	s += 4 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBalanceRecordV6) MsgIsZero() bool {
-	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0)
+	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).IsNotFinalEntry == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
