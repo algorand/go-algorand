@@ -72,7 +72,7 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 
 	version := s.MerkleSignatureSaltVersion
 	for _, reveal := range s.Reveals {
-		if err := reveal.SigSlot.Sig.IsSaltVersionEqual(version); err != nil {
+		if err := reveal.SigSlot.Sig.ValidateSaltVersion(version); err != nil {
 			return err
 		}
 	}
@@ -93,7 +93,7 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 		err = r.Part.PK.VerifyBytes(
 			round,
 			data[:],
-			r.SigSlot.Sig,
+			&r.SigSlot.Sig,
 		)
 
 		if err != nil {

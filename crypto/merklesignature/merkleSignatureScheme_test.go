@@ -61,7 +61,7 @@ func TestSignerCreation(t *testing.T) {
 
 	sig, err := signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(2, genMsgForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(2, genMsgForTest(), &sig))
 
 	signer = generateTestSigner(2, 2, 3, a)
 	a.Equal(0, length(signer, a))
@@ -80,19 +80,19 @@ func TestSignerCreation(t *testing.T) {
 
 	sig, err = signer.GetSigner(10).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(10, genMsgForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(10, genMsgForTest(), &sig))
 
 	sig, err = signer.GetSigner(11).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(11, genMsgForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(11, genMsgForTest(), &sig))
 
 	sig, err = signer.GetSigner(0).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(0, genMsgForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(0, genMsgForTest(), &sig))
 
 	sig, err = signer.GetSigner(1).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(1, genMsgForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(1, genMsgForTest(), &sig))
 }
 
 func TestSignerCreationOutOfBounds(t *testing.T) {
@@ -125,13 +125,13 @@ func TestVerifierKeyLifetimeError(t *testing.T) {
 	verifier := signer.GetVerifier()
 
 	verifier.KeyLifetime = 0
-	a.ErrorIs(verifier.VerifyBytes(0, []byte(""), Signature{}), ErrKeyLifetimeIsZero)
+	a.ErrorIs(verifier.VerifyBytes(0, []byte(""), &Signature{}), ErrKeyLifetimeIsZero)
 
 	verifier.KeyLifetime = 1
 	sig, err := signer.GetSigner(10).SignBytes([]byte("hello"))
 	a.NoError(err)
 
-	a.NoError(verifier.VerifyBytes(10, []byte("hello"), sig))
+	a.NoError(verifier.VerifyBytes(10, []byte("hello"), &sig))
 }
 
 func TestEmptySigner(t *testing.T) {
@@ -252,7 +252,7 @@ func TestSigning(t *testing.T) {
 
 	sig, err := signer.GetSigner(start).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, &sig))
 
 	_, err = signer.GetSigner(start - 1).SignBytes(msg)
 	a.Error(err)
@@ -266,14 +266,14 @@ func TestSigning(t *testing.T) {
 
 	sig, err = signer.GetSigner(start).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, &sig))
 
 	sig, err = signer.GetSigner(start + 5).SignBytes(msg)
 	a.NoError(err)
 
-	err = signer.GetVerifier().VerifyBytes(start+5, msg, sig)
+	err = signer.GetVerifier().VerifyBytes(start+5, msg, &sig)
 	a.NoError(err)
-	err = signer.GetVerifier().VerifyBytes(start+7, msg, sig) // same key used since both rounds under same lifetime of key
+	err = signer.GetVerifier().VerifyBytes(start+7, msg, &sig) // same key used since both rounds under same lifetime of key
 	a.NoError(err)
 
 	signer = generateTestSigner(50, 100, 12, a)
@@ -288,7 +288,7 @@ func TestSigning(t *testing.T) {
 	for ; i < 100; i++ {
 		sig, err = signer.GetSigner(i).SignBytes(msg)
 		a.NoError(err)
-		a.NoError(signer.GetVerifier().VerifyBytes(i, msg, sig))
+		a.NoError(signer.GetVerifier().VerifyBytes(i, msg, &sig))
 	}
 
 	signer = generateTestSigner(234, 4634, 256, a)
@@ -307,16 +307,16 @@ func TestBadRound(t *testing.T) {
 	start, _, signer := generateTestSignerAux(a)
 	msg, sig := makeSig(signer, start, a)
 
-	err := signer.GetVerifier().VerifyBytes(start+1, msg, sig)
+	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	msg, sig = makeSig(signer, start+1, a)
-	err = signer.GetVerifier().VerifyBytes(start, msg, sig)
+	err = signer.GetVerifier().VerifyBytes(start, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	err = signer.GetVerifier().VerifyBytes(start+2, msg, sig)
+	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
@@ -331,7 +331,7 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
-	err := signer.GetVerifier().VerifyBytes(start, msg, sig2)
+	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
@@ -339,7 +339,7 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
-	err = signer.GetVerifier().VerifyBytes(start, msg, sig3)
+	err = signer.GetVerifier().VerifyBytes(start, msg, &sig3)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -368,7 +368,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 	bs[0]++
 	sig2.Signature = bs
 
-	err := signer.GetVerifier().VerifyBytes(start, msg, sig2)
+	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -386,16 +386,16 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	a.NoError(err)
 
 	sig.VectorCommitmentIndex = 0
-	err = signer.GetVerifier().VerifyBytes(20, h, sig)
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig.VectorCommitmentIndex = math.MaxUint64
-	err = signer.GetVerifier().VerifyBytes(20, h, sig)
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	err = signer.GetVerifier().VerifyBytes(20, h, sig)
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -415,7 +415,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 
 	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
-	err := signer.GetVerifier().VerifyBytes(start+1, msg, sig2)
+	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -498,7 +498,7 @@ func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, S
 
 	sig, err := signer.GetSigner(sigRound).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().VerifyBytes(sigRound, msg, sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(sigRound, msg, &sig))
 	return msg, sig
 }
 

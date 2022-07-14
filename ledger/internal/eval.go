@@ -1211,15 +1211,11 @@ func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDiges
 
 	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.StateProofVotersLookback))
 	voters, err := eval.l.VotersForStateProof(lookback)
-	if err != nil {
+	if err != nil || voters == nil {
 		return
 	}
 
-	if voters != nil {
-		root, total = voters.Tree.Root(), voters.TotalWeight
-	}
-
-	return
+	return voters.Tree.Root(), voters.TotalWeight, nil
 }
 
 // TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.

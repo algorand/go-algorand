@@ -283,7 +283,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
 	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
 	{Type, StackBytes, false, 0, 5, false, "Transaction type as bytes"},
-	{TypeEnum, StackUint64, false, 0, 5, false, "See table below"},
+	{TypeEnum, StackUint64, false, 0, 5, false, "Transaction type as integer"},
 	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
 	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
 	{AssetSender, StackBytes, false, 0, 5, false,

@@ -83,7 +83,7 @@ func (b *Builder) Present(pos uint64) (bool, error) {
 
 // IsValid verifies that the participant along with the signature can be inserted to the builder.
 // verifySig can be set to false when the signature is already verified (e.g. loaded from the DB)
-func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig bool) error {
+func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig bool) error {
 	if pos >= uint64(len(b.participants)) {
 		return fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.participants))
 	}
@@ -96,7 +96,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 
 	// Check signature
 	if verifySig {
-		if err := sig.IsSaltVersionEqual(merklesignature.SchemeSaltVersion); err != nil {
+		if err := sig.ValidateSaltVersion(merklesignature.SchemeSaltVersion); err != nil {
 			return err
 		}
 
