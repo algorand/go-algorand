@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
 	"sync/atomic"
 	"testing"
 	"time"
@@ -92,13 +91,9 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	filesToCreate := 4
 
-	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectory)
-	}()
+	temporaryDirectory := t.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
-	err = os.Mkdir(catchpointsDirectory, 0777)
+	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
@@ -162,12 +157,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
-	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectory)
-	}()
+	temporaryDirectory := t.TempDir()
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
@@ -198,7 +188,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
+	err := deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
 	require.NoError(t, err)
 
 	// ensure that all the files were deleted.
@@ -221,16 +211,12 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	if accountDBVersion < 6 {
 		return
 	}
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectroy)
-	}()
+	temporaryDirectroy := t.TempDir()
 	tempCatchpointDir := filepath.Join(temporaryDirectroy, CatchpointDirName)
 
 	// creating empty catchpoint directories
 	emptyDirPath := path.Join(tempCatchpointDir, "2f", "e1")
-	err = os.MkdirAll(emptyDirPath, 0755)
+	err := os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
 	emptyDirPath = path.Join(tempCatchpointDir, "2e", "e1")
 	err = os.MkdirAll(emptyDirPath, 0755)
@@ -287,11 +273,7 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 func TestRecordCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectory)
-	}()
+	temporaryDirectory := t.TempDir()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
@@ -306,7 +288,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
 
-	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
 	err = ct.loadFromDisk(ml, ml.Latest())
@@ -357,13 +339,9 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	ct := catchpointTracker{}
 	ct.initialize(cfg, ".")
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(b, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectroy)
-	}()
+	temporaryDirectroy := b.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectroy, CatchpointDirName)
-	err = os.Mkdir(catchpointsDirectory, 0777)
+	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
 	ct.dbDirectory = temporaryDirectroy
@@ -885,13 +863,9 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	ct := newCatchpointTracker(t, ml, cfg, ".")
 	defer ct.close()
 
-	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(temporaryDirectory)
-	}()
+	temporaryDirectory := t.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
-	err = os.Mkdir(catchpointsDirectory, 0777)
+	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
@@ -978,11 +952,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
 
-	tempDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(tempDirectory)
-	}()
+	tempDirectory := t.TempDir()
 	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
@@ -1084,11 +1054,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
 
-	tempDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(tempDirectory)
-	}()
+	tempDirectory := t.TempDir()
 	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
@@ -1111,6 +1077,7 @@ func TestSecondStagePersistence(t *testing.T) {
 		if i == secondStageRound {
 			// Save first stage info and data file.
 			var exists bool
+			var err error
 			firstStageInfo, exists, err = selectCatchpointFirstStageInfo(
 				context.Background(), ml.dbs.Rdb.Handle, firstStageRound)
 			require.NoError(t, err)
@@ -1223,11 +1190,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
 
-	tempDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
-	require.NoError(t, err)
-	defer func() {
-		os.RemoveAll(tempDirectory)
-	}()
+	tempDirectory := t.TempDir()
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4

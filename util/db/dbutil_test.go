@@ -21,10 +21,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -241,11 +242,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
 	if os == "darwin" {
-		var err error
-		dbFolder, err = ioutil.TempDir("", "TestDBConcurrencyRW")
-		if err != nil {
-			panic(err)
-		}
+		dbFolder = t.TempDir()
 	}
 
 	fn := fmt.Sprintf("/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
@@ -476,4 +473,104 @@ func TestReadingWhileWriting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, count)
 
+}
+
+// using Write-Ahead Logging (WAL)
+func TestLockingTableWhileWritingWAL(t *testing.T) {
+	testLockingTableWhileWriting(t, true)
+}
+
+// using the default Rollback Journal
+func TestLockingTableWhileWritingJournal(t *testing.T) {
+	testLockingTableWhileWriting(t, false)
+}
+
+// testLockingTableWhileWriting tests the locking mechanism when one connection writes to a specific database table, and another reads from a different table.
+// Using the old journaling method, a write-lock completely locks the database file for other connections, however, if we use
+// WAL mode instead, locking a specific table is possible, making concurrent reads more performant.
+func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbParams := []string{"_secure_delete=on"} // not required but used in ErasableAccessor, so I'd like it to be tested here as well
+	if useWAL {
+		dbParams = []string{"_secure_delete=on", "_journal_mode=wal"}
+	}
+
+	dbName := strings.Replace(t.Name(), "/", "_", -1) + ".sqlite3"
+
+	writeAcc, err := makeAccessorImpl(dbName, false, false, dbParams)
+	a.NoError(err)
+	defer os.Remove(dbName)
+	defer os.Remove(dbName + "-shm")
+	defer os.Remove(dbName + "-wal")
+	defer writeAcc.Close()
+
+	_, err = writeAcc.Handle.Exec(`CREATE TABLE foo (pk INTEGER PRIMARY KEY, a BLOB, b BLOB)`)
+	a.NoError(err)
+	_, err = writeAcc.Handle.Exec(`CREATE TABLE bar (pk INTEGER PRIMARY KEY, a INTEGER)`)
+	a.NoError(err)
+	_, err = writeAcc.Handle.Exec(`INSERT INTO bar (pk,a) VALUES (1,234)`)
+	a.NoError(err)
+
+	rands := randStringBytes(1024 * 1024 * 40) // 40MB string
+
+	for i := 1; i <= 2; i++ { // Insert some huge blobs
+		err = writeAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.Exec("INSERT INTO foo (pk, a, b) VALUES (?, ?, ?)", i, rands, rands)
+			return err
+
+		})
+		a.NoError(err)
+	}
+
+	go func() { // Goroutine reading periodically from a table different from the one being written to.
+		readAcc, err := makeAccessorImpl(dbName, true, false, dbParams)
+		a.NoError(err)
+		defer readAcc.Close()
+
+		for i := 0; i < 40; i++ {
+			time.Sleep(time.Second / 2)
+			fmt.Printf("Reading bar - %d\n", i)
+
+			var x int
+			err = readAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				row := tx.QueryRow(`SELECT a FROM bar WHERE pk=1`)
+				err = row.Scan(&x)
+				if useWAL {
+					a.NoError(err)
+					a.Equal(234, x)
+				} else {
+					if err != nil { // database should be locked very often, but not every time (probabilistic)
+						fmt.Printf("SELECT query failed: %v\n", err)
+						a.ErrorContains(err, "database is locked")
+					}
+				}
+				return err
+			})
+			if useWAL {
+				a.NoError(err)
+			}
+		}
+	}()
+
+	for i := 0; i < 20; i++ { // Update the huge blobs with changing sizes (hold the write-lock for longer than 1 second)
+		fmt.Printf("Updating foo - %d\n", i)
+		rands = rands[1:]
+		err = writeAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.Exec("UPDATE foo SET a=?, b=? WHERE pk=?", rands, rands, 1)
+			return err
+		})
+		a.NoError(err)
+	}
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func randStringBytes(n uint) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }
