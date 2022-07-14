@@ -41,7 +41,7 @@ EXPECTED="No box found for appid $APPID with name str:not_found"
 # Create several boxes
 BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0" "b64:AQIDBA==") # b64:YmFzZTY0 == str:base64, b64:AQIDBA== is not unicode
 BOX_VALUE="box value"
-B64_BOX_VALUE="Ym94IHZhbHVlAAAAAAAAAAAAAAAAAAAA"
+B64_BOX_VALUE="b64:Ym94IHZhbHVlAAAAAAAAAAAAAAAAAAAA"
 
 for BOX_NAME in "${BOX_NAMES[@]}"
 do
@@ -55,7 +55,11 @@ done
 # Confirm that we can get the values of each individual box
 for BOX_NAME in "${BOX_NAMES[@]}"
 do
-  VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | cut -d" " -f2-)
+  ${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME"
+  NAME=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Name | tr -s ' ' | cut -d" " -f2-)
+  [ "$NAME" = "$BOX_NAME" ]
+
+  VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | tr -s ' ' | cut -d" " -f2-)
   [ "$VALUE" = "$B64_BOX_VALUE" ]
 done
 

@@ -17,7 +17,7 @@
 package main
 
 import (
-	"encoding/base64"
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -70,11 +70,19 @@ var appBoxInfoCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		// Print box info
-		encodedName := base64.StdEncoding.EncodeToString(box.Name)
-		encodedValue := base64.StdEncoding.EncodeToString(box.Value)
-		reportInfof("Name:  %s", encodedName)
-		reportInfof("Value: %s", encodedValue)
+		// Print inputted box name, but check that it matches found box name first
+		// This reduces confusion of potentially receiving a different box name representation
+		boxNameBytes, err := newAppCallBytes(boxName).Raw()
+		if err != nil {
+			reportErrorf(errorInvalidBoxName, boxName)
+		}
+		if bytes.Compare(box.Name, boxNameBytes) != 0 {
+			reportErrorf(errorBoxNameMismatch, box.Name, boxNameBytes)
+		}
+		reportInfof("Name:  %s", boxName)
+
+		// Print box value
+		reportInfof("Value: %s", encodeBytesAsAppCallBytes(box.Value))
 	},
 }
 
