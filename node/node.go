@@ -374,7 +374,7 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	// TODO re-enable with configuration flag post V1
-	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+	go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
 }
 
 // waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
