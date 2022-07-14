@@ -1975,8 +1975,7 @@ func TestLookupAgreement(t *testing.T) {
 
 func BenchmarkLedgerStartup(b *testing.B) {
 	log := logging.TestingLog(b)
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkLedgerStartup")
-	require.NoError(b, err)
+	tmpDir := b.TempDir()
 	genesisInitState, _ := ledgertesting.GenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 
 	cfg := config.GetDefaultLocal()
@@ -2008,7 +2007,6 @@ func BenchmarkLedgerStartup(b *testing.B) {
 	b.Run("DiskDatabase/Archival", func(b *testing.B) {
 		testOpenLedger(b, false, cfg)
 	})
-	os.RemoveAll(tmpDir)
 }
 
 // TestLedgerReloadShrinkDeltas checks the ledger has correct account state
