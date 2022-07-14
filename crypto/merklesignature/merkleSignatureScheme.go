@@ -264,7 +264,7 @@ func (v *Verifier) FirstRoundInKeyLifetime(round uint64) (uint64, error) {
 }
 
 // VerifyBytes verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
+func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig *Signature) error {
 	validKeyRound, err := v.FirstRoundInKeyLifetime(round)
 	if err != nil {
 		return err

@@ -102,7 +102,7 @@ func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig 
 
 		cpy := make([]byte, len(b.data))
 		copy(cpy, b.data[:]) // TODO: once cfalcon is fixed can remove this copy.
-		if err := p.PK.VerifyBytes(b.round, cpy, *sig); err != nil {
+		if err := p.PK.VerifyBytes(b.round, cpy, sig); err != nil {
 			return err
 		}
 	}

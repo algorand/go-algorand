@@ -93,7 +93,7 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 		err = r.Part.PK.VerifyBytes(
 			round,
 			data[:],
-			r.SigSlot.Sig,
+			&r.SigSlot.Sig,
 		)
 
 		if err != nil {
