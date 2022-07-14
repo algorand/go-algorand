@@ -1158,7 +1158,7 @@ func initConsensusProtocols() {
 
 	// Enable state proofs.
 	vFuture.StateProofInterval = 256
-	vFuture.StateProofTopVoters = 1024 * 1024
+	vFuture.StateProofTopVoters = 1024
 	vFuture.StateProofVotersLookback = 16
 	vFuture.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.StateProofStrengthTarget = 256
