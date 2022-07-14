@@ -17,7 +17,6 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,12 +45,10 @@ func TestLoadDefaultConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	defer os.RemoveAll(configDir)
-	currentRoot := config.SetGlobalConfigFileRoot(configDir)
+	currentRoot := config.SetGlobalConfigFileRoot(t.TempDir())
 	defer config.SetGlobalConfigFileRoot(currentRoot)
 
-	_, err = EnsureTelemetryConfig(nil, "")
+	_, err := EnsureTelemetryConfig(nil, "")
 
 	a.Nil(err)
 
@@ -71,17 +68,15 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
-	dataDir, err := ioutil.TempDir("", "dataDir")
-	defer os.RemoveAll(dataDir)
+	dataDir := t.TempDir()
 	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 	_, err = os.Stat(dataDirLoggingPath)
 	a.True(os.IsNotExist(err))
@@ -117,13 +112,12 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 
 	cfgPath := "/missing-directory"
@@ -150,14 +144,12 @@ func TestSaveLoadConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	os.RemoveAll(configDir)
-	err = os.Mkdir(configDir, 0777)
+	configDir := t.TempDir()
+	err := os.Mkdir(configDir, 0777)
 
 	cfg, err := EnsureTelemetryConfig(&configDir, "")
 	cfg.Name = "testname"
@@ -178,8 +170,6 @@ func TestSaveLoadConfig(t *testing.T) {
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)
 	a.Equal(cfgLoad, cfg)
-
-	os.RemoveAll(configDir)
 }
 
 func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {

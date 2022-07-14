@@ -107,6 +107,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.SeedRefreshInterval = 8
 	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
 	catchpointCatchupProtocol.MaxTxnLife = 33
+	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
+	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
 	if runtime.GOARCH == "amd64" {
 		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
@@ -135,6 +137,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
 	cfg.CatchpointInterval = 4
+	cfg.MaxAcctLookback = 2
 	cfg.SaveToDisk(primaryNode.GetDataDir())
 	cfg.Archival = false
 	cfg.NetAddress = ""
@@ -253,7 +256,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("CatchpointInterval: %v, Archival: %v", tc.catchpointInterval, tc.archival), func(t *testing.T) {
+		t.Run(fmt.Sprintf("CatchpointInterval_%v/Archival_%v", tc.catchpointInterval, tc.archival), func(t *testing.T) {
 			a := require.New(fixtures.SynchronizedTest(t))
 			log := logging.TestingLog(t)
 
@@ -267,6 +270,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			catchpointCatchupProtocol.SeedRefreshInterval = 8
 			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
 			catchpointCatchupProtocol.MaxTxnLife = 33
+			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
+			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
 			if runtime.GOARCH == "amd64" {
 				// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
@@ -292,6 +297,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			a.NoError(err)
 			cfg.CatchpointInterval = tc.catchpointInterval
 			cfg.Archival = tc.archival
+			cfg.MaxAcctLookback = 2
 			cfg.SaveToDisk(primaryNode.GetDataDir())
 
 			// start the primary node
@@ -307,7 +313,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 
 			// Let the network make some progress
 			currentRound := uint64(1)
-			targetRound := uint64(37)
+			targetRound := uint64(41)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 			log.Infof("Building ledger history..")
