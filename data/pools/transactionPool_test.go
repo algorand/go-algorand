@@ -1482,9 +1482,10 @@ func generateProofForTesting(
 		p, err := b.Present(uint64(i))
 		require.False(t, p)
 		require.NoError(t, err)
-		err = b.IsValid(uint64(i), sigs[partArray[i].PK], true)
+		s := sigs[partArray[i].PK]
+		err = b.IsValid(uint64(i), &s, true)
 		require.NoError(t, err)
-		b.Add(uint64(i), sigs[partArray[i].PK])
+		b.Add(uint64(i), s)
 
 		// sanity check that the builder add the signature
 		isPresent, err := b.Present(uint64(i))

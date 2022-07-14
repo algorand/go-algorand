@@ -368,7 +368,7 @@ func TestGenerateBlockProof(t *testing.T) {
 			lightheader := headers[headerIndex]
 			err = merklearray.VerifyVectorCommitment(
 				tx.Txn.Message.BlockHeadersCommitment,
-				map[uint64]crypto.Hashable{headerIndex: lightheader},
+				map[uint64]crypto.Hashable{headerIndex: &lightheader},
 				proof.ToProof())
 
 			a.NoError(err)

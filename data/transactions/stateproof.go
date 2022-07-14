@@ -37,23 +37,9 @@ type StateProofTxnFields struct {
 // Empty returns whether the StateProofTxnFields are all zero,
 // in the sense of being omitted in a msgpack encoding.
 func (sp StateProofTxnFields) Empty() bool {
-	if sp.StateProofIntervalLatestRound != 0 {
-		return false
-	}
-	if !sp.StateProof.SigCommit.IsEmpty() || sp.StateProof.SignedWeight != 0 {
-		return false
-	}
-	if len(sp.StateProof.SigProofs.Path) != 0 || len(sp.StateProof.PartProofs.Path) != 0 {
-		return false
-	}
-	if len(sp.StateProof.Reveals) != 0 {
-		return false
-	}
-	if !sp.Message.MsgIsZero() {
-		return false
-	}
-
-	return true
+	return sp.StateProofIntervalLatestRound == 0 &&
+		sp.StateProof.MsgIsZero() &&
+		sp.Message.MsgIsZero()
 }
 
 //msgp:ignore specialAddr

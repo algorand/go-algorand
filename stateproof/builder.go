@@ -135,7 +135,7 @@ func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 			continue
 		}
 
-		if err := builderForRound.IsValid(pos, sig.sig, false); err != nil {
+		if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
 			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
 			continue
 		}
@@ -217,7 +217,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Ignore, nil
 	}
 
-	if err := builderForRound.IsValid(pos, sfa.Sig, true); err != nil {
+	if err := builderForRound.IsValid(pos, &sfa.Sig, true); err != nil {
 		return network.Disconnect, err
 	}
 
