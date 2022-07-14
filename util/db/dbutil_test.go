@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -243,11 +242,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
 	if os == "darwin" {
-		var err error
-		dbFolder, err = ioutil.TempDir("", "TestDBConcurrencyRW")
-		if err != nil {
-			panic(err)
-		}
+		dbFolder = t.TempDir()
 	}
 
 	fn := fmt.Sprintf("/%s.%d.sqlite3", t.Name(), crypto.RandUint64())

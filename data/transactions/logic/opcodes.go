@@ -75,17 +75,18 @@ type linearCost struct {
 	depth     int
 }
 
-// divideCeilUnsafely provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
+// divCeil provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
 // The method does _not_ check for divide-by-zero.
-func divideCeilUnsafely(numerator int, denominator int) int {
+func divCeil(numerator int, denominator int) int {
 	return (numerator + denominator - 1) / denominator
 }
 
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
-		// Uses divideCeilUnsafely rather than (len/size) to match how Ethereum discretizes hashing costs.
-		cost += divideCeilUnsafely(lc.chunkCost*len(stack[len(stack)-1-lc.depth].Bytes), lc.chunkSize)
+		// Uses divCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
+		count := len(stack[len(stack)-1-lc.depth].Bytes)
+		cost += lc.chunkCost * divCeil(count, lc.chunkSize)
 	}
 	return cost
 }
@@ -493,6 +494,8 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
+	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
+	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, opDefault()},
 
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
