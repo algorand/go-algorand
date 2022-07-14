@@ -18,7 +18,6 @@ package node
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
 	util.SetFdSoftLimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -93,15 +92,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	}
 
 	for i := range wallets {
-		rootDirectory, err := ioutil.TempDir("", "testdir"+t.Name()+strconv.Itoa(i))
+		rootDirectory := t.TempDir()
 		rootDirs = append(rootDirs, rootDirectory)
-		require.NoError(t, err)
 
 		defaultConfig.NetAddress = "127.0.0.1:0"
 		defaultConfig.SaveToDisk(rootDirectory)
 
 		// Save empty phonebook - we'll add peers after they've been assigned listening ports
-		err = config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
+		err := config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
 		require.NoError(t, err)
 
 		genesisDir := filepath.Join(rootDirectory, g.ID())
@@ -174,7 +172,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		require.NoError(t, err)
 	}
 
-	return nodes, wallets, rootDirs
+	return nodes, wallets
 }
 
 func TestSyncingFullNode(t *testing.T) {
@@ -185,10 +183,9 @@ func TestSyncingFullNode(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootDirs[i])
 		defer nodes[i].Stop()
 	}
 
@@ -244,10 +241,9 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootdirs[i])
 		defer nodes[i].Stop()
 	}
 	initialRound := nodes[0].ledger.NextRound()
@@ -313,10 +309,9 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootDirs[i])
 		defer nodes[i].Stop()
 	}
 
@@ -483,8 +478,7 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
-	require.NoError(t, err)
+	testDirectroy := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -511,8 +505,7 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 func TestAsyncRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
-	require.NoError(t, err)
+	testDirectroy := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-record-async",
