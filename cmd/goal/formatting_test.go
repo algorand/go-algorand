@@ -94,3 +94,22 @@ func TestStringsToBoxRefs(t *testing.T) {
 	require.Panics(t, func() { translateBoxRefs(brs, []uint64{55, 78}) })
 	require.Panics(t, func() { translateBoxRefs(brs, []uint64{51, 77}) })
 }
+
+func TestBytesToAppCallBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testCases := []struct {
+		input    []byte
+		expected string
+	}{
+		{[]byte("unicode"), "str:unicode"},
+		{[]byte{1, 2, 3, 4}, "b64:AQIDBA=="},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expected, func(t *testing.T) {
+			acb := encodeBytesAsAppCallBytes(tc.input)
+			require.Equal(t, tc.expected, acb)
+		})
+	}
+}

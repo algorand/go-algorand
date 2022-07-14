@@ -78,14 +78,6 @@ var appBoxInfoCmd = &cobra.Command{
 	},
 }
 
-func encodeValueInAppCallBytesFormat(value []byte) string {
-	if isPrintable, _ := unicodePrintable(string(value)); isPrintable {
-		return "str:" + string(value)
-	}
-
-	return "b64:" + base64.StdEncoding.EncodeToString(value)
-}
-
 var appBoxListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all application boxes belonging to an application",
@@ -110,7 +102,7 @@ var appBoxListCmd = &cobra.Command{
 
 		// Print app boxes
 		for _, descriptor := range boxes {
-			encodedName := encodeValueInAppCallBytesFormat(descriptor.Name)
+			encodedName := encodeBytesAsAppCallBytes(descriptor.Name)
 			reportInfof("%s", encodedName)
 		}
 	},
