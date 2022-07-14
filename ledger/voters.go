@@ -79,9 +79,8 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.Round, onlineTopFunc ledgercore.TopOnlineAccounts) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.Round) error {
 	vt.l = l
-	vt.onlineTopFunction = onlineTopFunc
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	hdr, err := l.BlockHdr(latestDbRound)

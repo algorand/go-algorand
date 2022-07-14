@@ -22,16 +22,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-deadlock"
-	"github.com/stretchr/testify/require"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
