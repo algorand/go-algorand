@@ -1071,7 +1071,6 @@ func TestParticipationDB_Locking(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 100; i++ {
-			fmt.Printf("removing %d\n", i)
 			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusFuture])
 			registry.Flush(defaultTimeout)
 		}
@@ -1079,7 +1078,6 @@ func TestParticipationDB_Locking(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		time.Sleep(time.Second / 2)
-		fmt.Printf("reading %d\n", i)
 		_, err = registry.GetStateProofForRound(id2, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while the main thread is updating the Rolling table.
