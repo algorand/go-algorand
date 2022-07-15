@@ -911,7 +911,7 @@ func TestTxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), "invalid txn field")
 	}
 }
 
@@ -929,7 +929,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 127}
 	// TODO: Check should know the type stack was wrong
-	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field 127")
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field TxnField(127)")
 
 	// test gtxn does not accept ApplicationArgs and Accounts
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
@@ -941,7 +941,7 @@ func TestGtxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), "invalid txn field")
 	}
 }
 
@@ -2058,7 +2058,7 @@ txna ApplicationArgs 0
 
 	// modify txn field to unknown one
 	ops.Program[2] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify txn array index
 	ops.Program[2] = saved
@@ -2105,7 +2105,7 @@ txna ApplicationArgs 0
 
 	// modify gtxn field to unknown one
 	ops.Program[3] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify gtxn array index
 	ops.Program[3] = saved

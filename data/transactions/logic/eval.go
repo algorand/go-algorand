@@ -2510,13 +2510,13 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.version > cx.version {
-		return nil, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %s", field)
 	}
 	if expectArray != fs.array {
 		if expectArray {
-			return nil, fmt.Errorf("unsupported array field %d", field)
+			return nil, fmt.Errorf("unsupported array field %s", field)
 		}
-		return nil, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %s", field)
 	}
 	return &fs, nil
 }
