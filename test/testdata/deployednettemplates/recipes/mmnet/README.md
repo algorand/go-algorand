@@ -1,4 +1,6 @@
-# Model Mainnet Recipe
+# Model Mainnet (mmnet) Recipe
+
+> `NOTE`: The name `mmnet` is short for `model mainnet`.
 
 This recipe is meant to be a _best-effort representation_ of mainnet that can be used for testing purposes. In no way is this an exact copy as that would be financially unfeasible. This recipe was first created based on the [scenario2](../scenario2/) recipe with the intention of expanding on the number relays to match mainnet's distribution amongst other improvements.
 
