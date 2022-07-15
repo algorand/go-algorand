@@ -71,7 +71,7 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
 	if dl.eval == nil {
 		dl.beginBlock()
 		defer func() {
-			// only advance if the txn was supposed to suceed
+			// only advance if the txn was supposed to succeed
 			if len(problem) > 0 {
 				dl.eval = nil
 			} else {
@@ -98,7 +98,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 	if dl.eval == nil {
 		dl.beginBlock()
 		defer func() {
-			// only advance if the txgroup was supposed to suceed
+			// only advance if the txgroup was supposed to succeed
 			if problem != "" {
 				dl.eval = nil
 			} else {
