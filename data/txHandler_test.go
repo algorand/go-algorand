@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -124,9 +125,9 @@ func BenchmarkTimeAfter(b *testing.B) {
 	}
 }
 
-func makeRandomTransactions(num int) []byte {
+func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 	stxns := make([]transactions.SignedTxn, num)
-	result := make([]byte, 0, num*110)
+	result := make([]byte, 0, num*200)
 	for i := 0; i < num; i++ {
 		var sig crypto.Signature
 		crypto.RandBytes(sig[:])
@@ -135,18 +136,46 @@ func makeRandomTransactions(num int) []byte {
 		stxns[i] = transactions.SignedTxn{
 			Sig:      sig,
 			AuthAddr: addr,
+			Txn: transactions.Transaction{
+				Header: transactions.Header{
+					Sender: addr,
+					Fee:    basics.MicroAlgos{Raw: crypto.RandUint64()},
+					Note:   sig[:],
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: crypto.RandUint64()},
+				},
+			},
 		}
 
 		d2 := protocol.Encode(&stxns[i])
 		result = append(result, d2...)
 	}
-	return result
+	return stxns, result
+}
+
+func TestTxHandlerProcessIncomingTxn(t *testing.T) {
+	const numTxns = 11
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, 1),
+	}
+	stxns, blob := makeRandomTransactions(numTxns)
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg := <-handler.backlogQueue
+	require.Equal(t, numTxns, len(msg.unverifiedTxGroup))
+	for i := 0; i < numTxns; i++ {
+		require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+	}
 }
 
 const benchTxnNum = 25_000
 
 func BenchmarkTxHandlerDecoder(b *testing.B) {
-	blob := makeRandomTransactions(benchTxnNum)
+	_, blob := makeRandomTransactions(benchTxnNum)
 	var err error
 	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
 	for i := 0; i < b.N; i++ {
@@ -160,11 +189,12 @@ func BenchmarkTxHandlerDecoder(b *testing.B) {
 			require.NoError(b, err)
 			idx++
 		}
+		require.Equal(b, benchTxnNum, idx)
 	}
 }
 
 func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
-	blob := makeRandomTransactions(benchTxnNum)
+	_, blob := makeRandomTransactions(benchTxnNum)
 	var err error
 	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
 	for i := 0; i < b.N; i++ {
@@ -178,5 +208,6 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 			require.NoError(b, err)
 			idx++
 		}
+		require.Equal(b, benchTxnNum, idx)
 	}
 }
