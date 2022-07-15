@@ -708,7 +708,7 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// teal v2 (apps)
+	// AVM v2 (apps)
 	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -870,14 +870,14 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV21,
 	protocol.ConsensusV22,
 	protocol.ConsensusV23,
-	protocol.ConsensusV24, // teal v2 (apps)
+	protocol.ConsensusV24, // AVM v2 (apps)
 	protocol.ConsensusV25,
 	protocol.ConsensusV26,
 	protocol.ConsensusV27,
 	protocol.ConsensusV28,
 	protocol.ConsensusV29,
-	protocol.ConsensusV30, // teal v5 (inner txs)
-	protocol.ConsensusV31, // teal v6 (inner txs with appls)
+	protocol.ConsensusV30, // AVM v5 (inner txs)
+	protocol.ConsensusV31, // AVM v6 (inner txs with appls)
 	protocol.ConsensusV32, // unlimited assets and apps
 	protocol.ConsensusFuture,
 }

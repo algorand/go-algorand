@@ -40,7 +40,7 @@ import (
 )
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
-// we check that TEAL v1 and v2 programs are compatible with the latest evaluator
+// we check that v1 and v2 programs are compatible with the latest evaluator
 func makeTestProto() *config.ConsensusParams {
 	return makeTestProtoV(LogicVersion)
 }
@@ -1628,7 +1628,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
 			txn.Txn.ExtraProgramPages = 2
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -1888,7 +1888,7 @@ gtxn 0 Sender
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			txn := makeSampleTxn()
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -5192,7 +5192,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
@@ -5403,7 +5403,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}

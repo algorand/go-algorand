@@ -29,7 +29,7 @@ import (
 )
 
 // This test ensures a program compiled with by pre-AVM v2 go-algorand
-// that includes all the opcodes from TEAL v1 runs in AVM v2 runModeSignature well
+// that includes all the opcodes from AVM v1 runs in AVM v2 runModeSignature well
 var sourceV1 = `byte 0x41 // A
 sha256
 byte 0x559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd
@@ -278,7 +278,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 
 	ep, tx, _ := makeSampleEnvWithVersion(1)
-	// RekeyTo disallowed on TEAL v0/v1
+	// RekeyTo disallowed on AVM v0/v1
 	tx.RekeyTo = basics.Address{}
 
 	ep.TxnGroup[0].Lsig.Logic = program
@@ -343,7 +343,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	testLogicBytes(t, program, ep)
 }
 
-// ensure v2 fields error on pre TEAL v2 logicsig version
+// ensure v2 fields error on pre v2 logicsig version
 // ensure v2 fields error in v1 program
 func TestBackwardCompatGlobalFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -461,8 +461,8 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 func TestBackwardCompatAssemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// TEAL v1 does not allow branching to the last line
-	// TEAL v2 makes such programs legal
+	// v1 does not allow branching to the last line
+	// v2 makes such programs legal
 	t.Parallel()
 	source := "int 1; int 1; bnz done; done:"
 

@@ -1686,7 +1686,7 @@ func TestAssembleVersions(t *testing.T) {
 
 	testLine(t, "txna Accounts 0", AssemblerMaxVersion, "")
 	testLine(t, "txna Accounts 0", 2, "")
-	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in TEAL v2")
+	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in v2")
 }
 
 func TestAssembleBalance(t *testing.T) {
@@ -1877,7 +1877,7 @@ func TestDisassembleLastLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// starting from TEAL v2 branching to the last line are legal
+	// starting from v2 branching to the last line are legal
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			source := fmt.Sprintf(`#pragma version %d
@@ -2219,7 +2219,7 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	// check if no version it defaults to TEAL v1
+	// check if no version it defaults to v1
 	text = `byte "test"
 len
 `
@@ -2479,8 +2479,8 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{4, "...is not allowed."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in TEAL v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in TEAL v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in v6..."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{4, "...is not allowed."})
 
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{3, "...is not allowed."})

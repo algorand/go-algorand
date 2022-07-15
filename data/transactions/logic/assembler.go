@@ -929,7 +929,7 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())
@@ -961,7 +961,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 					ops.returns(spec, fs.Type())
 				}
 				if fs.Version() > ops.Version {
-					return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?",
+					return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?",
 						spec.Name, args[i], fs.Version())
 				}
 				ops.pending.WriteByte(fs.Field())
@@ -1413,7 +1413,7 @@ func (ops *OpStream) assemble(text string) error {
 			// bail out on the assembly as a whole.
 			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
 			if ok {
-				ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+				ops.errorf("%s opcode was introduced in v%d", opstring, spec.Version)
 			} else {
 				spec, ok = keywords[opstring]
 			}
@@ -1450,7 +1450,7 @@ func (ops *OpStream) assemble(text string) error {
 		}
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
+	// backward compatibility: do not allow jumps behind last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
@@ -1506,7 +1506,7 @@ func (ops *OpStream) pragma(line string) error {
 
 		// We initialize Version with assemblerNoVersion as a marker for
 		// non-specified version because version 0 is valid
-		// version for TEAL v1.
+		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
 		} else if ops.Version != ver {
@@ -1553,7 +1553,7 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc

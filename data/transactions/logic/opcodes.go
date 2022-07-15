@@ -653,15 +653,15 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
-// Migration from TEAL v1 to TEAL v2.
-// TEAL v1 allowed execution of program with version 0.
-// With TEAL v2 opcode versions are introduced and they are bound to every opcode.
-// There is no opcodes with version 0 so that TEAL v2 evaluator rejects any program with version 0.
-// To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
+// Migration from v1 to v2.
+// v1 allowed execution of program with version 0.
+// With v2 opcode versions are introduced and they are bound to every opcode.
+// There is no opcodes with version 0 so that v2 evaluator rejects any program with version 0.
+// To preserve backward compatibility version 0 array is populated with v1 opcodes
 // with the version overwritten to 0.
 func init() {
 	// First, initialize baseline v1 opcodes.
-	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
+	// Zero (empty) version is an alias for v1 opcodes and needed for compatibility with v1 code.
 	OpsByName[0] = make(map[string]OpSpec, 256)
 	OpsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {

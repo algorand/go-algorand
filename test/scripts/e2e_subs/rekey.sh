@@ -48,7 +48,7 @@ cat "${TEMPDIR}/group0_split-0.stxn" "${TEMPDIR}/group0_split-1.txn" > "${TEMPDI
 RES=$(${gcmd} clerk rawsend -f "${TEMPDIR}/group0_signed.stxn" 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL txn group with rekey transaction should require teal version >= 2 %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL txn group with rekey transaction should require version >= 2 %Y%m%d_%H%M%S"
     false
 fi
 
