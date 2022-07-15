@@ -265,11 +265,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 // Note that this also checks the consistency of the transaction's group hash,
 // which is required for safe transaction signature caching behavior.
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
-	txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
-	for i := range tx.unverifiedTxGroup {
-		txids[i] = tx.unverifiedTxGroup[i].ID()
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
+		for i := range tx.unverifiedTxGroup {
+			txids[i] = tx.unverifiedTxGroup[i].ID()
+		}
+		logging.Base().Debugf("got a tx group with IDs %v", txids)
 	}
-	logging.Base().Debugf("got a tx group with IDs %v", txids)
 
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
