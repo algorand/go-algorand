@@ -256,11 +256,13 @@ func newMsgpDecoderBytes(b []byte, h codec.Handle) *MsgpDecoderBytes {
 	return &MsgpDecoderBytes{b: b, pos: 0}
 }
 
+// MsgpDecoderBytes is a []byte decoder into msgp-encoded objects
 type MsgpDecoderBytes struct {
 	b   []byte
 	pos int
 }
 
+// Decode an objptr from from a byte stream
 func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	if !objptr.CanUnmarshalMsg(objptr) {
 		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)
