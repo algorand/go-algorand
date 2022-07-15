@@ -1476,6 +1476,11 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
+	maxBoxNumToGet := uint64(10)
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), maxBoxNumToGet)
+	a.NoError(err)
+	a.Len(resp.Boxes, int(maxBoxNumToGet))
+
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
 		// grouping box names to operate, and delete such boxes
