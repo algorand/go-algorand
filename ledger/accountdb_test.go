@@ -2918,6 +2918,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 		}
 	}
 
+	// test caching performance
 	lookbacks := []int{1, 32, 256, 2048}
 	for _, lookback := range lookbacks {
 		for _, boxSize := range boxSizes {
@@ -2940,6 +2941,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 					require.NoError(b, err)
 					require.True(b, v.Valid)
 
+					// benchmark reading the potentially cached value that was read lookback boxes ago
 					if i >= lookback {
 						boxName = boxNames[(i-lookback)%totalBoxes]
 						b.StartTimer()
