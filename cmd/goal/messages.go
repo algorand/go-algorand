@@ -102,7 +102,7 @@ const (
 	errorClearProgArgsRequired     = "Exactly one of --clear-prog or --clear-prog-raw is required"
 	errorMissingBoxName            = "Box --name is required"
 	errorInvalidBoxName            = "Failed to parse box name %s. It must have the same form as app-arg."
-	errorBoxNameMismatch           = "Inputted box name %s does not match box name %s received from algod"
+	errorBoxNameMismatch           = "Inputted box name %s does not match box name %s received from algod, please contact us, this shouldn't happen"
 
 	// Clerk
 	infoTxIssued               = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
