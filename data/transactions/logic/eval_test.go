@@ -185,14 +185,14 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, defaultEvalParams(nil), "invalid", "invalid program (empty)")
 }
 
-// TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
-func TestMinTealVersionParamEvalCheckSignature(t *testing.T) {
+// TestMinAvmVersionParamEval tests eval/check reading the MinAvmVersion from the param
+func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	params := defaultEvalParams(nil)
 	version2 := uint64(rekeyingEnabledVersion)
-	params.MinTealVersion = &version2
+	params.MinAvmVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
 	// set the teal program version to 1
 	binary.PutUvarint(program, 1)
@@ -3891,7 +3891,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
+func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
@@ -3936,8 +3936,8 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			ep := defaultEvalParams(nil)
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(cse.group)
 
-			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(ep.TxnGroup)
+			// Computed MinAvmVersion should be == validFromVersion
+			calc := ComputeMinAvmVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion

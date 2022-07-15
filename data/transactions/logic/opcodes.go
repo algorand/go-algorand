@@ -342,7 +342,7 @@ type OpSpec struct {
 	Name   string
 	op     evalFunc // evaluate the op
 	Proto
-	Version   uint64 // TEAL version opcode introduced
+	Version   uint64 // AVM version opcode introduced
 	OpDetails        // Special cost or bytecode layout considerations
 }
 
@@ -372,9 +372,9 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
 
-	// Cost of these opcodes increases in TEAL version 2 based on measured
+	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
-	// and achieve reasonable TPS. Same opcode for different TEAL versions
+	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
 	{0x01, "sha256", opSHA256, proto("b:b"), 2, costly(35)},
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 2, costly(130)},
@@ -440,7 +440,7 @@ var OpSpecs = []OpSpec{
 	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
 	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
-	// It is ok to have the same opcode for different TEAL versions.
+	// It is ok to have the same opcode for different versions.
 	// This 'txn' asm command supports additional argument in version 2 and
 	// generates 'txna' opcode in that particular case
 	{0x31, "txn", opTxn, proto(":a"), 2, field("f", &TxnFields).assembler(asmTxn2)},
