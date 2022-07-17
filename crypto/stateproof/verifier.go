@@ -66,7 +66,7 @@ func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint6
 // Verify checks if s is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
 func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
-	if s.SigProofs.TreeDepth > 20 || s.PartProofs.TreeDepth > 20 {
+	if s.SigProofs.TreeDepth > MaxTreeDepth || s.PartProofs.TreeDepth > MaxTreeDepth {
 		return ErrTreeDepthTooLarge
 	}
 
