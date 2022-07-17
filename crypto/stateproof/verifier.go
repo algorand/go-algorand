@@ -26,10 +26,9 @@ import (
 
 // Errors for the StateProof verifier
 var (
-	ErrCoinNotInRange               = errors.New("coin is not within slot weight range")
-	ErrNoRevealInPos                = errors.New("no reveal for position")
-	ErrParticipantTreeDepthTooLarge = errors.New("state proof's participantTree depth is too large")
-	ErrSigTreeDepthTooLarge         = errors.New("state proof's sigTree depth is too large")
+	ErrCoinNotInRange    = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos     = errors.New("no reveal for position")
+	ErrTreeDepthTooLarge = errors.New("tree depth is too large")
 )
 
 // Verifier is used to verify a state proof. those fields represent all the verifier's trusted data
@@ -143,15 +142,13 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 }
 
 func verifyStateProofTreesDepth(s *StateProof) error {
-	if s.SigProofs.TreeDepth <= MaxTreeDepth && s.PartProofs.TreeDepth <= MaxTreeDepth {
-		return nil
+	if s.SigProofs.TreeDepth > MaxTreeDepth {
+		return fmt.Errorf("%w. sigTree depth is %d", ErrTreeDepthTooLarge, s.SigProofs.TreeDepth)
 	}
 
-	// stating the issue of the state proof tree depth:
-	err := ErrSigTreeDepthTooLarge
-	depth := s.SigProofs.TreeDepth
 	if s.PartProofs.TreeDepth > MaxTreeDepth {
-		err, depth = ErrParticipantTreeDepthTooLarge, s.PartProofs.TreeDepth
+		return fmt.Errorf("%w. partTree depth is %d", ErrTreeDepthTooLarge, s.PartProofs.TreeDepth)
 	}
-	return fmt.Errorf("%w. maximal value %d, actual value %d", err, MaxTreeDepth, depth)
+
+	return nil
 }

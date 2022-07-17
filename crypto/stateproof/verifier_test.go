@@ -168,12 +168,12 @@ func TestTreeDepth(t *testing.T) {
 
 	tmp := sProof.PartProofs.TreeDepth
 	sProof.PartProofs.TreeDepth = MaxTreeDepth + 1
-	a.ErrorIs(verifier.Verify(stateProofIntervalForTests, p.data, &sProof), ErrParticipantTreeDepthTooLarge)
+	a.ErrorIs(verifier.Verify(stateProofIntervalForTests, p.data, &sProof), ErrTreeDepthTooLarge)
 	sProof.PartProofs.TreeDepth = tmp
 
 	tmp = sProof.SigProofs.TreeDepth
 	sProof.SigProofs.TreeDepth = MaxTreeDepth + 1
-	a.ErrorIs(verifier.Verify(stateProofIntervalForTests, p.data, &sProof), ErrSigTreeDepthTooLarge)
+	a.ErrorIs(verifier.Verify(stateProofIntervalForTests, p.data, &sProof), ErrTreeDepthTooLarge)
 	sProof.SigProofs.TreeDepth = tmp
 
 	a.NoError(verifier.Verify(stateProofIntervalForTests, p.data, &sProof))
