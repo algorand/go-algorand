@@ -155,3 +155,27 @@ func TestEqualVerifiers(t *testing.T) {
 
 	a.Equal(verifierLnP, verifier)
 }
+
+func TestTreeDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	p := generateProofForTesting(a, false)
+	sProof := p.sp
+
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
+	a.NoError(err)
+
+	tmp := sProof.PartProofs.TreeDepth
+	sProof.PartProofs.TreeDepth = 21
+	a.ErrorIs(ErrTreeDepthTooLarge, verifier.Verify(stateProofIntervalForTests, p.data, &sProof))
+	sProof.PartProofs.TreeDepth = tmp
+
+	tmp = sProof.SigProofs.TreeDepth
+	sProof.SigProofs.TreeDepth = 21
+	a.ErrorIs(ErrTreeDepthTooLarge, verifier.Verify(stateProofIntervalForTests, p.data, &sProof))
+	sProof.SigProofs.TreeDepth = tmp
+
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
+	a.NoError(err)
+}
