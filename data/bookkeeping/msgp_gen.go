@@ -2208,8 +2208,8 @@ func (z *GenesisAllocation) MsgIsZero() bool {
 func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
 	if (*z).GenesisHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -2218,9 +2218,13 @@ func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Sha256TxnCommitment.MsgIsZero() {
+	if (*z).Seed.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
+	}
+	if (*z).Sha256TxnCommitment.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -2236,6 +2240,11 @@ func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).RoundNumber.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = (*z).Seed.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "tc"
 			o = append(o, 0xa2, 0x74, 0x63)
 			o = (*z).Sha256TxnCommitment.MarshalMsg(o)
@@ -2261,6 +2270,14 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Seed.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				return
+			}
 		}
 		if zb0001 > 0 {
 			zb0001--
@@ -2309,6 +2326,12 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
+			case "s":
+				bts, err = (*z).Seed.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Seed")
+					return
+				}
 			case "r":
 				bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
 				if err != nil {
@@ -2347,13 +2370,13 @@ func (_ *LightBlockHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *LightBlockHeader) Msgsize() (s int) {
-	s = 1 + 2 + (*z).RoundNumber.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
+	s = 1 + 2 + (*z).Seed.Msgsize() + 2 + (*z).RoundNumber.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *LightBlockHeader) MsgIsZero() bool {
-	return ((*z).RoundNumber.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
+	return ((*z).Seed.MsgIsZero()) && ((*z).RoundNumber.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
