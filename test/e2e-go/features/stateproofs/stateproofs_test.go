@@ -100,6 +100,7 @@ func TestStateProofs(t *testing.T) {
 }
 
 func TestStateProofsMultiWallets(t *testing.T) {
+	t.Skip("this test is heavy and should be run manually")
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
