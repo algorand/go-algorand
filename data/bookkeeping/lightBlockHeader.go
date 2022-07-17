@@ -19,6 +19,7 @@ package bookkeeping
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -28,6 +29,7 @@ import (
 type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	Seed                committee.Seed       `codec:"s"`
 	RoundNumber         basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
@@ -36,6 +38,7 @@ type LightBlockHeader struct {
 // ToLightBlockHeader creates returns a LightBlockHeader from a given block header
 func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
 	return LightBlockHeader{
+		Seed:                bh.Seed,
 		GenesisHash:         bh.GenesisHash,
 		RoundNumber:         bh.Round,
 		Sha256TxnCommitment: bh.Sha256Commitment[:],

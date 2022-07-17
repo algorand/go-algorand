@@ -30,4 +30,6 @@ const (
 	// VersionForCoinGenerator is used as part of the seed for Fiat-Shamir. We would change this
 	// value if the state proof verifier algorithm changes. This will allow us to make different coins for different state proof verification algorithms
 	VersionForCoinGenerator = byte(0)
+	// MaxTreeDepth defines the maximal size of a merkle tree depth the state proof allows.
+	MaxTreeDepth = 20
 )
