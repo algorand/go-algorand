@@ -26,9 +26,10 @@ import (
 
 // Errors for the StateProof verifier
 var (
-	ErrCoinNotInRange    = errors.New("coin is not within slot weight range")
-	ErrNoRevealInPos     = errors.New("no reveal for position")
-	ErrTreeDepthTooLarge = errors.New("state proof tree depth is too large")
+	ErrCoinNotInRange               = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos                = errors.New("no reveal for position")
+	ErrParticipantTreeDepthTooLarge = errors.New("state proof's participantTree depth is too large")
+	ErrSigTreeDepthTooLarge         = errors.New("state proof's sigTree depth is too large")
 )
 
 // Verifier is used to verify a state proof. those fields represent all the verifier's trusted data
@@ -66,8 +67,8 @@ func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint6
 // Verify checks if s is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
 func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
-	if s.SigProofs.TreeDepth > MaxTreeDepth || s.PartProofs.TreeDepth > MaxTreeDepth {
-		return ErrTreeDepthTooLarge
+	if err := verifyStateProofTreesDepth(s); err != nil {
+		return err
 	}
 
 	nr := uint64(len(s.PositionsToReveal))
@@ -139,4 +140,18 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 	}
 
 	return nil
+}
+
+func verifyStateProofTreesDepth(s *StateProof) error {
+	if s.SigProofs.TreeDepth <= MaxTreeDepth && s.PartProofs.TreeDepth <= MaxTreeDepth {
+		return nil
+	}
+
+	// stating the issue of the state proof tree depth:
+	err := ErrSigTreeDepthTooLarge
+	depth := s.SigProofs.TreeDepth
+	if s.PartProofs.TreeDepth > MaxTreeDepth {
+		err, depth = ErrParticipantTreeDepthTooLarge, s.PartProofs.TreeDepth
+	}
+	return fmt.Errorf("%w. maximal value %d, actual value %d", err, MaxTreeDepth, depth)
 }
