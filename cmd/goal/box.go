@@ -25,6 +25,7 @@ import (
 )
 
 var boxName string
+var maxBoxes int
 
 func init() {
 	appCmd.AddCommand(appBoxCmd)
@@ -36,6 +37,8 @@ func init() {
 
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")
 	appBoxInfoCmd.MarkFlagRequired("name")
+
+	appBoxListCmd.Flags().IntVarP(&maxBoxes, "max", "m", 0, "Maximum number of boxes to list. 0 means no limit.")
 }
 
 var appBoxCmd = &cobra.Command{
@@ -97,7 +100,7 @@ var appBoxListCmd = &cobra.Command{
 		_, client := getDataDirAndClient()
 
 		// Get app boxes
-		boxesRes, err := client.ApplicationBoxes(appIdx)
+		boxesRes, err := client.ApplicationBoxes(appIdx, maxBoxes)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}

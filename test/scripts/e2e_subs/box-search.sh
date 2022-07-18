@@ -73,4 +73,10 @@ b64:AQIDBA=="
 # shellcheck disable=SC2059
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
+# Confirm that we can limit the number of boxes returned
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
+[ "$(wc -l <<< "$BOX_LIST")" = "1" ] # only one line
+# shellcheck disable=SC2143
+[ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ]
+
 date "+${scriptname} OK %Y%m%d_%H%M%S"
