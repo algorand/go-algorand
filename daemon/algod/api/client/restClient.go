@@ -422,9 +422,13 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+type applicationBoxesParams struct {
+	Max uint64 `url:"max,omitempty"`
+}
+
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
-func (client RestClient) ApplicationBoxes(appID uint64) (response generatedV2.BoxesResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), nil)
+func (client RestClient) ApplicationBoxes(appID uint64, maxBoxNum uint64) (response generatedV2.BoxesResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
 	return
 }
 
