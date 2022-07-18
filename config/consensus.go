@@ -437,6 +437,18 @@ type ConsensusParams struct {
 	// This new header is in addition to the existing SHA512_256 merkle root.
 	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
 	EnableSHA256TxnCommitmentHeader bool
+
+	// CatchpointLookback specifies a round lookback to take catchpoints at.
+	// Accounts snapshot for round X will be taken at X-CatchpointLookback
+	CatchpointLookback uint64
+
+	// DeeperBlockHeaderHistory defines number of rounds in addition to MaxTxnLife
+	// available for lookup for smart contracts and smart signatures.
+	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
+	DeeperBlockHeaderHistory uint64
+
+	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
+	EnableOnlineAccountCatchpoints bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -452,7 +464,7 @@ const (
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
 
-	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	// PaysetCommitMerkle uses merkle array to commit to the payset.
 	PaysetCommitMerkle
 )
 
@@ -593,7 +605,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	return staticConsensus
 }
 
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// Merge merges a configurable consensus on top of the existing consensus protocol and return
 // a new consensus protocol without modify any of the incoming structures.
 func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
 	staticConsensus := cp.DeepCopy()
@@ -1135,6 +1147,12 @@ func initConsensusProtocols() {
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	vFuture.CatchpointLookback = 320
+
+	// Require MaxTxnLife + X blocks and headers preserved by a node
+	vFuture.DeeperBlockHeaderHistory = 1
+
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 256
 	vFuture.CompactCertTopVoters = 1024 * 1024
@@ -1148,6 +1166,7 @@ func initConsensusProtocols() {
 	vFuture.UnifyInnerTxIDs = true
 
 	vFuture.EnableSHA256TxnCommitmentHeader = true
+	vFuture.EnableOnlineAccountCatchpoints = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

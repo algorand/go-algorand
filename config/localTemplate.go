@@ -44,7 +44,7 @@ type Local struct {
 	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23"`
 
 	// environmental (may be overridden)
-	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
+	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
 	// are being kept around. ( the precise number of recent blocks depends on the consensus parameters )
 	Archival bool `version[0]:"false"`
 
@@ -318,7 +318,8 @@ type Local struct {
 
 	// CatchpointTracking determines if catchpoints are going to be tracked. The value is interpreted as follows:
 	// A value of -1 means "don't track catchpoints".
-	// A value of 1 means "track catchpoints as long as CatchpointInterval is also set to a positive non-zero value". If CatchpointInterval <= 0, no catchpoint tracking would be performed.
+	// A value of 1 means "track catchpoints as long as CatchpointInterval > 0".
+	// A value of 2 means "track catchpoints and always generate catchpoint files as long as CatchpointInterval > 0".
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
 	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
 	CatchpointTracking int64 `version[11]:"0"`
@@ -447,6 +448,10 @@ type Local struct {
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
 	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+
+	// MaxAcctLookback sets the maximum lookback range for account states,
+	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
+	MaxAcctLookback uint64 `version[23]:"8"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

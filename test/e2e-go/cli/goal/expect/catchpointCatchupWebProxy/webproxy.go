@@ -55,6 +55,7 @@ func main() {
 		mu.Unlock()
 		// prevent requests for block #2 to go through.
 		if strings.HasSuffix(request.URL.String(), "/block/2") {
+			response.Write([]byte("webProxy prevents block 2 from serving"))
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
