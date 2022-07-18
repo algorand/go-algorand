@@ -25,7 +25,7 @@ import (
 )
 
 var boxName string
-var maxBoxes int
+var maxBoxes uint64
 
 func init() {
 	appCmd.AddCommand(appBoxCmd)
@@ -38,7 +38,7 @@ func init() {
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")
 	appBoxInfoCmd.MarkFlagRequired("name")
 
-	appBoxListCmd.Flags().IntVarP(&maxBoxes, "max", "m", 0, "Maximum number of boxes to list. 0 means no limit.")
+	appBoxListCmd.Flags().Uint64VarP(&maxBoxes, "max", "m", 0, "Maximum number of boxes to list. 0 means no limit.")
 }
 
 var appBoxCmd = &cobra.Command{

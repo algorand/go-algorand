@@ -75,8 +75,8 @@ b64:AQIDBA=="
 
 # Confirm that we can limit the number of boxes returned
 BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
-[ "$(wc -l <<< "$BOX_LIST")" = "1" ] # only one line
+[ "$(echo "$BOX_LIST" | wc -l)" -eq 1 ] # only one line
 # shellcheck disable=SC2143
-[ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ]
+[ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
