@@ -1415,7 +1415,7 @@ end:
 		}
 
 		var resp generated.BoxesResponse
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 		a.NoError(err)
 		a.Equal(createdBoxCount, uint64(len(resp.Boxes)))
 		for _, b := range resp.Boxes {
@@ -1461,7 +1461,7 @@ end:
 		`∑´´˙©˚¬∆ßåƒ√¬`,
 	}
 
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
+	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -1492,7 +1492,7 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 

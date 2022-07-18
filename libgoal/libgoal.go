@@ -777,10 +777,10 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 }
 
 // ApplicationBoxes takes an app's index and returns the names of boxes under it
-func (c *Client) ApplicationBoxes(appID uint64, optionalMaxBoxNum ...uint64) (resp generatedV2.BoxesResponse, err error) {
+func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generatedV2.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.ApplicationBoxes(appID, optionalMaxBoxNum...)
+		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
 	}
 	return
 }
