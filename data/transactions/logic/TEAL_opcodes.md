@@ -732,7 +732,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x58
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` without immediates.
+- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates.
 - Availability: v5
 
 ## extract_uint16
@@ -767,7 +767,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x5d
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
-- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` without immediates.
+- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates.
 - Availability: v7
 
 ## base64_decode e

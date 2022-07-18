@@ -936,6 +936,8 @@ func ordinalize(nums ...int) []string {
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
+	var correctImmediates []int
+	var numImmediatesWithField []int
 	expected := len(spec.OpDetails.Immediates)
 	if len(args) != expected {
 		if expected == 1 {
@@ -945,6 +947,8 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
+		correctImmediates = nil
+		numImmediatesWithField = nil
 		pseudos, isPseudoName := ops.versionedPseudoOps[spec.Name]
 		switch imm.kind {
 		case immByte:
@@ -956,7 +960,6 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 						// User supplied a uint, so we see if any of the other immediates take uints
 						// QUESTION: I'm making the assumption here that only immediates without groups take uints from 0 to 255
 						// Is that the case?
-						correctImmediates := make([]int, 0)
 						for j, otherImm := range spec.OpDetails.Immediates {
 							if otherImm.kind == immByte && otherImm.Group == nil {
 								correctImmediates = append(correctImmediates, j+1)
@@ -971,7 +974,6 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 						}
 					}
 					if isPseudoName {
-						numImmediatesWithField := make([]int, 0)
 						for numImms, ps := range pseudos {
 							for _, psImm := range ps.OpDetails.Immediates {
 								if psImm.kind == immByte && psImm.Group != nil {
@@ -1002,7 +1004,6 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				if err != nil {
 					if strings.Contains(err.Error(), "unable to parse") {
 						// Perhaps the field works in a different order
-						correctImmediates := make([]int, 0)
 						for j, otherImm := range spec.OpDetails.Immediates {
 							if otherImm.kind == immByte && otherImm.Group != nil {
 								if _, match := otherImm.Group.SpecByName(args[i]); match {
@@ -1351,6 +1352,11 @@ func init() {
 	addPseudoDocTags()
 }
 
+// Differentiates between specs in pseudoOps that can be assembled on their own and those that need to grab a different spec
+func isFullSpec(spec OpSpec) bool {
+	return spec.asm != nil
+}
+
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
 //by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
@@ -1391,8 +1397,7 @@ func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
 	for name, specs := range pseudoOps {
 		m[name] = make(map[int]OpSpec)
 		for numImmediates, spec := range specs {
-			if spec.asm != nil {
-				// If an assembly func is specified, then we assume it is a custom spec
+			if isFullSpec(spec) {
 				m[name][numImmediates] = spec
 				continue
 			}
