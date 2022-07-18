@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package eval_test
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
@@ -46,7 +46,7 @@ type DoubleLedger struct {
 	generator *ledger.Ledger
 	validator *ledger.Ledger
 
-	eval *internal.BlockEvaluator
+	eval *eval.BlockEvaluator
 }
 
 func (dl DoubleLedger) Close() {
@@ -61,7 +61,7 @@ func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv prot
 	return DoubleLedger{t, g, v, nil}
 }
 
-func (dl *DoubleLedger) beginBlock() *internal.BlockEvaluator {
+func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	dl.eval = nextBlock(dl.t, dl.generator)
 	return dl.eval
 }
@@ -160,7 +160,7 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
 }
 
-func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
+func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsState) *eval.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsS
 	nextHdr.RewardsState = rs
 	// follow nextBlock, which does this for determinism
 	nextHdr.TimeStamp = hdr.TimeStamp + 1
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
+	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: false,
 		Validate: true, // Do the complete checks that a new txn would be subject to
 	})

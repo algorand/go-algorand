@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package eval_test
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -384,14 +384,14 @@ ok:
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()
-func nextBlock(t testing.TB, ledger *ledger.Ledger) *internal.BlockEvaluator {
+func nextBlock(t testing.TB, ledger *ledger.Ledger) *eval.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
 	nextHdr.TimeStamp = hdr.TimeStamp + 1 // ensure deterministic tests
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
+	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: true,
 		Validate: true, // Do the complete checks that a new txn would be subject to
 	})
@@ -399,7 +399,7 @@ func nextBlock(t testing.TB, ledger *ledger.Ledger) *internal.BlockEvaluator {
 	return eval
 }
 
-func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn) {
+func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn) {
 	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
 		txn.GenesisHash = ledger.GenesisHash()
 	}
@@ -410,14 +410,14 @@ func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvalu
 	txn.FillDefaults(ledger.GenesisProto())
 }
 
-func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) {
+func txns(t testing.TB, ledger *ledger.Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) {
 	t.Helper()
 	for _, txn1 := range txns {
 		txn(t, ledger, eval, txn1)
 	}
 }
 
-func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
+func txn(t testing.TB, ledger *ledger.Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
 	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
@@ -432,7 +432,7 @@ func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn
 	require.Len(t, problem, 0)
 }
 
-func txgroup(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) error {
+func txgroup(t testing.TB, ledger *ledger.Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
 	t.Helper()
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
@@ -527,7 +527,7 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator) *ledgercore.ValidatedBlock {
+func endBlock(t testing.TB, ledger *ledger.Ledger, eval *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})

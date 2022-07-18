@@ -14,15 +14,31 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package eval
 
-// Export for testing only.  See
-// https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
-// nice explanation. tl;dr: Since some of our testing is in logic_test package,
-// we export some extra things to make testing easier there. But we do it in a
-// _test.go file, so they are only exported during testing.
+import (
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+)
 
-// In order to generate a block
-func (eval *BlockEvaluator) SetGenerate(g bool) {
-	eval.generate = g
+func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	if global {
+		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AssetCreatable,
+			Creator: addr,
+			Created: true,
+		}
+	}
+	return nil
+}
+
+func (cs *roundCowState) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	if global {
+		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AssetCreatable,
+			Creator: addr,
+			Created: false,
+		}
+	}
+	return nil
 }

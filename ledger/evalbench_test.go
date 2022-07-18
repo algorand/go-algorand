@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -491,7 +491,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+			_, err = eval.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
 		}
 		require.NoError(b, err)
 	}
