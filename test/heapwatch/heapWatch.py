@@ -13,6 +13,7 @@ import fnmatch
 import json
 import logging
 import os
+import queue
 import re
 import signal
 import shutil
@@ -100,6 +101,7 @@ class algodDir:
         self.headers = {}
         self._pid = None
         self._algod = None
+        self.timeout = 30
 
     def pid(self):
         if self._pid is None:
@@ -117,10 +119,12 @@ class algodDir:
             self._algod = algosdk.v2client.algod.AlgodClient(self.token, net, self.headers)
         return self._algod
 
-    def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None):
+    def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None, timeout=None):
+        if timeout is None:
+            timeout = self.timeout
         url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/' + name
         try:
-            response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
+            response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers), timeout=timeout)
         except Exception as e:
             logger.error('could not fetch %s from %s via %r (%s)', name, self.path, url, e)
             return
@@ -144,7 +148,7 @@ class algodDir:
 
     def get_cpu_profile(self, snapshot_name=None, outdir=None, seconds=90):
         seconds = int(seconds)
-        return self.get_pprof_snapshot('profile?seconds={}'.format(seconds), snapshot_name, outdir)
+        return self.get_pprof_snapshot('profile?seconds={}'.format(seconds), snapshot_name, outdir, timeout=seconds+20)
 
     def get_metrics(self, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/metrics'
@@ -161,6 +165,11 @@ class algodDir:
         with open(outpath, 'wb') as fout:
             fout.write(blob)
         logger.debug('%s -> %s', self.nick, outpath)
+
+    def go_metrics(self, snapshot_name=None, outdir=None):
+        t = threading.Thread(target=self.get_metrics, args=(snapshot_name, outdir))
+        t.start()
+        return t
 
     def get_blockinfo(self, snapshot_name=None, outdir=None):
         try:
@@ -179,7 +188,16 @@ class algodDir:
         with open(outpath, 'wt') as fout:
             json.dump(jsonable(bi), fout)
         return bi
-        #txncount = bi['block']['tc']
+
+    def _get_blockinfo_q(self, snapshot_name=None, outdir=None, biqueue=None):
+        bi = self.get_blockinfo(snapshot_name, outdir)
+        if biqueue and bi:
+            biqueue.put(bi)
+
+    def go_blockinfo(self, snapshot_name=None, outdir=None, biqueue=None):
+        t = threading.Thread(target=self._get_blockinfo_q, args=(snapshot_name, outdir, biqueue))
+        t.start()
+        return t
 
     def psHeap(self):
         if not self.isdir:
@@ -197,6 +215,24 @@ class algodDir:
                     pass
         except:
             return None, None
+
+class maxrnd:
+    def __init__(self, biqueue):
+        self.biqueue = 0
+        self.maxrnd = None
+
+    def _run(self):
+        while True:
+            bi = self.biqueue.get()
+            if 'block' not in bi:
+                return
+            rnd = bi['block'].get('rnd',0)
+            if (self.maxrnd is None) or (rnd > self.maxrnd):
+                self.maxrnd = rnd
+    def start(self):
+        t = threading.Thread(target=self._run)
+        t.start()
+        return t
 
 class watcher:
     def __init__(self, args):
@@ -270,12 +306,22 @@ class watcher:
             for ad in self.they:
                 ad.get_goroutine_snapshot(snapshot_name, outdir=self.args.out)
         if self.args.metrics:
+            threads = []
             for ad in self.they:
-                ad.get_metrics(snapshot_name, outdir=self.args.out)
+                threads.append(ad.go_metrics(snapshot_name, outdir=self.args.out))
+            for t in threads:
+                t.join()
         if self.args.blockinfo:
+            threads = []
+            biq = queue.SimpleQueue()
+            mr = maxrnd(biq)
+            mrt = mr.start()
             for ad in self.they:
-                bi = ad.get_blockinfo(snapshot_name, outdir=self.args.out)
-                self.latest_round = nmax(self.latest_round, bi['block'].get('rnd',0))
+                threads.append(ad.go_blockinfo(snapshot_name, outdir=self.args.out, biqueue=biq))
+            for t in threads:
+                t.join()
+            mrt.join()
+            self.latest_round = mr.maxrnd
         if get_cpu:
             cpuSample = durationToSeconds(self.args.cpu_sample) or 90
             threads = []

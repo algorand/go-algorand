@@ -470,6 +470,8 @@ class nodestats:
             prevPath = path
             prevtime = curtime
             prevbi = bi
+        if prevbi is None or firstBi is None:
+            return
         txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
         rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
         totalDt = prevtime - firstTime
