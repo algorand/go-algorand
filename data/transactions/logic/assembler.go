@@ -895,7 +895,7 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())
@@ -903,6 +903,36 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 type asmFunc func(*OpStream, *OpSpec, []string) error
+
+// Helpful code for errors mostly taken from https://socketloop.com/tutorials/golang-ordinal-and-ordinalize-a-given-number-to-the-english-ordinal-numeral
+func ordinalize(nums ...int) []string {
+	sort.Ints(nums)
+	ordinalized := make([]string, len(nums))
+	var ordinalDictionary = map[int]string{
+		0: "th",
+		1: "st",
+		2: "nd",
+		3: "rd",
+		4: "th",
+		5: "th",
+		6: "th",
+		7: "th",
+		8: "th",
+		9: "th",
+	}
+	for i, num := range nums {
+		// math.Abs() is to convert negative number to positive
+		if num < 0 {
+			num = -num
+		}
+		if ((num % 100) >= 11) && ((num % 100) <= 13) {
+			ordinalized[i] = strconv.Itoa(num) + "th"
+		} else {
+			ordinalized[i] = strconv.Itoa(num) + ordinalDictionary[num]
+		}
+	}
+	return ordinalized
+}
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
@@ -915,19 +945,54 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
+		pseudos, isPseudoName := ops.versionedPseudoOps[spec.Name]
 		switch imm.kind {
 		case immByte:
 			if imm.Group != nil {
 				fs, ok := imm.Group.SpecByName(args[i])
 				if !ok {
+					_, err := simpleImm(args[i], "")
+					if err == nil {
+						// User supplied a uint, so we see if any of the other immediates take uints
+						// QUESTION: I'm making the assumption here that only immediates without groups take uints from 0 to 255
+						// Is that the case?
+						correctImmediates := make([]int, 0)
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group == nil {
+								correctImmediates = append(correctImmediates, j+1)
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as its %s immediate", errMsg, args[i], strings.Join(ordinalize(correctImmediates...), " or "))
+						}
+					}
+					if isPseudoName {
+						numImmediatesWithField := make([]int, 0)
+						for numImms, ps := range pseudos {
+							for _, psImm := range ps.OpDetails.Immediates {
+								if psImm.kind == immByte && psImm.Group != nil {
+									if _, ok := psImm.Group.SpecByName(args[i]); ok {
+										numImmediatesWithField = append(numImmediatesWithField, numImms)
+									}
+								}
+							}
+						}
+						if len(numImmediatesWithField) > 0 {
+							return ops.errorf("%#v field of %s can only be used with %s", args[i], spec.Name, joinIntsOnOr("immediate", numImmediatesWithField...))
+						}
+					}
 					return ops.errorf("%s unknown field: %#v", spec.Name, args[i])
 				}
-				// refine the typestack now, so it is maintain even if there's a version error
+				// refine the typestack now, so it is maintained even if there's a version error
 				if fs.Type().Typed() {
 					ops.returns(spec, fs.Type())
 				}
 				if fs.Version() > ops.Version {
-					return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?",
+					return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?",
 						spec.Name, args[i], fs.Version())
 				}
 				ops.pending.WriteByte(fs.Field())
@@ -935,6 +1000,24 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				// simple immediate that must be a number from 0-255
 				val, err := simpleImm(args[i], imm.Name)
 				if err != nil {
+					if strings.Contains(err.Error(), "unable to parse") {
+						// Perhaps the field works in a different order
+						correctImmediates := make([]int, 0)
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group != nil {
+								if _, match := otherImm.Group.SpecByName(args[i]); match {
+									correctImmediates = append(correctImmediates, j+1)
+								}
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as its %s immediate", errMsg, args[i], strings.Join(ordinalize(correctImmediates...), " or "))
+						}
+					}
 					return ops.errorf("%s %w", spec.Name, err)
 				}
 				ops.pending.WriteByte(val)
@@ -1150,6 +1233,29 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return nil, StackTypes{scratchType}
 }
 
+func joinIntsOnOr(singularTerminator string, list ...int) string {
+	if len(list) == 1 {
+		switch {
+		case list[0] == 0:
+			return "no " + singularTerminator + "s"
+		case list[0] == 1:
+			return "1 " + singularTerminator
+		default:
+			return fmt.Sprintf("%d %ss", list[0], singularTerminator)
+		}
+	}
+	sort.Ints(list)
+	errMsg := ""
+	for i, val := range list {
+		if i+1 < len(list) {
+			errMsg += fmt.Sprintf("%d or ", val)
+		} else {
+			errMsg += fmt.Sprintf("%d ", val)
+		}
+	}
+	return errMsg + singularTerminator + "s"
+}
+
 func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 	immediateCounts := make([]int, len(specs))
 	i := 0
@@ -1157,20 +1263,10 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 		immediateCounts[i] = numImms
 		i++
 	}
-	sort.SliceStable(immediateCounts, func(j, k int) bool { return immediateCounts[j] < immediateCounts[k] })
-	errMsg := fmt.Sprintf("%s expects", name)
-	for i, numImms := range immediateCounts {
-		if i+1 < len(immediateCounts) {
-			errMsg += fmt.Sprintf(" %d or", numImms)
-		} else {
-			errMsg += fmt.Sprintf(" %d", numImms)
-		}
-	}
-	errMsg += " immediate arguments"
-	ops.error(errMsg)
+	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...))
 }
 
-// getSpec finds the OpSpec we need during assembly based on it's name, our current version, and the immediates passed in
+// getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
 // Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
@@ -1191,14 +1287,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 		}
 		pseudo.Name = name
 		if pseudo.Version > ops.Version && (ops.Version != 0 || pseudo.Version != 1) {
-			switch {
-			case len(args) > 1:
-				ops.errorf("%s opcode with %d immediates was introduced in TEAL v%d", pseudo.Name, len(args), pseudo.Version)
-			case len(args) == 1:
-				ops.errorf("%s opcode with 1 immediate was introduced in TEAL v%d", pseudo.Name, pseudo.Version)
-			default:
-				ops.errorf("%s opcode without immediates was introduced in TEAL v%d", pseudo.Name, pseudo.Version)
-			}
+			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
 		}
 		if len(args) == 0 {
 			return pseudo, pseudo.Name + " without immediates", true
@@ -1209,7 +1298,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	if !ok {
 		spec, ok = OpsByName[AssemblerMaxVersion][name]
 		if ok {
-			ops.errorf("%s opcode was introduced in TEAL v%d", name, spec.Version)
+			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
 		} else {
 			ops.errorf("unknown opcode: %s", name)
 		}
@@ -1243,15 +1332,10 @@ func addPseudoDocTags() {
 				continue
 			}
 			msg := ""
-			switch {
-			case i > 1:
-				msg = fmt.Sprintf("`%s` can be called using `%s` with %d immediates.", spec.Name, name, i)
-			case i == 1:
-				msg = fmt.Sprintf("`%s` can be called using `%s` with %d immediate.", spec.Name, name, i)
-			case i == 0:
-				msg = fmt.Sprintf("`%s` can be called using `%s` without immediates.", spec.Name, name)
-			default:
+			if i == anyImmediates {
 				continue
+			} else {
+				msg = fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			}
 			desc, ok := opDocByName[spec.Name]
 			if ok {
@@ -1307,8 +1391,8 @@ func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
 	for name, specs := range pseudoOps {
 		m[name] = make(map[int]OpSpec)
 		for numImmediates, spec := range specs {
-			if spec.Version != 0 {
-				// If a version is specified, then we assume it is a custom spec
+			if spec.asm != nil {
+				// If an assembly func is specified, then we assume it is a custom spec
 				m[name][numImmediates] = spec
 				continue
 			}
@@ -1660,7 +1744,7 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
