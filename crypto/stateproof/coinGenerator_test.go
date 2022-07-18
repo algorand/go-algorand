@@ -19,6 +19,7 @@ package stateproof
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -49,6 +50,8 @@ func TestCoinFixedLengthHash(t *testing.T) {
 		signedWeight:   1 << 10,
 		data:           data,
 	}
+	e := reflect.ValueOf(choice)
+	a.Equal(6, e.NumField())
 
 	rep := crypto.HashRep(&choice)
 	a.Equal(180, len(rep))

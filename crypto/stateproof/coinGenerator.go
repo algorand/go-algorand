@@ -109,7 +109,7 @@ func (cg *coinGenerator) getNextCoin() uint64 {
 	// we accept the sample if z < threshold
 	// else, we reject the sample and repeat the process.
 	var randNumFromXof uint64
-	for true {
+	for {
 		var shakeDigest [8]byte
 		cg.shkContext.Read(shakeDigest[:])
 		randNumFromXof = binary.LittleEndian.Uint64(shakeDigest[:])
