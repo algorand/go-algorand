@@ -1,4 +1,4 @@
-// WARNING: THIS IS NOT A PRODUCTION QUALITY PROGRAM - FOR TEST PURPOSES ONLY
+// Copied directly from cmd/goal/examples/boxes.teal
 
 #pragma version 7
     txn ApplicationID
