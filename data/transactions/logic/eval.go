@@ -174,7 +174,7 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 // ComputeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
-// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
 func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
