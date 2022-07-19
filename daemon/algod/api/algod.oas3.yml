@@ -2668,6 +2668,7 @@
         "operationId": "GetProofForLightBlockHeader",
         "parameters": [
           {
+            "description": "The round in which the transaction appears.",
             "in": "path",
             "name": "round",
             "required": true,
@@ -2679,7 +2680,14 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LightBlockHeaderProof"
+                }
+              }
+            },
+            "description": "Proof of a light block header."
           },
           "401": {
             "content": {
@@ -3532,6 +3540,7 @@
         "operationId": "StateProof",
         "parameters": [
           {
+            "description": "The round in which the transaction appears.",
             "in": "path",
             "name": "round",
             "required": true,
@@ -3543,7 +3552,14 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/StateProofResponse"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateProof"
+                }
+              }
+            },
+            "description": "StateProofResponse wraps the StateProof type in a response."
           },
           "401": {
             "content": {

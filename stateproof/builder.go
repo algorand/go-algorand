@@ -74,7 +74,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	res.votersHdr = votersHdr
 	res.voters = voters
 	res.message = msg
-	res.Builder, err = stateproof.MkBuilder(msg.IntoStateProofMessageHash(),
+	res.Builder, err = stateproof.MakeBuilder(msg.IntoStateProofMessageHash(),
 		uint64(hdr.Round),
 		provenWeight,
 		voters.Participants,
