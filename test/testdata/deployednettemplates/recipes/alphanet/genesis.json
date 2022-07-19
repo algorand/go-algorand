@@ -1,7 +1,7 @@
 {
 	"NetworkName": "alphanet",
-	"VersionModifier": "",
-	"ConsensusProtocol": "alpha1",
+	"VersionModifier": "v1.1",
+	"ConsensusProtocol": "alpha2",
 	"FirstPartKeyRound": 0,
 	"LastPartKeyRound": 3000000,
 	"PartKeyDilution": 0,
@@ -127,7 +127,7 @@
 			"Online": false
 		}
 	],
-	"FeeSink": "OOZZ32IHB6SS6ZTARKJ2PQP3QKE7R3IWQTOPXRGLTAGPVCDS3FHJOEOYVM",
+	"FeeSink": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
 	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
 	"DevMode": false,
 	"Comment": ""
