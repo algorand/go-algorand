@@ -1168,6 +1168,9 @@ func initConsensusProtocols() {
 	vFuture.EnableSHA256TxnCommitmentHeader = true
 	vFuture.EnableOnlineAccountCatchpoints = true
 
+	vFuture.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+	vFuture.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
