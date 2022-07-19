@@ -904,39 +904,9 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 
 type asmFunc func(*OpStream, *OpSpec, []string) error
 
-// Helpful code for errors mostly taken from https://socketloop.com/tutorials/golang-ordinal-and-ordinalize-a-given-number-to-the-english-ordinal-numeral
-func ordinalize(nums ...int) []string {
-	sort.Ints(nums)
-	ordinalized := make([]string, len(nums))
-	var ordinalDictionary = map[int]string{
-		0: "th",
-		1: "st",
-		2: "nd",
-		3: "rd",
-		4: "th",
-		5: "th",
-		6: "th",
-		7: "th",
-		8: "th",
-		9: "th",
-	}
-	for i, num := range nums {
-		// math.Abs() is to convert negative number to positive
-		if num < 0 {
-			num = -num
-		}
-		if ((num % 100) >= 11) && ((num % 100) <= 13) {
-			ordinalized[i] = strconv.Itoa(num) + "th"
-		} else {
-			ordinalized[i] = strconv.Itoa(num) + ordinalDictionary[num]
-		}
-	}
-	return ordinalized
-}
-
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	var correctImmediates []int
+	var correctImmediates []string
 	var numImmediatesWithField []int
 	expected := len(spec.OpDetails.Immediates)
 	if len(args) != expected {
@@ -958,11 +928,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 					_, err := simpleImm(args[i], "")
 					if err == nil {
 						// User supplied a uint, so we see if any of the other immediates take uints
-						// QUESTION: I'm making the assumption here that only immediates without groups take uints from 0 to 255
-						// Is that the case?
 						for j, otherImm := range spec.OpDetails.Immediates {
 							if otherImm.kind == immByte && otherImm.Group == nil {
-								correctImmediates = append(correctImmediates, j+1)
+								correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
 							}
 						}
 						if len(correctImmediates) > 0 {
@@ -970,7 +938,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 							if isPseudoName {
 								errMsg += " with " + joinIntsOnOr("immediate", len(args))
 							}
-							return ops.errorf("%s can only use %#v as its %s immediate", errMsg, args[i], strings.Join(ordinalize(correctImmediates...), " or "))
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
 						}
 					}
 					if isPseudoName {
@@ -1007,7 +975,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 						for j, otherImm := range spec.OpDetails.Immediates {
 							if otherImm.kind == immByte && otherImm.Group != nil {
 								if _, match := otherImm.Group.SpecByName(args[i]); match {
-									correctImmediates = append(correctImmediates, j+1)
+									correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
 								}
 							}
 						}
@@ -1016,7 +984,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 							if isPseudoName {
 								errMsg += " with " + joinIntsOnOr("immediate", len(args))
 							}
-							return ops.errorf("%s can only use %#v as its %s immediate", errMsg, args[i], strings.Join(ordinalize(correctImmediates...), " or "))
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
 						}
 					}
 					return ops.errorf("%s %w", spec.Name, err)
@@ -1236,10 +1204,10 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
 	if len(list) == 1 {
-		switch {
-		case list[0] == 0:
+		switch list[0] {
+		case 0:
 			return "no " + singularTerminator + "s"
-		case list[0] == 1:
+		case 1:
 			return "1 " + singularTerminator
 		default:
 			return fmt.Sprintf("%d %ss", list[0], singularTerminator)
@@ -1287,7 +1255,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 			}
 		}
 		pseudo.Name = name
-		if pseudo.Version > ops.Version && (ops.Version != 0 || pseudo.Version != 1) {
+		if pseudo.Version > ops.Version {
 			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
 		}
 		if len(args) == 0 {
@@ -1313,12 +1281,12 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Version: 1, Proto: proto(":i"), OpDetails: assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {anyImmediates: OpSpec{Name: "addr", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method":  {anyImmediates: OpSpec{Name: "method", Version: 1, Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
 	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
