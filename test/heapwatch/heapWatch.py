@@ -101,7 +101,7 @@ class algodDir:
         self.headers = {}
         self._pid = None
         self._algod = None
-        self.timeout = 30
+        self.timeout = 15
 
     def pid(self):
         if self._pid is None:
@@ -218,7 +218,7 @@ class algodDir:
 
 class maxrnd:
     def __init__(self, biqueue):
-        self.biqueue = 0
+        self.biqueue = biqueue
         self.maxrnd = None
 
     def _run(self):
@@ -320,6 +320,7 @@ class watcher:
                 threads.append(ad.go_blockinfo(snapshot_name, outdir=self.args.out, biqueue=biq))
             for t in threads:
                 t.join()
+            biq.put({})
             mrt.join()
             self.latest_round = mr.maxrnd
         if get_cpu:
