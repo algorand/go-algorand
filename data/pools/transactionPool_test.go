@@ -1473,7 +1473,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusFuture].StateProofStrengthTarget
-	b, err := stateproof.MkBuilder(data, round, provenWeight,
+	b, err := stateproof.MakeBuilder(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
