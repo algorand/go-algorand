@@ -306,9 +306,8 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
-	var lowestRound basics.Round
 	if ao.voters != nil {
-		lowestRound = ao.voters.lowestRound(newBase)
+		dcr.lowestRound = ao.voters.computeForgettableRounds(newBase)
 	}
 
 	offset = uint64(newBase - dbRound)
@@ -319,7 +318,6 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		dcr.offset = offset
 	}
 	dcr.oldBase = dbRound
-	dcr.lowestRound = lowestRound
 	return dcr
 }
 
@@ -504,6 +502,9 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	forgetBefore := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
 	ao.onlineAccountsCache.prune(forgetBefore)
 
+	if ao.voters != nil {
+		ao.voters.deleteUpToRoundFromCache(dcc.lowestRound) // todo: should it be under the lock?
+	}
 	ao.accountsMu.Unlock()
 
 	ao.accountsReadCond.Broadcast()

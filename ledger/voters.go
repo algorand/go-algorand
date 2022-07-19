@@ -103,6 +103,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 	}
 
 	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
+		// TODO: fix: return error if we should be able to fetch that block header.
 		hdr, err = l.BlockHdr(r)
 		//if err != nil {
 		//	return err
@@ -159,8 +160,6 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	vt.removeOldVoters(hdr)
-
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
 	// block.
@@ -171,35 +170,6 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
 			vt.loadTree(hdr)
-		}
-	}
-}
-
-// removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
-// voters would be removed if one of the two condition is met
-// 1 - Voters are for a round which was already been confirmed by stateproof
-// 2 - Voters are for a round which is older than the allowed recovery interval.
-// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
-// StateProofRecoveryInterval + 1
-// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
-//
-// It is possible to optimize this function and not to travers votersForRoundCache on every round.
-// Since the map is small (Usually  0 - 2 elements and up to StateProofRecoveryInterval) we decided to keep the code simple
-// and check for deletion in every round.
-func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
-	proto := config.Consensus[hdr.CurrentProtocol]
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
-
-	for r, tr := range vt.votersForRoundCache {
-		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
-		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
-
-		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
-		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
-			stateProofRound <= oldestRoundOnRecoveryPeriod {
-			delete(vt.votersForRoundCache, r)
 		}
 	}
 }
@@ -234,4 +204,57 @@ func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, 
 	}
 
 	return tr, nil
+}
+
+func (vt *votersTracker) deleteUpToRoundFromCache(lowestRound basics.Round) {
+	// Removing all rounds that are no longer needed, from the map, and hence later on from the blocks db.
+	for rnd := range vt.votersForRoundCache {
+		if rnd <= lowestRound {
+			delete(vt.votersForRoundCache, rnd)
+		}
+	}
+}
+
+// computeForgettableRounds determines which voters data can be removed from the tracker.
+// voters can be removed if one of the two condition is met
+// 1 - Voters are for a round which was already been confirmed by stateproof
+// 2 - Voters are for a round which is older than the allowed recovery interval.
+// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
+// StateProofRecoveryInterval + 1
+// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
+//
+// It is possible to optimize this function and not to travers votersForRoundCache on every round.
+// Since the map is small (Usually  0 - 2 elements and up to StateProofRecoveryInterval) we decided to keep the code simple
+// and check for deletion in every round.
+func (vt *votersTracker) computeForgettableRounds(newBase basics.Round) basics.Round {
+	hdr, err := vt.l.BlockHdr(newBase)
+	if err != nil {
+		// this shouldn't happen, blocks shouldn't be released without votersTracker consent.
+		vt.l.trackerLog().Errorf("couldn't fetch block header %v", err)
+		return newBase
+	}
+
+	proto := config.Consensus[hdr.CurrentProtocol]
+
+	if proto.StateProofInterval == 0 {
+		return newBase
+	}
+
+	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+
+	maxRoundToDrop := basics.Round(0)
+	for r, tr := range vt.votersForRoundCache {
+		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
+		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+
+		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
+		if maxRoundToDrop < r && (stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
+			stateProofRound <= oldestRoundOnRecoveryPeriod) {
+
+			maxRoundToDrop = r
+		}
+	}
+
+	return maxRoundToDrop
 }

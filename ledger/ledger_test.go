@@ -22,13 +22,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -1713,17 +1712,21 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	for i := uint64(0); i < proto.StateProofInterval*4; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	// at the point the ledger would remove the voters round for the database.
-	// that will cause the stateproof transaction verification to fail because there are
-	// missing blocks
-	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
-	_, err = l.Validate(context.Background(), blk, backlogPool)
-	expectedErr := &ledgercore.ErrNoEntry{}
-	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+	// Ensuring blocks are removed from the ledger.
+	_, err = l.Block(basics.Round(proto.StateProofInterval) * 2)
+	require.NotNil(t, err)
+	require.True(t, errors.As(err, &ledgercore.ErrNoEntry{}), fmt.Sprintf("got error %s", err))
+
+	// returns nils in both values if voterTracker does not hold an entry to that round.
+	for i := uint64(0); i < proto.StateProofInterval*2; i++ {
+		nil1, nil2 := l.VotersForStateProof(basics.Round(i))
+		require.Nil(t, nil1, "voters for state proof were found.")
+		require.Nil(t, nil2, "error while searching for state proof voters.")
+	}
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
@@ -2730,16 +2733,38 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	l.WaitForCommit(blk.BlockHeader.Round)
-	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+	l.WaitForCommit(l.Latest())
+
+	l.trackerMu.RLock()
+	l.trackerMu.RUnlock()
+	hdr, err := l.BlockHdr(l.acctsOnline.cachedDBRoundOnline)
+	require.NoError(t, err)
+
+	minimalLoadedRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound - basics.Round(proto.StateProofVotersLookback)
+
+	expected := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
+	// We do not expect equality exact with the snapshot.
+	// Instead, we look in the reloaded voters to create trees for rounds confirmed in the DB.
+	v := l.acctsOnline.voters.votersForRoundCache
+	for rnd, tree := range expected {
+		if rnd < minimalLoadedRound {
+			require.Nil(t, v[rnd], "expected no tree for round %d", rnd)
+			continue
+		}
+
+		require.NoError(t, v[rnd].Wait())
+		require.Equal(t, tree.Tree, v[rnd].Tree)
+		require.Equal(t, tree.Participants, v[rnd].Participants)
+	}
 }
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Skip("This test is not finished, we want to inspect the behaviour of giving up on a stateproof")
+
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
