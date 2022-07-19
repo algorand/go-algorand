@@ -4840,6 +4840,9 @@ func opVrfVerify(cx *EvalContext) error {
 	return nil
 }
 
+// availableRound checks to see if the requested round, `r`, is allowed to be
+// accessed. If it is, it's returned as a basics.Round. It is named by analogy
+// to the availableAsset and  availableApp helpers.
 func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	firstAvail := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
 	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
