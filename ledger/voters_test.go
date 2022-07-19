@@ -103,67 +103,6 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
-func TestLimitVoterTracker(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-	recoveryIntervalForTests := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval
-	numOfIntervals := recoveryIntervalForTests
-	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	au, ao := newAcctUpdates(t, ml, conf, ".")
-	defer au.close()
-	defer ao.close()
-
-	i := uint64(1)
-	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
-	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, ao)
-	}
-
-	a.Equal(recoveryIntervalForTests, uint64(len(ao.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
-
-	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
-	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, ao)
-	}
-
-	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
-
-	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
-	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, ao)
-	}
-
-	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
-}
-
 func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
