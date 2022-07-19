@@ -17,6 +17,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -26,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 
 	"strings"
 	"sync"
@@ -1185,10 +1187,16 @@ func TestParticipationDB_Locking(t *testing.T) {
 
 	dbName := strings.Replace(t.Name(), "/", "_", -1)
 
-	dbfile, err := db.OpenErasablePair(dbName + ".sqlite3")
+	dbpair, err := db.OpenErasablePair(dbName + ".sqlite3")
 	a.NoError(err)
 
-	registry, err := makeParticipationRegistry(dbfile, logging.TestingLog(t))
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetLevel(logging.Warn)
+	log.SetOutput(&bufNewLogger)
+	dbpair.Rdb.SetLogger(log)
+
+	registry, err := makeParticipationRegistry(dbpair, logging.TestingLog(t))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -1207,18 +1215,89 @@ func TestParticipationDB_Locking(t *testing.T) {
 		a.Equal(id, part.ID())
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	var flushCount int32
+	const targetFlushes = 5
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 25; i++ {
 			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusFuture])
 			registry.Flush(defaultTimeout)
+			if atomic.LoadInt32(&flushCount) < targetFlushes {
+				atomic.AddInt32(&flushCount, 1)
+			}
 		}
+		wg.Done()
 	}()
 
-	for i := 0; i < 50; i++ {
-		time.Sleep(time.Second / 2)
+	for i := 0; i < 25; i++ {
+	repeat:
+		// to not start lookup until deleted some keys
+		if atomic.LoadInt32(&flushCount) < targetFlushes {
+			time.Sleep(time.Second)
+			goto repeat
+		}
 		_, err = registry.GetStateProofForRound(id2, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while the main thread is updating the Rolling table.
+		a.NoError(err)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	warnings := bufNewLogger.String()
+	deadlineCount := strings.Count(warnings, "tx surpassed expected deadline")
+	a.Empty(deadlineCount, fmt.Sprintf("found %d messages 'tx surpassed expected deadline' but expected 0", deadlineCount))
+	wg.Wait()
+}
+
+func TestParticipationDBInstallWhileReading(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	dbName := strings.Replace(t.Name(), "/", "_", -1)
+
+	dbpair, err := db.OpenErasablePair(dbName + ".sqlite3")
+	a.NoError(err)
+
+	registry, err := makeParticipationRegistry(dbpair, logging.TestingLog(t))
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+	defer registryCloseTest(t, registry, dbName)
+
+	var sampledPartID ParticipationID
+	for i := 0; i < 3; i++ {
+		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		id, err := registry.Insert(part)
+		if i == 0 {
+			sampledPartID = id
+		}
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, part.StateProofSecrets.GetAllKeys()))
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, part.ID())
+	}
+
+	appendedKeys := make(chan struct{})
+	newPart := makeTestParticipationWithLifetime(a, 1, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution, merklesignature.KeyLifetimeDefault)
+	go func() {
+		id, err := registry.Insert(newPart)
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, newPart.StateProofSecrets.GetAllKeys()))
+		appendedKeys <- struct{}{}
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, newPart.ID())
+	}()
+
+	<-appendedKeys // Makes sure we start fetching keys after the append keys operation has already started
+	for i := 0; i < 50; i++ {
+		_, err = registry.GetStateProofForRound(sampledPartID, basics.Round(256))
+		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
+		// while a different go routine is installing new keys.
 		a.NoError(err)
 	}
 }

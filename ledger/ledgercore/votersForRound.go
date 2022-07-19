@@ -100,7 +100,7 @@ func createStateProofParticipant(stateProofID *merklesignature.Commitment, money
 	return retPart
 }
 
-// LoadTree todo
+// LoadTree loads the participation tree and other required fields, using the provided TopOnlineAccounts function.
 func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 

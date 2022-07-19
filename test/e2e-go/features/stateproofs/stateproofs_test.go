@@ -86,8 +86,6 @@ func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	r := require.New(fixtures.SynchronizedTest(t))
-
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := getDefaultStateProofConsensusParams()
@@ -97,6 +95,39 @@ func TestStateProofs(t *testing.T) {
 	fixture.SetConsensus(configurableConsensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
+
+	verifyStateProofsCreation(t, &fixture, consensusParams)
+}
+
+func TestStateProofsMultiWallets(t *testing.T) {
+	t.Skip("this test is heavy and should be run manually")
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := getDefaultStateProofConsensusParams()
+	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
+	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
+	// we want the network to fail in generating stateproof if one node is not working correctly.
+	// For that we will increase the proven Weight to be close to 100%. However, this change might not be enough.
+	// if the signed Weight and the Proven Weight are very close to each other the number of reveals in the state proof
+	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
+	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak stateproof"
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 4
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProofMultiWallets.json"))
+	defer fixture.Shutdown()
+
+	verifyStateProofsCreation(t, &fixture, consensusParams)
+}
+
+func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture, consensusParams config.ConsensusParams) {
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	restClient, err := fixture.NC.AlgodClient()
 	r.NoError(err)
@@ -113,7 +144,7 @@ func TestStateProofs(t *testing.T) {
 			from:   accountFetcher{nodeName: "Node0", accountNumber: 0},
 			to:     accountFetcher{nodeName: "Node1", accountNumber: 0},
 			amount: 1,
-		}.sendPayment(r, &fixture, rnd)
+		}.sendPayment(r, fixture, rnd)
 
 		err = fixture.WaitForRound(rnd, 30*time.Second)
 		r.NoError(err)

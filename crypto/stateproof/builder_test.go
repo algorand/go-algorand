@@ -119,12 +119,12 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := uint64(0); i < uint64(npart); i++ {
 		a.False(b.Present(i))
-		a.NoError(b.IsValid(i, sigs[i], !doLargeTest))
+		a.NoError(b.IsValid(i, &sigs[i], !doLargeTest))
 		b.Add(i, sigs[i])
 
 		// sanity check that the builder add the signature
@@ -280,12 +280,12 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
+	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
 		a.False(b.Present(uint64(i)))
-		a.NoError(b.IsValid(uint64(i), sigs[i], false))
+		a.NoError(b.IsValid(uint64(i), &sigs[i], false))
 		b.Add(uint64(i), sigs[i])
 	}
 
@@ -461,7 +461,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	builder, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	// actual test:
@@ -471,7 +471,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
 
-	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrSignatureSaltVersionMismatch)
+	a.ErrorIs(builder.IsValid(0, &sig, true), merklesignature.ErrSignatureSaltVersionMismatch)
 }
 
 func TestBuildAndReady(t *testing.T) {
@@ -485,7 +485,7 @@ func TestBuildAndReady(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	builder, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	a.False(builder.Ready())
@@ -514,18 +514,18 @@ func TestErrorCases(t *testing.T) {
 
 	builder.participants = make([]basics.Participant, 1, 1)
 	builder.sigs = make([]sigslot, 1, 1)
-	err = builder.IsValid(1, merklesignature.Signature{}, false)
+	err = builder.IsValid(1, &merklesignature.Signature{}, false)
 	a.ErrorIs(err, ErrPositionOutOfBound)
 
-	err = builder.IsValid(0, merklesignature.Signature{}, false)
+	err = builder.IsValid(0, &merklesignature.Signature{}, false)
 	require.ErrorIs(t, err, ErrPositionWithZeroWeight)
 
 	builder.participants[0].Weight = 1
-	err = builder.IsValid(0, merklesignature.Signature{}, true)
+	err = builder.IsValid(0, &merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrKeyLifetimeIsZero)
 
 	builder.participants[0].PK.KeyLifetime = 20
-	err = builder.IsValid(0, merklesignature.Signature{}, true)
+	err = builder.IsValid(0, &merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 
 	builder.sigs[0].Weight = 1
@@ -600,7 +600,7 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	_, err := MkBuilder(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
+	_, err := MakeBuilder(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
 }
@@ -641,14 +641,14 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MkBuilder(data, stateProofIntervalForTests, provenWeight, parts, partcom, stateProofStrengthTargetForTests)
+			builder, err := MakeBuilder(data, stateProofIntervalForTests, provenWeight, parts, partcom, stateProofStrengthTargetForTests)
 			if err != nil {
 				b.Error(err)
 			}
 
 			for i := 0; i < npart; i++ {
 				a.False(builder.Present(uint64(i)))
-				a.NoError(builder.IsValid(uint64(i), sigs[i], true))
+				a.NoError(builder.IsValid(uint64(i), &sigs[i], true))
 				builder.Add(uint64(i), sigs[i])
 			}
 

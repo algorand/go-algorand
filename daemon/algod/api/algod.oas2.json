@@ -1247,15 +1247,6 @@
       ]
     },
     "/v2/stateproofs/{round}": {
-      "parameters": [
-        {
-          "type": "integer",
-          "name": "round",
-          "in": "path",
-          "required": true,
-          "minimum": 0
-        }
-      ],
       "get": {
         "produces": [
           "application/json"
@@ -1265,9 +1256,19 @@
         ],
         "summary": "get a state proof that covers a given round",
         "operationId": "StateProof",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round in which the transaction appears.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/StateProofResponse"
+            "$ref": "#/responses/StateProofResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -1297,18 +1298,17 @@
             "description": "Unknown Error"
           }
         }
-      }
-    },
-    "/v2/blocks/{round}/lightheader/proof": {
+      },
       "parameters": [
         {
           "type": "integer",
           "name": "round",
           "in": "path",
-          "required": true,
-          "minimum": 0
+          "required": true
         }
-      ],
+      ]
+    },
+    "/v2/blocks/{round}/lightheader/proof": {
       "get": {
         "produces": [
           "application/json"
@@ -1318,9 +1318,19 @@
         ],
         "summary": "Gets a proof for a given light block header inside a state proof commitment",
         "operationId": "GetProofForLightBlockHeader",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round in which the transaction appears.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
+            "$ref": "#/responses/LightBlockHeaderProofResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -1350,7 +1360,15 @@
             "description": "Unknown Error"
           }
         }
-      }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true
+        }
+      ]
     },
     "/v2/applications/{application-id}": {
       "get": {
