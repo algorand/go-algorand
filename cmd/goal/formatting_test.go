@@ -97,7 +97,7 @@ func TestStringsToBoxRefs(t *testing.T) {
 
 func TestBytesToAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
+	t.Parallel()
 	testCases := []struct {
 		input    []byte
 		expected string
