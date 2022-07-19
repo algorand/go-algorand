@@ -869,7 +869,8 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	added := node.accountManager.AddParticipation(partkey)
+	// This is ephemeral since we are deleting the file after this function is done
+	added := node.accountManager.AddParticipation(partkey, true)
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
@@ -939,7 +940,9 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// Tell the AccountManager about the Participation (dupes don't matter)
 			// make sure that all stateproof data (with are not the keys per round)
 			// are being store to the registry in that point
-			added := node.accountManager.AddParticipation(part)
+			// These files are not ephemeral and must be deleted eventually since
+			// this function is called to load files located in the node on startup
+			added := node.accountManager.AddParticipation(part, false)
 			if added {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
 			} else {
