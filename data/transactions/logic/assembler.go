@@ -906,8 +906,6 @@ type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	var correctImmediates []string
-	var numImmediatesWithField []int
 	expected := len(spec.OpDetails.Immediates)
 	if len(args) != expected {
 		if expected == 1 {
@@ -917,8 +915,8 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
-		correctImmediates = nil
-		numImmediatesWithField = nil
+		var correctImmediates []string
+		var numImmediatesWithField []int
 		pseudos, isPseudoName := ops.versionedPseudoOps[spec.Name]
 		switch imm.kind {
 		case immByte:
@@ -1237,6 +1235,7 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 
 // getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
 // Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
+// The returned string is the spec's name, annotated if it was a pseudoOp with no immediates to help disambiguate typetracking errors
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
@@ -1297,15 +1296,10 @@ var pseudoOps = map[string]map[int]OpSpec{
 func addPseudoDocTags() {
 	for name, specs := range pseudoOps {
 		for i, spec := range specs {
-			if spec.Name == name {
+			if spec.Name == name || i == anyImmediates {
 				continue
 			}
-			msg := ""
-			if i == anyImmediates {
-				continue
-			} else {
-				msg = fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
-			}
+			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			desc, ok := opDocByName[spec.Name]
 			if ok {
 				opDocByName[spec.Name] = desc + "<br />" + msg
@@ -1583,7 +1577,7 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			opstring = fields[0]
 		}
-		spec, trackNameString, ok := getSpec(ops, opstring, fields[1:])
+		spec, expandedName, ok := getSpec(ops, opstring, fields[1:])
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
@@ -1600,7 +1594,7 @@ func (ops *OpStream) assemble(text string) error {
 					returns = nreturns
 				}
 			}
-			ops.trackStack(args, returns, append([]string{trackNameString}, fields[1:]...))
+			ops.trackStack(args, returns, append([]string{expandedName}, fields[1:]...))
 			spec.asm(ops, &spec, fields[1:])
 			if spec.deadens() { // An unconditional branch deadens the following code
 				ops.known.deaden()
