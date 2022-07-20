@@ -68,7 +68,7 @@ for LEDGER in $LEDGERS; do
         SORT=address
         ;;
       txtail)
-        SORT=round
+        SORT=rnd
         ;;
       catchpointfirststageinfo)
         SORT=round
