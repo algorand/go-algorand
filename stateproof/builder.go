@@ -427,10 +427,10 @@ func (spw *Worker) tryBuilding() {
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
-		stxn.Txn.StateProofType = protocol.StateProofBasic
-		stxn.Txn.StateProofIntervalLatestRound = rnd
-		stxn.Txn.StateProof = *sp
-		stxn.Txn.Message = b.message
+		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
+		stxn.Txn.StateProofTxnFields.StateProofIntervalLatestRound = rnd
+		stxn.Txn.StateProofTxnFields.StateProof = *sp
+		stxn.Txn.StateProofTxnFields.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)

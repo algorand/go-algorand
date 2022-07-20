@@ -136,8 +136,8 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 	return provenWeight, nil
 }
 
-// validateStateProof checks that a state proof is valid.
-func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof stateproof.StateProof, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
+// ValidateStateProof checks that a state proof is valid.
+func ValidateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof stateproof.StateProof, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
