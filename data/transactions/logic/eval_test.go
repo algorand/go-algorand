@@ -194,7 +194,7 @@ func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	version2 := uint64(rekeyingEnabledVersion)
 	params.MinAvmVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
-	// set the teal program version to 1
+	// set the program version to 1
 	binary.PutUvarint(program, 1)
 
 	verErr := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
