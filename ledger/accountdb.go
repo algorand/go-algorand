@@ -271,7 +271,7 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 type persistedBoxData struct {
 	// box value
 	value *string
-	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
+	// the round number that is associated with the box value. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose.
 	round basics.Round
 }
