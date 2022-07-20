@@ -89,6 +89,11 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
+	earliestRoundToRecover := max(
+		getEarliestRoundToRecover(hdr.Round, proto),
+		getPreviousStateProofRound(hdr, proto),
+	).SubSaturate(basics.Round(proto.StateProofVotersLookback))
+
 	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
@@ -103,11 +108,14 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 	}
 
 	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
-		// TODO: fix: return error if we should be able to fetch that block header.
+		if r < earliestRoundToRecover {
+			continue
+		}
+
 		hdr, err = l.BlockHdr(r)
-		//if err != nil {
-		//	return err
-		//}
+		if err != nil {
+			return err
+		}
 
 		vt.loadTree(hdr)
 	}
@@ -242,21 +250,42 @@ func (vt *votersTracker) computeForgettableRounds(newBase basics.Round) basics.R
 		return newBase
 	}
 
-	closestIntervalRound := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
-	earliestRoundToRecover := closestIntervalRound.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	earliestRoundToRecover := getEarliestRoundToRecover(hdr.Round, proto)
+	confirmedStateProof := getPreviousStateProofRound(hdr, proto)
+
+	forfeitRound := max(
+		vt.lowestRound(newBase),
+		earliestRoundToRecover.SubSaturate(basics.Round(proto.StateProofVotersLookback)),
+		confirmedStateProof.SubSaturate(basics.Round(proto.StateProofVotersLookback)),
+	)
+
+	return forfeitRound
+}
+
+func getPreviousStateProofRound(hdr bookkeeping.BlockHeader, proto config.ConsensusParams) basics.Round {
 	nextStateProof := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 	confirmedStateProof := nextStateProof.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	forfeitRound := max(earliestRoundToRecover, confirmedStateProof).
-		SubSaturate(basics.Round(proto.StateProofVotersLookback))
-
-	return max(vt.lowestRound(newBase), forfeitRound)
+	return confirmedStateProof
 }
 
-func max(a basics.Round, b basics.Round) basics.Round {
-	if a > b {
-		return a
+func getEarliestRoundToRecover(rnd basics.Round, proto config.ConsensusParams) basics.Round {
+	if proto.StateProofInterval == 0 {
+		return rnd // no recover
 	}
-	return b
+
+	closestIntervalRound := basics.Round(uint64(rnd) - uint64(rnd)%proto.StateProofInterval)
+	earliestRoundToRecover := closestIntervalRound.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+
+	return earliestRoundToRecover
+}
+
+func max(arr ...basics.Round) basics.Round {
+	m := arr[0]
+	for i := 1; i < len(arr); i++ {
+		if m < arr[i] {
+			m = arr[i]
+		}
+	}
+	return m
 }

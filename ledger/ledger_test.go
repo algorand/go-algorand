@@ -22,12 +22,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -2726,7 +2727,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	for i := uint64(0); i < proto.StateProofInterval+proto.StateProofVotersLookback; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -2737,33 +2738,21 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	l.trackerMu.RLock()
 	l.trackerMu.RUnlock()
-	hdr, err := l.BlockHdr(l.acctsOnline.cachedDBRoundOnline)
-	require.NoError(t, err)
+	//hdr, err := l.BlockHdr(l.acctsOnline.cachedDBRoundOnline)
+	//require.NoError(t, err)
 
-	minimalLoadedRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound - basics.Round(proto.StateProofVotersLookback)
+	//minimalLoadedRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound - basics.Round(proto.StateProofVotersLookback)
 
 	expected := l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	// We do not expect equality exact with the snapshot.
-	// Instead, we look in the reloaded voters to create trees for rounds confirmed in the DB.
-	v := l.acctsOnline.voters.votersForRoundCache
-	for rnd, tree := range expected {
-		if rnd < minimalLoadedRound {
-			require.Nil(t, v[rnd], "expected no tree for round %d", rnd)
-			continue
-		}
-
-		require.NoError(t, v[rnd].Wait())
-		require.Equal(t, tree.Tree, v[rnd].Tree)
-		require.Equal(t, tree.Participants, v[rnd].Participants)
-	}
+	verifyVotersContent(t, expected, l.acctsOnline.voters.votersForRoundCache)
 }
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Skip("This test is not finished, we want to inspect the behaviour of giving up on a stateproof")
+	//t.Skip("This test is not finished, we want to inspect the behaviour of giving up on a stateproof")
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 
@@ -2796,14 +2785,13 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	// the voters tracker should contains all the voters for each stateproof round. nothing should be removed
 	l.WaitForCommit(blk.BlockHeader.Round)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
-	beforeRemoveVotersLen := len(vtSnapshot)
 	err = l.reloadLedger()
 	require.NoError(t, err)
 	_, found := l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.True(t, found)
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	for i := uint64(0); i < proto.StateProofInterval*3; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -2819,5 +2807,4 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
-	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
 }
