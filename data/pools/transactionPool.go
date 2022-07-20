@@ -49,8 +49,9 @@ import (
 // TransactionPool.AssembleBlock constructs a valid block for
 // proposal given a deadline.
 type TransactionPool struct {
-	// feePerByte is stored at the beginning of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
-	// with atomic operations which require 64 bit alignment on arm.
+	// feePerByte is stored at the beginning of this struct to ensure it has a
+	// 64 bit aligned address. This is needed as it's being used with atomic
+	// operations which require 64 bit alignment on arm.
 	feePerByte uint64
 
 	// const
@@ -92,6 +93,14 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
+
+	cfg                 config.Local
+	speculatedBlockChan chan speculatedBlock
+}
+
+type speculatedBlock struct {
+	blk    *ledgercore.ValidatedBlock
+	branch bookkeeping.BlockHash
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -122,6 +131,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
+		cfg:                  cfg,
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -129,8 +139,49 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-// poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
-// via the pool.assemblyMu lock.
+func (pool *TransactionPool) copyTransactionPoolOverNewLedger(ledger *ledger.Ledger) *TransactionPool {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.speculatedBlockChan = make(chan speculatedBlock, 1)
+
+	copy := TransactionPool{
+		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
+		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
+		expiredTxCount:       make(map[basics.Round]int),
+		ledger:               ledger,
+		statusCache:          makeStatusCache(pool.cfg.TxPoolSize),
+		logProcessBlockStats: pool.cfg.EnableProcessBlockStats,
+		logAssembleStats:     pool.cfg.EnableAssembleStats,
+		expFeeFactor:         pool.cfg.TxPoolExponentialIncreaseFactor,
+		txPoolMaxSize:        pool.cfg.TxPoolSize,
+		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
+		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
+		cfg:                  pool.cfg,
+		speculatedBlockChan:  pool.speculatedBlockChan,
+	}
+	copy.cond.L = &copy.mu
+	copy.assemblyCond.L = &copy.assemblyMu
+	copy.recomputeBlockEvaluator(nil, 0)
+
+	// deep copy txns
+	for txid, txn := range pool.pendingTxids {
+		copy.pendingTxids[txid] = txn
+	}
+
+	// TODO(yossi) I think it's okay to not do the following deep copying. Is it?
+	for txid, txn := range pool.rememberedTxids {
+		copy.rememberedTxids[txid] = txn
+	}
+	for round, i := range pool.expiredTxCount {
+		copy.expiredTxCount[round] = i
+	}
+
+	return &copy
+}
+
+// poolAsmResults is used to syncronize the state of the block assembly process.
+// The structure reading/writing is syncronized via the pool.assemblyMu lock.
 type poolAsmResults struct {
 	// the ok variable indicates whether the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
 	// whether it's still in-progress.
@@ -326,7 +377,7 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 	return feePerByte
 }
 
-// checkSufficientFee take a set of signed transactions and verifies that each transaction has
+// checkSufficientFee takes a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
 	// Special case: the compact cert transaction, if issued from the
@@ -479,6 +530,23 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	}
 
 	return pool.statusCache.check(txid)
+}
+
+func (pool *TransactionPool) OnNewSpeculatedBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	speculatedLedger := nil
+	speculatedPool := pool.copyTransactionPoolOverNewLedger(speculatedLedger)
+	speculatedPool.OnNewBlock(block, delta)
+
+	if speculatedPool.assemblyResults.err != nil {
+		return
+	}
+
+	speculatedPool.speculatedBlockChan <- speculatedBlock{blk: speculatedPool.assemblyResults.blk, branch: block.Hash()}
+	select {
+	case speculatedPool.speculatedBlockChan <- speculatedBlock{blk: speculatedPool.assemblyResults.blk, branch: block.Hash()}:
+	default:
+		speculatedPool.log.Warnf("failed writing speculated block to channel, channel already has a block")
+	}
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
