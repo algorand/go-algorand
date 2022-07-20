@@ -15,9 +15,9 @@ trap "rm -r $D" 0
 GENJSON="$1"
 UNAME=$(uname)
 if [[ "${UNAME}" == *"MINGW"* ]]; then
-	GOPATH1=$HOME/go
+    GOPATH1=$HOME/go
 else
-	GOPATH1=$(go env GOPATH | cut -d: -f1)
+    GOPATH1=$(go env GOPATH | cut -d: -f1)
 fi
 $GOPATH1/bin/algod -d $D -g "$GENJSON" -x >/dev/null
 LEDGERS=$D/*/ledger.*sqlite
@@ -82,9 +82,9 @@ for LEDGER in $LEDGERS; do
         ;;
     esac
 
-    echo ".schema $T" | sqlite3 $LEDGER
+    echo ".schema $T" | sqlite3 "$LEDGER"
     ( echo .headers on;
-      echo .mode insert $T;
-      echo "SELECT * FROM $T ORDER BY $SORT;" ) | sqlite3 $LEDGER
+      echo .mode insert "$T";
+      echo "SELECT * FROM $T ORDER BY $SORT;" ) | sqlite3 "$LEDGER"
   done
 done
