@@ -32,7 +32,7 @@ const LogicVersion = 7
 const rekeyingEnabledVersion = 2
 
 // appsEnabledVersion is the version of TEAL where ApplicationCall
-// functionality was enabled. We use this to disallow v0 and v1 TEAL programs
+// functionality was enabled. We use this to disallow v0 and v1 programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
@@ -672,7 +672,7 @@ func init() {
 			OpsByName[1][oi.Name] = oi
 		}
 	}
-	// Start from v2 TEAL and higher,
+	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
 	for v := uint64(2); v <= evalMaxVersion; v++ {
 		OpsByName[v] = make(map[string]OpSpec, 256)

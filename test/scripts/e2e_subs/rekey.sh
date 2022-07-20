@@ -14,7 +14,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 
-# Rekeying should fail if in a txn group with a < v2 TEAL program
+# Rekeying should fail if in a txn group with a < v2 program
 
 # Make v1 program
 printf 'int 1' > "${TEMPDIR}/simplev1.teal"
