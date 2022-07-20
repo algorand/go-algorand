@@ -210,6 +210,9 @@ type accountUpdates struct {
 	// baseResources stores the most recently used resources, at exactly dbRound
 	baseResources lruResources
 
+	// baseBoxes stores the most recently used box, at exactly dbRound
+	baseBoxes lruBoxes
+
 	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
 	logAccountUpdatesMetrics bool
 
@@ -309,6 +312,7 @@ func (au *accountUpdates) close() {
 
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
+	au.baseBoxes.prune(0)
 }
 
 // LookupOnlineAccountData returns the online account data for a given address at a given round.
@@ -378,7 +382,13 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
-		// OTHER LOOKUPS USE "base" caches here.
+		// check the baseBoxes cache
+		if pbd, has := au.baseBoxes.read(key); has {
+			// we don't technically need this, since it's already in the baseBoxes, however, writing this over
+			// would ensure that we promote this field.
+			au.baseBoxes.writePending(pbd, key)
+			return pbd.value, nil
+		}
 
 		if synchronized {
 			au.accountsMu.RUnlock()
@@ -391,7 +401,13 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 
 		persistedData, err := au.accountsq.lookupKeyValue(key)
 		if persistedData.round == currentDbRound {
-			return persistedData.value, nil
+			if persistedData.value != nil {
+				// if we read actual data return it
+				au.baseBoxes.writePending(persistedData, key)
+				return persistedData.value, err
+			}
+			// otherwise return empty
+			return nil, err
 		}
 
 		// The db round is unexpected...
@@ -1040,6 +1056,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+	au.baseBoxes.init(au.log, 0, 0) // todo
 	return
 }
 
@@ -1064,6 +1081,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 	au.baseAccounts.flushPendingWrites()
 	au.baseResources.flushPendingWrites()
+	au.baseBoxes.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -1118,6 +1136,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.prune(newBaseAccountSize)
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
+	// todo:
+	newBaseBoxesSize := (len(au.kvStore) + 1)
+	au.baseBoxes.prune(newBaseBoxesSize)
 
 	if au.voters != nil {
 		au.voters.newBlock(blk.BlockHeader)
@@ -2046,6 +2067,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	// rowid are flushed.
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
+	au.baseBoxes.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

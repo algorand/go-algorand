@@ -207,6 +207,15 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 	return ret
 }
 
+//msgp:ignore persistedBoxData
+type persistedBoxData struct {
+	// box value
+	value *string
+	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
+	// in persistedAccountData, and serves the same purpose.
+	round basics.Round
+}
+
 // resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
 type resourceDelta struct {
 	oldResource persistedResourcesData
@@ -1968,12 +1977,7 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-type persistedValue struct {
-	value *string
-	round basics.Round
-}
-
-func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
+func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedBoxData, err error) {
 	err = db.Retry(func() error {
 		var v sql.NullString
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
@@ -3706,5 +3710,11 @@ func (pac *persistedAccountData) before(other *persistedAccountData) bool {
 // before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
 func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
+	return prd.round < other.round
+}
+
+// before compares the round numbers of two persistedBoxData and determines if the current persistedBoxData
+// happened before the other.
+func (prd *persistedBoxData) before(other *persistedBoxData) bool {
 	return prd.round < other.round
 }

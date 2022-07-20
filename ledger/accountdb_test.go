@@ -2904,7 +2904,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N; i++ {
-					var pv persistedValue
+					var pv persistedBoxData
 					boxName := boxNames[i%totalBoxes]
 					b.StartTimer()
 					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
@@ -2935,7 +2935,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N+lookback; i++ {
-					var pv persistedValue
+					var pv persistedBoxData
 					boxName := boxNames[i%totalBoxes]
 					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
 					require.NoError(b, err)
