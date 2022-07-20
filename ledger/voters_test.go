@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -89,6 +90,14 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	//  - voters to confirm the numOfIntervals - 1 th interval
 	//  - voters to confirm the numOfIntervals th interval
 	//  - voters to confirm the numOfIntervals + 1  th interval
+
+	// forcing post commit behaviour which should clean the memory of the voters.
+	ao.postCommit(context.Background(), &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lowestRound: basics.Round((numOfIntervals-2)*intervalForTest - lookbackForTest - 1),
+		},
+	})
+
 	a.Equal(uint64(3), uint64(len(ao.voters.votersForRoundCache)))
 	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
@@ -98,6 +107,13 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	addBlockToAccountsUpdate(block.block, ao)
+
+	// forcing post commit behaviour which should clean the memory of the voters.
+	ao.postCommit(context.Background(), &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lowestRound: ao.voters.computeForgettableRounds(basics.Round((numOfIntervals-1)*intervalForTest - lookbackForTest - 1)),
+		},
+	})
 
 	a.Equal(uint64(2), uint64(len(ao.voters.votersForRoundCache)))
 	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
