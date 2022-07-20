@@ -216,7 +216,8 @@
             "acfg",
             "axfer",
             "afrz",
-            "appl"
+            "appl",
+            "stpf"
           ],
           "type": "string"
         }
