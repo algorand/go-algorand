@@ -1182,6 +1182,9 @@ func initConsensusProtocols() {
 
 	vFuture.UnfundedSenders = true
 
+	vFuture.MaxTxnBytesPerBlock = 6*1024*1024
+	vFuture.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
