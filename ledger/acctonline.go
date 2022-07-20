@@ -306,10 +306,6 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
-	if ao.voters != nil {
-		dcr.lowestRound = ao.voters.computeForgettableRounds(newBase)
-	}
-
 	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)
 
@@ -318,6 +314,10 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		dcr.offset = offset
 	}
 	dcr.oldBase = dbRound
+
+	if ao.voters != nil {
+		dcr.lowestRound = ao.voters.computeForgettableRounds(newBase)
+	}
 	return dcr
 }
 
