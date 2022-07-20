@@ -2796,6 +2796,9 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+
+		l.trackers.scheduleCommit(blk.BlockHeader.Round, 1)
+		l.trackers.waitAccountsWriting()
 	}
 
 	// the voters tracker should give up on voters for round 512
