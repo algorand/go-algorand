@@ -2323,7 +2323,7 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcaa; extract 0 6; byte 0x123456789abcaa; !=", 5)
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
-
+	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract; byte 0xbc; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
@@ -2331,6 +2331,7 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
 	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2339,11 +2340,17 @@ func TestExtractFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract without immediates expects 3 stack arguments but stack height is 1"})
 
 	testProg(t, `byte 0xf000000000000000
 	extract 1
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 0 or 2 immediate arguments"})
+
+	testProg(t, `byte 0xf000000000000000
+	int 0
+	int 5
+	extract3 1 2
+	len`, 5, Expect{4, "extract3 expects 0 immediate arguments"})
 
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
@@ -4092,7 +4099,7 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1`, v)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
 			ep := defaultEvalParams(&txn)
@@ -5192,7 +5199,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
@@ -5403,7 +5410,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
