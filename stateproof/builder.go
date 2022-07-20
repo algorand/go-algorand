@@ -249,7 +249,7 @@ func (spw *Worker) builder(latest basics.Round) {
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
-		spw.tryBuilding()
+		spw.tryBuilding(latest)
 
 		nextrnd := latest + 1
 		select {
@@ -398,43 +398,49 @@ func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
 	}
 }
 
-func (spw *Worker) tryBuilding() {
+func (spw *Worker) tryBuilding(latest basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	for rnd, b := range spw.builders {
-		firstValid := spw.ledger.Latest()
-		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
-		if b.SignedWeight() < acceptableWeight {
-			// Haven't signed enough to build the state proof at this time..
-			continue
-		}
+	latestHdr, err := spw.ledger.BlockHdr(latest)
+	if err != nil {
+		spw.log.Warnf("spw.tryBuilding: failed to fetch block header for latest (%d) round: %w", latest, err)
+		return
+	}
+	stateProofNextRound := latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	b, ok := spw.builders[stateProofNextRound]
+	if !ok {
+		return
+	}
+	firstValid := latest
+	acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
+	if b.SignedWeight() < acceptableWeight {
+		// Haven't signed enough to build the state proof at this time..
+		return
+	}
+	if !b.Ready() {
+		// Haven't gotten enough signatures to get past ProvenWeight
+		return
+	}
+	sp, err := b.Build()
+	if err != nil {
+		spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", stateProofNextRound, err)
+		return
+	}
 
-		if !b.Ready() {
-			// Haven't gotten enough signatures to get past ProvenWeight
-			continue
-		}
-
-		sp, err := b.Build()
-		if err != nil {
-			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
-			continue
-		}
-
-		var stxn transactions.SignedTxn
-		stxn.Txn.Type = protocol.StateProofTx
-		stxn.Txn.Sender = transactions.StateProofSender
-		stxn.Txn.FirstValid = firstValid
-		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
-		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
-		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
-		stxn.Txn.StateProofTxnFields.StateProofIntervalLatestRound = rnd
-		stxn.Txn.StateProofTxnFields.StateProof = *sp
-		stxn.Txn.StateProofTxnFields.Message = b.message
-		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
-		if err != nil {
-			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
-		}
+	var stxn transactions.SignedTxn
+	stxn.Txn.Type = protocol.StateProofTx
+	stxn.Txn.Sender = transactions.StateProofSender
+	stxn.Txn.FirstValid = firstValid
+	stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
+	stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
+	stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
+	stxn.Txn.StateProofTxnFields.StateProofIntervalLatestRound = stateProofNextRound
+	stxn.Txn.StateProofTxnFields.StateProof = *sp
+	stxn.Txn.StateProofTxnFields.Message = b.message
+	err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
+	if err != nil {
+		spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", stateProofNextRound, err)
 	}
 }
 
