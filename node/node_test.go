@@ -556,10 +556,18 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 		acctData    basics.OnlineAccountData
 		expectedInt int
 	}{
-		{"online 1", basics.OnlineAccountData{VoteFirstValid: 1, VoteLastValid: 100, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0},
-		{"online 2", basics.OnlineAccountData{VoteFirstValid: 1, VoteLastValid: 100, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0},
-		{"offline & not closed", basics.OnlineAccountData{VoteFirstValid: 0, VoteLastValid: 0, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0 | bitAccountOffline},
-		{"offline & closed", basics.OnlineAccountData{VoteFirstValid: 0, VoteLastValid: 0, MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0 | bitAccountOffline | bitAccountIsClosed},
+		{"online 1", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 1, VoteLastValid: 100},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0},
+		{"online 2", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 1, VoteLastValid: 100},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0},
+		{"offline & not closed", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 0, VoteLastValid: 0},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0 | bitAccountOffline},
+		{"offline & closed", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 0, VoteLastValid: 0},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0 | bitAccountOffline | bitAccountIsClosed},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
