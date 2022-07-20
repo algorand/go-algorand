@@ -321,12 +321,12 @@ return stack matches the name of the input value.
 | `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
 | `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
-| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails |
+| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates. |
 | `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
-| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A) |
-| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A) |
+| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate. |
+| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates. |
 | `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
 | `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
 
@@ -401,12 +401,12 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `args` | Ath LogicSig argument |
 | `txn f` | field F of current transaction |
 | `gtxn t f` | field F of the Tth transaction in the current group |
-| `txna f i` | Ith value of the array field F of the current transaction |
+| `txna f i` | Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates. |
 | `txnas f` | Ath value of the array field F of the current transaction |
-| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group |
+| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates. |
 | `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | field F of the Ath transaction in the current group |
-| `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
+| `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates. |
 | `gtxnsas f` | Bth value of the array field F from the Ath transaction in the current group |
 | `global f` | global field F |
 | `load i` | Ith scratch space value. All scratch spaces are 0 at program start. |
@@ -419,8 +419,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gaid t` | ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | ID of the asset or application created in the Ath transaction of the current group |
 
-**Transaction Fields**
-
+#### Transaction Fields
+##### Scalar Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
@@ -449,9 +449,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 23 | TxID | []byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
-| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
-| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
@@ -471,9 +469,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
 | 46 | FreezeAssetAccount | []byte | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
 | 47 | FreezeAssetFrozen | uint64 | v2  | The new frozen value, 0 or 1 |
-| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
-| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
 | 52 | GlobalNumUint | uint64 | v3  | Number of global state integers in ApplicationCall |
 | 53 | GlobalNumByteSlice | uint64 | v3  | Number of global state byteslices in ApplicationCall |
@@ -481,16 +477,24 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
 | 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
-| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
-| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
-| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
+
+##### Array Fields
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
+| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
+| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

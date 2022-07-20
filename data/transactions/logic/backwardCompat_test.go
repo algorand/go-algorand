@@ -408,13 +408,13 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	for _, fs := range fields {
 		field := fs.field.String()
-		for _, command := range tests {
+		for i, command := range tests {
 			text := fmt.Sprintf(command, field)
 			asmError := "...was introduced in ..."
 			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("%s unknown field: %#v", op, field)
+				asmError = fmt.Sprintf("%#v field of %s can only be used with %d immediates", field, op, i+2)
 			}
 			// check assembler fails in versions before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
