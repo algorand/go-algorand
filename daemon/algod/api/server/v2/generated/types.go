@@ -709,6 +709,13 @@ type PostParticipationResponse struct {
 	PartId string `json:"partId"`
 }
 
+// PostSimulationResponse defines model for PostSimulationResponse.
+type PostSimulationResponse struct {
+
+	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage string `json:"failure-message"`
+}
+
 // PostTransactionsResponse defines model for PostTransactionsResponse.
 type PostTransactionsResponse struct {
 

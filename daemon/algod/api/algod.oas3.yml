@@ -600,6 +600,25 @@
         },
         "description": "Participation ID of the submission"
       },
+      "PostSimulationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "failure-message": {
+                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "failure-message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Simulation results."
+      },
       "PostTransactionsResponse": {
         "content": {
           "application/json": {
@@ -4331,6 +4350,124 @@
           }
         },
         "summary": "Get a specific pending transaction."
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "operationId": "SimulateTransaction",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The byte encoded signed transaction to broadcast to network",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "failure-message": {
+                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "failure-message"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "failure-message": {
+                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "failure-message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Simulation results."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Malformed Algorand transaction "
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Broadcasts a raw transaction to the network.",
+        "x-codegen-request-body-name": "rawtxn"
       }
     },
     "/versions": {
