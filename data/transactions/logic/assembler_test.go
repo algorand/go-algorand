@@ -1899,7 +1899,7 @@ func TestDisassembleLastLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// starting from TEAL v2 branching to the last line are legal
+	// starting from v2 branching to the last line are legal
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			source := fmt.Sprintf(`#pragma version %d
@@ -2241,7 +2241,7 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	// check if no version it defaults to TEAL v1
+	// check if no version it defaults to v1
 	text = `byte "test"
 len
 `

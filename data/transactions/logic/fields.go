@@ -564,7 +564,7 @@ func (fs globalFieldSpec) Note() string {
 }
 
 var globalFieldSpecs = [...]globalFieldSpec{
-	// version 0 is the same as TEAL v1 (initial TEAL release)
+	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
 	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
 	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
