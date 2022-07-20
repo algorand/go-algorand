@@ -209,7 +209,7 @@ func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, 
 func (vt *votersTracker) deleteUpToRoundFromCache(lowestRound basics.Round) {
 	// Removing all rounds that are no longer needed, from the map, and hence later on from the blocks db.
 	for rnd := range vt.votersForRoundCache {
-		if rnd <= lowestRound {
+		if rnd < lowestRound {
 			delete(vt.votersForRoundCache, rnd)
 		}
 	}
@@ -227,6 +227,7 @@ func (vt *votersTracker) deleteUpToRoundFromCache(lowestRound basics.Round) {
 // Since the map is small (Usually  0 - 2 elements and up to StateProofRecoveryInterval) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) computeForgettableRounds(newBase basics.Round) basics.Round {
+	// TODO: verify we can fetch from the ledger in this code section.
 	hdr, err := vt.l.BlockHdr(newBase)
 	if err != nil {
 		// this shouldn't happen, blocks shouldn't be released without votersTracker consent.
@@ -236,25 +237,26 @@ func (vt *votersTracker) computeForgettableRounds(newBase basics.Round) basics.R
 
 	proto := config.Consensus[hdr.CurrentProtocol]
 
+	// no state proof, doesn't need to remember anything.
 	if proto.StateProofInterval == 0 {
 		return newBase
 	}
 
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	closestIntervalRound := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
+	earliestRoundToRecover := closestIntervalRound.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	nextStateProof := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-	maxRoundToDrop := basics.Round(0)
-	for r, tr := range vt.votersForRoundCache {
-		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
-		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+	confirmedStateProof := nextStateProof.SubSaturate(basics.Round(proto.StateProofInterval))
 
-		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
-		if maxRoundToDrop < r && (stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
-			stateProofRound <= oldestRoundOnRecoveryPeriod) {
+	forfeitRound := max(earliestRoundToRecover, confirmedStateProof).
+		SubSaturate(basics.Round(proto.StateProofVotersLookback))
 
-			maxRoundToDrop = r
-		}
+	return max(vt.lowestRound(newBase), forfeitRound)
+}
+
+func max(a basics.Round, b basics.Round) basics.Round {
+	if a > b {
+		return a
 	}
-
-	return maxRoundToDrop
+	return b
 }

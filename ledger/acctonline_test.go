@@ -121,12 +121,13 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, totals ledgercore.AccountT
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = testProtocolVersion
+
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = totals
 
 	ml.trackers.newBlock(blk, delta)
-
+	_ = ml.addMockBlock(blockEntry{block: blk}, delta)
 	return newTotals
 }
 
@@ -1173,29 +1174,37 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 
 	// add maxBalLookback empty blocks
 	maxBlocks := maxBalLookback * 5
-	for i := 1; i <= maxBlocks; i++ {
+	i := 1
+	for ; i <= maxBlocks; i++ {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
 		base := genesisAccts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
 		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
+		// in this test we simulate that the stateproof is stalled, thus we want every header to state: nextStateProof = 12:
+		ml.blocks[len(ml.blocks)-1].block.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{}
+		ml.blocks[len(ml.blocks)-1].block.BlockHeader.Round = basics.Round(i)
+
+		//ml.blocks[len(ml.blocks)-1].block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = bookkeeping.StateProofTrackingData{
+		//	StateProofNextRound: 0,
+		//}
 		genesisAccts = append(genesisAccts, newAccts)
 		commitSync(t, oa, ml, basics.Round(i))
 	}
-	require.Len(t, oa.deltas, int(conf.MaxAcctLookback))
-	require.Equal(t, basics.Round(maxBlocks-int(conf.MaxAcctLookback)), oa.cachedDBRoundOnline)
+	require.Len(t, oa.deltas, int(conf.MaxAcctLookback), "deltas should be equal to the max loop-back")
+	require.Equal(t, basics.Round(maxBlocks-int(conf.MaxAcctLookback)), oa.cachedDBRoundOnline, "ensuring disk is updated as much as possible")
 	// voters stalls after the first interval
 	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
-	require.Equal(t, basics.Round(stateProofRounds-stateProofVotersLookback), lowest)
-	require.Equal(t, maxBlocks/stateProofRounds, len(oa.voters.votersForRoundCache))
+	require.Equal(t, basics.Round(stateProofRounds-stateProofVotersLookback), lowest, "expecting lowest to be before the first stateproof which was not accepted yet.")
+	require.Equal(t, maxBlocks/stateProofRounds, len(oa.voters.votersForRoundCache), "we shouldn't have released any tree from the votertracker.")
 	retain, lookback := oa.committedUpTo(oa.latest())
-	require.Equal(t, lowest, retain)
-	require.Equal(t, conf.MaxAcctLookback, uint64(lookback))
+	require.Equal(t, lowest, retain, "online accounts doesn't release more than voters tracker.")
+	require.Equal(t, conf.MaxAcctLookback, uint64(lookback), "ensure lookback has reached it's maximal capacity")
 
-	// onlineRoundParamsData does not store more than maxBalLookback + deltas even if voters stall
+	// onlineRoundParamsData that is stored in memory and not disk should contain maximal value of maxBalLookback+conf.MaxAcctLookback.
 	require.Equal(t, uint64(len(oa.onlineRoundParamsData)), maxBalLookback+conf.MaxAcctLookback)
 
-	// DB has all the required history tho
+	// ensuring that other oa.onlineRoundParamsData were moved into the disk ( inflating disk size and not main memory).
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -1203,7 +1212,9 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		return err
 	})
 	require.NoError(t, err)
+	// disk round == latest - lookback.
 	require.Equal(t, oa.latest()-basics.Round(conf.MaxAcctLookback), endRound)
+	//  maxBlocks - <the position that the voters agrees to release> - <maximal lookback in main memory> == <the params stored in the db>
 	require.Equal(t, maxBlocks-int(lowest)-int(conf.MaxAcctLookback)+1, len(dbOnlineRoundParams))
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
