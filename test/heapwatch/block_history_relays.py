@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 #
 
+import argparse
 import configparser
 import logging
+import os
 import re
 import threading
 
 import block_history
+
+logger = logging.getLogger(__name__)
 
 relay_pat = re.compile(r'name_r\d+')
 
@@ -16,6 +20,7 @@ def main():
     ap.add_argument('--all', default=False, action='store_true')
     ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('--token', default='', help='default algod api token to use')
+    ap.add_argument('--outdir', required=True)
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -33,20 +38,22 @@ def main():
             continue
         if args.all:
             pass
-        elif args.endswith('1'):
+        elif k.endswith('1'):
             pass
         else:
             continue
         for net in v.keys():
-            addr = 'http://' + net + ':' + port
+            addr = 'http://' + net + ':' + args.port
             #addrName[addr] = k
-            outpath = os.path.join(outdir, name + '_' + net)
+            outpath = os.path.join(args.outdir, k + '_' + net)
             fet = block_history.Fetcher(addr=addr, token=args.token, outpath=outpath)
             t = threading.Thread(target=fet.loop)
+            logger.debug('starting %s -> %s', addr, outpath)
             t.start()
             threads.append(t)
     for t in threads:
-        t.wait()
+        t.join()
+    logger.debug('block_history_relays.py done')
 
 if __name__ == '__main__':
     main()

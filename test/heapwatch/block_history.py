@@ -27,7 +27,7 @@ def addr_token_from_algod(algorand_data):
     return addr, token
 
 def loads(blob):
-    return msgpack.loads(base64.b64decode(blob))
+    return msgpack.loads(base64.b64decode(blob), strict_map_key=False)
 
 def dumps(blob):
     return base64.b64encode(msgpack.dumps(blob))
@@ -159,7 +159,7 @@ class Fetcher:
             if b is None:
                 print("got None nextblock. exiting")
                 return
-            b = msgpack.loads(b)
+            b = msgpack.loads(b, strict_map_key=False)
             nowround = b['block'].get('rnd', 0)
             if (lastround is not None) and (nowround != lastround + 1):
                 logger.info('round jump %d to %d', lastround, nowround)
