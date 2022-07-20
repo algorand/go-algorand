@@ -1181,13 +1181,10 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		base := genesisAccts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
 		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
-		// in this test we simulate that the stateproof is stalled, thus we want every header to state: nextStateProof = 12:
+		// the voterTracker needs access to headers.
 		ml.blocks[len(ml.blocks)-1].block.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{}
 		ml.blocks[len(ml.blocks)-1].block.BlockHeader.Round = basics.Round(i)
 
-		//ml.blocks[len(ml.blocks)-1].block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = bookkeeping.StateProofTrackingData{
-		//	StateProofNextRound: 0,
-		//}
 		genesisAccts = append(genesisAccts, newAccts)
 		commitSync(t, oa, ml, basics.Round(i))
 	}
