@@ -1,12 +1,17 @@
-PARAMS=-w 500 -R 20 -N 100 -n 100 -H 15 --node-template node.json --relay-template relay.json
+PARAMS=-w 500 -R 20 -N 100 -n 100 -H 15 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
+
+SOURCES=node.json ${GOPATH}/bin/netgoal Makefile relay.json nonPartNode.json
 
 all:	net.json genesis.json
 
-net.json:	node.json ${GOPATH}/bin/netgoal Makefile
+net.json:	${SOURCES}
 	netgoal generate -t net -r /tmp/wat -o net.json ${PARAMS}
 
-genesis.json:	${GOPATH}/bin/netgoal Makefile
+genesis.json:	${SOURCES}
 	netgoal generate -t genesis -r /tmp/wat -o genesis.json ${PARAMS}
+	mv genesis.json genesis.json.orig
+	jq '.NetworkName="bs3s"|.ConsensusProtocol="wat"|.LastPartKeyRound=5000' < genesis.json.orig > genesis.json
+	rm genesis.json.orig
 
 clean:
 	rm -f net.json genesis.json
