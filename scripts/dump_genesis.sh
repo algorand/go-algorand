@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Fail if anything goes wrong
+set -e
+set -o pipefail
+
 if [ "$1" = "" ]; then
   echo "Usage: $0 genesis.json"
   exit 1
@@ -40,7 +44,7 @@ for LEDGER in $LEDGERS; do
         SORT=id
         ;;
       onlineroundparamstail)
-        SORT=round
+        SORT=rnd
         ;;
       participationperiods)
         SORT=period
