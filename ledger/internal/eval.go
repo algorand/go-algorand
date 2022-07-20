@@ -522,14 +522,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*fromRewards = newFromRewards
 	}
 
-	var overflowed bool
-	fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
-	}
-	err = cs.putAccount(from, fromBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
+		}
+		err = cs.putAccount(from, fromBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	toBal, err := cs.lookup(to)
@@ -547,13 +550,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*toRewards = newToRewards
 	}
 
-	toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
-	}
-	err = cs.putAccount(to, toBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
+		}
+		err = cs.putAccount(to, toBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

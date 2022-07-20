@@ -277,9 +277,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 
 @@ Loading_Values.md @@
 
-**Transaction Fields**
-
+#### Transaction Fields
+##### Scalar Fields
 @@ txn_fields.md @@
+##### Array Fields
+@@ txna_fields.md @@
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 

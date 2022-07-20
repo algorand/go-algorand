@@ -615,25 +615,47 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
 	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
 	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
-	testLine(t, "txn Accounts 0", 1, "txn expects 1 immediate argument")
+	testLine(t, "gtxna ApplicationArgs 0 255", AssemblerMaxVersion, "gtxna can only use \"ApplicationArgs\" as immediate 2")
+	testLine(t, "gtxna 0 255 ApplicationArgs", AssemblerMaxVersion, "gtxna can only use \"255\" as immediate 1 or 3")
+
+	testLine(t, "txn Accounts 256", AssemblerMaxVersion, "txn i beyond 255: 256")
+	testLine(t, "txn ApplicationArgs 256", AssemblerMaxVersion, "txn i beyond 255: 256")
+	testLine(t, "txn 255 ApplicationArgs", AssemblerMaxVersion, "txn with 2 immediates can only use \"255\" as immediate 2")
+	testLine(t, "txn Sender 256", AssemblerMaxVersion, "\"Sender\" field of txn can only be used with 1 immediate")
+	testLine(t, "gtxn 0 Accounts 256", AssemblerMaxVersion, "gtxn i beyond 255: 256")
+	testLine(t, "gtxn 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxn i beyond 255: 256")
+	testLine(t, "gtxn 256 Accounts 0", AssemblerMaxVersion, "gtxn t beyond 255: 256")
+	testLine(t, "gtxn 0 Sender 256", AssemblerMaxVersion, "\"Sender\" field of gtxn can only be used with 2 immediates")
+	testLine(t, "gtxn ApplicationArgs 0 255", AssemblerMaxVersion, "gtxn with 3 immediates can only use \"ApplicationArgs\" as immediate 2")
+	testLine(t, "gtxn 0 255 ApplicationArgs", AssemblerMaxVersion, "gtxn with 3 immediates can only use \"255\" as immediate 1 or 3")
+
+	testLine(t, "txn Accounts 0", 1, "txn opcode with 2 immediates was introduced in v2")
 	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
 	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
+	testLine(t, "txn Accounts 0 1", AssemblerMaxVersion, "txn expects 1 or 2 immediate arguments")
 	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")
 	testLine(t, "txna Accounts a", AssemblerMaxVersion, "txna unable to parse...")
-	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects 2 immediate arguments")
+	testLine(t, "txn Accounts a", AssemblerMaxVersion, "txn unable to parse...")
+	testLine(t, "gtxn 0 Sender 0", 1, "gtxn opcode with 3 immediates was introduced in v2")
 	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects 2 or 3 immediate arguments")
 	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects 3 immediate arguments")
 	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "gtxna unable to parse...")
 	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "gtxna unable to parse...")
+
+	testLine(t, "gtxn 0 Accounts 1 2", AssemblerMaxVersion, "gtxn expects 2 or 3 immediate arguments")
+	testLine(t, "gtxn a Accounts 0", AssemblerMaxVersion, "gtxn unable to parse...")
+	testLine(t, "gtxn 0 Accounts a", AssemblerMaxVersion, "gtxn unable to parse...")
+
 	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects 2 immediate arguments")
 	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
 	testLine(t, "gtxn a ABC", 2, "gtxn unable to parse...")
-	testLine(t, "txn Accounts", 1, "txn unknown field: \"Accounts\"")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn unknown field: \"Accounts\"")
+	// For now not going to additionally report version issue until version is only problem
+	testLine(t, "txn Accounts", 1, "\"Accounts\" field of txn can only be used with 2 immediates")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "\"Accounts\" field of txn can only be used with 2 immediates")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn unknown field: \"Accounts\"...")
-	testLine(t, "gtxn 0 Accounts", 1, "gtxn unknown field: \"Accounts\"")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "\"Accounts\" field of gtxn can only be used with 3 immediates")
+	testLine(t, "gtxn 0 Accounts", 1, "\"Accounts\" field of gtxn can only be used with 3 immediates")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
@@ -1697,7 +1719,7 @@ func TestAssembleVersions(t *testing.T) {
 
 	testLine(t, "txna Accounts 0", AssemblerMaxVersion, "")
 	testLine(t, "txna Accounts 0", 2, "")
-	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in TEAL v2")
+	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in v2")
 }
 
 func TestAssembleBalance(t *testing.T) {
@@ -2490,8 +2512,8 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{4, "...is not allowed."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in TEAL v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in TEAL v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in v6..."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{4, "...is not allowed."})
 
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{3, "...is not allowed."})
@@ -2586,4 +2608,74 @@ done:
 #pragma typetrack true
  concat
 `, LogicVersion, Expect{5, "concat arg 1 wanted type []byte..."})
+}
+
+func TestMergeProtos(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	iVi := OpSpec{Proto: proto("i:i")}
+	bVb := OpSpec{Proto: proto("b:b")}
+	aaVa := OpSpec{Proto: proto("aa:a")}
+	aVaa := OpSpec{Proto: proto("a:aa")}
+	p, _, _ := mergeProtos(map[int]OpSpec{0: iVi, 1: bVb})
+	require.Equal(t, proto("a:a"), p)
+	_, _, ok := mergeProtos(map[int]OpSpec{0: aaVa, 1: iVi})
+	require.False(t, ok)
+	_, _, ok = mergeProtos(map[int]OpSpec{0: aVaa, 1: iVi})
+	require.False(t, ok)
+	medley := OpSpec{Proto: proto("aibibabai:aibibabai")}
+	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}
+	p, _, _ = mergeProtos(map[int]OpSpec{0: medley, 1: medley2})
+	require.Equal(t, proto("aiaabaaaa:aiaabaaaa"), p)
+	v1 := OpSpec{Version: 1, Proto: proto(":")}
+	v2 := OpSpec{Version: 2, Proto: proto(":")}
+	_, v, _ := mergeProtos(map[int]OpSpec{0: v2, 1: v1})
+	require.Equal(t, uint64(1), v)
+}
+
+// Extra tests for features of getSpec that are currently not tested elsewhere
+func TestGetSpec(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ops, _ := AssembleStringWithVersion("int 1", AssemblerMaxVersion)
+	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
+	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
+	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
+	_, _, ok := getSpec(ops, "dummyPseudo", []string{})
+	require.False(t, ok)
+	_, _, ok = getSpec(ops, "nonsense", []string{})
+	require.False(t, ok)
+	require.Equal(t, 2, len(ops.Errors))
+	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
+}
+
+func TestAddPseudoDocTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// Not parallel because it modifies pseudoOps and opDocByName which are global maps
+	// t.Parallel()
+	defer func() {
+		delete(pseudoOps, "tests")
+		delete(opDocByName, "multiple")
+		delete(opDocByName, "single")
+		delete(opDocByName, "none")
+		delete(opDocByName, "any")
+	}()
+
+	pseudoOps["tests"] = map[int]OpSpec{2: OpSpec{Name: "multiple"}, 1: OpSpec{Name: "single"}, 0: OpSpec{Name: "none"}, anyImmediates: OpSpec{Name: "any"}}
+	addPseudoDocTags()
+	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
+	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
+	require.Equal(t, "`none` can be called using `tests` with no immediates.", opDocByName["none"])
+	require.Equal(t, "", opDocByName["any"])
+}
+func TestReplacePseudo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	replaceVersion := 7
+	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
+		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace without immediates expects 3 stack arguments but stack height is 2"})
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
+	}
 }

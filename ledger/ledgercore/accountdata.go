@@ -17,8 +17,6 @@
 package ledgercore
 
 import (
-	"reflect"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -145,7 +143,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 
 // IsZero checks if an AccountData value is the same as its zero value.
 func (u AccountData) IsZero() bool {
-	return reflect.DeepEqual(u, AccountData{})
+	return u == AccountData{}
 }
 
 // Money is similar to basics account data Money function

@@ -770,7 +770,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F of the current transaction",
+      "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -791,7 +791,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -897,7 +897,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Ath transaction in the current group",
+      "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -1217,7 +1217,7 @@
       "Args": "BUU",
       "Returns": "B",
       "Size": 1,
-      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
+      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -1261,7 +1261,7 @@
       "Args": "BB",
       "Returns": "B",
       "Size": 2,
-      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)\n`replace2` can be called using `replace` with 1 immediate.",
       "ImmediateNote": "{uint8 start position}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1273,7 +1273,7 @@
       "Args": "BUB",
       "Returns": "B",
       "Size": 1,
-      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)\n`replace3` can be called using `replace` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
