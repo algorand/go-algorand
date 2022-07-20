@@ -1144,9 +1144,6 @@ func initConsensusProtocols() {
 	vFuture := v32
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
-	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
-
 	// Make the accounts snapshot for round X at X-CatchpointLookback
 	vFuture.CatchpointLookback = 320
 
