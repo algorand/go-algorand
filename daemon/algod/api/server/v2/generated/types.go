@@ -269,6 +269,13 @@ type Box struct {
 	Value []byte `json:"value"`
 }
 
+// BoxDescriptor defines model for BoxDescriptor.
+type BoxDescriptor struct {
+
+	// Base64 encoded box name
+	Name []byte `json:"name"`
+}
+
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {
 	Branch      string `json:"branch"`
@@ -608,7 +615,9 @@ type BlockResponse struct {
 type BoxResponse Box
 
 // BoxesResponse defines model for BoxesResponse.
-type BoxesResponse [][]byte
+type BoxesResponse struct {
+	Boxes []BoxDescriptor `json:"boxes"`
+}
 
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {

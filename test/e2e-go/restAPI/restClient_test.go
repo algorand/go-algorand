@@ -1415,11 +1415,11 @@ end:
 		}
 
 		var resp generated.BoxesResponse
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 		a.NoError(err)
-		a.Equal(createdBoxCount, uint64(len(resp)))
-		for _, byteName := range resp {
-			a.True(createdBoxName[string(byteName)])
+		a.Equal(createdBoxCount, uint64(len(resp.Boxes)))
+		for _, b := range resp.Boxes {
+			a.True(createdBoxName[string(b.Name)])
 		}
 	}
 
@@ -1461,9 +1461,9 @@ end:
 		`∑´´˙©˚¬∆ßåƒ√¬`,
 	}
 
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
+	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
-	a.Empty(resp)
+	a.Empty(resp.Boxes)
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -1476,6 +1476,11 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
+	maxBoxNumToGet := uint64(10)
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), maxBoxNumToGet)
+	a.NoError(err)
+	a.Len(resp.Boxes, int(maxBoxNumToGet))
+
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
 		// grouping box names to operate, and delete such boxes
@@ -1487,9 +1492,9 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
-	a.Empty(resp)
+	a.Empty(resp.Boxes)
 
 	// Get Box value from box name
 	encodeInt := func(n uint64) []byte {
