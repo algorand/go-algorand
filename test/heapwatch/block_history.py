@@ -48,6 +48,7 @@ class Fetcher:
         self._algod = None
         self.go = True
         self.prev_round = prev_round
+        self.block_time = None
         self.outpath = outpath
         self._outf = None
         if outpath and prev_round is None:
@@ -105,6 +106,7 @@ class Fetcher:
         return None
 
     def _nextblock_inner(self, lastround):
+        self.block_time = None
         algod = self.algod()
         if lastround is None:
             status = algod.status()
@@ -120,9 +122,12 @@ class Fetcher:
                 pass
                 #logger.debug('could not get block %d: %s', lastround + 1, e, exc_info=True)
         status = algod.status_after_block(lastround)
+        block_time = time.time() # the block has happened, don't count block data transit time
         nbr = status['last-round']
         retries = 30
         while (nbr > lastround + 1) and self.go:
+            # if more than one block elapsed, we don't have a good time for either block
+            block_time = None
             # try lastround+1 one last time
             try:
                 blk = self.algod().block_info(lastround + 1, response_format='msgpack')
@@ -137,6 +142,7 @@ class Fetcher:
                 break
         blk = self.algod().block_info(nbr, response_format='msgpack')
         if blk:
+            self.block_time = block_time
             return blk
         raise Exception('got None for blk {}'.format(nbr))
 
@@ -172,7 +178,7 @@ class Fetcher:
         # throw away certs
         b.pop('cert', None)
         # Add fine grained time. This should be better than ['block']['ts']
-        b['_time'] = time.time()
+        b['_time'] = self.block_time or time.time()
         self.outf().write(dumps(b) + b'\n')
 
     def close(self):
