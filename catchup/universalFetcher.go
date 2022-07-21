@@ -36,14 +36,14 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-// UniversalFetcher fetches blocks either from an http peer or ws peer.
+// UniversalBlockFetcher fetches blocks either from an http peer or ws peer.
 type UniversalBlockFetcher struct {
 	config config.Local
 	net    network.GossipNode
 	log    logging.Logger
 }
 
-// makeUniversalFetcher returns a fetcher for http and ws peers.
+// MakeUniversalBlockFetcher returns a fetcher for http and ws peers.
 func MakeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *UniversalBlockFetcher {
 	return &UniversalBlockFetcher{
 		config: config,
