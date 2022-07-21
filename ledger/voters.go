@@ -256,13 +256,11 @@ func (vt *votersTracker) computeForgettableRounds(newBase basics.Round) basics.R
 	earliestRoundToRecover := getEarliestRoundToRecover(hdr.Round, proto)
 	confirmedStateProof := getPreviousStateProofRound(hdr, proto)
 
-	forfeitRound := max(
+	return max(
 		vt.lowestRound(newBase),
 		earliestRoundToRecover.SubSaturate(basics.Round(proto.StateProofVotersLookback)),
 		confirmedStateProof.SubSaturate(basics.Round(proto.StateProofVotersLookback)),
 	)
-
-	return forfeitRound
 }
 
 func getPreviousStateProofRound(hdr bookkeeping.BlockHeader, proto config.ConsensusParams) basics.Round {
