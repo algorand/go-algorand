@@ -65,9 +65,9 @@ const (
 
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 
-// peerSelectorPeer is a peer wrapper, adding to it the peerClass information
+// PeerSelectorPeer is a peer wrapper, adding to it the peerClass information
 // There can be multiple peer elements with the same address but different peer classes, and it is important to distinguish between them.
-type peerSelectorPeer struct {
+type PeerSelectorPeer struct {
 	network.Peer
 	peerClass network.PeerOption
 }
@@ -80,7 +80,7 @@ type peerClass struct {
 	peerClass   network.PeerOption
 }
 
-// the peersRetriever is a subset of the network.GossipNode used to ensure that we can create an instance of the peerSelector
+// the peersRetriever is a subset of the network.GossipNode used to ensure that we can create an instance of the PeerSelector
 // for testing purposes, providing just the above function.
 type peersRetriever interface {
 	// Get a list of Peers we could potentially send a direct message to.
@@ -101,11 +101,11 @@ type peerPool struct {
 	peers []peerPoolEntry
 }
 
-// peerSelector is a helper struct used to select the next peer to try and connect to
+// PeerSelector is a helper struct used to select the next peer to try and connect to
 // for various catchup purposes. Unlike the underlying network GetPeers(), it allows the
 // client to provide feedback regarding the peer's performance, and to have the subsequent
 // query(s) take advantage of that intel.
-type peerSelector struct {
+type PeerSelector struct {
 	mu          deadlock.Mutex
 	net         peersRetriever
 	peerClasses []peerClass
@@ -268,19 +268,19 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	return bounded
 }
 
-// MakePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
-func MakePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *peerSelector {
-	selector := &peerSelector{
+// MakePeerSelector creates a PeerSelector, given a peersRetriever and peerClass array.
+func MakePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *PeerSelector {
+	selector := &PeerSelector{
 		net:         net,
 		peerClasses: initialPeersClasses,
 	}
 	return selector
 }
 
-// getNextPeer returns the next peer. It randomally selects a peer from a pool that has
+// GetNextPeer returns the next peer. It randomally selects a peer from a pool that has
 // the lowest rank value. Given that the peers are grouped by their ranks, allow us to
 // prioritize peers based on their class and/or performance.
-func (ps *peerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
+func (ps *PeerSelector) GetNextPeer() (psp *PeerSelectorPeer, err error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.refreshAvailablePeers()
@@ -291,17 +291,17 @@ func (ps *peerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
 			// provide the needed test.
 			// pick one of the peers from this pool at random
 			peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
-			psp = &peerSelectorPeer{pool.peers[peerIdx].peer, pool.peers[peerIdx].class.peerClass}
+			psp = &PeerSelectorPeer{pool.peers[peerIdx].peer, pool.peers[peerIdx].class.peerClass}
 			return
 		}
 	}
 	return nil, errPeerSelectorNoPeerPoolsAvailable
 }
 
-// rankPeer ranks a given peer.
+// RankPeer ranks a given peer.
 // return the old value and the new updated value.
 // updated value could be different from the input rank.
-func (ps *peerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int, int) {
+func (ps *PeerSelector) RankPeer(psp *PeerSelectorPeer, rank int) (int, int) {
 	if psp == nil {
 		return -1, -1
 	}
@@ -368,7 +368,7 @@ func (ps *peerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int, int) {
 }
 
 // peerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
-func (ps *peerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
+func (ps *PeerSelector) peerDownloadDurationToRank(psp *PeerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	poolIdx, peerIdx := ps.findPeer(psp)
@@ -391,7 +391,7 @@ func (ps *peerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockD
 // addToPool adds a given peer to the correct group. If no group exists for that peer's rank,
 // a new group is created.
 // The method return true if a new group was created ( suggesting that the pools list would need to be re-ordered ), or false otherwise.
-func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass, peerHistory *historicStats) bool {
+func (ps *PeerSelector) addToPool(peer network.Peer, rank int, class peerClass, peerHistory *historicStats) bool {
 	// see if we already have a list with that rank:
 	for i, pool := range ps.pools {
 		if pool.rank == rank {
@@ -405,7 +405,7 @@ func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass, 
 }
 
 // sort the pools array in an ascending order according to the rank of each pool.
-func (ps *peerSelector) sort() {
+func (ps *PeerSelector) sort() {
 	sort.SliceStable(ps.pools, func(i, j int) bool {
 		return ps.pools[i].rank < ps.pools[j].rank
 	})
@@ -425,7 +425,7 @@ func peerAddress(peer network.Peer) string {
 
 // refreshAvailablePeers reload the available peers from the network package, add new peers along with their
 // corresponding initial rank, and deletes peers that have been dropped by the network package.
-func (ps *peerSelector) refreshAvailablePeers() {
+func (ps *PeerSelector) refreshAvailablePeers() {
 	existingPeers := make(map[network.PeerOption]map[string]bool)
 	for _, pool := range ps.pools {
 		for _, localPeer := range pool.peers {
@@ -483,7 +483,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 
 // findPeer look into the peer pool and find the given peer.
 // The method returns the pool and peer indices if a peer was found, or (-1, -1) otherwise.
-func (ps *peerSelector) findPeer(psp *peerSelectorPeer) (poolIdx, peerIdx int) {
+func (ps *PeerSelector) findPeer(psp *PeerSelectorPeer) (poolIdx, peerIdx int) {
 	peerAddr := peerAddress(psp.Peer)
 	if peerAddr == "" {
 		return -1, -1

@@ -129,7 +129,7 @@ func TestUGetBlockHTTP(t *testing.T) {
 func TestUGetBlockUnsupported(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fetcher := universalBlockFetcher{}
+	fetcher := UniversalBlockFetcher{}
 	peer := ""
 	block, cert, duration, err := fetcher.FetchBlock(context.Background(), 1, peer)
 	require.Error(t, err)
