@@ -356,14 +356,14 @@ var txnFieldSpecs = [...]txnFieldSpec{
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
 var TxnFields = FieldGroup{
-	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	"txn", "",
 	TxnFieldNames[:],
 	txnFieldSpecByName,
 }
 
-// TxnScalarFields narows TxnFields to only have the names of scalar fetching opcodes
+// TxnScalarFields narrows TxnFields to only have the names of scalar fetching opcodes
 var TxnScalarFields = FieldGroup{
-	"txn", "",
+	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
 	txnScalarFieldNames(),
 	txnFieldSpecByName,
 }
@@ -386,7 +386,7 @@ func txnScalarFieldNames() []string {
 
 // TxnArrayFields narows TxnFields to only have the names of array fetching opcodes
 var TxnArrayFields = FieldGroup{
-	"txna", "",
+	"txna", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
 	txnaFieldNames(),
 	txnFieldSpecByName,
 }
@@ -564,7 +564,7 @@ func (fs globalFieldSpec) Note() string {
 }
 
 var globalFieldSpecs = [...]globalFieldSpec{
-	// version 0 is the same as TEAL v1 (initial TEAL release)
+	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
 	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
 	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},

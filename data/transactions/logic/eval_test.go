@@ -40,7 +40,7 @@ import (
 )
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
-// we check that TEAL v1 and v2 programs are compatible with the latest evaluator
+// we check that v1 and v2 programs are compatible with the latest evaluator
 func makeTestProto() *config.ConsensusParams {
 	return makeTestProtoV(LogicVersion)
 }
@@ -185,16 +185,16 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, defaultEvalParams(nil), "invalid", "invalid program (empty)")
 }
 
-// TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
-func TestMinTealVersionParamEvalCheckSignature(t *testing.T) {
+// TestMinAvmVersionParamEval tests eval/check reading the MinAvmVersion from the param
+func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	params := defaultEvalParams(nil)
 	version2 := uint64(rekeyingEnabledVersion)
-	params.MinTealVersion = &version2
+	params.MinAvmVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
-	// set the teal program version to 1
+	// set the program version to 1
 	binary.PutUvarint(program, 1)
 
 	verErr := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
@@ -1628,7 +1628,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
 			txn.Txn.ExtraProgramPages = 2
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -1888,7 +1888,7 @@ gtxn 0 Sender
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			txn := makeSampleTxn()
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -2323,7 +2323,7 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcaa; extract 0 6; byte 0x123456789abcaa; !=", 5)
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
-
+	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract; byte 0xbc; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
@@ -2331,6 +2331,7 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
 	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2339,11 +2340,17 @@ func TestExtractFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract without immediates expects 3 stack arguments but stack height is 1"})
 
 	testProg(t, `byte 0xf000000000000000
 	extract 1
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 0 or 2 immediate arguments"})
+
+	testProg(t, `byte 0xf000000000000000
+	int 0
+	int 5
+	extract3 1 2
+	len`, 5, Expect{4, "extract3 expects 0 immediate arguments"})
 
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
@@ -3891,7 +3898,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
+func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
@@ -3936,8 +3943,8 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			ep := defaultEvalParams(nil)
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(cse.group)
 
-			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(ep.TxnGroup)
+			// Computed MinAvmVersion should be == validFromVersion
+			calc := ComputeMinAvmVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
@@ -4092,7 +4099,7 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1`, v)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
 			ep := defaultEvalParams(&txn)
@@ -5192,7 +5199,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
@@ -5403,7 +5410,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
