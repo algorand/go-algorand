@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -2643,7 +2644,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	l.WaitForCommit(l.Latest())
 }
 
-func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.VotersForRound, actual map[basics.Round]*ledgercore.VotersForRound) {
+func verifyVotersContent(t *testing.T, expected, actual map[basics.Round]*ledgercore.VotersForRound) {
 	require.Equal(t, len(expected), len(actual))
 	for k, v := range actual {
 		require.NoError(t, v.Wait())
@@ -2752,7 +2753,6 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Skip("This test is not finished, we want to inspect the behaviour of giving up on a stateproof")
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 
@@ -2810,4 +2810,76 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
+}
+
+func TestUnsyncedVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofRecoveryInterval + 1)); i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	// the voters tracker should contains all the voters for each stateproof round. nothing should be removed
+	l.WaitForCommit(blk.BlockHeader.Round)
+	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+
+	err = l.reloadLedger()
+	require.NoError(t, err)
+	_, found := l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
+	require.True(t, found)
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
+
+	for i := uint64(0); i < proto.StateProofInterval*3; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	l.WaitForCommit(blk.BlockHeader.Round)
+
+	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+
+	require.NoError(t, l.reloadLedger())
+
+	// Due to the test not being synchronised, the snapshot and the loaded voters may differ in
+	// one entry to their cache. For instance, the loaded one was not subjected to deletion in the commit
+	// sequence, but the snapshot did, or vice versa.
+	snapshotLength := len(vtSnapshot)
+	loadedLength := len(l.acctsOnline.voters.votersForRoundCache)
+	entriesDiff := int(math.Abs(float64(snapshotLength - loadedLength)))
+	require.GreaterOrEqual(t, 1, entriesDiff)
+
+	if entriesDiff == 0 {
+		return
+	}
+
+	// removing the only diff that there should be between the snapshot and the loaded voterTracker.
+	delete(vtSnapshot, 496)
+	delete(l.acctsOnline.voters.votersForRoundCache, 496)
+	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 }
