@@ -104,9 +104,10 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.R
 
 	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
-		//if err != nil {
-		//	return err
-		//}
+		if err != nil {
+			vt.l.trackerLog().Errorf("votersTracker: loadFromDisk: cannot load tree for round %v, err : %v", r, err)
+			continue
+		}
 
 		vt.loadTree(hdr)
 	}
