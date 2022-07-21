@@ -384,11 +384,15 @@ replace2 2
 pushbytes 0x88
 pushint 1
 replace3
-` + pairingNonsense
+`
+
+const v8Nonsense = v7Nonsense + pairingNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
-const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984800243218001775c0280018881015d" + pairingCompiled
+const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984800243218001775c0280018881015d"
+
+const v8Compiled = v7Compiled + pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -398,6 +402,7 @@ var nonsense = map[uint64]string{
 	5: v5Nonsense,
 	6: v6Nonsense,
 	7: v7Nonsense,
+	8: v8Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -433,7 +438,7 @@ func TestAssemble(t *testing.T) {
 	// This doesn't have to be a sensible program to run, it just has to compile.
 
 	t.Parallel()
-	require.Equal(t, LogicVersion, len(nonsense))
+	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for _, spec := range OpSpecs {
@@ -465,7 +470,8 @@ var experiments = []uint64{fidoVersion, pairingVersion}
 func TestExperimental(t *testing.T) {
 	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
 	for _, v := range experiments {
-		require.Equal(t, futureV, v)
+		// Allows less, so we can push something out, even before vFuture has been updated.
+		require.LessOrEqual(t, futureV, v)
 	}
 }
 
@@ -1521,8 +1527,11 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// optimizations in later versions that change the bytecode
 	// emitted. But currently it is, so we test it for now to
 	// catch any suprises.
-	require.Equal(t, LogicVersion, len(nonsense))
+	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
+		if v > LogicVersion {
+			continue // We allow them to be set, but can't test assembly beyond LogicVersion
+		}
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
