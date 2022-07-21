@@ -1162,11 +1162,11 @@ func initConsensusProtocols() {
 	vFuture.DeeperBlockHeaderHistory = 1
 
 	// Enable compact certificates.
-	vFuture.CompactCertRounds = 0
-	vFuture.CompactCertTopVoters = 0
-	vFuture.CompactCertVotersLookback = 0
-	vFuture.CompactCertWeightThreshold = 0
-	vFuture.CompactCertSecKQ = 0
+	vFuture.CompactCertRounds = 2000
+	vFuture.CompactCertTopVoters = 1024 * 1024
+	vFuture.CompactCertVotersLookback = 16
+	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
+	vFuture.CompactCertSecKQ = 128
 
 	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4
