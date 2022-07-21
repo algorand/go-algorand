@@ -2678,9 +2678,15 @@ func TestVotersReloadFromDisk(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// at this point the database should contain the voter for round 256 but for the voters for 512 should be in deltas
+	// at this point the database should contain the voter for round 256 but the voters for round 512 should be in deltas
 	l.WaitForCommit(blk.BlockHeader.Round)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+
+	// ensuring no tree was evicted.
+	for _, round := range []basics.Round{240, 496} {
+		require.Contains(t, vtSnapshot, round)
+	}
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
