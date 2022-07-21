@@ -175,6 +175,8 @@ func (nd *nodeDir) configureAPIToken(token string) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, " - Assigning APIToken: %s\n", token)
 	ioutil.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodTokenFilename), []byte(token), 0600)
+	// TODO: allow separate algod.admin.token config?
+	ioutil.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodAdminTokenFilename), []byte(token), 0600)
 	err = nd.saveConfig()
 	return
 }

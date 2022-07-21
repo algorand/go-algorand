@@ -13,11 +13,13 @@ import fnmatch
 import json
 import logging
 import os
+import queue
 import re
 import signal
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 
@@ -79,9 +81,17 @@ def jsonable(ob):
         return {jsonable(k):jsonable(v) for k,v in ob.items()}
     return ob
 
+def nmax(a,b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return max(a,b)
+
 class algodDir:
     def __init__(self, path, net=None, token=None, admin_token=None):
         self.path = path
+        self.isdir = os.path.isdir(path)
         self.nick = os.path.basename(self.path)
         if net is None:
             net, token, admin_token = read_algod_dir(self.path)
@@ -91,9 +101,12 @@ class algodDir:
         self.headers = {}
         self._pid = None
         self._algod = None
+        self.timeout = 15
 
     def pid(self):
         if self._pid is None:
+            if not self.isdir:
+                return None
             with open(os.path.join(self.path, 'algod.pid')) as fin:
                 self._pid = int(fin.read())
         return self._pid
@@ -106,11 +119,17 @@ class algodDir:
             self._algod = algosdk.v2client.algod.AlgodClient(self.token, net, self.headers)
         return self._algod
 
-    def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None):
+    def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None, timeout=None):
+        if timeout is None:
+            timeout = self.timeout
         url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/' + name
-        response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers), timeout=timeout)
+        except Exception as e:
+            logger.error('could not fetch %s from %s via %r (%s)', name, self.path, url, e)
+            return
         if response.code != 200:
-            logger.error('could not fetch %s from %s via %r', name, self.path. url)
+            logger.error('could not fetch %s from %s via %r (%r)', name, self.path, url, response.code)
             return
         blob = response.read()
         if snapshot_name is None:
@@ -127,6 +146,10 @@ class algodDir:
     def get_goroutine_snapshot(self, snapshot_name=None, outdir=None):
         return self.get_pprof_snapshot('goroutine', snapshot_name, outdir)
 
+    def get_cpu_profile(self, snapshot_name=None, outdir=None, seconds=90):
+        seconds = int(seconds)
+        return self.get_pprof_snapshot('profile?seconds={}'.format(seconds), snapshot_name, outdir, timeout=seconds+20)
+
     def get_metrics(self, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/metrics'
         try:
@@ -142,6 +165,11 @@ class algodDir:
         with open(outpath, 'wb') as fout:
             fout.write(blob)
         logger.debug('%s -> %s', self.nick, outpath)
+
+    def go_metrics(self, snapshot_name=None, outdir=None):
+        t = threading.Thread(target=self.get_metrics, args=(snapshot_name, outdir))
+        t.start()
+        return t
 
     def get_blockinfo(self, snapshot_name=None, outdir=None):
         try:
@@ -160,9 +188,20 @@ class algodDir:
         with open(outpath, 'wt') as fout:
             json.dump(jsonable(bi), fout)
         return bi
-        #txncount = bi['block']['tc']
+
+    def _get_blockinfo_q(self, snapshot_name=None, outdir=None, biqueue=None):
+        bi = self.get_blockinfo(snapshot_name, outdir)
+        if biqueue and bi:
+            biqueue.put(bi)
+
+    def go_blockinfo(self, snapshot_name=None, outdir=None, biqueue=None):
+        t = threading.Thread(target=self._get_blockinfo_q, args=(snapshot_name, outdir, biqueue))
+        t.start()
+        return t
 
     def psHeap(self):
+        if not self.isdir:
+            return None, None
         # return rss, vsz (in kilobytes)
         # ps -o rss,vsz $(cat ${ALGORAND_DATA}/algod.pid)
         subp = subprocess.Popen(['ps', '-o', 'rss,vsz', str(self.pid())], stdout=subprocess.PIPE)
@@ -177,12 +216,31 @@ class algodDir:
         except:
             return None, None
 
+class maxrnd:
+    def __init__(self, biqueue):
+        self.biqueue = biqueue
+        self.maxrnd = None
+
+    def _run(self):
+        while True:
+            bi = self.biqueue.get()
+            if 'block' not in bi:
+                return
+            rnd = bi['block'].get('rnd',0)
+            if (self.maxrnd is None) or (rnd > self.maxrnd):
+                self.maxrnd = rnd
+    def start(self):
+        t = threading.Thread(target=self._run)
+        t.start()
+        return t
+
 class watcher:
     def __init__(self, args):
         self.args = args
         self.prevsnapshots = {}
         self.they = []
         self.netseen = set()
+        self.latest_round = None
         os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
             cp = configparser.ConfigParser(allow_no_value=True)
@@ -226,7 +284,7 @@ class watcher:
             logger.error('bad algod: %r', net, exc_info=True)
 
 
-    def do_snap(self, now):
+    def do_snap(self, now, get_cpu=False):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
         snapshot_isotime = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(now))
         logger.debug('begin snapshot %s', snapshot_name)
@@ -235,7 +293,8 @@ class watcher:
         if self.args.heaps:
             for ad in self.they:
                 snappath = ad.get_heap_snapshot(snapshot_name, outdir=self.args.out)
-                newsnapshots[ad.path] = snappath
+                if snappath:
+                    newsnapshots[ad.path] = snappath
                 rss, vsz = ad.psHeap()
                 if rss and vsz:
                     psheaps[ad.nick] = (rss, vsz)
@@ -247,11 +306,32 @@ class watcher:
             for ad in self.they:
                 ad.get_goroutine_snapshot(snapshot_name, outdir=self.args.out)
         if self.args.metrics:
+            threads = []
             for ad in self.they:
-                ad.get_metrics(snapshot_name, outdir=self.args.out)
+                threads.append(ad.go_metrics(snapshot_name, outdir=self.args.out))
+            for t in threads:
+                t.join()
         if self.args.blockinfo:
+            threads = []
+            biq = queue.SimpleQueue()
+            mr = maxrnd(biq)
+            mrt = mr.start()
             for ad in self.they:
-                ad.get_blockinfo(snapshot_name, outdir=self.args.out)
+                threads.append(ad.go_blockinfo(snapshot_name, outdir=self.args.out, biqueue=biq))
+            for t in threads:
+                t.join()
+            biq.put({})
+            mrt.join()
+            self.latest_round = mr.maxrnd
+        if get_cpu:
+            cpuSample = durationToSeconds(self.args.cpu_sample) or 90
+            threads = []
+            for ad in self.they:
+                t = threading.Thread(target=ad.get_cpu_profile, kwargs={'snapshot_name':snapshot_name, 'outdir':self.args.out, 'seconds': cpuSample})
+                t.start()
+                threads.append(t)
+            for t in threads:
+                t.join()
         if self.args.svg:
             logger.debug('snapped, processing pprof...')
             # make absolute and differential plots
@@ -264,6 +344,23 @@ class watcher:
                     subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc_diff.svg', '-diff_base='+prev, snappath])
         self.prevsnapshots = newsnapshots
 
+def durationToSeconds(rts):
+    if rts is None:
+        return None
+    rts = rts.lower()
+    if rts.endswith('h'):
+        mult = 3600
+        rts = rts[:-1]
+    elif rts.endswith('m'):
+        mult = 60
+        rts = rts[:-1]
+    elif rts.endswith('s'):
+        mult = 1
+        rts = rts[:-1]
+    else:
+        mult = 1
+    return float(rts) * mult
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
@@ -273,6 +370,7 @@ def main():
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
     ap.add_argument('--runtime', default=None, help='(\d+)[hm]? time in hour/minute (default second) to gather info then exit')
+    ap.add_argument('--rounds', default=None, type=int, help='number of rounds to run')
     ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
@@ -281,6 +379,8 @@ def main():
     ap.add_argument('--svg', dest='svg', default=False, action='store_true', help='automatically run `go tool pprof` to generate performance profile svg from collected data')
     ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
+    ap.add_argument('--cpu-after', help='capture cpu profile after some time (e.g. 5m (after start))')
+    ap.add_argument('--cpu-sample', help='capture cpu profile for some time (e.g. 90s)')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -305,28 +405,19 @@ def main():
 
     app.do_snap(now)
     endtime = None
+    end_round = None
+    if (app.latest_round is not None) and (args.rounds is not None):
+        end_round = app.latest_round + args.rounds
     if args.runtime:
-        rts = args.runtime
-        if rts.endswith('h'):
-            mult = 3600
-            rts = rts[:-1]
-        elif rts.endswith('m'):
-            mult = 60
-            rts = rts[:-1]
-        else:
-            mult = 1
-        endtime = (float(rts) * mult) + start
+        endtime = durationToSeconds(args.runtime) + start
+
+    cpuAfter = durationToSeconds(args.cpu_after)
+    if cpuAfter is not None:
+        cpuAfter += start
+
 
     if args.period:
-        lastc = args.period.lower()[-1:]
-        if lastc == 's':
-            periodSecs = int(args.period[:-1])
-        elif lastc == 'm':
-            periodSecs = int(args.period[:-1]) * 60
-        elif lastc == 'h':
-            periodSecs = int(args.period[:-1]) * 3600
-        else:
-            periodSecs = int(args.period)
+        periodSecs = durationToSeconds(args.period)
 
         periodi = 1
         nextt = start + (periodi * periodSecs)
@@ -341,8 +432,15 @@ def main():
                 now = time.time()
             periodi += 1
             nextt += periodSecs
-            app.do_snap(now)
+            get_cpu = False
+            if (cpuAfter is not None) and (now > cpuAfter):
+                get_cpu = True
+                cpuAfter = None
+            app.do_snap(now, get_cpu)
+            now = time.time()
             if (endtime is not None) and (now > endtime):
+                return
+            if (end_round is not None) and (app.latest_round is not None) and (app.latest_round >= end_round):
                 return
     return 0
 
