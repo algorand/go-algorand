@@ -268,8 +268,8 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	return bounded
 }
 
-// makePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
-func makePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *peerSelector {
+// MakePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
+func MakePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *peerSelector {
 	selector := &peerSelector{
 		net:         net,
 		peerClasses: initialPeersClasses,

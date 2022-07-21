@@ -287,9 +287,9 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
 
 	// Get the same block we wrote
-	block, _, _, err := makeUniversalBlockFetcher(logging.Base(),
+	block, _, _, err := MakeUniversalBlockFetcher(logging.Base(),
 		net,
-		defaultConfig).fetchBlock(context.Background(), lastRoundAtStart+1, net.peers[0])
+		defaultConfig).FetchBlock(context.Background(), lastRoundAtStart+1, net.peers[0])
 
 	require.NoError(t, err)
 
@@ -396,7 +396,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 
 	// Make Service
 	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
-	fetcher := makeUniversalBlockFetcher(logging.Base(), net, defaultConfig)
+	fetcher := MakeUniversalBlockFetcher(logging.Base(), net, defaultConfig)
 
 	// Start the service ( dummy )
 	syncer.testStart()
@@ -409,7 +409,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 
 	for i := basics.Round(1); i <= numberOfBlocks; i++ {
 		// Get the same block we wrote
-		blk, _, _, err2 := fetcher.fetchBlock(context.Background(), i, net.GetPeers()[0])
+		blk, _, _, err2 := fetcher.FetchBlock(context.Background(), i, net.GetPeers()[0])
 		require.NoError(t, err2)
 
 		// Check we wrote the correct block

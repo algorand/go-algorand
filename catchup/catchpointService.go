@@ -274,7 +274,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
+	peerSelector := MakePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -621,8 +621,8 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		}
 		return nil, time.Duration(0), psp, true, cs.abort(fmt.Errorf("fetchBlock: recurring non-HTTP peer was provided by the peer selector"))
 	}
-	fetcher := makeUniversalBlockFetcher(cs.log, cs.net, cs.config)
-	blk, _, downloadDuration, err = fetcher.fetchBlock(cs.ctx, round, httpPeer)
+	fetcher := MakeUniversalBlockFetcher(cs.log, cs.net, cs.config)
+	blk, _, downloadDuration, err = fetcher.FetchBlock(cs.ctx, round, httpPeer)
 	if err != nil {
 		if cs.ctx.Err() != nil {
 			return nil, time.Duration(0), psp, true, cs.stopOrAbort()
@@ -743,14 +743,14 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 
 func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 	if cs.config.EnableCatchupFromArchiveServers {
-		cs.blocksDownloadPeerSelector = makePeerSelector(
+		cs.blocksDownloadPeerSelector = MakePeerSelector(
 			cs.net,
 			[]peerClass{
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	} else {
-		cs.blocksDownloadPeerSelector = makePeerSelector(
+		cs.blocksDownloadPeerSelector = MakePeerSelector(
 			cs.net,
 			[]peerClass{
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},

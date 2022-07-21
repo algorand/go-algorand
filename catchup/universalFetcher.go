@@ -44,15 +44,15 @@ type universalBlockFetcher struct {
 }
 
 // makeUniversalFetcher returns a fetcher for http and ws peers.
-func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
+func MakeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
 	return &universalBlockFetcher{
 		config: config,
 		net:    net,
 		log:    log}
 }
 
-// fetchBlock returns a block from the peer. The peer can be either an http or ws peer.
-func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
+// FetchBlock returns a block from the peer. The peer can be either an http or ws peer.
+func (uf *universalBlockFetcher) FetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
 	var fetchedBuf []byte
