@@ -2710,8 +2710,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	defer l.Close()
 
 	blk := genesisInitState.Block
-	var sp bookkeeping.StateProofTrackingData
-	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
+
+	sp := bookkeeping.StateProofTrackingData{
+		StateProofNextRound: basics.Round(proto.StateProofInterval * 2),
+	}
+
 	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
 		protocol.StateProofBasic: sp,
 	}
@@ -2723,7 +2726,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// we simulate a  stateproof for round 512 being confirmed on chain
+	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
 	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 3)
 	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
 		protocol.StateProofBasic: sp,
@@ -2738,6 +2741,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+
+	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
+	require.Contains(t, vtSnapshot, basics.Round(496))
+	require.NotContains(t, vtSnapshot, basics.Round(240))
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
