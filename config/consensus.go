@@ -449,6 +449,14 @@ type ConsensusParams struct {
 
 	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
 	EnableOnlineAccountCatchpoints bool
+
+	// UnfundedSenders ensures that accounts with no balance (so they don't even
+	// "exist") can still be a transaction sender by avoiding updates to rewards
+	// state for accounts with no algos. The actual change implemented to allow
+	// this is to avoid updating an account if the only change would have been
+	// the rewardsLevel, but the rewardsLevel has no meaning because the account
+	// has fewer than RewardUnit algos.
+	UnfundedSenders bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1164,6 +1172,8 @@ func initConsensusProtocols() {
 
 	vFuture.EnableSHA256TxnCommitmentHeader = true
 	vFuture.EnableOnlineAccountCatchpoints = true
+
+	vFuture.UnfundedSenders = true
 
 	vFuture.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
 	vFuture.MaxTxnBytesPerBlock = 5 * 1024 * 1024

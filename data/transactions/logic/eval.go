@@ -70,7 +70,7 @@ const maxLogCalls = 32
 // you count the top-level app call.
 const maxAppCallDepth = 8
 
-// maxStackDepth should not change unless controlled by a teal version change
+// maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
 // stackValue is the type for the operand stack.
@@ -171,13 +171,13 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
-// ComputeMinTealVersion calculates the minimum safe TEAL version that may be
+// ComputeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
-// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinTealVersion(group []transactions.SignedTxnWithAD) uint64 {
+func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -242,10 +242,10 @@ type EvalParams struct {
 	// optional debugger
 	Debugger DebuggerHook
 
-	// MinTealVersion is the minimum allowed TEAL version of this program.
+	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
-	// MinTealVersion is nil, we will compute it ourselves
-	MinTealVersion *uint64
+	// MinAvmVersion is nil, we will compute it ourselves
+	MinAvmVersion *uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
@@ -305,7 +305,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	minTealVersion := ComputeMinTealVersion(txgroup)
+	minAvmVersion := ComputeMinAvmVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -327,7 +327,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		Proto:                   proto,
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		MinTealVersion:          &minTealVersion,
+		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -357,12 +357,12 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txg)
+	minAvmVersion := ComputeMinAvmVersion(txg)
 	// Can't happen currently, since earliest inner callable version is higher
 	// than any minimum imposed otherwise.  But is correct to inherit a stronger
 	// restriction from above, in case of future restriction.
-	if minTealVersion < *caller.MinTealVersion {
-		minTealVersion = *caller.MinTealVersion
+	if minAvmVersion < *caller.MinAvmVersion {
+		minAvmVersion = *caller.MinAvmVersion
 	}
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
@@ -380,7 +380,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
 		pastScratch:             make([]*scratchSpace, len(txg)),
-		MinTealVersion:          &minTealVersion,
+		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -829,12 +829,12 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
-	if params.MinTealVersion == nil {
-		minVersion := ComputeMinTealVersion(params.TxnGroup)
-		params.MinTealVersion = &minVersion
+	if params.MinAvmVersion == nil {
+		minVersion := ComputeMinAvmVersion(params.TxnGroup)
+		params.MinAvmVersion = &minVersion
 	}
-	if version < *params.MinTealVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinTealVersion, version)
+	if version < *params.MinAvmVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinAvmVersion, version)
 	}
 	return version, vlen, nil
 }
@@ -895,7 +895,7 @@ func (cx *EvalContext) step() error {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 
-	// this check also ensures TEAL versioning: v2 opcodes are not in opsByOpcode[1] array
+	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
