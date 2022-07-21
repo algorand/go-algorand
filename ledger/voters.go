@@ -183,11 +183,14 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 }
 
 // lowestRound() returns the lowest votersForRoundCache state (blocks and accounts) needed by
-// the votersTracker in case of a restart.  The accountUpdates tracker will
-// not delete account state before this round, so that after a restart, it's
+// the votersTracker in case of a restart.
+// 	 NOTE: use with caution! lowestRound should be used ONLY with committed base rounds.
+//	 Otherwise, user receive the false impression of blocks it can remove
+// The online tracker will not delete account state before this round, so that after a restart, it's
 // possible to reconstruct the votersTracker.  If votersTracker does
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
+	// TODO: isn't safe if the base > committedRound. Should i panic I log an error here in case someone gave a different base?
 	minRound := base
 	for r := range vt.votersForRoundCache {
 		if r < minRound {
