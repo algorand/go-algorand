@@ -532,20 +532,21 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) OnNewSpeculatedBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	speculatedLedger := nil
-	speculatedPool := pool.copyTransactionPoolOverNewLedger(speculatedLedger)
-	speculatedPool.OnNewBlock(block, delta)
+func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	speculativeLedger := nil
+	speculativePool := pool.copyTransactionPoolOverNewLedger(speculatedLedger)
+	// check block's prev == ledger latest
+	speculativePool.OnNewBlock(block, delta)
 
-	if speculatedPool.assemblyResults.err != nil {
+	if speculativePool.assemblyResults.err != nil {
 		return
 	}
 
-	speculatedPool.speculatedBlockChan <- speculatedBlock{blk: speculatedPool.assemblyResults.blk, branch: block.Hash()}
+	speculativePool.speculatedBlockChan <- speculatedBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}
 	select {
-	case speculatedPool.speculatedBlockChan <- speculatedBlock{blk: speculatedPool.assemblyResults.blk, branch: block.Hash()}:
+	case speculativePool.speculatedBlockChan <- speculatedBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}:
 	default:
-		speculatedPool.log.Warnf("failed writing speculated block to channel, channel already has a block")
+		speculativePool.log.Warnf("failed writing speculated block to channel, channel already has a block")
 	}
 }
 
