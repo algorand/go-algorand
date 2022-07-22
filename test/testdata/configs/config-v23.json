@@ -102,5 +102,5 @@
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
     "UseXForwardedForAddressField": "",
-    "VerifiedTranscationsCacheSize": 75000
+    "VerifiedTranscationsCacheSize": 150000
 }
