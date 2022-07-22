@@ -1,4 +1,4 @@
-PARAMS=-w 20 -R 5 -N 20 -n 20 -H 4 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
+PARAMS=-w 20 -R 5 -N 20 -n 20 -H 8 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
 
 all:	topology.json net.json genesis.json
 
