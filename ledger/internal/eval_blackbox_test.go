@@ -997,12 +997,13 @@ func TestHeaderAccess(t *testing.T) {
 		for i := 0; i < int(config.Consensus[cv].MaxTxnLife); i++ {
 			dl.fullBlock()
 		}
+
 		// current should be 1003. Confirm.
-		fvt.FirstValid = 1004
-		fvt.LastValid = 1010
-		dl.txn(&fvt, "txn dead")
+		require.EqualValues(t, 1002, dl.generator.Latest())
+		require.EqualValues(t, 1002, dl.validator.Latest())
 
 		fvt.FirstValid = 1003
+		fvt.LastValid = 1010
 		dl.txn(&fvt) // success advances the round
 		// now we're confident current is 1004, so construct a txn that is as
 		// old as possible, and confirm access.
