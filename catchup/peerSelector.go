@@ -462,7 +462,7 @@ func (ps *PeerSelector) refreshAvailablePeers() {
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
 			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
-				if toRemove, _ := existingPeers[pool.peers[peerIdx].class.PeerClass][peerAddress]; toRemove {
+				if toRemove := existingPeers[pool.peers[peerIdx].class.PeerClass][peerAddress]; toRemove {
 					// need to be removed.
 					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 				}
