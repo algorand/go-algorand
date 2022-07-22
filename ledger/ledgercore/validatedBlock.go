@@ -68,6 +68,10 @@ func (vb ValidatedBlock) CheckDup(currentProto config.ConsensusParams, firstVali
 	return nil
 }
 
+func (vb ValidatedBlock) Hash() bookkeeping.BlockHash {
+	return vb.blk.Hash()
+}
+
 // MakeValidatedBlock creates a validated block.
 func MakeValidatedBlock(blk bookkeeping.Block, delta StateDelta) ValidatedBlock {
 	return ValidatedBlock{

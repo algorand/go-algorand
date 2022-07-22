@@ -29,12 +29,12 @@ type LedgerForEvaluator interface {
 	// Needed for cow.go
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
+	//Totals(basics.Round) (ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
@@ -74,7 +74,7 @@ type validatedBlockAsLFE struct {
 
 // makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a
 // ValidatedBlock.
-func makeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
+func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
 	return &validatedBlockAsLFE{
 		l:  l,
 		vb: vb,

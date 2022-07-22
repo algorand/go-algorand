@@ -59,7 +59,7 @@ type TransactionPool struct {
 	logAssembleStats     bool
 	expFeeFactor         uint64
 	txPoolMaxSize        int
-	ledger               *ledger.Ledger
+	ledger               ledger.LedgerForEvaluator
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -139,9 +139,14 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverNewLedger(ledger *ledger.Ledger) *TransactionPool {
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) *TransactionPool {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+
+	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
+	if err != nil {
+		return nil
+	}
 
 	pool.speculatedBlockChan = make(chan speculatedBlock, 1)
 
@@ -149,7 +154,7 @@ func (pool *TransactionPool) copyTransactionPoolOverNewLedger(ledger *ledger.Led
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
-		ledger:               ledger,
+		ledger:               specLedger,
 		statusCache:          makeStatusCache(pool.cfg.TxPoolSize),
 		logProcessBlockStats: pool.cfg.EnableProcessBlockStats,
 		logAssembleStats:     pool.cfg.EnableAssembleStats,
@@ -533,8 +538,10 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	speculativeLedger := nil
-	speculativePool := pool.copyTransactionPoolOverNewLedger(speculatedLedger)
+
+	vb := ledgercore.MakeValidatedBlock(block, delta)
+
+	speculativePool := pool.copyTransactionPoolOverSpecLedger(&vb)
 	// check block's prev == ledger latest
 	speculativePool.OnNewBlock(block, delta)
 
