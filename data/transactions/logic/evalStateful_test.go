@@ -69,7 +69,7 @@ func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify* and err are tested separately below
 
-	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
+	// check modeAny (v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
 	opcodesRunModeAny := `intcblock 0 1 1 1 1 5 100
 	bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
