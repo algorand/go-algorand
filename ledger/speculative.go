@@ -17,12 +17,16 @@
 package ledger
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 )
 
 type LedgerForEvaluator interface {
@@ -34,8 +38,9 @@ type LedgerForEvaluator interface {
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
-	//Totals(basics.Round) (ledgercore.AccountTotals, error)
+	Latest() basics.Round
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
+	GenesisProto() config.ConsensusParams
 }
 
 // validatedBlockAsLFE presents a LedgerForEvaluator interface on top of
@@ -75,6 +80,9 @@ type validatedBlockAsLFE struct {
 // makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a
 // ValidatedBlock.
 func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
+	if vb.Block().Round().SubSaturate(1) != l.Latest() {
+		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger round %d mismatches next block round %d", l.Latest(), vb.Block().Round())
+	}
 	return &validatedBlockAsLFE{
 		l:  l,
 		vb: vb,
@@ -104,6 +112,26 @@ func (v *validatedBlockAsLFE) GenesisHash() crypto.Digest {
 	return v.l.GenesisHash()
 }
 
+// Latest implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) Latest() basics.Round {
+	return v.vb.Block().Round()
+}
+
+// CompactCertVoters implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
+	if r >= v.vb.Block().Round() {
+		// We do not support computing the compact cert voters for rounds
+		// that have not been committed to the ledger yet.  This should not
+		// be a problem as long as the agreement pipeline depth does not
+		// exceed CompactCertVotersLookback.
+		err := fmt.Errorf("validatedBlockAsLFE.CompactCertVoters(%d): validated block is for round %d, voters not available", r, v.vb.Block().Round())
+		logging.Base().Warn(err.Error())
+		return nil, err
+	}
+
+	return v.l.CompactCertVoters(r)
+}
+
 // GetCreatorForRound implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) GetCreatorForRound(r basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	if r == v.vb.Block().Round() {
@@ -117,4 +145,32 @@ func (v *validatedBlockAsLFE) GetCreatorForRound(r basics.Round, cidx basics.Cre
 	}
 
 	return v.l.GetCreatorForRound(r, cidx, ctype)
+}
+
+// Totals implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return v.vb.Block().Round(), v.vb.Delta().Totals, nil
+}
+
+// GenesisProto returns the initial protocol for this ledger.
+func (v *validatedBlockAsLFE) GenesisProto() config.ConsensusParams {
+	return v.l.GenesisProto()
+}
+
+// LookupApplication loads an application resource that matches the request parameters from the ledger.
+func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+// StartEvaluator starts a block evaluator with a particular block header.
+// The block header's Branch value determines which speculative branch is used.
+// This is intended to be used by the transaction pool assembly code.
+func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*internal.BlockEvaluator, error) {
+	if hdr.Round.SubSaturate(1) != v.Latest() {
+		return nil, fmt.Errorf("StartEvaluator: LFE round %d mismatches next block round %d", v.Latest(), hdr.Round)
+	}
+
+	evalopts := internal.EvaluatorOptions{PaysetHint: paysetHint, Validate: true, Generate: true}
+	return internal.StartEvaluator(v, hdr, evalopts)
 }
