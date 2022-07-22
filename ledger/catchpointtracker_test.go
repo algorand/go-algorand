@@ -69,7 +69,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao, &txTail{}}, conf)
 	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)

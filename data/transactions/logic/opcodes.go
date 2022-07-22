@@ -62,7 +62,8 @@ const createdResourcesVersion = 6
 // field.
 const appAddressAvailableVersion = 7
 
-const fidoVersion = 7 // base64, json, secp256r1
+const fidoVersion = 7       // base64, json, secp256r1
+const randomnessVersion = 7 // vrf_verify, block
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
@@ -591,6 +592,10 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(modeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
+
+	// randomness support
+	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 
 type sortByOpcode []OpSpec
