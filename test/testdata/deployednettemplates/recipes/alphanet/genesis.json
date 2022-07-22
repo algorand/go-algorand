@@ -1,9 +1,9 @@
 {
-	"NetworkName": "alphanet",
-	"VersionModifier": "v1.1",
+	"NetworkName": "",
+	"VersionModifier": "",
 	"ConsensusProtocol": "alpha2",
 	"FirstPartKeyRound": 0,
-	"LastPartKeyRound": 3000000,
+	"LastPartKeyRound": 50000,
 	"PartKeyDilution": 0,
 	"Wallets": [
 		{
