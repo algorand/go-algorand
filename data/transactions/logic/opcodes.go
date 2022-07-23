@@ -69,6 +69,7 @@ const randomnessVersion = 7 // vrf_verify, block
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const fpVersion = 8      // changes for frame pointers and simpler function discipline
 
 type linearCost struct {
 	baseCost  int
@@ -122,6 +123,8 @@ type OpDetails struct {
 	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
 	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
 	Immediates []immediate // details of each immediate arg to opcode
+
+	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -168,11 +171,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
 func detBranch() OpDetails {
@@ -236,11 +239,21 @@ func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetai
 }
 
 func immediates(names ...string) OpDetails {
+	return immKinded(immByte, names...)
+}
+
+func (d OpDetails) trust() OpDetails {
+	clone := d
+	clone.trusted = true
+	return clone
+}
+
+func immKinded(kind immKind, names ...string) OpDetails {
 	d := detDefault()
 	d.Size = len(names) + 1
 	d.Immediates = make([]immediate, len(names))
 	for i, name := range names {
-		d.Immediates[i] = imm(name, immByte)
+		d.Immediates[i] = imm(name, kind)
 	}
 	return d
 }
@@ -292,6 +305,7 @@ type immKind byte
 
 const (
 	immByte immKind = iota
+	immInt8
 	immLabel
 	immInt
 	immBytes
@@ -543,9 +557,9 @@ var OpSpecs = []OpSpec{
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
-	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault()},
+	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault().trust()},
 	{0x8a, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	// 0x8b will likely be a switch on pairs of values/targets
+	// 0x8b will likely be a switch on pairs of values/targets, called `match`
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
@@ -606,6 +620,13 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	// protoByte is a named constant because opCallsub needs to know it.
+	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r")},
+	{0xf1, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i")},
+	{0xf2, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i")},
+	{0xf3, "pushn", opPushN, proto(":", "", "[N zeros]"), fpVersion, stacky(typePushN, "n").trust()},
+	{0xf4, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, stacky(typePopN, "n").trust()},
 }
 
 type sortByOpcode []OpSpec

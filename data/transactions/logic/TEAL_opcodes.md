@@ -1418,3 +1418,40 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 | 0 | BlkSeed | []byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 
+
+## proto a r
+
+- Opcode: 0xf0 {uint8 arguments} {uint8 return values}
+- Stack: ... &rarr; ...
+- Prepare top call frame for a retsub that will assume A args and R return values.
+- Availability: v8
+
+Fails unless the last instruction executed was a `callsub`.
+
+## frame_dig i
+
+- Opcode: 0xf1 {int8 frame slot}
+- Stack: ... &rarr; ..., any
+- Nth (signed) value from the frame pointer.
+- Availability: v8
+
+## frame_bury i
+
+- Opcode: 0xf2 {int8 frame slot}
+- Stack: ..., A &rarr; ...
+- Replace the Nth (signed) value from the frame pointer in the stack
+- Availability: v8
+
+## pushn n
+
+- Opcode: 0xf3 {uint8 stack depth}
+- Stack: ... &rarr; ..., [N zeros]
+- Push N 0s onto the stack
+- Availability: v8
+
+## popn n
+
+- Opcode: 0xf4 {uint8 stack depth}
+- Stack: ..., [N items] &rarr; ...
+- Remove N values from the top of the stack
+- Availability: v8

@@ -1077,7 +1077,7 @@ const globalV7TestProgram = globalV6TestProgram + `
 `
 
 const globalV8TestProgram = globalV7TestProgram + `
-// No new globals in v7
+// No new globals in v8
 `
 
 func TestGlobal(t *testing.T) {
@@ -1575,7 +1575,8 @@ assert
 int 1
 `
 
-const testTxnProgramTextV8 = testTxnProgramTextV7
+const testTxnProgramTextV8 = testTxnProgramTextV7 + `
+`
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -4204,7 +4205,7 @@ func notrack(program string) string {
 	return pragma + program
 }
 
-type evalTester func(pass bool, err error) bool
+type evalTester func(t *testing.T, pass bool, err error) bool
 
 func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
 	t.Helper()
@@ -4234,7 +4235,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					require.NoError(t, err)
 					ep = defaultEvalParamsWithVersion(&txn, lv)
 					pass, err := EvalSignature(0, ep)
-					ok := tester(pass, err)
+					ok := tester(t, pass, err)
 					if !ok {
 						t.Log(ep.Trace.String())
 						t.Log(err)
@@ -4254,22 +4255,36 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
 func testRejects(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
-func testPanics(t *testing.T, program string, introduced uint64) error {
+func testPanics(t *testing.T, program string, introduced uint64, pattern ...string) error {
 	t.Helper()
-	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	return testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
+		t.Helper()
 		// TEAL panic! not just reject at exit
-		return !pass && err != nil
+		if pass {
+			return false
+		}
+		if err == nil {
+			t.Log("program rejected rather panicked")
+			return false
+		}
+		for _, p := range pattern {
+			if !strings.Contains(err.Error(), p) {
+				t.Log(err, "does not contain", p)
+				return false
+			}
+		}
+		return true
 	})
 }
 

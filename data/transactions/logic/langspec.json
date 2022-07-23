@@ -2313,6 +2313,59 @@
       "Groups": [
         "State Access"
       ]
+    },
+    {
+      "Opcode": 240,
+      "Name": "proto",
+      "Size": 3,
+      "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
+      "DocExtra": "Fails unless the last instruction executed was a `callsub`.",
+      "ImmediateNote": "{uint8 arguments} {uint8 return values}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 241,
+      "Name": "frame_dig",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "Nth (signed) value from the frame pointer.",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 242,
+      "Name": "frame_bury",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 243,
+      "Name": "pushn",
+      "Size": 2,
+      "Doc": "Push N 0s onto the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 244,
+      "Name": "popn",
+      "Size": 2,
+      "Doc": "Remove N values from the top of the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ]
     }
   ]
 }

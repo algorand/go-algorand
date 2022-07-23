@@ -2399,6 +2399,10 @@ func TestReturnTypes(t *testing.T) {
 		"bn256_add":        true,
 		"bn256_scalar_mul": true,
 		"bn256_pairing":    true,
+
+		"proto":      true,
+		"frame_dig":  true,
+		"frame_bury": true,
 	}
 
 	byName := OpsByName[LogicVersion]
@@ -2426,6 +2430,8 @@ func TestReturnTypes(t *testing.T) {
 						switch imm.kind {
 						case immByte:
 							cmd += " 0"
+						case immInt8:
+							cmd += " -2"
 						case immInt:
 							cmd += " 10"
 						case immInts:

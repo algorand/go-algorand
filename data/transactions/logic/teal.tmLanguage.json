@@ -64,7 +64,7 @@
         },
         {
           "name": "keyword.control.teal",
-          "match": "^(assert|b|bnz|bz|callsub|cover|dig|dup|dup2|err|pop|retsub|return|select|swap|switch|uncover)\\b"
+          "match": "^(assert|b|bnz|bz|callsub|cover|dig|dup|dup2|err|frame_bury|frame_dig|pop|popn|proto|pushn|retsub|return|select|swap|switch|uncover)\\b"
         },
         {
           "name": "keyword.other.teal",

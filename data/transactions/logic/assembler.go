@@ -533,7 +533,7 @@ func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
-	constIndex, err := simpleImm(args[0], "constant")
+	constIndex, err := byteImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -544,7 +544,7 @@ func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("bytec operation needs one argument")
 	}
-	constIndex, err := simpleImm(args[0], "constant")
+	constIndex, err := byteImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -881,7 +881,7 @@ func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
-	val, err := simpleImm(args[0], "argument")
+	val, err := byteImm(args[0], "argument")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -946,13 +946,21 @@ func asmSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func simpleImm(value string, label string) (byte, error) {
+func byteImm(value string, label string) (byte, error) {
 	res, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
 		return 0, fmt.Errorf("unable to parse %s %#v as integer", label, value)
 	}
 	if res > 255 {
 		return 0, fmt.Errorf("%s beyond 255: %d", label, res)
+	}
+	return byte(res), err
+}
+
+func int8Imm(value string, label string) (byte, error) {
+	res, err := strconv.ParseInt(value, 10, 8)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s %#v as int8", label, value)
 	}
 	return byte(res), err
 }
@@ -1020,7 +1028,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 			if imm.Group != nil {
 				fs, ok := imm.Group.SpecByName(args[i])
 				if !ok {
-					_, err := simpleImm(args[i], "")
+					_, err := byteImm(args[i], "")
 					if err == nil {
 						// User supplied a uint, so we see if any of the other immediates take uints
 						for j, otherImm := range spec.OpDetails.Immediates {
@@ -1063,7 +1071,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				ops.pending.WriteByte(fs.Field())
 			} else {
 				// simple immediate that must be a number from 0-255
-				val, err := simpleImm(args[i], imm.Name)
+				val, err := byteImm(args[i], imm.Name)
 				if err != nil {
 					if strings.Contains(err.Error(), "unable to parse") {
 						// Perhaps the field works in a different order
@@ -1086,6 +1094,12 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				}
 				ops.pending.WriteByte(val)
 			}
+		case immInt8:
+			val, err := int8Imm(args[i], imm.Name)
+			if err != nil {
+				return ops.errorf("%s %w", spec.Name, err)
+			}
+			ops.pending.WriteByte(val)
 		default:
 			return ops.errorf("unable to assemble immKind %d", imm.kind)
 		}
@@ -1295,6 +1309,32 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 		}
 	}
 	return nil, StackTypes{scratchType}
+}
+
+func typePushN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	n, ok := getByteImm(args, 0)
+	if !ok {
+		return nil, nil
+	}
+	ints := make(StackTypes, n)
+	for i := range ints {
+		ints[i] = StackUint64
+	}
+
+	return nil, ints
+}
+
+func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	n, ok := getByteImm(args, 0)
+	if !ok {
+		return nil, nil
+	}
+	anys := make(StackTypes, n)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+
+	return anys, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -2293,7 +2333,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
-		case immByte:
+		case immByte, immInt8:
 			if pc >= len(dis.program) {
 				return "", fmt.Errorf("program end while reading immediate %s for %s",
 					imm.Name, spec.Name)
@@ -2309,7 +2349,11 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 				out += name
 			} else {
-				out += fmt.Sprintf("%d", b)
+				if imm.kind == immByte {
+					out += fmt.Sprintf("%d", b)
+				} else if imm.kind == immInt8 {
+					out += fmt.Sprintf("%d", int8(b))
+				}
 			}
 			if spec.Name == "intc" && int(b) < len(dis.intc) {
 				out += fmt.Sprintf(" // %d", dis.intc[b])

@@ -402,7 +402,7 @@ switch_label1:
 pushint 1
 `
 
-const v8Nonsense = v7Nonsense + switchNonsense
+const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense
 
 const v9Nonsense = v8Nonsense + pairingNonsense
 
@@ -415,7 +415,7 @@ const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988
 
 const switchCompiled = "81018a02fff800008101"
 
-const v8Compiled = v7Compiled + switchCompiled
+const v8Compiled = v7Compiled + switchCompiled + frameCompiled
 
 const v9Compiled = v7Compiled + pairingCompiled
 
@@ -481,6 +481,7 @@ func TestAssemble(t *testing.T) {
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
 			expectedBytes, _ := hex.DecodeString(compiled[v])
+			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
@@ -488,7 +489,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{pairingVersion}
+var experiments = []uint64{pairingVersion, fpVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had

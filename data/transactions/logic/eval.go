@@ -472,6 +472,15 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 }
 
+type frame struct {
+	retpc  int
+	height int
+
+	clear   bool // perform "shift and clear" in retsub
+	args    int
+	returns int
+}
+
 type scratchSpace [256]stackValue
 
 // EvalContext is the execution context of AVM bytecode.  It contains the full
@@ -497,8 +506,9 @@ type EvalContext struct {
 	// keeping the running changes, the debugger can be changed to display them
 	// as the app runs.
 
-	stack     []stackValue
-	callstack []int
+	stack       []stackValue
+	callstack   []frame
+	fromCallsub bool
 
 	appID   basics.AppIndex
 	program []byte
@@ -980,7 +990,7 @@ func (cx *EvalContext) step() error {
 	preheight := len(cx.stack)
 	err := spec.op(cx)
 
-	if err == nil {
+	if err == nil && !spec.trusted {
 		postheight := len(cx.stack)
 		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
@@ -2109,9 +2119,26 @@ func opSwitch(cx *EvalContext) error {
 	return nil
 }
 
+const protoByte = 0xf0
+
 func opCallSub(cx *EvalContext) error {
-	cx.callstack = append(cx.callstack, cx.pc+3)
-	return opB(cx)
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
+		height: len(cx.stack),
+	})
+	err := opB(cx)
+
+	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
+	   we confirm we came directly from callsub by checking (and resetting) the
+	   flag. This is really a little handshake between callsub and proto. Done
+	   this way, we don't have to waste time clearing the fromCallsub flag in
+	   every instruction, only in proto since we know we're going there next.
+	*/
+
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return err
 }
 
 func opRetSub(cx *EvalContext) error {
@@ -2119,9 +2146,19 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	target := cx.callstack[top]
+	frame := cx.callstack[top]
+	if frame.clear {
+		argstart := frame.height - frame.args
+		expect := frame.height + frame.returns
+		if len(cx.stack) < expect {
+			found := len(cx.stack) - frame.height
+			return fmt.Errorf("retsub expected %d values, found %d", frame.returns, found)
+		}
+		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
+		cx.stack = cx.stack[:argstart+frame.returns]
+	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = target
+	cx.nextpc = frame.retpc
 	return nil
 }
 

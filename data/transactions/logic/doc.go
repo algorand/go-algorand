@@ -195,6 +195,12 @@ var opDocByName = map[string]string{
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+
+	"proto":      "Prepare top call frame for a retsub that will assume A args and R return values.",
+	"frame_dig":  "Nth (signed) value from the frame pointer.",
+	"frame_bury": "Replace the Nth (signed) value from the frame pointer in the stack",
+	"pushn":      "Push N 0s onto the stack",
+	"popn":       "Remove N values from the top of the stack",
 }
 
 // OpDoc returns a description of the op
@@ -265,6 +271,12 @@ var opcodeImmediateNotes = map[string]string{
 	"block":      "{uint8 block field}",
 
 	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+
+	"proto":      "{uint8 arguments} {uint8 return values}",
+	"frame_dig":  "{int8 frame slot}",
+	"frame_bury": "{int8 frame slot}",
+	"pushn":      "{uint8 stack depth}",
+	"popn":       "{uint8 stack depth}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -327,6 +339,7 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+	"proto":    "Fails unless the last instruction executed was a `callsub`.",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -343,7 +356,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub", "switch"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "pushn", "dup", "dup2", "dig", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "retsub", "switch", "proto"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
