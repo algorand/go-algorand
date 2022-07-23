@@ -131,6 +131,14 @@
     {
       "Name": "NPN8-alphanet",
       "Template": "AWS-SA-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "NPN9-alphanet",
+      "Template": "AWS-EU-NORTH-1-c5d.4xl"
+    },
+    {
+      "Name": "NPN10-alphanet",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.4xl"
     }
   ]
 }

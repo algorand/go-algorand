@@ -755,6 +755,50 @@
 					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
 				}
 			]
+		},
+		{
+			"Name": "NPN9-alphanet",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode9",
+					"Wallets": [
+						{
+							"Name": "Wallet29",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN10-alphanet",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode10",
+					"Wallets": [
+						{
+							"Name": "Wallet30",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
 		}
 	]
 }
