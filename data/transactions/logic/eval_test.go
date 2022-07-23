@@ -248,6 +248,62 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	require.Equal(t, "", tealValue.Bytes)
 }
 
+func TestTxnFirstValidTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
+	// since it looks at the past of the blockchain, it is "stateless", in the
+	// sense that the value can not change, so it is available in logicsigs
+
+	ep, tx, ledger := makeSampleEnv()
+
+	// By default, test ledger uses an oddball round, ask it what round it's
+	// going to use and prep fv, lv accordingly.
+	current := ledger.Round()
+
+	tx.FirstValid = current - 10
+	tx.LastValid = current + 10
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	tx.FirstValid = current
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	tx.FirstValid = current - basics.Round(ep.Proto.MaxTxnLife)
+	tx.LastValid = current
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	// This test isn't really even possible because lifetime is too big. But
+	// nothing here checks that, so we can write this imposible test.
+	tx.FirstValid = current - basics.Round(ep.Proto.MaxTxnLife)
+	tx.LastValid = current + 1
+	testLogic(t, "txn FirstValidTime", 7, ep, "is not available")
+
+	// But also test behavior at the beginning of chain's life by setting the
+	// fake ledger round to a low number.
+	ledger.rnd = 10
+	tx.FirstValid = 2
+	tx.LastValid = 100
+	testLogic(t, "txn FirstValidTime; int 104; ==", 7, ep)
+
+	tx.FirstValid = 3
+	testLogic(t, "txn FirstValidTime; int 109; ==", 7, ep)
+
+	// This ensure 0 is not available, even though it "should" be allowed by the
+	// range check. round 0 doesn't exist!
+	tx.FirstValid = 1
+	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
+
+	// glassbox test - we know available range depends on LastValid - Lifetime - 1
+	tx.FirstValid = 1
+	tx.LastValid = tx.FirstValid + basics.Round(ep.Proto.MaxTxnLife)
+	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
+
+	// Same, for even weirder case of asking for a wraparound, high round
+	tx.FirstValid = 0 // I *guess* this is a legal txn early in chain's life
+	testLogic(t, "txn FirstValidTime; int 4; ==", 7, ep, "round 18446744073709551615 is not available")
+}
+
 func TestWrongProtoVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -855,7 +911,7 @@ func TestTxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), "invalid txn field")
 	}
 }
 
@@ -873,7 +929,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 127}
 	// TODO: Check should know the type stack was wrong
-	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field 127")
+	testLogicBytes(t, program, defaultEvalParams(nil), "invalid txn field TxnField(127)")
 
 	// test gtxn does not accept ApplicationArgs and Accounts
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
@@ -885,7 +941,7 @@ func TestGtxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(nil), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(nil), "invalid txn field")
 	}
 }
 
@@ -1491,6 +1547,11 @@ txn ClearStateProgram
 ==
 assert
 
+txn FirstValidTime
+int 0
+>
+assert
+
 int 1
 `
 
@@ -1606,9 +1667,6 @@ func TestTxn(t *testing.T) {
 				continue
 			}
 			if !strings.Contains(tests[v], txnField) {
-				if txnField == FirstValidTime.String() {
-					continue
-				}
 				// fields were introduced for itxn before they became available for txn
 				if v < txnEffectsVersion && fs.effects {
 					continue
@@ -2000,7 +2058,7 @@ txna ApplicationArgs 0
 
 	// modify txn field to unknown one
 	ops.Program[2] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify txn array index
 	ops.Program[2] = saved
@@ -2047,7 +2105,7 @@ txna ApplicationArgs 0
 
 	// modify gtxn field to unknown one
 	ops.Program[3] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify gtxn array index
 	ops.Program[3] = saved

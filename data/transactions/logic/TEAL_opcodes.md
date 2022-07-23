@@ -364,7 +364,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -423,8 +423,6 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
-
-FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
 
@@ -1377,3 +1375,33 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
+
+## vrf_verify s
+
+- Opcode: 0xd0 {uint8 parameters index}
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: uint64
+- Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
+- **Cost**: 5700
+- Availability: v7
+
+`vrf_verify` Standards:
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | VrfAlgorand |  |
+
+
+## block f
+
+- Opcode: 0xd1 {uint8 block field}
+- Stack: ..., A: uint64 &rarr; ..., any
+- field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.
+- Availability: v7
+
+`block` Fields:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | BlkSeed | []byte |  |
+| 1 | BlkTimestamp | uint64 |  |
+
