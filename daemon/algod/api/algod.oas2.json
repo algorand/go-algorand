@@ -1259,7 +1259,7 @@
         "parameters": [
           {
             "type": "integer",
-            "description": "The round in which the transaction appears.",
+            "description": "The round for which a state proof is desired.",
             "name": "round",
             "in": "path",
             "required": true,

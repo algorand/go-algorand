@@ -3540,7 +3540,7 @@
         "operationId": "StateProof",
         "parameters": [
           {
-            "description": "The round in which the transaction appears.",
+            "description": "The round for which a state proof is desired.",
             "in": "path",
             "name": "round",
             "required": true,
