@@ -774,16 +774,16 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
 	lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLatestRound
 	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
-	provenWeight := uint64(0)
 
 	stateProofStats := telemetryspec.StateProofStats{
-		ProvenWeight:   provenWeight,
+		ProvenWeight:   0,
 		SignedWeight:   txib.Txn.StateProofTxnFields.StateProof.SignedWeight,
 		NumReveals:     len(txib.Txn.StateProofTxnFields.StateProof.Reveals),
 		NumPosToReveal: len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal),
 		TxnSize:        encodedLen,
 	}
 
+	provenWeight := uint64(0)
 	if err != nil {
 		return stateProofStats
 	}
@@ -794,7 +794,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 	if err != nil {
 		return stateProofStats
 	}
-	
+
 	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
 	provenWeight, _ =
 		basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
