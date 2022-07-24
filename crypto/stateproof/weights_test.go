@@ -66,7 +66,7 @@ func TestVerifyProvenWeight(t *testing.T) {
 	a.NoError(err)
 
 	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, stateProofStrengthTargetForTests)
-	a.ErrorIs(err, ErrInsufficientSingedWeight)
+	a.ErrorIs(err, ErrInsufficientSignedWeight)
 }
 
 func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
