@@ -45,11 +45,6 @@ func TestConvertSha256Header(t *testing.T) {
 	a.Equal(gh, sha256Header.GenesisHash)
 }
 
-/*
-	sha256 can be compromised if the first bytes in it are known.
-	To ensure an attacker cannot take advantage of our use of sha256,
-	we ensure the first field in the marshalled bytes of the light header is the committee seed.
-*/
 func TestFirstFieldsAreCommitteeSeed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -63,9 +58,7 @@ func TestFirstFieldsAreCommitteeSeed(t *testing.T) {
 		GenesisHash: gh,
 	}
 
-	// why do we need msgpack to be okj? can't we define "toBeHahsed"?
 	o := protocol.Encode(&blockHeader)
 
-	a.False(strings.HasPrefix(string(o[:]), "123456789a"))
 	a.True(strings.HasPrefix(string(o[5:]), "123456789a"))
 }

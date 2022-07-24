@@ -29,6 +29,11 @@ import (
 type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	/*
+		sha256 can be compromised if the first bytes in it are known.
+		To ensure an attacker cannot take advantage of our use of sha256,
+		we ensure the first field in the marshalled bytes of the light header is the committee seed.
+	*/
 	Seed                committee.Seed       `codec:"0"` // ensuring this is the first field in a msgpacked struct.
 	Round               basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
