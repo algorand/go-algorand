@@ -54,14 +54,19 @@ type Participant struct {
 // msgpack creates a compressed representation of the struct which might be varied in length, which will
 // be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-	weightSize := 8
-	keyLifteimeSize := 8
+
+	weightAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
+
+	keyLifetimeBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(keyLifetimeBytes, p.PK.KeyLifetime)
+
 	publicKeyBytes := p.PK.Commitment
 
-	partCommitment := make([]byte, weightSize+len(publicKeyBytes)+keyLifteimeSize)
-	binary.LittleEndian.PutUint64(partCommitment[:weightSize], p.Weight)
-	binary.LittleEndian.PutUint64(partCommitment[weightSize:weightSize+keyLifteimeSize], p.PK.KeyLifetime)
-	copy(partCommitment[weightSize+keyLifteimeSize:], publicKeyBytes[:])
+	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes)+len(keyLifetimeBytes))
+	partCommitment = append(partCommitment, weightAsBytes...)
+	partCommitment = append(partCommitment, keyLifetimeBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
 	return protocol.StateProofPart, partCommitment
 }
