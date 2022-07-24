@@ -29,7 +29,7 @@ var (
 	ErrTooManyReveals                   = errors.New("too many reveals in state proof")
 	ErrZeroSignedWeight                 = errors.New("signed weight cannot be zero")
 	ErrIllegalInputForLnApprox          = errors.New("cannot calculate a ln integer value for 0")
-	ErrInsufficientSingedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed, with the desired security level")
+	ErrInsufficientSignedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed, with the desired security level")
 	ErrNegativeNumOfRevealsEquation     = errors.New("state proof creation failed: weights will not be able to satisfy the verification equation")
 )
 
@@ -97,7 +97,7 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 		Mul(rhs, y)
 
 	if lhs.Cmp(rhs) < 0 {
-		return ErrInsufficientSingedWeight
+		return ErrInsufficientSignedWeight
 	}
 
 	return nil

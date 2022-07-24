@@ -1259,7 +1259,7 @@
         "parameters": [
           {
             "type": "integer",
-            "description": "The round in which the transaction appears.",
+            "description": "The round for which a state proof is desired.",
             "name": "round",
             "in": "path",
             "required": true,
@@ -1321,7 +1321,7 @@
         "parameters": [
           {
             "type": "integer",
-            "description": "The round in which the transaction appears.",
+            "description": "The round to which the light block header belongs.",
             "name": "round",
             "in": "path",
             "required": true,
