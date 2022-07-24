@@ -29,7 +29,7 @@ import (
 type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Seed                committee.Seed       `codec:"s"`
+	Seed                committee.Seed       `codec:"0"` // ensuring this is the first field in a msgpacked struct.
 	RoundNumber         basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
