@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 // Migration is used to upgrade a database from one version to the next.
@@ -32,9 +34,17 @@ type Migration func(ctx context.Context, tx *sql.Tx, newDatabase bool) error
 // The Migration slice is ordered and must contain all prior migrations
 // in order to determine which need to be called.
 func Initialize(accessor Accessor, migrations []Migration) error {
-	return accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return InitializeWithContext(ctx, tx, migrations)
 	})
+
+	var sqlError *sqlite3.Error
+	if errors.As(err, &sqlError) {
+		return fmt.Errorf("%w.  Sql error - Code: %d, Extended Code: %d", err, sqlError.Code, sqlError.ExtendedCode)
+	}
+
+	return err
+
 }
 
 // InitializeWithContext creates or upgrades a DB accessor.

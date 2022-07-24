@@ -57,6 +57,7 @@ type roundCowParent interface {
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	StateProofNext() basics.Round
 	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
+	blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	// note: getStorageLimits is redundant with the other methods
 	// and is provided to optimize state schema lookups
@@ -231,6 +232,10 @@ func (cb *roundCowState) ValidateStateProof(latestRoundInIntervalHdr *bookkeepin
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.BlockHdr(r)
+}
+
+func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return cb.lookupParent.blockHdrCached(r)
 }
 
 func (cb *roundCowState) incTxnCount() {

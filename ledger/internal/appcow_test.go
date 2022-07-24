@@ -95,6 +95,10 @@ func (ml *emptyLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, erro
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func (ml *emptyLedger) StateProofNext() basics.Round {
 	return basics.Round(0)
 }
