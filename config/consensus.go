@@ -379,7 +379,7 @@ type ConsensusParams struct {
 	// can be.
 	//
 	// This threshold can be thought of as the maximum fraction of
-	// malicious weight that state proof defend against.
+	// malicious weight that state proofs defend against.
 	//
 	// The threshold is computed as StateProofWeightThreshold/(1<<32).
 	StateProofWeightThreshold uint32
