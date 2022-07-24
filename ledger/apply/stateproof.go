@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// StateProof applies the StateProof transaction and by setting the next StateProof round
+// StateProof applies the StateProof transaction and setting the next StateProof round
 func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofs, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {

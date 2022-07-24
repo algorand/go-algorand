@@ -1096,7 +1096,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	balances := apply.Balances(cow)
-	stateProofApplier := apply.StateProofs(cow)
 
 	params := balances.ConsensusParams()
 
@@ -1137,6 +1136,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
+			stateProofApplier := apply.StateProofs(cow)
 			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, stateProofApplier, eval.validate)
 		}
 
