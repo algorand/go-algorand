@@ -771,24 +771,28 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	return
 }
 
-func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) (stateProofStats telemetryspec.StateProofStats) {
+func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
 	lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLatestRound
 	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	provenWeight := uint64(0)
 	if err == nil {
 		proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 		votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
 		votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
 		if err == nil {
 			totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
-			stateProofStats.ProvenWeight, _ =
+			provenWeight, _ =
 				basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 		}
 	}
-	stateProofStats.SignedWeight = txib.Txn.StateProofTxnFields.StateProof.SignedWeight
-	stateProofStats.NumReveals = len(txib.Txn.StateProofTxnFields.StateProof.Reveals)
-	stateProofStats.NumPosToReveal = len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal)
-	stateProofStats.TxnSize = encodedLen
-	return
+
+	return telemetryspec.StateProofStats{
+		ProvenWeight:   provenWeight,
+		SignedWeight:   txib.Txn.StateProofTxnFields.StateProof.SignedWeight,
+		NumReveals:     len(txib.Txn.StateProofTxnFields.StateProof.Reveals),
+		NumPosToReveal: len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal),
+		TxnSize:        encodedLen,
+	}
 }
 
 // AssembleBlock assembles a block for a given round, trying not to
