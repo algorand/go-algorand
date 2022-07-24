@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -70,7 +71,7 @@ const maxLogCalls = 32
 // you count the top-level app call.
 const maxAppCallDepth = 8
 
-// maxStackDepth should not change unless controlled by a teal version change
+// maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
 // stackValue is the type for the operand stack.
@@ -171,13 +172,13 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
-// ComputeMinTealVersion calculates the minimum safe TEAL version that may be
+// ComputeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
-// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinTealVersion(group []transactions.SignedTxnWithAD) uint64 {
+func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -200,6 +201,7 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -242,10 +244,10 @@ type EvalParams struct {
 	// optional debugger
 	Debugger DebuggerHook
 
-	// MinTealVersion is the minimum allowed TEAL version of this program.
+	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
-	// MinTealVersion is nil, we will compute it ourselves
-	MinTealVersion *uint64
+	// MinAvmVersion is nil, we will compute it ourselves
+	MinAvmVersion *uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
@@ -305,7 +307,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	minTealVersion := ComputeMinTealVersion(txgroup)
+	minAvmVersion := ComputeMinAvmVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -327,7 +329,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		Proto:                   proto,
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		MinTealVersion:          &minTealVersion,
+		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -357,12 +359,12 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txg)
+	minAvmVersion := ComputeMinAvmVersion(txg)
 	// Can't happen currently, since earliest inner callable version is higher
 	// than any minimum imposed otherwise.  But is correct to inherit a stronger
 	// restriction from above, in case of future restriction.
-	if minTealVersion < *caller.MinTealVersion {
-		minTealVersion = *caller.MinTealVersion
+	if minAvmVersion < *caller.MinAvmVersion {
+		minAvmVersion = *caller.MinAvmVersion
 	}
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
@@ -380,7 +382,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
 		pastScratch:             make([]*scratchSpace, len(txg)),
-		MinTealVersion:          &minTealVersion,
+		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -829,12 +831,12 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
-	if params.MinTealVersion == nil {
-		minVersion := ComputeMinTealVersion(params.TxnGroup)
-		params.MinTealVersion = &minVersion
+	if params.MinAvmVersion == nil {
+		minVersion := ComputeMinAvmVersion(params.TxnGroup)
+		params.MinAvmVersion = &minVersion
 	}
-	if version < *params.MinTealVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinTealVersion, version)
+	if version < *params.MinAvmVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinAvmVersion, version)
 	}
 	return version, vlen, nil
 }
@@ -858,6 +860,10 @@ func boolToUint(x bool) uint64 {
 		return 1
 	}
 	return 0
+}
+
+func boolToSV(x bool) stackValue {
+	return stackValue{Uint: boolToUint(x)}
 }
 
 func (cx *EvalContext) remainingBudget() int {
@@ -895,7 +901,7 @@ func (cx *EvalContext) step() error {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 
-	// this check also ensures TEAL versioning: v2 opcodes are not in opsByOpcode[1] array
+	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
@@ -1302,7 +1308,7 @@ func opLt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := cx.stack[prev].Uint < cx.stack[last].Uint
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1328,7 +1334,7 @@ func opAnd(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1337,7 +1343,7 @@ func opOr(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
-	cx.stack[prev].Uint = boolToUint(cond)
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1356,8 +1362,7 @@ func opEq(cx *EvalContext) error {
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
 	}
-	cx.stack[prev].Uint = boolToUint(cond)
-	cx.stack[prev].Bytes = nil
+	cx.stack[prev] = boolToSV(cond)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1372,8 +1377,7 @@ func opNeq(cx *EvalContext) error {
 
 func opNot(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	cond := cx.stack[last].Uint == 0
-	cx.stack[last].Uint = boolToUint(cond)
+	cx.stack[last] = boolToSV(cx.stack[last].Uint == 0)
 	return nil
 }
 
@@ -1674,8 +1678,7 @@ func opBytesLt(cx *EvalContext) error {
 
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) < 0)
+	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) < 0)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1711,8 +1714,7 @@ func opBytesEq(cx *EvalContext) error {
 
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) == 0)
+	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) == 0)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -2297,6 +2299,19 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = txn.Fee.Raw
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
+	case FirstValidTime:
+		rnd, err := cx.availableRound(uint64(txn.FirstValid) - 1)
+		if err != nil {
+			return sv, err
+		}
+		hdr, err := cx.Ledger.BlockHdrCached(rnd)
+		if err != nil {
+			return sv, err
+		}
+		if hdr.TimeStamp < 0 {
+			return sv, fmt.Errorf("block(%d) timestamp %d < 0", txn.FirstValid-1, hdr.TimeStamp)
+		}
+		sv.Uint = uint64(hdr.TimeStamp)
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
@@ -2495,13 +2510,13 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.version > cx.version {
-		return nil, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %s", field)
 	}
 	if expectArray != fs.array {
 		if expectArray {
-			return nil, fmt.Errorf("unsupported array field %d", field)
+			return nil, fmt.Errorf("unsupported array field %s", field)
 		}
-		return nil, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %s", field)
 	}
 	return &fs, nil
 }
@@ -2999,8 +3014,7 @@ func opEd25519Verify(cx *EvalContext) error {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig))
-	cx.stack[pprev].Bytes = nil
+	cx.stack[pprev] = boolToSV(sv.Verify(msg, sig))
 	cx.stack = cx.stack[:prev]
 	return nil
 }
@@ -3022,8 +3036,7 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
-	cx.stack[pprev].Bytes = nil
+	cx.stack[pprev] = boolToSV(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
 	cx.stack = cx.stack[:prev]
 	return nil
 }
@@ -3093,8 +3106,7 @@ func opEcdsaVerify(cx *EvalContext) error {
 		result = ecdsa.Verify(&pubkey, msg, r, s)
 	}
 
-	cx.stack[fifth].Uint = boolToUint(result)
-	cx.stack[fifth].Bytes = nil
+	cx.stack[fifth] = boolToSV(result)
 	cx.stack = cx.stack[:fourth]
 	return nil
 }
@@ -3729,9 +3741,7 @@ func opAppOptedIn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[prev].Uint = boolToUint(optedIn)
-	cx.stack[prev].Bytes = nil
-
+	cx.stack[prev] = boolToSV(optedIn)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -4180,8 +4190,6 @@ func opAcctParamsGet(cx *EvalContext) error {
 		return err
 	}
 
-	exist := boolToUint(account.MicroAlgos.Raw > 0)
-
 	var value stackValue
 
 	switch fs.field {
@@ -4193,7 +4201,7 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Bytes = account.AuthAddr[:]
 	}
 	cx.stack[last] = value
-	cx.stack = append(cx.stack, stackValue{Uint: exist})
+	cx.stack = append(cx.stack, boolToSV(account.MicroAlgos.Raw > 0))
 	return nil
 }
 
@@ -4782,6 +4790,103 @@ func opItxnSubmit(cx *EvalContext) error {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 	return nil
+}
+
+type rawMessage []byte
+
+func (rm rawMessage) ToBeHashed() (protocol.HashID, []byte) {
+	return "", []byte(rm)
+}
+
+func opVrfVerify(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // PK
+	prev := last - 1          // proof
+	pprev := prev - 1         // data
+
+	data := rawMessage(cx.stack[pprev].Bytes)
+	proofbytes := cx.stack[prev].Bytes
+	var proof crypto.VrfProof
+	if len(proofbytes) != len(proof) {
+		return fmt.Errorf("vrf proof wrong size %d != %d", len(proofbytes), len(proof))
+	}
+	copy(proof[:], proofbytes[:])
+
+	pubkeybytes := cx.stack[last].Bytes
+	var pubkey crypto.VrfPubkey
+	if len(pubkeybytes) != len(pubkey) {
+		return fmt.Errorf("vrf pubkey wrong size %d != %d", len(pubkeybytes), len(pubkey))
+	}
+	copy(pubkey[:], pubkeybytes[:])
+
+	var verified bool
+	var output []byte
+	std := VrfStandard(cx.program[cx.pc+1])
+	ss, ok := vrfStandardSpecByField(std)
+	if !ok || ss.version > cx.version {
+		return fmt.Errorf("invalid VRF standard %s", std)
+	}
+	switch std {
+	case VrfAlgorand:
+		var out crypto.VrfOutput
+		verified, out = pubkey.Verify(proof, data)
+		output = out[:]
+	default:
+		return fmt.Errorf("unsupported vrf_verify standard %s", std)
+	}
+
+	cx.stack[pprev].Bytes = output[:]
+	cx.stack[prev] = boolToSV(verified)
+	cx.stack = cx.stack[:last] // pop 1 because we take 3 args and return 2
+	return nil
+}
+
+// availableRound checks to see if the requested round, `r`, is allowed to be
+// accessed. If it is, it's returned as a basics.Round. It is named by analogy
+// to the availableAsset and  availableApp helpers.
+func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
+	firstAvail := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
+	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
+		firstAvail = 1
+	}
+	current := cx.Ledger.Round()
+	round := basics.Round(r)
+	if round < firstAvail || round >= current {
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
+	}
+	return round, nil
+}
+
+func opBlock(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // round
+	round, err := cx.availableRound(cx.stack[last].Uint)
+	if err != nil {
+		return err
+	}
+	f := BlockField(cx.program[cx.pc+1])
+	fs, ok := blockFieldSpecByField(f)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid block field %s", f)
+	}
+
+	hdr, err := cx.Ledger.BlockHdrCached(round)
+	if err != nil {
+		return err
+	}
+
+	switch fs.field {
+	case BlkSeed:
+		cx.stack[last].Bytes = hdr.Seed[:]
+		return nil
+	case BlkTimestamp:
+		cx.stack[last].Bytes = nil
+		if hdr.TimeStamp < 0 {
+			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
+		}
+		cx.stack[last].Uint = uint64(hdr.TimeStamp)
+		return nil
+	default:
+		return fmt.Errorf("invalid block field %d", fs.field)
+	}
 }
 
 // PcDetails return PC and disassembled instructions at PC up to 2 opcodes back

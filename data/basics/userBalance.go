@@ -436,22 +436,23 @@ func PendingRewards(ot *OverflowTracker, proto config.ConsensusParams, microAlgo
 func WithUpdatedRewards(
 	proto config.ConsensusParams, status Status, microAlgosIn MicroAlgos, rewardedMicroAlgosIn MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
 ) (MicroAlgos, MicroAlgos, uint64) {
-	if status != NotParticipating {
-		var ot OverflowTracker
-		rewardsUnits := microAlgosIn.RewardUnits(proto)
-		rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
-		rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
-		microAlgosOut := ot.AddA(microAlgosIn, rewards)
-		if ot.Overflowed {
-			logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
-		}
-		rewardsBaseOut := rewardsLevelIn
-		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
-		// this rewardAlgos counter could potentially roll over.
-		rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
-		return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
+	if status == NotParticipating {
+		return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
 	}
-	return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
+
+	var ot OverflowTracker
+	rewardsUnits := microAlgosIn.RewardUnits(proto)
+	rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
+	rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+	microAlgosOut := ot.AddA(microAlgosIn, rewards)
+	if ot.Overflowed {
+		logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
+	}
+	rewardsBaseOut := rewardsLevelIn
+	// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
+	// this rewardAlgos counter could potentially roll over.
+	rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
+	return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
 }
 
 // WithUpdatedRewards returns an updated number of algos in an AccountData

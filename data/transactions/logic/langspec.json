@@ -616,7 +616,6 @@
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of current transaction",
-      "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
@@ -771,7 +770,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F of the current transaction",
+      "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -792,7 +791,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -898,7 +897,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Ath transaction in the current group",
+      "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -1218,7 +1217,7 @@
       "Args": "BUU",
       "Returns": "B",
       "Size": 1,
-      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
+      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -1262,7 +1261,7 @@
       "Args": "BB",
       "Returns": "B",
       "Size": 2,
-      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)\n`replace2` can be called using `replace` with 1 immediate.",
       "ImmediateNote": "{uint8 start position}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1274,7 +1273,7 @@
       "Args": "BUB",
       "Returns": "B",
       "Size": 1,
-      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)\n`replace3` can be called using `replace` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -1674,42 +1673,6 @@
       "Returns": "B",
       "Size": 1,
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 153,
-      "Name": "bn256_add",
-      "Args": "BB",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "for (curve points A and B) return the curve point A + B",
-      "DocExtra": "A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 154,
-      "Name": "bn256_scalar_mul",
-      "Args": "BB",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "for (curve point A, scalar K) return the curve point KA",
-      "DocExtra": "A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 155,
-      "Name": "bn256_pairing",
-      "Args": "BB",
-      "Returns": "U",
-      "Size": 1,
-      "Doc": "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired =\u003e {0 or 1}",
-      "DocExtra": "G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
       "Groups": [
         "Arithmetic"
       ]
@@ -2313,6 +2276,30 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
         "Inner Transactions"
+      ]
+    },
+    {
+      "Opcode": 208,
+      "Name": "vrf_verify",
+      "Args": "BBB",
+      "Returns": "BU",
+      "Size": 2,
+      "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+      "ImmediateNote": "{uint8 parameters index}",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
+      "Opcode": 209,
+      "Name": "block",
+      "Args": "U",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "ImmediateNote": "{uint8 block field}",
+      "Groups": [
+        "State Access"
       ]
     }
   ]
