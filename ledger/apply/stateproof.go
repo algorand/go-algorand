@@ -25,7 +25,7 @@ import (
 )
 
 // StateProof applies the StateProof transaction and by setting the next StateProof round
-func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, cs StateProofData, validate bool) error {
+func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, cs StateProofs, validate bool) error {
 	latestRoundInInterval := tx.StateProofIntervalLatestRound
 	spType := tx.StateProofType
 	stateProof := tx.StateProof

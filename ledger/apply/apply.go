@@ -27,8 +27,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// StateProofData allows to fetch and update the StateProof header data
-type StateProofData interface {
+// StateProofs allows to fetch and update the StateProof header data
+type StateProofs interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	StateProofNext() basics.Round
 	SetStateProofNext(rnd basics.Round)
