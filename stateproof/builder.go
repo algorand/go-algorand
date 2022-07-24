@@ -249,7 +249,7 @@ func (spw *Worker) builder(latest basics.Round) {
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
-		spw.tryBuilding()
+		spw.tryBroadcast()
 
 		nextrnd := latest + 1
 		select {
@@ -398,7 +398,7 @@ func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
 	}
 }
 
-func (spw *Worker) tryBuilding() {
+func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
@@ -427,10 +427,10 @@ func (spw *Worker) tryBuilding() {
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
-		stxn.Txn.StateProofType = protocol.StateProofBasic
-		stxn.Txn.StateProofIntervalLatestRound = rnd
-		stxn.Txn.StateProof = *sp
-		stxn.Txn.Message = b.message
+		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
+		stxn.Txn.StateProofTxnFields.StateProofIntervalLatestRound = rnd
+		stxn.Txn.StateProofTxnFields.StateProof = *sp
+		stxn.Txn.StateProofTxnFields.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)

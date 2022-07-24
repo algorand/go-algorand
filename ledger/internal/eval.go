@@ -24,10 +24,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -325,11 +323,11 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) stateProofNext() basics.Round {
+func (x *roundCowBase) StateProofNext() basics.Round {
 	return x.stateProofNextRnd
 }
 
-func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdr(r)
 }
 
@@ -557,37 +555,6 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 
 func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
-}
-
-func (cs *roundCowState) applyStateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof sp.StateProof, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
-	if spType != protocol.StateProofBasic {
-		return fmt.Errorf("applyStateProof type %d not supported", spType)
-	}
-
-	nextStateProofRnd := cs.stateProofNext()
-
-	latestRoundHdr, err := cs.blockHdr(latestRoundInInterval)
-	if err != nil {
-		return err
-	}
-
-	proto := config.Consensus[latestRoundHdr.CurrentProtocol]
-
-	if validate {
-		votersRnd := latestRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
-		votersHdr, err := cs.blockHdr(votersRnd)
-		if err != nil {
-			return err
-		}
-
-		err = validateStateProof(latestRoundHdr, stateProof, votersHdr, nextStateProofRnd, atRound, stateProofMsg)
-		if err != nil {
-			return err
-		}
-	}
-
-	cs.setStateProofNext(latestRoundInInterval + basics.Round(proto.StateProofInterval))
-	return nil
 }
 
 // BlockEvaluator represents an in-progress evaluation of a block
@@ -1127,7 +1094,9 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
+	balances := apply.Balances(cow)
+
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -1146,7 +1115,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, cow.round())
 
 	case protocol.AssetConfigTx:
 		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
@@ -1162,12 +1131,13 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 
 	case protocol.StateProofTx:
 		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNext depending on
-		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.Message, tx.Header.FirstValid, eval.validate)
+			stateProofApplier := apply.StateProofs(cow)
+			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, stateProofApplier, eval.validate)
 		}
 
 	default:
@@ -1247,7 +1217,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				return err
 			}
 
-			basicStateProof.StateProofNextRound = eval.state.stateProofNext()
+			basicStateProof.StateProofNextRound = eval.state.StateProofNext()
 
 			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 			eval.block.StateProofTracking[protocol.StateProofBasic] = basicStateProof
@@ -1292,8 +1262,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
 			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.stateProofNext() {
-			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.stateProofNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.StateProofNext() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.StateProofNext())
 		}
 		for ccType := range eval.block.StateProofTracking {
 			if ccType != protocol.StateProofBasic {

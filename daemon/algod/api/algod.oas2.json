@@ -2882,7 +2882,8 @@
         "acfg",
         "axfer",
         "afrz",
-        "appl"
+        "appl",
+        "stpf"
       ],
       "type": "string",
       "name": "tx-type",
