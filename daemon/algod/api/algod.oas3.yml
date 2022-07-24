@@ -2668,7 +2668,7 @@
         "operationId": "GetProofForLightBlockHeader",
         "parameters": [
           {
-            "description": "The round in which the transaction appears.",
+            "description": "The round to which the light block header belongs.",
             "in": "path",
             "name": "round",
             "required": true,
