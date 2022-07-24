@@ -30,7 +30,7 @@ type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Seed                committee.Seed       `codec:"0"` // ensuring this is the first field in a msgpacked struct.
-	RoundNumber         basics.Round         `codec:"r"`
+	Round               basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
 }
@@ -40,7 +40,7 @@ func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
 	return LightBlockHeader{
 		Seed:                bh.Seed,
 		GenesisHash:         bh.GenesisHash,
-		RoundNumber:         bh.Round,
+		Round:               bh.Round,
 		Sha256TxnCommitment: bh.Sha256Commitment[:],
 	}
 }

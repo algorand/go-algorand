@@ -2218,7 +2218,7 @@ func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).RoundNumber.MsgIsZero() {
+	if (*z).Round.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -2242,7 +2242,7 @@ func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o = (*z).RoundNumber.MarshalMsg(o)
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "tc"
@@ -2281,9 +2281,9 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
+			bts, err = (*z).Round.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RoundNumber")
+				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
 			}
 		}
@@ -2333,9 +2333,9 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "r":
-				bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
+				bts, err = (*z).Round.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "RoundNumber")
+					err = msgp.WrapError(err, "Round")
 					return
 				}
 			case "gh":
@@ -2370,13 +2370,13 @@ func (_ *LightBlockHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *LightBlockHeader) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Seed.Msgsize() + 2 + (*z).RoundNumber.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
+	s = 1 + 2 + (*z).Seed.Msgsize() + 2 + (*z).Round.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *LightBlockHeader) MsgIsZero() bool {
-	return ((*z).Seed.MsgIsZero()) && ((*z).RoundNumber.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
+	return ((*z).Seed.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

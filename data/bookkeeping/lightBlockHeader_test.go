@@ -17,11 +17,12 @@
 package bookkeeping
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestConvertSha256Header(t *testing.T) {
@@ -36,7 +37,7 @@ func TestConvertSha256Header(t *testing.T) {
 	blockHeader := BlockHeader{Round: 200, GenesisHash: gh, TxnCommitments: txnCommit}
 	sha256Header := blockHeader.ToLightBlockHeader()
 
-	a.Equal(basics.Round(200), sha256Header.RoundNumber)
+	a.Equal(basics.Round(200), sha256Header.Round)
 	a.Equal(txnCommit.Sha256Commitment[:], []byte(sha256Header.Sha256TxnCommitment))
 	a.Equal(gh, sha256Header.GenesisHash)
 }
