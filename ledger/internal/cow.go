@@ -225,7 +225,7 @@ func (cb *roundCowState) StateProofNext() basics.Round {
 	return cb.lookupParent.StateProofNext()
 }
 
-func (cb *roundCowState) ValidateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof stateproof.StateProof, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
+func (cb *roundCowState) ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
 	return ValidateStateProof(latestRoundInIntervalHdr, stateProof, votersHdr, nextStateProofRnd, atRound, msg)
 }
 

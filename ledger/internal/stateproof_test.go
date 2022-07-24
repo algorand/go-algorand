@@ -34,12 +34,12 @@ import (
 func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var spHdr bookkeeping.BlockHeader
-	var sp stateproof.StateProof
-	var votersHdr bookkeeping.BlockHeader
+	spHdr := &bookkeeping.BlockHeader{}
+	sp := &stateproof.StateProof{}
+	votersHdr := &bookkeeping.BlockHeader{}
 	var nextSPRnd basics.Round
 	var atRound basics.Round
-	msg := stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
+	msg := &stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
 	err := ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)

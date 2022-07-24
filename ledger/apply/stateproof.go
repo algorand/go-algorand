@@ -48,7 +48,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 			return err
 		}
 
-		err = sp.ValidateStateProof(latestRoundHdr, tx.StateProof, votersHdr, nextStateProofRnd, atRound, tx.Message)
+		err = sp.ValidateStateProof(&latestRoundHdr, &tx.StateProof, &votersHdr, nextStateProofRnd, atRound, &tx.Message)
 		if err != nil {
 			return err
 		}
