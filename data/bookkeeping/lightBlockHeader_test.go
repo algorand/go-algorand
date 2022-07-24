@@ -17,10 +17,13 @@
 package bookkeeping
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -40,4 +43,29 @@ func TestConvertSha256Header(t *testing.T) {
 	a.Equal(basics.Round(200), sha256Header.Round)
 	a.Equal(txnCommit.Sha256Commitment[:], []byte(sha256Header.Sha256TxnCommitment))
 	a.Equal(gh, sha256Header.GenesisHash)
+}
+
+/*
+	sha256 can be compromised if the first bytes in it are known.
+	To ensure an attacker cannot take advantage of our use of sha256,
+	we ensure the first field in the marshalled bytes of the light header is the committee seed.
+*/
+func TestFirstFieldsAreCommitteeSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var gh crypto.Digest
+	crypto.RandBytes(gh[:])
+
+	blockHeader := LightBlockHeader{
+		Seed:        committee.Seed{'1', '2', '3', '4', '5', '6', '7', '8', '9', 'a'},
+		Round:       200,
+		GenesisHash: gh,
+	}
+
+	// why do we need msgpack to be okj? can't we define "toBeHahsed"?
+	o := protocol.Encode(&blockHeader)
+
+	a.False(strings.HasPrefix(string(o[:]), "123456789a"))
+	a.True(strings.HasPrefix(string(o[5:]), "123456789a"))
 }
