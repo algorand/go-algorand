@@ -609,7 +609,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
-	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, len(w.builders))
 
@@ -626,7 +626,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
 	s.mu.Unlock()
 
-	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(3, len(w.builders))
 
@@ -666,14 +666,14 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
-	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 
 	s.mu.Lock()
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
 	s.mu.Unlock()
 
-	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
 
@@ -685,14 +685,15 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	a.Equal(proto.StateProofRecoveryInterval, uint64(len(roundSigs)))
 }
 
-func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
+func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {
 	const maxRetries = 10000
 	i := 0
 	for {
 		s.mu.Lock()
+		r := s.latest + 1
 		// in order to make sure the builder and the signer are waiting for a round we need to make sure
 		// that round r has c channel and r +1 doesn't have.
-		// we also want to make sure that the builder and the singer are waitting
+		// we also want to make sure that the builder and the singer are waiting
 		isWaitingForRound := s.waiters[r] != nil && s.waiters[r+1] == nil
 		isWaitingForRound = isWaitingForRound && (s.waitersCount[r] == 2)
 		s.mu.Unlock()

@@ -61,8 +61,8 @@ type votersTracker struct {
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
-	l  ledgerForTracker
-	ao *onlineAccounts
+	l                 ledgerForTracker
+	onlineTopFunction ledgercore.TopOnlineAccounts
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -79,13 +79,11 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, latestDbRound basics.Round) error {
 	vt.l = l
-	vt.ao = ao
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
-	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
+	hdr, err := l.BlockHdr(latestDbRound)
 	if err != nil {
 		return err
 	}
@@ -104,10 +102,11 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) er
 			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
-	for r := startR; r <= latest; r += basics.Round(proto.StateProofInterval) {
+	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
-			return err
+			vt.l.trackerLog().Errorf("votersTracker: loadFromDisk: cannot load tree for round %v, err : %v", r, err)
+			continue
 		}
 
 		vt.loadTree(hdr)
@@ -139,8 +138,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
-		err := tr.LoadTree(onlineAccounts, hdr)
+		err := tr.LoadTree(vt.onlineTopFunction, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
