@@ -19,7 +19,6 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
@@ -54,19 +53,14 @@ type Participant struct {
 // msgpack creates a compressed representation of the struct which might be varied in length, which will
 // be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-
-	weightAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
-
-	keyLifetimeBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(keyLifetimeBytes, p.PK.KeyLifetime)
-
+	weightSize := 8
+	keyLifteimeSize := 8
 	publicKeyBytes := p.PK.Commitment
 
-	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes)+len(keyLifetimeBytes))
-	partCommitment = append(partCommitment, weightAsBytes...)
-	partCommitment = append(partCommitment, keyLifetimeBytes...)
-	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+	partCommitment := make([]byte, weightSize+len(publicKeyBytes)+keyLifteimeSize)
+	binary.LittleEndian.PutUint64(partCommitment[:weightSize], p.Weight)
+	binary.LittleEndian.PutUint64(partCommitment[weightSize:weightSize+keyLifteimeSize], p.PK.KeyLifetime)
+	copy(partCommitment[weightSize+keyLifteimeSize:], publicKeyBytes[:])
 
 	return protocol.StateProofPart, partCommitment
 }
