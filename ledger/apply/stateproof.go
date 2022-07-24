@@ -25,19 +25,16 @@ import (
 )
 
 // StateProof applies the StateProof transaction and by setting the next StateProof round
-func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, cs StateProofs, validate bool) error {
-	latestRoundInInterval := tx.StateProofIntervalLatestRound
+func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofs, validate bool) error {
 	spType := tx.StateProofType
-	stateProof := tx.StateProof
-	stateProofMsg := tx.Message
-
 	if spType != protocol.StateProofBasic {
 		return fmt.Errorf("applyStateProof type %d not supported", spType)
 	}
 
-	nextStateProofRnd := cs.StateProofNext()
+	nextStateProofRnd := sp.StateProofNext()
 
-	latestRoundHdr, err := cs.BlockHdr(latestRoundInInterval)
+	latestRoundInInterval := tx.StateProofIntervalLatestRound
+	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)
 	if err != nil {
 		return err
 	}
@@ -46,17 +43,17 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, cs St
 
 	if validate {
 		votersRnd := latestRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
-		votersHdr, err := cs.BlockHdr(votersRnd)
+		votersHdr, err := sp.BlockHdr(votersRnd)
 		if err != nil {
 			return err
 		}
 
-		err = cs.ValidateStateProof(latestRoundHdr, stateProof, votersHdr, nextStateProofRnd, atRound, stateProofMsg)
+		err = sp.ValidateStateProof(latestRoundHdr, tx.StateProof, votersHdr, nextStateProofRnd, atRound, tx.Message)
 		if err != nil {
 			return err
 		}
 	}
 
-	cs.SetStateProofNext(latestRoundInInterval + basics.Round(proto.StateProofInterval))
+	sp.SetStateProofNext(latestRoundInInterval + basics.Round(proto.StateProofInterval))
 	return nil
 }

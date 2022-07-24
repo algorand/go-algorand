@@ -349,7 +349,6 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 			if err != nil {
 				spw.log.Warnf("broadcastSigs: Broadcast for %d: %v", rnd, err)
 			}
-			fmt.Println("BUILDER: broadcast sig for round", rnd)
 		}
 	}
 }
