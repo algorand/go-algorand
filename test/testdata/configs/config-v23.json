@@ -63,7 +63,7 @@
     "LogArchiveMaxAge": "",
     "LogArchiveName": "node.archive.log",
     "LogSizeLimit": 1073741824,
-    "MaxAcctLookback": 8,
+    "MaxAcctLookback": 4,
     "MaxAPIResourcesPerAccount": 100000,
     "MaxCatchpointDownloadDuration": 7200000000000,
     "MaxConnectionsPerIP": 30,
