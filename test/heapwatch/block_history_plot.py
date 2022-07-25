@@ -19,6 +19,8 @@ def process(path):
     maxdt = 0
     mintps = 999999
     maxtps = 0
+    tcv = []
+    tsv = []
     tpsv = []
     dtv = []
     txnv = []
@@ -33,10 +35,17 @@ def process(path):
             tc = block.get('tc', 0)
             ts = block.get('ts', 0) # timestamp recorded at algod, 1s resolution int
             _time = row['_time'] # timestamp recorded at client, 0.000001s resolution float
+            tcv.append(tc)
             if prevtime is not None:
                 dt = _time - prevtime
                 if dt < 1:
                     dt = ts - prevts
+                    tsv.append(ts)
+                else:
+                    if _time < tsv[-1]:
+                        tsv.append(ts)
+                    else:
+                        tsv.append(_time)
                 dtxn = tc - prevtc
                 tps = dtxn / dt
                 mintxn = min(dtxn,mintxn)
@@ -48,6 +57,8 @@ def process(path):
                 tpsv.append(tps)
                 dtv.append(dt)
                 txnv.append(dtxn)
+            else:
+                tsv.append(ts)
             prevrnd = rnd
             prevtc = tc
             prevts = ts
@@ -81,7 +92,7 @@ def process(path):
         min(tpsv[start:end]), max(tpsv[start:end]),
     ))
     print('long round times: {}'.format(' '.join(list(filter(lambda x: x >= 9,dtv[start:end])))))
-    fig, (ax1, ax2, ax3) = plt.subplots(3)
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
     ax1.set_title('round time (seconds)')
     ax1.hist(list(filter(lambda x: x < 9,dtv[start:end])),bins=20)
     #plt.savefig(path + '_round_time_hist.svg', format='svg')
@@ -98,6 +109,19 @@ def process(path):
     ax3.hist(txnv[start:end],bins=20)
     #plt.savefig(path + '_btxn_hist.svg', format='svg')
     #plt.savefig(path + '_btxn_hist.png', format='png')
+
+    # 10 round moving average TPS
+    tpsv10 = []
+    for i in range(10,len(tsv)):
+        ts0 = tsv[i-10]
+        tsa = tsv[i]
+        tc0 = tcv[i-10]
+        tca = tcv[i]
+        dt = tsa-ts0
+        dtxn = tca-tc0
+        tpsv10.append(dtxn/dt)
+    ax4.set_title('TPS(10 round window)')
+    ax4.plot(tpsv10)
     fig.tight_layout()
     plt.savefig(path + '_hist.svg', format='svg')
     plt.savefig(path + '_hist.png', format='png')
