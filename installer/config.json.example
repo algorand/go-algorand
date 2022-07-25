@@ -33,7 +33,7 @@
     "EnableAccountUpdatesStats": false,
     "EnableAgreementReporting": false,
     "EnableAgreementTimeMetrics": false,
-    "EnableAssembleStats": false,
+    "EnableAssembleStats": true,
     "EnableBlockService": false,
     "EnableBlockServiceFallbackToArchiver": true,
     "EnableCatchupFromArchiveServers": false,
@@ -44,7 +44,7 @@
     "EnableMetricReporting": false,
     "EnableOutgoingNetworkMessageFiltering": true,
     "EnablePingHandler": true,
-    "EnableProcessBlockStats": false,
+    "EnableProcessBlockStats": true,
     "EnableProfiler": false,
     "EnableRequestLogger": false,
     "EnableRuntimeMetrics": false,
@@ -80,7 +80,7 @@
     "PeerConnectionsUpdateInterval": 3600,
     "PeerPingPeriodSeconds": 0,
     "PriorityPeers": {},
-    "ProposalAssemblyTime": 700000000,
+    "ProposalAssemblyTime": 500000000,
     "PublicAddress": "",
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
@@ -102,5 +102,5 @@
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
     "UseXForwardedForAddressField": "",
-    "VerifiedTranscationsCacheSize": 30000
+    "VerifiedTranscationsCacheSize": 150000
 }
