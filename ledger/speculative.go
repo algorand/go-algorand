@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -38,6 +39,7 @@ type LedgerForEvaluator interface {
 	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
+	VerifiedTransactionCache() verify.VerifiedTransactionCache
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
@@ -198,9 +200,12 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Addr
 	return v.l.LookupWithoutRewards(r, a)
 }
 
-// StartEvaluator starts a block evaluator with a particular block header.
-// The block header's Branch value determines which speculative branch is used.
-// This is intended to be used by the transaction pool assembly code.
+// VerifiedTransactionCache implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return v.l.VerifiedTransactionCache()
+}
+
+// StartEvaluator implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
 	if hdr.Round.SubSaturate(1) != v.Latest() {
 		return nil, fmt.Errorf("StartEvaluator: LFE round %d mismatches next block round %d", v.Latest(), hdr.Round)
