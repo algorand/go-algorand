@@ -122,11 +122,11 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
-    
+
     # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
     # Please update as necessary.
     "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
-    
+
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
     duration "e2e client setup"
@@ -181,8 +181,8 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         tar -j -c -f "${CI_E2E_FILENAME}.tar.bz2" --exclude node.log --exclude agreement.cdv net
         rm -rf "${TEMPDIR}/net"
         RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
-        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${CI_E2E_FILENAME}_${RSTAMP}.tar.bz2"
+        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${CI_E2E_FILENAME}_${RSTAMP}.tar.bz2"
         popd
     fi
 
