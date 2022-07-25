@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -253,7 +253,7 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participation, fee, txnFirstValid, txnLastValid uint64, leaseBytes [32]byte, includeStateProofKeys bool) (transactions.Transaction, error) {
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -293,7 +293,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, f
 	}
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -350,7 +350,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -405,7 +405,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -460,7 +460,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -637,7 +637,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 	}
 
 	// Get consensus params so we can get max field lengths
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}

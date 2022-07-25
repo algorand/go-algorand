@@ -35,8 +35,51 @@ def algod_client_for_dir(algorand_data, headers=None):
         net = 'http://' + net
     return algosdk.v2client.algod.AlgodClient(token, net, headers)
 
+def mins(a,b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a,b)
+
+def maxs(a,b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return max(a,b)
+
 def get_blockinfo_tps(algod, rounds=10):
     status = algod.status()
+    lastround = status['last-round']
+    cround = lastround - rounds
+    bytxtype = {}
+    mintime = None
+    maxtime = None
+    mintc = 0
+    maxtc = 0
+    while cround <= lastround:
+        ba = msgpack.loads(algod.block_info(cround, response_format='msgpack'), strict_map_key=False)
+        #logger.debug('block keys %s', sorted(ba['block'].keys()))
+        mintime = mins(mintime, ba['block']['ts'])
+        maxtime = maxs(maxtime, ba['block']['ts'])
+        mintc = mins(mintc, ba['block'].get('tc',0))
+        maxtc = maxs(maxtc, ba['block'].get('tc',0))
+        txns = ba['block'].get('txns',[])
+        for stxib in txns:
+            #logger.debug('txn keys %s', sorted(stxib['txn'].keys()))
+            tt = stxib['txn']['type']
+            bytxtype[tt] = bytxtype.get(tt, 0) + 1
+        cround += 1
+    summary = [(count, tt) for tt,count in bytxtype.items()]
+    summary.sort(reverse=True)
+    print(summary)
+    dt = maxtime-mintime
+    dtxn = maxtc-mintc
+    tps = dtxn/dt
+    return tps
+
+def wat():
     ba = msgpack.loads(algod.block_info(status['last-round']-rounds, response_format='msgpack'), strict_map_key=False)
     bb = msgpack.loads(algod.block_info(status['last-round'], response_format='msgpack'), strict_map_key=False)
     ra = ba['block']['rnd']
@@ -57,7 +100,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
     ap.add_argument('-d', dest='algorand_data')
-    ap.add_argument('-r', '--rounds', type=int, help='number of rounds to calculate over')
+    ap.add_argument('-r', '--rounds', type=int, default=10, help='number of rounds to calculate over')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
