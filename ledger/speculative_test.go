@@ -27,12 +27,13 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 func TestSpeculative(t *testing.T) {
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 1000)
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1000)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
@@ -43,9 +44,6 @@ func TestSpeculative(t *testing.T) {
 	blk0, err := l.BlockHdr(l.Latest())
 	require.NoError(t, err)
 
-	sl, err := MakeSpeculativeLedger(l)
-	require.NoError(t, err)
-
 	var blk1 bookkeeping.Block
 	blk1.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk1.Branch = blk0.Hash()
@@ -53,6 +51,9 @@ func TestSpeculative(t *testing.T) {
 	blk1.FeeSink = testSinkAddr
 	blk1.BlockHeader.GenesisHash = genesisInitState.GenesisHash
 	blk1.BlockHeader.Round = l.Latest() + 1
+
+	sl, err := MakeSpeculativeLedger(l)
+	require.NoError(t, err)
 
 	state, err := sl.eval(context.Background(), bookkeeping.BlockHash{}, blk1, false, nil)
 	require.NoError(t, err)
