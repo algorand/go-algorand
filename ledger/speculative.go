@@ -201,6 +201,7 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Addr
 }
 
 // VerifiedTransactionCache implements the ledgerForEvaluator interface.
+// TODO(yossi) should we forward this cache?
 func (v *validatedBlockAsLFE) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return v.l.VerifiedTransactionCache()
 }

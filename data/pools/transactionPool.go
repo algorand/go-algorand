@@ -93,12 +93,12 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
+	cancel               <-chan bool
 
-	cfg                 config.Local
-	speculatedBlockChan chan speculatedBlock
+	cfg config.Local
 }
 
-type speculatedBlock struct {
+type SpeculativeBlock struct {
 	blk    *ledgercore.ValidatedBlock
 	branch bookkeeping.BlockHash
 }
@@ -139,7 +139,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) *TransactionPool {
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock, cancelComputations <-chan bool) *TransactionPool {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -148,10 +148,9 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 		return nil
 	}
 
-	pool.speculatedBlockChan = make(chan speculatedBlock, 1)
-
 	copy := TransactionPool{
-		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
+		// TODO(yossi) verify this assumption
+		pendingTxids:         pool.pendingTxids, // it is safe to shallow copy pendingTxids since this map is only (atomically) swapped and never directly changed
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               specLedger,
@@ -163,25 +162,10 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
 		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
 		cfg:                  pool.cfg,
-		speculatedBlockChan:  pool.speculatedBlockChan,
+		cancel:               cancelComputations,
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
-	copy.recomputeBlockEvaluator(nil, 0)
-
-	// deep copy txns
-	for txid, txn := range pool.pendingTxids {
-		copy.pendingTxids[txid] = txn
-	}
-
-	// TODO(yossi) I think it's okay to not do the following deep copying. Is it?
-	for txid, txn := range pool.rememberedTxids {
-		copy.rememberedTxids[txid] = txn
-	}
-	for round, i := range pool.expiredTxCount {
-		copy.expiredTxCount[round] = i
-	}
-
 	return &copy
 }
 
@@ -537,21 +521,19 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta, specBlock chan<- SpeculativeBlock, cancel <-chan bool) {
 
 	vb := ledgercore.MakeValidatedBlock(block, delta)
+	speculativePool := pool.copyTransactionPoolOverSpecLedger(&vb, cancel)
 
-	speculativePool := pool.copyTransactionPoolOverSpecLedger(&vb)
-	// check block's prev == ledger latest
 	speculativePool.OnNewBlock(block, delta)
 
 	if speculativePool.assemblyResults.err != nil {
 		return
 	}
 
-	speculativePool.speculatedBlockChan <- speculatedBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}
 	select {
-	case speculativePool.speculatedBlockChan <- speculatedBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}:
+	case specBlock <- SpeculativeBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}:
 	default:
 		speculativePool.log.Warnf("failed writing speculated block to channel, channel already has a block")
 	}
@@ -785,6 +767,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// Feed the transactions in order
 	for _, txgroup := range txgroups {
+		switch {
+		case <-pool.cancel:
+			return
+		default: // continue processing transactions
+		}
+
 		if len(txgroup) == 0 {
 			asmStats.InvalidCount++
 			continue
