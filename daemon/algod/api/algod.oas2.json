@@ -2259,6 +2259,16 @@
         }
       }
     },
+    "SimulationResult": {
+      "description": "Result of a transaction group simulation",
+      "type": "object",
+      "properties": {
+        "failure-message": {
+          "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+          "type": "string"
+        }
+      }
+    },
     "DryrunState": {
       "description": "Stores the TEAL eval step data",
       "type": "object",
@@ -3084,16 +3094,7 @@
     "PostSimulationResponse": {
       "description": "Simulation results.",
       "schema": {
-        "type": "object",
-        "required": [
-          "failure-message"
-        ],
-        "properties": {
-          "failure-message": {
-            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-            "type": "string"
-          }
-        }
+        "$ref": "#/definitions/SimulationResult"
       }
     },
     "SupplyResponse": {

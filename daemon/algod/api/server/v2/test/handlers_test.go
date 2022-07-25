@@ -414,15 +414,15 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
+func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableDeveloperAPI bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	handler := v2.Handlers{
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	handler = v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -435,8 +435,14 @@ func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
 		body = bytes.NewReader(bodyBytes)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", body)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	return
+}
+
+func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, false)
+	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -448,6 +454,23 @@ func TestPostTransaction(t *testing.T) {
 
 	postTransactionTest(t, -1, 400)
 	postTransactionTest(t, 0, 200)
+}
+
+func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableDeveloperAPI bool) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableDeveloperAPI)
+	defer releasefunc()
+	err := handler.SimulateTransaction(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulateTransactionTest(t, -1, 400, true)
+	simulateTransactionTest(t, 0, 404, false)
+	simulateTransactionTest(t, 0, 200, true)
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {

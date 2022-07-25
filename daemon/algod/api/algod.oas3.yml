@@ -604,16 +604,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "failure-message": {
-                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "failure-message"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/SimulationResult"
             }
           }
         },
@@ -1583,6 +1574,16 @@
           "pool-error",
           "txn"
         ],
+        "type": "object"
+      },
+      "SimulationResult": {
+        "description": "Result of a transaction group simulation",
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -4372,30 +4373,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "failure-message": {
-                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "failure-message"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/SimulationResult"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "properties": {
-                    "failure-message": {
-                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "failure-message"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/SimulationResult"
                 }
               }
             },

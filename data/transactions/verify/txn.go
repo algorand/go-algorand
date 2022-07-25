@@ -128,6 +128,9 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return err
 	}
 
+	if verifier == nil {
+		return errors.New("verifier is nil")
+	}
 	return stxnVerifyCore(s, txnIdx, groupCtx, verifier)
 }
 

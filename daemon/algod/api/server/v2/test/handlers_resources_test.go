@@ -28,6 +28,7 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -56,6 +57,11 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
+}
+
+func (l *mockLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad, rnd, _, err := l.LookupAccount(rnd, addr)
+	return ad, rnd, err
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -96,6 +102,9 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
+func (l *mockLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	panic("not implemented")
+}
 func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 	panic("not implemented")
 }
@@ -103,6 +112,9 @@ func (l *mockLedger) Wait(r basics.Round) chan struct{} {
 	panic("not implemented")
 }
 func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
+	panic("not implemented")
+}
+func (l *mockLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	panic("not implemented")
 }
 func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {

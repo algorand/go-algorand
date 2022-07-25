@@ -440,6 +440,13 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulationResult defines model for SimulationResult.
+type SimulationResult struct {
+
+	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage *string `json:"failure-message,omitempty"`
+}
+
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -710,11 +717,7 @@ type PostParticipationResponse struct {
 }
 
 // PostSimulationResponse defines model for PostSimulationResponse.
-type PostSimulationResponse struct {
-
-	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage string `json:"failure-message"`
-}
+type PostSimulationResponse SimulationResult
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.
 type PostTransactionsResponse struct {

@@ -67,11 +67,14 @@ type LedgerForAPI interface {
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error)
+	CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 }
@@ -738,16 +741,14 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	return v2.GetStatus(ctx)
 }
 
-// RawTransaction broadcasts a raw transaction to the network.
-// (POST /v2/transactions)
-func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+func (v2 *Handlers) checkNodeAndDecodeTxGroup(ctx echo.Context) ([]transactions.SignedTxn, error) {
 	stat, err := v2.Node.Status()
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+		return nil, internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 	if stat.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
-		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+		return nil, serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 	proto := config.Consensus[stat.LastVersion]
 
@@ -760,19 +761,31 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 			break
 		}
 		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
+			return nil, badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		txgroup = append(txgroup, st)
 
 		if len(txgroup) > proto.MaxTxGroupSize {
 			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
-			return badRequest(ctx, err, err.Error(), v2.Log)
+			return nil, badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
 
 	if len(txgroup) == 0 {
 		err := errors.New("empty txgroup")
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		return nil, badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	return txgroup, nil
+}
+
+// RawTransaction broadcasts a raw transaction to the network.
+// (POST /v2/transactions)
+func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+	txgroup, err := v2.checkNodeAndDecodeTxGroup(ctx)
+	// If txgroup is nil, then a validation check failed and we should stop. Alternatively, if err is not nil, return it.
+	if txgroup == nil || err != nil {
+		return err
 	}
 
 	err = v2.Node.BroadcastSignedTxGroup(txgroup)
@@ -783,6 +796,47 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
+}
+
+// SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
+// (POST /v2/transactions/simulate)
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/transactions/simulate was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+
+	txgroup, err := v2.checkNodeAndDecodeTxGroup(ctx)
+	// If txgroup is nil, then a validation check failed and we should stop. Alternatively, if err is not nil, return it.
+	if txgroup == nil || err != nil {
+		return err
+	}
+
+	actualLedger := v2.Node.LedgerForAPI()
+
+	// fetch previous block header just once to prevent racing with network
+	hdr, err := actualLedger.BlockHdr(actualLedger.Latest())
+	if err != nil {
+		return internalError(ctx, err, "current block error", v2.Log)
+	}
+
+	// simulate transaction
+	simulator := MakeSimulatorFromAPILedger(actualLedger, hdr)
+	result, err := simulator.SimulateSignedTxGroup(txgroup)
+	if err != nil {
+		var invalidTxErr *InvalidTxGroupError
+		var scopedErr *ScopedSimulatorError
+		switch {
+		case errors.As(err, &invalidTxErr):
+			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
+		case errors.As(err, &scopedErr):
+			return internalError(ctx, scopedErr, scopedErr.External, v2.Log)
+		default:
+			return internalError(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	res := generated.PostSimulationResponse(result)
+	return ctx.JSON(http.StatusOK, res)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
