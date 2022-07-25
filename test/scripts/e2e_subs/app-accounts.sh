@@ -36,9 +36,6 @@ function balance {
 [ "$(balance "$ACCOUNT")" = 999998999000 ]
 [ "$(balance "$SMALL")" =        1000000 ]
 
-exit 1
-
-
 APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/app-escrow.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')
 [ "$(balance "$SMALL")" = 999000 ] # 1000 fee
 
