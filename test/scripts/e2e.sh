@@ -158,14 +158,13 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
-    echo "Current platform: ${E2E_PLATFORM}"
-
     KEEP_TEMPS_CMD_STR=""
 
     # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
     # so that we can keep the temporary test artifact for use in the indexer e2e tests.
     # The file is located at ${TEMPDIR}/net_done.tar.bz2
-    if [ "$E2E_PLATFORM" == "arm64" ]; then
+    if [ -n "$CI_KEEP_TEMP_PLATFORM" ] && [ "$CI_KEEP_TEMP_PLATFORM" == "$CI_PLATFORM" ]; then
+      echo "Setting --keep-temps so that an e2e artifact can be saved."
       KEEP_TEMPS_CMD_STR="--keep-temps"
     fi
 
@@ -173,12 +172,17 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
+        # This should be set by CI, but if it isn't set a default.
+        if [ -z "$CI_E2E_FILENAME" ]; then
+          CI_E2E_FILENAME="net_done"
+        fi
+
         pushd "${TEMPDIR}" || exit 1
-        tar -j -c -f net_done.tar.bz2 --exclude node.log --exclude agreement.cdv net
+        tar -j -c -f "${CI_E2E_FILENAME}.tar.bz2" --exclude node.log --exclude agreement.cdv net
         rm -rf "${TEMPDIR}/net"
         RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
-        aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         popd
     fi
 

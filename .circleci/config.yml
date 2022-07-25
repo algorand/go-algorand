@@ -646,7 +646,11 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      E2E_PLATFORM: << parameters.platform >>
+      CI_PLATFORM: << parameters.platform >>
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
+      CI_E2E_FILENAME: "nightly"
     steps:
       - prepare_build_dir
       - prepare_go
