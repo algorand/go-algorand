@@ -45,7 +45,7 @@ def main():
         for net in v.keys():
             addr = 'http://' + net + ':' + args.port
             #addrName[addr] = k
-            outpath = os.path.join(args.outdir, k + '_' + net)
+            outpath = os.path.join(args.outdir, k + '_' + net + '.blockhistory')
             fet = block_history.Fetcher(addr=addr, token=args.token, outpath=outpath)
             t = threading.Thread(target=fet.loop)
             logger.debug('starting %s -> %s', addr, outpath)
