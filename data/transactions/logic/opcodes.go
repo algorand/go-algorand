@@ -32,7 +32,7 @@ const LogicVersion = 7
 const rekeyingEnabledVersion = 2
 
 // appsEnabledVersion is the version of TEAL where ApplicationCall
-// functionality was enabled. We use this to disallow v0 and v1 TEAL programs
+// functionality was enabled. We use this to disallow v0 and v1 programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
@@ -62,11 +62,13 @@ const createdResourcesVersion = 6
 // field.
 const appAddressAvailableVersion = 7
 
+const fidoVersion = 7       // base64, json, secp256r1
+const randomnessVersion = 7 // vrf_verify, block
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const fidoVersion = 7    // base64, json, secp256r1
-const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
+const pairingVersion = 8 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 
 type linearCost struct {
 	baseCost  int
@@ -342,7 +344,7 @@ type OpSpec struct {
 	Name   string
 	op     evalFunc // evaluate the op
 	Proto
-	Version   uint64 // TEAL version opcode introduced
+	Version   uint64 // AVM version opcode introduced
 	OpDetails        // Special cost or bytecode layout considerations
 }
 
@@ -372,9 +374,9 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
 
-	// Cost of these opcodes increases in TEAL version 2 based on measured
+	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
-	// and achieve reasonable TPS. Same opcode for different TEAL versions
+	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
 	{0x01, "sha256", opSHA256, proto("b:b"), 2, costly(35)},
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 2, costly(130)},
@@ -439,20 +441,17 @@ var OpSpecs = []OpSpec{
 	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(modeSig)},
 	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
 	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
+	// txn, gtxn, and gtxns are also implemented as pseudoOps to choose
+	// between scalar and array version based on number of immediates.
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
-	// It is ok to have the same opcode for different TEAL versions.
-	// This 'txn' asm command supports additional argument in version 2 and
-	// generates 'txna' opcode in that particular case
-	{0x31, "txn", opTxn, proto(":a"), 2, field("f", &TxnFields).assembler(asmTxn2)},
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
-	{0x33, "gtxn", opGtxn, proto(":a"), 2, immediates("t", "f").field("f", &TxnFields).assembler(asmGtxn2)},
 	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},
 	{0x35, "store", opStore, proto("a:"), 1, stacky(typeStore, "i")},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
 	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnFields).assembler(asmGtxns)},
+	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnScalarFields)},
 	{0x39, "gtxnsa", opGtxnsa, proto("i:a"), 3, immediates("f", "i").field("f", &TxnArrayFields)},
 	// Group scratch space access
 	{0x3a, "gload", opGload, proto(":a"), 4, immediates("t", "i").only(modeApp)},
@@ -593,6 +592,10 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(modeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
+
+	// randomness support
+	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 
 type sortByOpcode []OpSpec
@@ -653,15 +656,15 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
-// Migration from TEAL v1 to TEAL v2.
-// TEAL v1 allowed execution of program with version 0.
-// With TEAL v2 opcode versions are introduced and they are bound to every opcode.
-// There is no opcodes with version 0 so that TEAL v2 evaluator rejects any program with version 0.
-// To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
+// Migration from v1 to v2.
+// v1 allowed execution of program with version 0.
+// With v2 opcode versions are introduced and they are bound to every opcode.
+// There is no opcodes with version 0 so that v2 evaluator rejects any program with version 0.
+// To preserve backward compatibility version 0 array is populated with v1 opcodes
 // with the version overwritten to 0.
 func init() {
 	// First, initialize baseline v1 opcodes.
-	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
+	// Zero (empty) version is an alias for v1 opcodes and needed for compatibility with v1 code.
 	OpsByName[0] = make(map[string]OpSpec, 256)
 	OpsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {
@@ -675,7 +678,7 @@ func init() {
 			OpsByName[1][oi.Name] = oi
 		}
 	}
-	// Start from v2 TEAL and higher,
+	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
 	for v := uint64(2); v <= evalMaxVersion; v++ {
 		OpsByName[v] = make(map[string]OpSpec, 256)

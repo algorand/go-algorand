@@ -69,7 +69,7 @@ func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify* and err are tested separately below
 
-	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
+	// check modeAny (v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
 	opcodesRunModeAny := `intcblock 0 1 1 1 1 5 100
 	bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
@@ -2371,6 +2371,8 @@ func TestReturnTypes(t *testing.T) {
 
 		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
+
+		"block": ": int 4294967200; block BlkSeed",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2390,6 +2392,8 @@ func TestReturnTypes(t *testing.T) {
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
+
+		"vrf_verify": true,
 
 		"bn256_add":        true,
 		"bn256_scalar_mul": true,
@@ -2528,6 +2532,34 @@ func TestLatestTimestamp(t *testing.T) {
 	ep, _, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
 	testApp(t, source, ep)
+}
+
+func TestBlockSeed(t *testing.T) {
+	ep, txn, l := makeSampleEnv()
+
+	// makeSampleENv creates txns with fv, lv that don't actually fit the round
+	// in l.  Nothing in most tests cares. But the rule for `block` is
+	// related to lv and the current round, so we set the fv,lv more
+	// realistically.
+	txn.FirstValid = l.round() - 10
+	txn.LastValid = l.round() + 10
+
+	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
+	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep) // current - 1
+	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep,
+		"not available") // can't get current round's blockseed
+
+	// proto.MaxTxnLife is 1500 in test.
+	testApp(t, "int 4294967300; int 1500; -; block BlkSeed; len; int 32; ==", ep,
+		"not available") // 1500 back from current is more than 1500 back from lv
+	testApp(t, "int 4294967310; int 1500; -; block BlkSeed; len; int 32; ==", ep) // 1500 back from lv is legal
+	testApp(t, "int 4294967310; int 1501; -; block BlkSeed; len; int 32; ==", ep) // 1501 back from lv is legal
+	testApp(t, "int 4294967310; int 1502; -; block BlkSeed; len; int 32; ==", ep,
+		"not available") // 1501 back from lv is not
+
+	// A little silly, as it only tests the test ledger: ensure samenes and differentness
+	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
+	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

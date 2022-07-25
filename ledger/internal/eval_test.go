@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,12 +31,14 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -202,7 +203,6 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 func TestCowStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var spRnd basics.Round
 	var spType protocol.StateProofType
 	var stateProof stateproof.StateProof
 	var atRound basics.Round
@@ -218,15 +218,21 @@ func TestCowStateProof(t *testing.T) {
 		0, ledgercore.AccountTotals{}, 0)
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
-	err := c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	stateProofTx := transactions.StateProofTxnFields{
+		StateProofIntervalLatestRound: atRound,
+		StateProofType:                spType,
+		StateProof:                    stateProof,
+		Message:                       msg,
+	}
+	err := apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
 	// no spRnd block
-	spType = protocol.StateProofBasic
+	stateProofTx.StateProofType = protocol.StateProofBasic
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
-	spRnd = 3
-	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	stateProofTx.StateProofIntervalLatestRound = 3
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
 	// no votersRnd block
@@ -242,20 +248,20 @@ func TestCowStateProof(t *testing.T) {
 
 	spHdr.Round = 15
 	blocks[spHdr.Round] = spHdr
-	spRnd = spHdr.Round
+	stateProofTx.StateProofIntervalLatestRound = spHdr.Round
 	blockErr[13] = noBlockErr
-	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
 	// validate fail
 	spHdr.Round = 1
-	spRnd = spHdr.Round
-	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	stateProofTx.StateProofIntervalLatestRound = spHdr.Round
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
 	// fall through to no err
 	validate = false
-	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.NoError(t, err)
 
 	// 100% coverage
@@ -633,6 +639,10 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
+func (ledger *evalTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return ledger.BlockHdrCached(rnd)
+}
+
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
@@ -728,6 +738,10 @@ type testCowBaseLedger struct {
 
 func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.BlockHdrCached(rnd)
 }
 
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {

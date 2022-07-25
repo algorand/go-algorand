@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -422,14 +423,14 @@ func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn
 	fillDefaults(t, ledger, eval, txn)
 	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
 	if err != nil {
-		if len(problem) == 1 {
+		if len(problem) == 1 && problem[0] != "" {
 			require.Contains(t, err.Error(), problem[0])
 		} else {
 			require.NoError(t, err) // Will obviously fail
 		}
 		return
 	}
-	require.Len(t, problem, 0)
+	require.True(t, len(problem) == 0 || problem[0] == "")
 }
 
 func txgroup(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) error {
@@ -605,21 +606,39 @@ func TestRewardsInAD(t *testing.T) {
 		defer dl.Close()
 
 		payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
+		nonpartTxn := txntest.Txn{Type: protocol.KeyRegistrationTx, Sender: addrs[2], Nonparticipation: true}
+		payNonPart := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[2]}
+
+		if ver < 18 { // Nonpart reyreg happens in v18
+			dl.txn(&nonpartTxn, "tries to mark an account as nonparticipating")
+		} else {
+			dl.fullBlock(&nonpartTxn)
+		}
 
 		// Build up Residue in RewardsState so it's ready to pay
 		for i := 1; i < 10; i++ {
 			dl.fullBlock()
 		}
 
-		vb := dl.fullBlock(&payTxn)
+		vb := dl.fullBlock(&payTxn, &payNonPart)
 		payInBlock := vb.Block().Payset[0]
+		nonPartInBlock := vb.Block().Payset[1]
 		if ver >= 15 {
 			require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
 			require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
 			require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+			// Sender is not due for more, and Receiver is nonpart
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			if ver < 18 {
+				require.Greater(t, nonPartInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			} else {
+				require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
+			}
 		} else {
-			require.EqualValues(t, 0, payInBlock.ApplyData.SenderRewards.Raw)
-			require.EqualValues(t, 0, payInBlock.ApplyData.ReceiverRewards.Raw)
+			require.Zero(t, payInBlock.ApplyData.SenderRewards)
+			require.Zero(t, payInBlock.ApplyData.ReceiverRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
 		}
 	})
 }
@@ -708,7 +727,7 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// teal v2 (apps)
+	// AVM v2 (apps)
 	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -870,14 +889,14 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV21,
 	protocol.ConsensusV22,
 	protocol.ConsensusV23,
-	protocol.ConsensusV24, // teal v2 (apps)
+	protocol.ConsensusV24, // AVM v2 (apps)
 	protocol.ConsensusV25,
 	protocol.ConsensusV26,
 	protocol.ConsensusV27,
 	protocol.ConsensusV28,
 	protocol.ConsensusV29,
-	protocol.ConsensusV30, // teal v5 (inner txs)
-	protocol.ConsensusV31, // teal v6 (inner txs with appls)
+	protocol.ConsensusV30, // AVM v5 (inner txs)
+	protocol.ConsensusV31, // AVM v6 (inner txs with appls)
 	protocol.ConsensusV32, // unlimited assets and apps
 	protocol.ConsensusFuture,
 }
@@ -943,6 +962,58 @@ func benchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B,
 	}
 }
 
+// TestHeaderAccess tests FirstValidTime and `block` which can access previous
+// block headers.
+func TestHeaderAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Added in v33
+	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+		cv := consensusByNumber[ver]
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		fvt := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			FirstValid:      0,
+			ApprovalProgram: "txn FirstValidTime",
+		}
+		dl.txn(&fvt, "round 0 is not available")
+
+		// advance current to 2
+		pay := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]}
+		dl.fullBlock(&pay)
+
+		fvt.FirstValid = 1
+		dl.txn(&fvt, "round 0 is not available")
+
+		fvt.FirstValid = 2
+		dl.txn(&fvt) // current becomes 3
+
+		// Advance current round far enough to test access MaxTxnLife ago
+		for i := 0; i < int(config.Consensus[cv].MaxTxnLife); i++ {
+			dl.fullBlock()
+		}
+
+		// current should be 1003. Confirm.
+		require.EqualValues(t, 1002, dl.generator.Latest())
+		require.EqualValues(t, 1002, dl.validator.Latest())
+
+		fvt.FirstValid = 1003
+		fvt.LastValid = 1010
+		dl.txn(&fvt) // success advances the round
+		// now we're confident current is 1004, so construct a txn that is as
+		// old as possible, and confirm access.
+		fvt.FirstValid = 1004 - basics.Round(config.Consensus[cv].MaxTxnLife)
+		fvt.LastValid = 1004
+		dl.txn(&fvt)
+	})
+
+}
+
 // TestLogsInBlock ensures that logs appear in the block properly
 func TestLogsInBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -989,133 +1060,184 @@ func TestLogsInBlock(t *testing.T) {
 	})
 }
 
-// TestGhostTransactions confirms that accounts that don't even exist
+// TestUnfundedSenders confirms that accounts that don't even exist
 // can be the Sender in some situations.  If some other transaction
 // covers the fee, and the transaction itself does not require an
 // asset or a min balance, it's fine.
-func TestGhostTransactions(t *testing.T) {
-	t.Skip("Behavior should be changed so test passes.")
-
+func TestUnfundedSenders(t *testing.T) {
 	/*
-		I think we have a behavior we should fix.  I’m going to call these
-		transactions where the Sender has no account and the fee=0 “ghost”
-		transactions.  In a ghost transaction, we still call balances.Move to
-		“pay” the fee.  Further, Move does not short-circuit a Move of 0 (for
-		good reason, allowing compounding).  Therefore, in Move, we do rewards
-		processing on the “ghost” account.  That causes us to want to write a
-		new accountdata for them.  But if we do that, the minimum balance
-		checker will catch it, and kill the transaction because the ghost isn’t
-		allowed to have a balance of 0.  I don’t think we can short-circuit
-		Move(0) because a zero pay is a known way to get your rewards
-		actualized. Instead, I advocate that we short-circuit the call to Move
-		for 0 fees.
-
-		// move fee to pool
-		if !tx.Fee.IsZero() {
-			err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
-			if err != nil {
-				return
-			}
-		}
-
-		I think this must be controlled by consensus upgrade, but I would love
-		to be told I’m wrong.  The other option is to outlaw these
-		transactions, but even that requires changing code if we want to be
-		exactly correct, because they are currently allowed when there are no
-		rewards to get paid out (as would happen in a new network, or if we
-		stop participation rewards - notice that this test only fails on the
-		4th attempt, once rewards have accumulated).
-
-		Will suggested that we could treat Ghost accounts as non-partipating.
-		Maybe that would allow the Move code to avoid trying to update
-		accountdata.
+		In a 0-fee transaction from unfunded sender, we still call balances.Move
+		to “pay” the fee.  Move() does not short-circuit a Move of 0 (for good
+		reason, it allows compounding rewards).  Therefore, in Move, we do
+		rewards processing on the unfunded account.  Before
+		proto.UnfundedSenders, the rewards procesing would set the RewardsBase,
+		which would require the account be written to DB, and therefore the MBR
+		check would kick in (and fail). Now it skips the update if the account
+		has less than RewardsUnit, as the update is meaningless anyway.
 	*/
 
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
+	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	asaIndex := basics.AssetIndex(1)
+		asaIndex := basics.AssetIndex(1)
 
-	asa := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		AssetParams: basics.AssetParams{
-			Total:     1000000,
-			Decimals:  3,
-			UnitName:  "oz",
-			AssetName: "Gold",
-			URL:       "https://gold.rush/",
-			Clawback:  basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
-			Freeze:    basics.Address{0x0f, 0x0e, 0xe, 0xe},
-			Manager:   basics.Address{0x0a, 0x0a, 0xe},
-		},
-	}
+		ghost := basics.Address{0x01}
 
-	eval := nextBlock(t, l)
-	txn(t, l, eval, &asa)
-	endBlock(t, l, eval)
+		asa_create := txntest.Txn{
+			Type:   "acfg",
+			Sender: addrs[0],
+			AssetParams: basics.AssetParams{
+				Total:    10,
+				Clawback: ghost,
+				Freeze:   ghost,
+				Manager:  ghost,
+			},
+		}
 
-	benefactor := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: addrs[0],
-		Fee:      2000,
-	}
+		app_create := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
 
-	ghost := basics.Address{0x01}
-	ephemeral := []txntest.Txn{
-		{
+		dl.fullBlock(&asa_create, &app_create)
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		fmt.Printf("addrs[0] = %+v\n", addrs[0])
+		fmt.Printf("addrs[1] = %+v\n", addrs[1])
+
+		benefactor := txntest.Txn{
 			Type:     "pay",
-			Amount:   0,
-			Sender:   ghost,
-			Receiver: ghost,
-			Fee:      0,
-		},
-		{
-			Type:          "axfer",
-			AssetAmount:   0,
-			Sender:        ghost,
-			AssetReceiver: basics.Address{0x02},
-			XferAsset:     basics.AssetIndex(1),
-			Fee:           0,
-		},
-		{
-			Type:          "axfer",
-			AssetAmount:   0,
-			Sender:        basics.Address{0x0c, 0x0b, 0x0a, 0x0c},
-			AssetReceiver: addrs[0],
-			AssetSender:   addrs[1],
-			XferAsset:     asaIndex,
-			Fee:           0,
-		},
-		{
-			Type:          "afrz",
-			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
-			FreezeAccount: addrs[0], // creator, therefore is opted in
-			FreezeAsset:   asaIndex,
-			AssetFrozen:   true,
-			Fee:           0,
-		},
-		{
-			Type:          "afrz",
-			Sender:        basics.Address{0x0f, 0x0e, 0xe, 0xe},
-			FreezeAccount: addrs[0], // creator, therefore is opted in
-			FreezeAsset:   asaIndex,
-			AssetFrozen:   false,
-			Fee:           0,
-		},
-	}
+			Sender:   addrs[0],
+			Receiver: addrs[0],
+			Fee:      2000,
+		}
 
-	for i, e := range ephemeral {
-		eval = nextBlock(t, l)
-		err := txgroup(t, l, eval, &benefactor, &e)
-		require.NoError(t, err, "i=%d %s", i, e.Type)
-		endBlock(t, l, eval)
-	}
+		ephemeral := []txntest.Txn{
+			{
+				Type:     "pay",
+				Amount:   0,
+				Sender:   ghost,
+				Receiver: ghost,
+				Fee:      0,
+			},
+			{ // Axfer of 0
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: basics.Address{0x02},
+				XferAsset:     basics.AssetIndex(1),
+				Fee:           0,
+			},
+			{ // Clawback
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: addrs[0],
+				AssetSender:   addrs[1],
+				XferAsset:     asaIndex,
+				Fee:           0,
+			},
+			{ // Freeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   true,
+				Fee:           0,
+			},
+			{ // Unfreeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   false,
+				Fee:           0,
+			},
+			{ // App call
+				Type:          "appl",
+				Sender:        ghost,
+				ApplicationID: basics.AppIndex(2),
+				Fee:           0,
+			},
+			{ // App creation (only works because it's also deleted)
+				Type:         "appl",
+				Sender:       ghost,
+				OnCompletion: transactions.DeleteApplicationOC,
+				Fee:          0,
+			},
+		}
+
+		// v33 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 33 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		for i, e := range ephemeral {
+			dl.txgroup(problem, benefactor.Noted(strconv.Itoa(i)), &e)
+		}
+	})
+}
+
+// TestAppCallAppDuringInit is similar to TestUnfundedSenders test, but now the
+// unfunded sender is a newly created app.  The fee has been paid by the outer
+// transaction, so the app should be able to make an app call as that requires
+// no min balance.
+func TestAppCallAppDuringInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		approve := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		// construct a simple app
+		vb := dl.fullBlock(&approve)
+
+		// now make a new app that calls it during init
+		approveID := vb.Block().Payset[0].ApplicationID
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		call_in_init := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `
+			  itxn_begin
+			  int appl
+			  itxn_field TypeEnum
+			  txn Applications 1
+			  itxn_field ApplicationID
+			  itxn_submit
+              int 1
+            `,
+			ForeignApps: []basics.AppIndex{approveID},
+			Fee:         2000, // Enough to have the inner fee paid for
+		}
+		// v33 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 33 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		dl.txn(&call_in_init, problem)
+	})
 }

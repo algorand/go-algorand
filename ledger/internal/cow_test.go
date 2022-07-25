@@ -89,17 +89,21 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *mockLedger) stateProofNext() basics.Round {
+func (ml *mockLedger) StateProofNext() basics.Round {
 	return 0
 }
 
-func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	err, hit := ml.blockErr[rnd]
 	if hit {
 		return bookkeeping.BlockHeader{}, err
 	}
 	hdr := ml.blocks[rnd] // default struct is fine if nothing found
 	return hdr, nil
+}
+
+func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return ml.blockHdrCached(rnd)
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {

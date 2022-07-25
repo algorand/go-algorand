@@ -93,6 +93,84 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 	testAccepts(t, progText, 1)
 }
 
+// This is patterned off vrf_test.go, but we don't create proofs here, we only
+// check that the output is correct, given the proof.
+func testVrfApp(pubkey, proof, data string, output string) string {
+	source := `
+byte 0x%s
+byte 0x%s
+byte 0x%s
+vrf_verify VrfAlgorand
+assert
+byte 0x%s
+==
+`
+	return fmt.Sprintf(source, data, proof, pubkey, output)
+}
+
+func TestVrfVerify(t *testing.T) {
+	ep, _, _ := makeSampleEnv()
+	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
+	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")
+	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
+	testLogic(t, "byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf proof wrong size")
+	// 80 byte proof
+	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
+	// 32 byte pubkey
+	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
+
+	// working app, but the verify itself fails
+	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand; !; assert; int 64; bzero; ==", LogicVersion, ep)
+
+	source := testVrfApp(
+		"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",                                                                                                 //pubkey
+		"b6b4699f87d56126c9117a7da55bd0085246f4c56dbc95d20172612e9d38e8d7ca65e573a126ed88d4e30a46f80a666854d675cf3ba81de0de043c3774f061560f55edc256a787afe701677c0f602900", // proof
+		"", // data
+		"5b49b554d05c0cd5a5325376b3387de59d924fd1e13ded44648ab33c21349a603f25b84ec5ed887995b33da5e3bfcb87cd2f64521c4c62cf825cffabbe5d31cc", // output
+	)
+	testLogic(t, source, LogicVersion, ep)
+
+	source = testVrfApp(
+		"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",                                                                                                 //pk
+		"ae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07", // pi
+		"72", // alpha
+		"94f4487e1b2fec954309ef1289ecb2e15043a2461ecc7b2ae7d4470607ef82eb1cfa97d84991fe4a7bfdfd715606bc27e2967a6c557cfb5875879b671740b7d8", // beta
+	)
+	testLogic(t, source, LogicVersion, ep)
+}
+
+// BenchMarkVerify is useful to see relative speeds of various crypto verify functions
+func BenchmarkVerify(b *testing.B) {
+	benches := [][]string{
+		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
+		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
+		/*
+					{"ed25519verify_bare", "", `byte 0x
+			byte 0x
+			addr
+			ed25519verify_bare
+			assert`, "int 1"},*/
+		{"ecdsa_verify", "", `byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
+byte 0x5eb27782eb1a5df8de9a5d51613ad5ca730840ddf4af919c6feb15cde14f9978
+byte 0x0cb3c0d636ed991ee030d09c295de3121eb166cb9e1552cf0ef0fb2358f35f0f
+byte 0x79de0699673571df1de8486718d06a3e7838f6831ec4ef3fb963788fbfb773b7
+byte 0xd76446a3393af3e2eefada16df80cc6a881a56f4cf41fa2ab4769c5708ce878d
+ecdsa_verify Secp256k1
+assert`, "int 1"},
+		{"vrf_verify", "", `byte 0x3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
+byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
+byte 0x72
+vrf_verify VrfAlgorand
+assert							// make sure we're testing success
+pop								// output`, "int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
