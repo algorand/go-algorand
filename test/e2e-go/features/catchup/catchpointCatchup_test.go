@@ -158,7 +158,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// Let the network make some progress
 	currentRound := uint64(1)
-	targetRound := uint64(37)
+	const targetRound = uint64(37)
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
@@ -200,33 +200,35 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// wait until node is caught up.
 	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
+
 	currentRound = uint64(1)
-	targetRound = uint64(1)
+	secondNodeTargetRound := uint64(1)
 	log.Infof("Second node catching up to round 1")
 	for {
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
-		if targetRound <= currentRound {
+		if secondNodeTargetRound <= currentRound {
 			break
 		}
 		currentRound++
 
 	}
 	log.Infof(" - done catching up!\n")
-
 	primaryNodeStatus, err := primaryNodeRestClient.Status()
 	a.NoError(err)
 	a.NotNil(primaryNodeStatus.LastCatchpoint)
 	log.Infof("primary node latest catchpoint - %s!\n", *primaryNodeStatus.LastCatchpoint)
-	secondNodeRestClient.Catchup(*primaryNodeStatus.LastCatchpoint)
+	_, err = secondNodeRestClient.Catchup(*primaryNodeStatus.LastCatchpoint)
+	a.NoError(err)
 
 	currentRound = primaryNodeStatus.LastRound
-	targetRound = currentRound + 1
-	log.Infof("Second node catching up to round 36")
+	a.LessOrEqual(targetRound, currentRound)
+	fixtureTargetRound := targetRound + 1
+	log.Infof("Second node catching up to round %v", currentRound)
 	for {
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
-		if targetRound <= currentRound {
+		if fixtureTargetRound <= currentRound {
 			break
 		}
 		currentRound++
