@@ -274,9 +274,7 @@ return stack matches the name of the input value.
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
-| `bn256_add` | for (curve points A and B) return the curve point A + B |
-| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
-| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -426,7 +424,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -617,6 +615,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
 
 ### Inner Transactions
 
