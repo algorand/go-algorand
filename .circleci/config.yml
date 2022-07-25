@@ -650,8 +650,10 @@ jobs:
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
       CI_PLATFORM: << parameters.platform >>
-      CI_KEEP_TEMP_PLATFORM: amd64
-      CI_E2E_FILENAME: nightly
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
+      CI_E2E_FILENAME: '{{ .Branch }}_nightly'
     steps:
       - prepare_build_dir
       - prepare_go
