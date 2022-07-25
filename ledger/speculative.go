@@ -35,6 +35,9 @@ type LedgerForEvaluator interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
+	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
@@ -159,18 +162,55 @@ func (v *validatedBlockAsLFE) GenesisProto() config.ConsensusParams {
 
 // LookupApplication loads an application resource that matches the request parameters from the ledger.
 func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+
+	if rnd == v.vb.Block().Round() {
+		// Intentionally apply (pending) rewards up to rnd.
+		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+		if ok {
+			return ledgercore.AppResource{AppParams: res.AppParams, AppLocalState: res.AppLocalState}, nil
+		}
+	}
+	return v.l.LookupApplication(rnd, addr, aidx)
+}
+
+// LookupAsset loads an asset resource that matches the request parameters from the ledger.
+func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+
+	if rnd == v.vb.Block().Round() {
+		// Intentionally apply (pending) rewards up to rnd.
+		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+		if ok {
+			return ledgercore.AssetResource{AssetParams: res.AssetParams, AssetHolding: res.AssetHolding}, nil
+		}
+	}
+	return v.l.LookupAsset(rnd, addr, aidx)
+}
+
+// LookupWithoutRewards implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	if r == v.vb.Block().Round() {
+		data, ok := v.vb.Delta().Accts.GetData(a)
+		if ok {
+			return data, r, nil
+		}
+	}
+
+	return v.l.LookupWithoutRewards(r, a)
 }
 
 // StartEvaluator starts a block evaluator with a particular block header.
 // The block header's Branch value determines which speculative branch is used.
 // This is intended to be used by the transaction pool assembly code.
-func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*internal.BlockEvaluator, error) {
+func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
 	if hdr.Round.SubSaturate(1) != v.Latest() {
 		return nil, fmt.Errorf("StartEvaluator: LFE round %d mismatches next block round %d", v.Latest(), hdr.Round)
 	}
 
-	evalopts := internal.EvaluatorOptions{PaysetHint: paysetHint, Validate: true, Generate: true}
-	return internal.StartEvaluator(v, hdr, evalopts)
+	return internal.StartEvaluator(v, hdr,
+		internal.EvaluatorOptions{
+			PaysetHint:          paysetHint,
+			Generate:            true,
+			Validate:            true,
+			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+		})
 }
