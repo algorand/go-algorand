@@ -399,6 +399,7 @@ commands:
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
+            export CI_E2E_FILENAME="${CIRCLE_BRANCH}_nightly"
             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
             export GOPATH="<< parameters.build_dir >>/go"
@@ -653,7 +654,6 @@ jobs:
       # This platform is arbitrary, basically we just want to keep temps for
       # one of the platforms in the matrix.
       CI_KEEP_TEMP_PLATFORM: "amd64"
-      CI_E2E_FILENAME: "${CIRCLE_BRANCH}_nightly"
     steps:
       - prepare_build_dir
       - prepare_go
