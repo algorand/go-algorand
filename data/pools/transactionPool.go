@@ -169,10 +169,6 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
 
-	// cancel any pending speculative assembly
-	if pool.cancelSpec != nil {
-		pool.cancelSpec()
-	}
 	pool.cancelSpec = cancel
 	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
 
@@ -572,11 +568,12 @@ func (pool *TransactionPool) TryReadSpeculativeBlock(branch bookkeeping.BlockHas
 	}
 }
 
+// OnNewBlock callback calls the internal implementation, onNewBlock with the ``false'' parameter to process all transactions.
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	pool.onNewBlock(block, delta, false)
 }
 
-// OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
+// onNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta, stopReprocessingAtFirstAsmBlock bool) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
@@ -598,6 +595,12 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
+
+	// cancel any pending speculative assembly
+	if pool.cancelSpec != nil {
+		pool.cancelSpec()
+	}
+
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
 		// - If there was less than one full block in the pool, reduce
