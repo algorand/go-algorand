@@ -89,7 +89,7 @@ type LogicEvalError struct {
 
 // Error satisfies builtin interface `error`
 func (err LogicEvalError) Error() string {
-	msg := fmt.Sprintf("logic eval error: %v", err.Err)
+	msg := fmt.Sprintf("AVM logic eval error: %v", err.Err)
 	if len(err.Details) > 0 {
 		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
 	}
