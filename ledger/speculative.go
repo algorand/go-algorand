@@ -179,10 +179,11 @@ func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Ad
 		if ok {
 			return ledgercore.AppResource{AppParams: res.AppParams, AppLocalState: res.AppLocalState}, nil
 		}
+
+		// fall back to looking up asset in ledger, until previous block
+		rnd = v.vb.Block().Round() - 1
 	}
 
-	// app didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
-	rnd = rnd.SubSaturate(1)
 	return v.l.LookupApplication(rnd, addr, aidx)
 }
 
@@ -194,25 +195,26 @@ func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address,
 		if ok {
 			return ledgercore.AssetResource{AssetParams: res.AssetParams, AssetHolding: res.AssetHolding}, nil
 		}
+		// fall back to looking up asset in ledger, until previous block
+		rnd = v.vb.Block().Round() - 1
 	}
 
-	// asset didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
-	rnd = rnd.SubSaturate(1)
 	return v.l.LookupAsset(rnd, addr, aidx)
 }
 
 // LookupWithoutRewards implements the ledgerForEvaluator interface.
-func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	if r == v.vb.Block().Round() {
+func (v *validatedBlockAsLFE) LookupWithoutRewards(rnd basics.Round, a basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	if rnd == v.vb.Block().Round() {
 		data, ok := v.vb.Delta().Accts.GetData(a)
 		if ok {
-			return data, r, nil
+			return data, rnd, nil
 		}
+		// fall back to looking up account in ledger, until previous block
+		rnd = v.vb.Block().Round() - 1
 	}
 
 	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
-	r = r.SubSaturate(1)
-	return v.l.LookupWithoutRewards(r, a)
+	return v.l.LookupWithoutRewards(rnd, a)
 }
 
 // VerifiedTransactionCache implements the ledgerForEvaluator interface.
