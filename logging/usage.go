@@ -18,11 +18,15 @@ package logging
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var ram_usage_gauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_ram_usage", Description: "number of bytes runtime.ReadMemStats().HeapInuse"})
 
 // UsageLogThread utility logging method
 func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *sync.WaitGroup) {
@@ -34,6 +38,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 	var prevUtime, prevStime int64
 	var Utime, Stime int64
 	var prevTime time.Time
+	var mst runtime.MemStats
 
 	ticker := time.NewTicker(period)
 	hasPrev := false
@@ -47,6 +52,9 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 
 		now = time.Now()
 		Utime, Stime, _ = util.GetCurrentProcessTimes()
+
+		runtime.ReadMemStats(&mst)
+		ram_usage_gauge.Set(float64(mst.HeapInuse), nil)
 
 		if hasPrev {
 			userNanos := Utime - prevUtime
