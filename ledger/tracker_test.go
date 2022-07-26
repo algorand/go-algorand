@@ -74,7 +74,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	_, err := trackerDBInitialize(ml, false, ".")
 	a.NoError(err)
 
-	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao}, conf)
+	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao, &txTail{}}, conf)
 	defer ml.trackers.close()
 	err = ml.trackers.loadFromDisk(ml)
 	a.NoError(err)

@@ -19,7 +19,6 @@ package fixtures
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -46,8 +45,7 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	ef.t = t
 	ef.testDir = os.Getenv("TESTDIR")
 	if ef.testDir == "" {
-		ef.testDir, _ = ioutil.TempDir("", "tmp")
-		ef.testDir = filepath.Join(ef.testDir, "expect")
+		ef.testDir = filepath.Join(t.TempDir(), "expect")
 		err = os.MkdirAll(ef.testDir, 0755)
 		if err != nil {
 			ef.t.Errorf("error creating test dir %s, with error %v", ef.testDir, err)

@@ -250,7 +250,6 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
-	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 
 	var maxTxnGroupEntries int
 	if p.consensusParams.Application {
@@ -293,52 +292,9 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, queue)
 				loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, queue)
 			case protocol.AssetConfigTx:
-				loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
 			case protocol.AssetTransferTx:
-				if !stxn.Txn.AssetSender.IsZero() {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-				} else {
-					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
-						// opt in
-						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					}
-				}
-				if !stxn.Txn.AssetReceiver.IsZero() {
-					loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-				}
-				if !stxn.Txn.AssetCloseTo.IsZero() {
-					loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-				}
 			case protocol.AssetFreezeTx:
-				if !stxn.Txn.FreezeAccount.IsZero() {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, queue)
-				}
 			case protocol.ApplicationCallTx:
-				if stxn.Txn.ApplicationID != 0 {
-					// load the global - so that we'll have the program
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
-					// load the local - so that we'll have the local state
-					// TODO: this is something we need to decide if we want to enable, since not
-					// every application call would use local storage.
-					if (stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC) ||
-						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.CloseOutOC) ||
-						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC) {
-						loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
-					}
-				}
-				for _, fa := range stxn.Txn.ForeignApps {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AppCreatable, task, resourceTasks, queue)
-				}
-				for _, fa := range stxn.Txn.ForeignAssets {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AssetCreatable, task, resourceTasks, queue)
-				}
-				for ixa := range stxn.Txn.Accounts {
-					loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, queue)
-				}
 			case protocol.CompactCertTx:
 			case protocol.KeyRegistrationTx:
 			}

@@ -247,6 +247,9 @@ type OpStream struct {
 	OffsetToLine map[int]int
 
 	HasStatefulOps bool
+
+	// Need new copy for each opstream
+	versionedPseudoOps map[string]map[int]OpSpec
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -857,43 +860,6 @@ func simpleImm(value string, label string) (byte, error) {
 	return byte(res), err
 }
 
-// asmTxn2 delegates to asmTxn or asmTxna depending on number of operands
-func asmTxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	switch len(args) {
-	case 1:
-		txn := OpsByName[1]["txn"] // v1 txn opcode does not have array names
-		return asmDefault(ops, &txn, args)
-	case 2:
-		txna := OpsByName[ops.Version]["txna"]
-		return asmDefault(ops, &txna, args)
-	default:
-		return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-	}
-}
-
-func asmGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 2 {
-		gtxn := OpsByName[1]["gtxn"] // v1 gtxn opcode does not have array names
-		return asmDefault(ops, &gtxn, args)
-	}
-	if len(args) == 3 {
-		gtxna := OpsByName[ops.Version]["gtxna"]
-		return asmDefault(ops, &gtxna, args)
-	}
-	return ops.errorf("%s expects 2 or 3 immediate arguments", spec.Name)
-}
-
-func asmGtxns(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 1 {
-		return asmDefault(ops, spec, args)
-	}
-	if len(args) == 2 {
-		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
-		return asmDefault(ops, &gtxnsa, args)
-	}
-	return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-}
-
 func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return asmDefault(ops, spec, args)
@@ -929,7 +895,7 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())
@@ -949,19 +915,52 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
+		var correctImmediates []string
+		var numImmediatesWithField []int
+		pseudos, isPseudoName := ops.versionedPseudoOps[spec.Name]
 		switch imm.kind {
 		case immByte:
 			if imm.Group != nil {
 				fs, ok := imm.Group.SpecByName(args[i])
 				if !ok {
+					_, err := simpleImm(args[i], "")
+					if err == nil {
+						// User supplied a uint, so we see if any of the other immediates take uints
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group == nil {
+								correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
+						}
+					}
+					if isPseudoName {
+						for numImms, ps := range pseudos {
+							for _, psImm := range ps.OpDetails.Immediates {
+								if psImm.kind == immByte && psImm.Group != nil {
+									if _, ok := psImm.Group.SpecByName(args[i]); ok {
+										numImmediatesWithField = append(numImmediatesWithField, numImms)
+									}
+								}
+							}
+						}
+						if len(numImmediatesWithField) > 0 {
+							return ops.errorf("%#v field of %s can only be used with %s", args[i], spec.Name, joinIntsOnOr("immediate", numImmediatesWithField...))
+						}
+					}
 					return ops.errorf("%s unknown field: %#v", spec.Name, args[i])
 				}
-				// refine the typestack now, so it is maintain even if there's a version error
+				// refine the typestack now, so it is maintained even if there's a version error
 				if fs.Type().Typed() {
 					ops.returns(spec, fs.Type())
 				}
 				if fs.Version() > ops.Version {
-					return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?",
+					return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?",
 						spec.Name, args[i], fs.Version())
 				}
 				ops.pending.WriteByte(fs.Field())
@@ -969,6 +968,23 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				// simple immediate that must be a number from 0-255
 				val, err := simpleImm(args[i], imm.Name)
 				if err != nil {
+					if strings.Contains(err.Error(), "unable to parse") {
+						// Perhaps the field works in a different order
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group != nil {
+								if _, match := otherImm.Group.SpecByName(args[i]); match {
+									correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
+								}
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
+						}
+					}
 					return ops.errorf("%s %w", spec.Name, err)
 				}
 				ops.pending.WriteByte(val)
@@ -1184,17 +1200,178 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return nil, StackTypes{scratchType}
 }
 
-// keywords or "pseudo-ops" handle parsing and assembling special asm language
-// constructs like 'addr' We use an OpSpec here, but it's somewhat degenerate,
-// since they don't have opcodes or eval functions. But it does need a lot of
-// OpSpec, in order to support assembly - Mode, typing info, etc.
-var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, proto(":i"), 1, assembler(asmInt)},
-	"byte": {0, "byte", nil, proto(":b"), 1, assembler(asmByte)},
+func joinIntsOnOr(singularTerminator string, list ...int) string {
+	if len(list) == 1 {
+		switch list[0] {
+		case 0:
+			return "no " + singularTerminator + "s"
+		case 1:
+			return "1 " + singularTerminator
+		default:
+			return fmt.Sprintf("%d %ss", list[0], singularTerminator)
+		}
+	}
+	sort.Ints(list)
+	errMsg := ""
+	for i, val := range list {
+		if i+1 < len(list) {
+			errMsg += fmt.Sprintf("%d or ", val)
+		} else {
+			errMsg += fmt.Sprintf("%d ", val)
+		}
+	}
+	return errMsg + singularTerminator + "s"
+}
+
+func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
+	immediateCounts := make([]int, len(specs))
+	i := 0
+	for numImms := range specs {
+		immediateCounts[i] = numImms
+		i++
+	}
+	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...))
+}
+
+// getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
+// Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
+// The returned string is the spec's name, annotated if it was a pseudoOp with no immediates to help disambiguate typetracking errors
+func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
+	pseudoSpecs, ok := ops.versionedPseudoOps[name]
+	if ok {
+		pseudo, ok := pseudoSpecs[len(args)]
+		if !ok {
+			// Could be that pseudoOp wants to handle immediates itself so check -1 key
+			pseudo, ok = pseudoSpecs[anyImmediates]
+			if !ok {
+				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
+				pseudoImmediatesError(ops, name, pseudoSpecs)
+				proto, version, ok := mergeProtos(pseudoSpecs)
+				if !ok {
+					return OpSpec{}, "", false
+				}
+				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{asm: func(*OpStream, *OpSpec, []string) error { return nil }}}
+			}
+		}
+		pseudo.Name = name
+		if pseudo.Version > ops.Version {
+			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
+		}
+		if len(args) == 0 {
+			return pseudo, pseudo.Name + " without immediates", true
+		}
+		return pseudo, pseudo.Name, true
+	}
+	spec, ok := OpsByName[ops.Version][name]
+	if !ok {
+		spec, ok = OpsByName[AssemblerMaxVersion][name]
+		if ok {
+			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
+		} else {
+			ops.errorf("unknown opcode: %s", name)
+		}
+	}
+	return spec, spec.Name, ok
+}
+
+// pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
+// Immediates key of -1 means asmfunc handles number of immediates
+// These will then get transferred over into a per-opstream versioned table during assembly
+const anyImmediates = -1
+
+var pseudoOps = map[string]map[int]OpSpec{
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, proto(":b"), 1, assembler(asmAddr)},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, proto(":b"), 1, assembler(asmMethod)},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
+	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
+	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
+	"extract": {0: OpSpec{Name: "extract3"}, 2: OpSpec{Name: "extract"}},
+	"replace": {0: OpSpec{Name: "replace3"}, 1: OpSpec{Name: "replace2"}},
+}
+
+func addPseudoDocTags() {
+	for name, specs := range pseudoOps {
+		for i, spec := range specs {
+			if spec.Name == name || i == anyImmediates {
+				continue
+			}
+			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
+			desc, ok := opDocByName[spec.Name]
+			if ok {
+				opDocByName[spec.Name] = desc + "<br />" + msg
+			} else {
+				opDocByName[spec.Name] = msg
+			}
+		}
+	}
+}
+
+func init() {
+	addPseudoDocTags()
+}
+
+// Differentiates between specs in pseudoOps that can be assembled on their own and those that need to grab a different spec
+func isFullSpec(spec OpSpec) bool {
+	return spec.asm != nil
+}
+
+// mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
+//by creating a new proto that is a combination of all the pseudo-op's possibilities
+func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
+	var args StackTypes
+	var returns StackTypes
+	var minVersion uint64
+	i := 0
+	for _, spec := range specs {
+		if i == 0 {
+			args = spec.Arg.Types
+			returns = spec.Return.Types
+			minVersion = spec.Version
+		} else {
+			if spec.Version < minVersion {
+				minVersion = spec.Version
+			}
+			if len(args) != len(spec.Arg.Types) || len(returns) != len(spec.Return.Types) {
+				return Proto{}, 0, false
+			}
+			for j := range args {
+				if args[j] != spec.Arg.Types[j] {
+					args[j] = StackAny
+				}
+			}
+			for j := range returns {
+				if returns[j] != spec.Return.Types[j] {
+					returns[j] = StackAny
+				}
+			}
+		}
+		i++
+	}
+	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+}
+
+func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
+	m := make(map[string]map[int]OpSpec)
+	for name, specs := range pseudoOps {
+		m[name] = make(map[int]OpSpec)
+		for numImmediates, spec := range specs {
+			if isFullSpec(spec) {
+				m[name][numImmediates] = spec
+				continue
+			}
+			newSpec, ok := OpsByName[version][spec.Name]
+			if ok {
+				m[name][numImmediates] = newSpec
+			} else {
+				m[name][numImmediates] = OpsByName[AssemblerMaxVersion][spec.Name]
+			}
+		}
+	}
+	return m
 }
 
 type lineError struct {
@@ -1387,8 +1564,10 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
+		if ops.versionedPseudoOps == nil {
+			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+		}
 		opstring := fields[0]
-
 		if opstring[len(opstring)-1] == ':' {
 			ops.createLabel(opstring[:len(opstring)-1])
 			fields = fields[1:]
@@ -1398,26 +1577,7 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			opstring = fields[0]
 		}
-
-		spec, ok := OpsByName[ops.Version][opstring]
-		if !ok {
-			spec, ok = keywords[opstring]
-			if spec.Version > 1 && spec.Version > ops.Version {
-				ok = false
-			}
-		}
-		if !ok {
-			// If the problem is only the version, it's useful to lookup the
-			// opcode from latest version, so we proceed with assembly well
-			// enough to report follow-on errors.  Of course, we still have to
-			// bail out on the assembly as a whole.
-			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
-			if ok {
-				ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
-			} else {
-				spec, ok = keywords[opstring]
-			}
-		}
+		spec, expandedName, ok := getSpec(ops, opstring, fields[1:])
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
@@ -1425,8 +1585,8 @@ func (ops *OpStream) assemble(text string) error {
 				ops.HasStatefulOps = true
 			}
 			args, returns := spec.Arg.Types, spec.Return.Types
-			if spec.OpDetails.refine != nil {
-				nargs, nreturns := spec.OpDetails.refine(&ops.known, fields[1:])
+			if spec.refine != nil {
+				nargs, nreturns := spec.refine(&ops.known, fields[1:])
 				if nargs != nil {
 					args = nargs
 				}
@@ -1434,7 +1594,7 @@ func (ops *OpStream) assemble(text string) error {
 					returns = nreturns
 				}
 			}
-			ops.trackStack(args, returns, fields)
+			ops.trackStack(args, returns, append([]string{expandedName}, fields[1:]...))
 			spec.asm(ops, &spec, fields[1:])
 			if spec.deadens() { // An unconditional branch deadens the following code
 				ops.known.deaden()
@@ -1445,12 +1605,10 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			ops.trace("\n")
 			continue
-		} else {
-			ops.errorf("unknown opcode: %s", opstring)
 		}
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
+	// backward compatibility: do not allow jumps behind last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
@@ -1506,7 +1664,7 @@ func (ops *OpStream) pragma(line string) error {
 
 		// We initialize Version with assemblerNoVersion as a marker for
 		// non-specified version because version 0 is valid
-		// version for TEAL v1.
+		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
 		} else if ops.Version != ver {
@@ -1553,7 +1711,7 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc

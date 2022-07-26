@@ -41,6 +41,7 @@ import (
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -332,6 +333,10 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
+func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return x.l.BlockHdrCached(r)
+}
+
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// For global, check if app params exist
 	if global {
@@ -517,14 +522,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*fromRewards = newFromRewards
 	}
 
-	var overflowed bool
-	fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
-	}
-	err = cs.putAccount(from, fromBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
+		}
+		err = cs.putAccount(from, fromBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	toBal, err := cs.lookup(to)
@@ -542,13 +550,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*toRewards = newToRewards
 	}
 
-	toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
-	}
-	err = cs.putAccount(to, toBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
+		}
+		err = cs.putAccount(to, toBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

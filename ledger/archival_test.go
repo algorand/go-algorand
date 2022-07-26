@@ -21,9 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	mathrand "math/rand"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -198,11 +196,8 @@ func TestArchivalRestart(t *testing.T) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
@@ -348,11 +343,8 @@ func TestArchivalCreatables(t *testing.T) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -380,7 +372,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
 		creator := basics.Address{}
-		_, err = rand.Read(creator[:])
+		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
 		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
@@ -701,11 +693,9 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer func() {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
-	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
-	require.NoError(t, err)
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -718,7 +708,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		addr := basics.Address{}
-		_, err = rand.Read(addr[:])
+		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
 		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
 		genesisInitState.Accounts[addr] = br.AccountData

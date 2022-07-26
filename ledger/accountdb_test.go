@@ -2229,7 +2229,8 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	data.VoteKeyDilution = crypto.RandUint64()
 
 	var ba baseOnlineAccountData
-	ba.SetCoreAccountData(ledgercore.ToAccountData(data))
+	ad := ledgercore.ToAccountData(data)
+	ba.SetCoreAccountData(&ad)
 
 	require.Equal(t, data.MicroAlgos, ba.MicroAlgos)
 	require.Equal(t, data.RewardsBase, ba.RewardsBase)
@@ -2282,7 +2283,8 @@ func TestBaseVotingDataGettersSetters(t *testing.T) {
 	var bv baseVotingData
 	require.True(t, bv.IsEmpty())
 
-	bv.SetCoreAccountData(ledgercore.ToAccountData(data))
+	ad := ledgercore.ToAccountData(data)
+	bv.SetCoreAccountData(&ad)
 
 	require.False(t, bv.IsEmpty())
 	require.Equal(t, data.VoteID, bv.VoteID)
@@ -2450,7 +2452,7 @@ func (m *mockAccountWriter) lookup(addr basics.Address) (pad persistedAccountDat
 		err = fmt.Errorf("not found %s", addr.String())
 		return
 	}
-	pad.accountData.SetCoreAccountData(data)
+	pad.accountData.SetCoreAccountData(&data)
 	pad.addr = addr
 	pad.rowid = rowid
 	return
