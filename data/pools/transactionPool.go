@@ -17,6 +17,7 @@
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -93,14 +94,12 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
-	cancel               <-chan bool
+
+	ctx        context.Context
+	cancelSpec context.CancelFunc
+	specBlock  chan *ledgercore.ValidatedBlock
 
 	cfg config.Local
-}
-
-type SpeculativeBlock struct {
-	blk    *ledgercore.ValidatedBlock
-	branch bookkeeping.BlockHash
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -132,6 +131,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
 		cfg:                  cfg,
+		ctx:                  context.Background(),
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -139,14 +139,16 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock, cancelComputations <-chan bool) *TransactionPool {
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
 	if err != nil {
-		return nil
+		return nil, nil, err
 	}
+
+	ctx, cancel := context.WithCancel(pool.ctx)
 
 	copy := TransactionPool{
 		// TODO(yossi) verify this assumption
@@ -162,11 +164,19 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
 		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
 		cfg:                  pool.cfg,
-		cancel:               cancelComputations,
+		ctx:                  ctx,
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
-	return &copy
+
+	// cancel any pending speculative assembly
+	if pool.cancelSpec != nil {
+		pool.cancelSpec()
+	}
+	pool.cancelSpec = cancel
+	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
+
+	return &copy, pool.specBlock, nil
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process.
@@ -521,10 +531,13 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta, specBlock chan<- SpeculativeBlock, cancel <-chan bool) {
-
+func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	vb := ledgercore.MakeValidatedBlock(block, delta)
-	speculativePool := pool.copyTransactionPoolOverSpecLedger(&vb, cancel)
+	speculativePool, outchan, err := pool.copyTransactionPoolOverSpecLedger(&vb)
+	if err != nil {
+		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
+		return
+	}
 
 	// TODO(yossi): this would process _all_ pending transactions. We could, however, finish after we have a block.
 	speculativePool.OnNewBlock(block, delta)
@@ -534,9 +547,27 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	}
 
 	select {
-	case specBlock <- SpeculativeBlock{blk: speculativePool.assemblyResults.blk, branch: block.Hash()}:
+	case outchan <- speculativePool.assemblyResults.blk:
 	default:
-		speculativePool.log.Warnf("failed writing speculated block to channel, channel already has a block")
+		speculativePool.log.Errorf("failed writing speculated block to channel, channel already has a block")
+	}
+}
+
+func (pool *TransactionPool) TryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	select {
+	case vb := <-pool.specBlock:
+		if vb == nil {
+			return nil, fmt.Errorf("speculation block is nil")
+		}
+		if vb.Block().Branch != branch {
+			return nil, fmt.Errorf("misspeculated block: branch = %x vs. latest hash = %x", vb.Block().Branch, branch)
+		}
+		return vb, nil
+	default:
+		return nil, fmt.Errorf("speculation block not ready")
 	}
 }
 
@@ -768,8 +799,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// Feed the transactions in order
 	for _, txgroup := range txgroups {
-		switch {
-		case <-pool.cancel:
+		select {
+		case <-pool.ctx.Done():
 			return
 		default: // continue processing transactions
 		}
