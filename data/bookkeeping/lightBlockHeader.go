@@ -30,11 +30,11 @@ type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	/*
-		Preparing blocks with specific sha256 values is hard as long as the first value in the light header is something
-		unpredictable. Ensuring that the light header blocks do not have specific sha256 values means
-		that a future attacker with quantum computation capabilities would need to face a more complex problem than
-		simply collision-resistance. Instead, the adversary would need to break 2nd-preimage. To ensure that, we add
-		the committee seed to the light-headers.
+		The seed is to mitigate against the (remote) possibility that an attacker can put itself in better position to
+		find a collision in the future -- perhaps with quantum -- e.g., by doing some precomputation,
+		knowing or even controlling the data to be hashed, etc. Starting the hash data with a value that is
+		uncontrollable and unpredictable (to today’s attackers) makes the attacker’s task more like breaking 2nd
+		preimage resistance (2PR/TCR), versus the easier goal of merely breaking collision resistance.
 	*/
 	Seed                committee.Seed       `codec:"0"`
 	Round               basics.Round         `codec:"r"`
