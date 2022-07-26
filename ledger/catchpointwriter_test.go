@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -417,7 +418,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectory)
@@ -500,7 +501,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectory)

@@ -4278,14 +4278,14 @@ func processAllBaseAccountRecords(
 			return 0, pendingBaseRow{}, pendingResourceRow{}, err
 		}
 
-		var rowsRemaining bool
-		pendingResource, rowsRemaining, err = processAllResources(resRows, addr, &accountData, rowid, pendingResource, resCb)
+		var moreRows bool
+		pendingResource, moreRows, err = processAllResources(resRows, addr, &accountData, rowid, pendingResource, resCb)
 		if err != nil {
 			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
 			return 0, pendingBaseRow{}, pendingResourceRow{}, err
 		}
 
-		if rowsRemaining {
+		if moreRows {
 			// we're done with this iteration.
 			pendingBase := pendingBaseRow{
 				addr:               addr,
