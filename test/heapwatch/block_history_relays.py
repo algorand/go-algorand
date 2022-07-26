@@ -19,6 +19,7 @@ fetchers = []
 
 def do_graceful_stop(signum, frame):
     global fetchers
+    global graceful_stop
     if graceful_stop:
         sys.stderr.write("second signal, quitting\n")
         sys.exit(1)
@@ -34,7 +35,7 @@ def main():
     ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
     ap.add_argument('--all', default=False, action='store_true')
     ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
-    op.add_argument('--pid')
+    ap.add_argument('--pid')
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--outdir', required=True)
     ap.add_argument('--verbose', default=False, action='store_true')
