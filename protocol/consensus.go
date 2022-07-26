@@ -194,6 +194,12 @@ const ConsensusVAlpha2 = ConsensusVersion(
 	"alpha2",
 )
 
+// ConsensusVAlpha3 is the second consensus protocol for AlphaNet, which increases the
+// filter timeout to 3.4 seconds.
+const ConsensusVAlpha3 = ConsensusVersion(
+	"alpha3",
+)
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
