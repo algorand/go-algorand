@@ -17,6 +17,9 @@
 package transactions
 
 import (
+	"encoding/base64"
+	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -40,6 +43,31 @@ func (sp StateProofTxnFields) Empty() bool {
 	return sp.StateProofIntervalLatestRound == 0 &&
 		sp.StateProof.MsgIsZero() &&
 		sp.Message.MsgIsZero()
+}
+
+// String returns a string representation of the StateProofTxnFields.
+func (sp StateProofTxnFields) String() string {
+	return fmt.Sprintf(
+		"StateProofTxnFields {\n"+
+			"  StateProofIntervalLatestRound: %d, StateProofType: %d,\n"+
+			"  StateProof {\n"+
+			"    SigCommit: %s\n"+
+			"    SignedWeight: %d\n"+
+			"    NumPositionsToReveal: %d\n"+
+			"  },\n"+
+			"  Message {\n"+
+			"    BlockHeadersCommitment: %s\n"+
+			"    VotersCommitment: %s\n"+
+			"    LnProvenWeight: %d, FirstAttestedRound: %d, LastAttestedRound: %d\n"+
+			"  }\n"+
+			"}",
+		sp.StateProofIntervalLatestRound, sp.StateProofType,
+		base64.StdEncoding.EncodeToString(sp.StateProof.SigCommit),
+		sp.StateProof.SignedWeight,
+		len(sp.StateProof.PositionsToReveal),
+		base64.StdEncoding.EncodeToString(sp.Message.BlockHeadersCommitment),
+		base64.StdEncoding.EncodeToString(sp.Message.VotersCommitment),
+		sp.Message.LnProvenWeight, sp.Message.FirstAttestedRound, sp.Message.LastAttestedRound)
 }
 
 //msgp:ignore specialAddr
