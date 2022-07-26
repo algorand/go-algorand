@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"fmt"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -77,6 +78,30 @@ func (ec *nodeExitErrorCollector) Print() {
 	for i, err := range ec.errors {
 		require.NoError(ec.t, err, ec.messages[i])
 	}
+}
+
+// awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
+func awaitCatchpointCreation(client algodclient.RestClient, fixture fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
+	s, err := client.Status()
+	if err != nil {
+		return generatedV2.NodeStatusResponse{}, err
+	}
+
+	if len(*s.LastCatchpoint) > 0 {
+		return s, nil
+
+	}
+
+	if roundWaitCount-1 > 0 {
+		err = fixture.ClientWaitForRound(client, s.LastRound+1, 10*time.Second)
+		if err != nil {
+			return generatedV2.NodeStatusResponse{}, err
+		}
+
+		return awaitCatchpointCreation(client, fixture, roundWaitCount-1)
+	}
+
+	return generatedV2.NodeStatusResponse{}, fmt.Errorf("No catchpoint exists")
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
@@ -158,7 +183,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// Let the network make some progress
 	currentRound := uint64(1)
-	targetRound := uint64(37)
+	const targetRound = uint64(37)
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
@@ -200,13 +225,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// wait until node is caught up.
 	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
+
 	currentRound = uint64(1)
-	targetRound = uint64(1)
+	secondNodeTargetRound := uint64(1)
 	log.Infof("Second node catching up to round 1")
 	for {
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
-		if targetRound <= currentRound {
+		if secondNodeTargetRound <= currentRound {
 			break
 		}
 		currentRound++
@@ -214,19 +240,21 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	}
 	log.Infof(" - done catching up!\n")
 
-	primaryNodeStatus, err := primaryNodeRestClient.Status()
+	status, err := awaitCatchpointCreation(primaryNodeRestClient, fixture, 3)
 	a.NoError(err)
-	a.NotNil(primaryNodeStatus.LastCatchpoint)
-	log.Infof("primary node latest catchpoint - %s!\n", *primaryNodeStatus.LastCatchpoint)
-	secondNodeRestClient.Catchup(*primaryNodeStatus.LastCatchpoint)
 
-	currentRound = primaryNodeStatus.LastRound
-	targetRound = currentRound + 1
-	log.Infof("Second node catching up to round 36")
+	log.Infof("primary node latest catchpoint - %s!\n", status.LastCatchpoint)
+	_, err = secondNodeRestClient.Catchup(*status.LastCatchpoint)
+	a.NoError(err)
+
+	currentRound = status.LastRound
+	a.LessOrEqual(targetRound, currentRound)
+	fixtureTargetRound := targetRound + 1
+	log.Infof("Second node catching up to round %v", currentRound)
 	for {
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
-		if targetRound <= currentRound {
+		if fixtureTargetRound <= currentRound {
 			break
 		}
 		currentRound++
