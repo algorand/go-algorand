@@ -61,8 +61,8 @@ type votersTracker struct {
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
-	l                 ledgerForTracker
-	onlineTopFunction ledgercore.TopOnlineAccounts
+	l             ledgerForTracker
+	onlineTracker ledgercore.OnlineTrackerForVoters
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -138,7 +138,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		err := tr.LoadTree(vt.onlineTopFunction, hdr)
+		err := tr.LoadTree(vt.onlineTracker, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 

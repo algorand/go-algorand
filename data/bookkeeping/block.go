@@ -232,6 +232,10 @@ type (
 		// expect from StateProofVotersCommitment.
 		StateProofVotersTotalWeight basics.MicroAlgos `codec:"t"`
 
+		// TotalOnlineWeight is the total weight of all online accounts, including those
+		// not in the StateProofVotersCommitment.
+		StateProofTotalOnlineWeight basics.MicroAlgos `codec:"o"`
+
 		// StateProofNextRound is the next round for which we will accept
 		// a StateProof transaction.
 		StateProofNextRound basics.Round `codec:"n"`

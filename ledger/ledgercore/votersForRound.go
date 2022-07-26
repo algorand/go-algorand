@@ -18,8 +18,9 @@ package ledgercore
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"sync"
+
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 
 	"github.com/algorand/go-deadlock"
 
@@ -67,10 +68,10 @@ type VotersForRound struct {
 
 	// TotalWeight is the sum of the weights from the Participants array.
 	TotalWeight basics.MicroAlgos
-}
 
-// TopOnlineAccounts is the function signature for a method that would return the top online accounts.
-type TopOnlineAccounts func(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*OnlineAccount, error)
+	// TotalOnline is the sum of all online stake for the lookback round used by TotalWeight.
+	TotalOnline basics.MicroAlgos
+}
 
 // MakeVotersForRound create a new VotersForRound object and initialize it's cond.
 func MakeVotersForRound() *VotersForRound {
@@ -100,15 +101,26 @@ func createStateProofParticipant(stateProofID *merklesignature.Commitment, money
 	return retPart
 }
 
+// OnlineTrackerForVoters describes methods needed for making a participation tree.
+type OnlineTrackerForVoters interface {
+	OnlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*OnlineAccount, error)
+	OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error)
+}
+
 // LoadTree loads the participation tree and other required fields, using the provided TopOnlineAccounts function.
-func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
+func (tr *VotersForRound) LoadTree(onlineTracker OnlineTrackerForVoters, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
 	// stateProofRound is the block that we expect to form a state proof for,
 	// using the balances from round r.
 	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineTop(r, stateProofRound, tr.Proto.StateProofTopVoters)
+	top, err := onlineTracker.OnlineTop(r, stateProofRound, tr.Proto.StateProofTopVoters)
+	if err != nil {
+		return err
+	}
+
+	totalOnline, err := onlineTracker.OnlineTotals(r)
 	if err != nil {
 		return err
 	}
@@ -143,6 +155,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 	tr.AddrToPos = addrToPos
 	tr.Participants = participants
 	tr.TotalWeight = totalWeight
+	tr.TotalOnline = totalOnline
 	tr.Tree = tree
 	tr.cond.Broadcast()
 	tr.mu.Unlock()

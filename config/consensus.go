@@ -384,6 +384,12 @@ type ConsensusParams struct {
 	// The threshold is computed as StateProofWeightThreshold/(1<<32).
 	StateProofWeightThreshold uint32
 
+	// EnableStateProofTotalOnlineWeightThreshold specifies whether to use the
+	// total online weight at block N-StateProofVotersLookback if true, or the
+	// total weight of the StateProofTopVoters accounts (by normalized balance)
+	// when determining if the StateProofWeightThreshold has been met.
+	EnableStateProofTotalOnlineWeightThreshold bool
+
 	// StateProofStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
 	StateProofStrengthTarget uint64
 
@@ -1163,6 +1169,7 @@ func initConsensusProtocols() {
 	vFuture.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.StateProofStrengthTarget = 256
 	vFuture.StateProofRecoveryInterval = 10
+	vFuture.EnableStateProofTotalOnlineWeightThreshold = true
 
 	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4

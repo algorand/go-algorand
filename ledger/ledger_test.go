@@ -152,6 +152,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		stateProofTracking := bookkeeping.StateProofTrackingData{
 			StateProofVotersCommitment:  voters.Tree.Root(),
 			StateProofVotersTotalWeight: voters.TotalWeight,
+			StateProofTotalOnlineWeight: voters.TotalOnline,
 			StateProofNextRound:         blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound,
 		}
 		blk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateProofTracking

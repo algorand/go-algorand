@@ -87,6 +87,7 @@ func TestValidateStateProof(t *testing.T) {
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
+	cc.StateProofTotalOnlineWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
@@ -133,6 +134,7 @@ func TestAcceptableStateProofWeight(t *testing.T) {
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
+	cc.StateProofTotalOnlineWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
@@ -153,6 +155,7 @@ func TestAcceptableStateProofWeight(t *testing.T) {
 	firstValid = basics.Round(29000 - 2)
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	cc.StateProofVotersTotalWeight.Raw = 0x7fffffffffffffff
+	cc.StateProofTotalOnlineWeight.Raw = 0x7fffffffffffffff
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	proto.StateProofWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto

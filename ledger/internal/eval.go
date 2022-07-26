@@ -1200,7 +1200,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 
 // stateProofVotersAndTotal returns the expected values of StateProofVotersCommitment
 // and StateProofVotersTotalWeight for a block.
-func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
+func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDigest, totalWeight basics.MicroAlgos, totalOnline basics.MicroAlgos, err error) {
 	if eval.proto.StateProofInterval == 0 {
 		return
 	}
@@ -1215,7 +1215,7 @@ func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDiges
 		return
 	}
 
-	return voters.Tree.Root(), voters.TotalWeight, nil
+	return voters.Tree.Root(), voters.TotalWeight, voters.TotalOnline, nil
 }
 
 // TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
@@ -1242,7 +1242,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
-			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
+			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, basicStateProof.StateProofTotalOnlineWeight, err = eval.stateProofVotersAndTotal()
 			if err != nil {
 				return err
 			}
@@ -1282,7 +1282,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		expectedVoters, expectedVotersWeight, err := eval.stateProofVotersAndTotal()
+		expectedVoters, expectedVotersWeight, expectedTotalOnline, err := eval.stateProofVotersAndTotal()
 		if err != nil {
 			return err
 		}
@@ -1291,6 +1291,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
 			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
+		}
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != expectedTotalOnline {
+			return fmt.Errorf("StateProofTotalOnlineWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight, expectedTotalOnline)
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.stateProofNext() {
 			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.stateProofNext())
