@@ -34,15 +34,15 @@ import (
 func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var spHdr bookkeeping.BlockHeader
-	var sp stateproof.StateProof
-	var votersHdr bookkeeping.BlockHeader
+	spHdr := &bookkeeping.BlockHeader{}
+	sp := &stateproof.StateProof{}
+	votersHdr := &bookkeeping.BlockHeader{}
 	var nextSPRnd basics.Round
 	var atRound basics.Round
-	msg := stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
+	msg := &stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
-	err := validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err := ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofNotEnabled)
 
@@ -54,32 +54,32 @@ func TestValidateStateProof(t *testing.T) {
 	proto.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[spHdr.CurrentProtocol] = proto
 
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errNotAtRightMultiple)
 
 	spHdr.Round = 4
 	votersHdr.Round = 4
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInvalidVotersRound)
 
 	votersHdr.Round = 2
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	nextSPRnd = 4
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofParamCreation)
 
 	votersHdr.CurrentProtocol = spHdr.CurrentProtocol
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	// since proven weight is zero, we cann't create the verifier
 	require.ErrorIs(t, err, stateproof.ErrIllegalInputForLnApprox)
@@ -89,26 +89,26 @@ func TestValidateStateProof(t *testing.T) {
 	cc.StateProofVotersTotalWeight.Raw = 100
 	cc.StateProofTotalOnlineWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
 	// Require 100% of the weight to be signed in order to accept stateproof before interval/2 rounds has passed from the latest round attested (optimal case)
 	sp.SignedWeight = 99 // suboptimal signed weight
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
 	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
 	atRound = latestRoundInProof + basics.Round(proto.StateProofInterval/2)
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
 	// This suboptimal signed weight should be enough for this round
 	atRound++
-	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
+	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofCrypto)

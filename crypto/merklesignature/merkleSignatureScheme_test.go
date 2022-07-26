@@ -31,6 +31,7 @@ import (
 )
 
 func TestSignerCreation(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
@@ -96,6 +97,7 @@ func TestSignerCreation(t *testing.T) {
 }
 
 func TestSignerCreationOutOfBounds(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	_, err := New(8, 4, 1)
@@ -108,6 +110,7 @@ func TestSignerCreationOutOfBounds(t *testing.T) {
 }
 
 func TestEmptyVerifier(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -118,6 +121,7 @@ func TestEmptyVerifier(t *testing.T) {
 }
 
 func TestVerifierKeyLifetimeError(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -135,6 +139,7 @@ func TestVerifierKeyLifetimeError(t *testing.T) {
 }
 
 func TestEmptySigner(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
@@ -153,6 +158,7 @@ func TestEmptySigner(t *testing.T) {
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -193,6 +199,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 }
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -216,6 +223,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 }
 
 func TestSignatureStructure(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -242,6 +250,7 @@ func genMsgForTest() []byte {
 }
 
 func TestSigning(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -301,6 +310,7 @@ func TestSigning(t *testing.T) {
 }
 
 func TestBadRound(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -323,6 +333,7 @@ func TestBadRound(t *testing.T) {
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -356,6 +367,7 @@ func copySig(sig Signature) Signature {
 }
 
 func TestIncorrectByteSignature(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -374,6 +386,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 }
 
 func TestIncorrectMerkleIndex(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
@@ -401,6 +414,7 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 }
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -421,6 +435,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 }
 
 func TestMarshal(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -439,6 +454,7 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestNumberOfGeneratedKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	keyLifetime := uint64(256)
@@ -466,6 +482,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 }
 
 func TestGetAllKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	keyLifetime := uint64(256)

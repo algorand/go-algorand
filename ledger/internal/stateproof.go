@@ -146,8 +146,8 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 	return provenWeight, nil
 }
 
-// validateStateProof checks that a state proof is valid.
-func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof stateproof.StateProof, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
+// ValidateStateProof checks that a state proof is valid.
+func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -169,13 +169,13 @@ func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateP
 			nextStateProofRnd, latestRoundInIntervalHdr.Round, votersRound, errExpectedDifferentStateProofRound)
 	}
 
-	acceptableWeight := AcceptableStateProofWeight(votersHdr, atRound, logging.Base())
+	acceptableWeight := AcceptableStateProofWeight(*votersHdr, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	provenWeight, err := GetProvenWeight(votersHdr, latestRoundInIntervalHdr)
+	provenWeight, err := GetProvenWeight(*votersHdr, *latestRoundInIntervalHdr)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
 	}
@@ -187,7 +187,7 @@ func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateP
 		return err
 	}
 
-	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.IntoStateProofMessageHash(), &stateProof)
+	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.IntoStateProofMessageHash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

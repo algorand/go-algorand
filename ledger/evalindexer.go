@@ -43,6 +43,8 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -85,6 +87,11 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 			round, l.latestRound)
 	}
 	return l.il.LatestBlockHdr()
+}
+
+// BlockHdrCached is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.il.BlockHdrCached(round)
 }
 
 // CheckDup is part of LedgerForEvaluator interface.

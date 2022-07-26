@@ -172,14 +172,14 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
-const aspProto = protocol.ConsensusVersion("test-state-proof-enabled")
+const spProto = protocol.ConsensusVersion("test-state-proof-enabled")
 
 func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.StateProofInterval = 256
-	config.Consensus[aspProto] = proto
+	config.Consensus[spProto] = proto
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
@@ -198,7 +198,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 			RewardsPool: poolAddr,
 		},
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: aspProto,
+			CurrentProtocol: spProto,
 		},
 	}
 
