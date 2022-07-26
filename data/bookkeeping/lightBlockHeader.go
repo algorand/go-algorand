@@ -29,8 +29,15 @@ import (
 type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Seed                committee.Seed       `codec:"s"`
-	RoundNumber         basics.Round         `codec:"r"`
+	/*
+		The seed is to mitigate against the (remote) possibility that an attacker can put itself in better position to
+		find a collision in the future -- perhaps with quantum -- e.g., by doing some precomputation,
+		knowing or even controlling the data to be hashed, etc. Starting the hash data with a value that is
+		uncontrollable and unpredictable (to today’s attackers) makes the attacker’s task more like breaking 2nd
+		preimage resistance (2PR/TCR), versus the easier goal of merely breaking collision resistance.
+	*/
+	Seed                committee.Seed       `codec:"0"`
+	Round               basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
 }
@@ -40,7 +47,7 @@ func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
 	return LightBlockHeader{
 		Seed:                bh.Seed,
 		GenesisHash:         bh.GenesisHash,
-		RoundNumber:         bh.Round,
+		Round:               bh.Round,
 		Sha256TxnCommitment: bh.Sha256Commitment[:],
 	}
 }
