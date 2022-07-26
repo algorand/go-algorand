@@ -135,7 +135,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, false)
 	return &pool
 }
 
@@ -231,7 +231,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, false)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -430,17 +430,18 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
 		recomputing: false,
 	}
-	return pool.ingest(txgroup, params)
+	_, err := pool.ingest(txgroup, params, false)
+	return err
 }
 
 // add tries to add the transaction group to the pool, bypassing the fee
 // priority checks.
-func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *telemetryspec.AssembleBlockMetrics, stopAtFirstFullBlock bool) (stoppedAtBlock bool, err error) {
 	params := poolIngestParams{
 		recomputing: true,
 		stats:       stats,
 	}
-	return pool.ingest(txgroup, params)
+	return pool.ingest(txgroup, params, stopAtFirstFullBlock)
 }
 
 // ingest checks whether a transaction group could be remembered in the pool,
@@ -448,9 +449,9 @@ func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *teleme
 //
 // ingest assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams) error {
+func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams, stopAtFirstFullBlock bool) (stoppedAtBlock bool, err error) {
 	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
+		return false, fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 	}
 
 	if !params.recomputing {
@@ -462,26 +463,26 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 		for pool.pendingBlockEvaluator.Round() <= latest && time.Now().Before(waitExpires) {
 			condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
 			if pool.pendingBlockEvaluator == nil {
-				return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
+				return false, fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 			}
 		}
 
-		err := pool.checkSufficientFee(txgroup)
+		err = pool.checkSufficientFee(txgroup)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
+	stoppedAtBlock, err = pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats, stopAtFirstFullBlock)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
 	for _, t := range txgroup {
 		pool.rememberedTxids[t.ID()] = t
 	}
-	return nil
+	return stoppedAtBlock, nil
 }
 
 // RememberOne stores the provided transaction.
@@ -540,7 +541,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	}
 
 	// TODO(yossi): this would process _all_ pending transactions. We could, however, finish after we have a block.
-	speculativePool.OnNewBlock(block, delta)
+	speculativePool.onNewBlock(block, delta, true)
 
 	if speculativePool.assemblyResults.err != nil {
 		return
@@ -571,8 +572,12 @@ func (pool *TransactionPool) TryReadSpeculativeBlock(branch bookkeeping.BlockHas
 	}
 }
 
-// OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	pool.onNewBlock(block, delta, false)
+}
+
+// OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
+func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta, stopReprocessingAtFirstAsmBlock bool) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
@@ -620,7 +625,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, false)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -717,20 +722,23 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	return err
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
-	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
+func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics, addUntilFirstBlockFull bool) (shouldContinue bool, err error) {
+	err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledgercore.ErrNoSpace {
 		pool.numPendingWholeBlocks++
+		if addUntilFirstBlockFull {
+			return true, nil
+		}
 		pool.pendingBlockEvaluator.ResetTxnBytes()
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	}
-	return err
+	return false, err
 }
 
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, stopAtFirstFullBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -813,7 +821,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			asmStats.EarlyCommittedCount++
 			continue
 		}
-		err := pool.add(txgroup, &asmStats)
+		stoppedAtBlock, err := pool.add(txgroup, &asmStats, stopAtFirstFullBlock)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
@@ -835,6 +843,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
+		}
+		if stoppedAtBlock {
+			break
 		}
 	}
 
@@ -1040,7 +1051,7 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, false)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
