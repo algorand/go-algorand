@@ -221,6 +221,17 @@ def main():
         headers=header_list_to_dict(args.headers),
         outpath=args.out,
     )
+
+    import signal
+    def do_graceful_stop(signum, frame):
+        if bot.go == False:
+            sys.stderr.write("second signal, quitting\n")
+            sys.exit(1)
+        sys.stderr.write("graceful stop...\n")
+        bot.go = False
+    signal.signal(signal.SIGTERM, do_graceful_stop)
+    signal.signal(signal.SIGINT, do_graceful_stop)
+
     bot.loop()
 
 if __name__ == '__main__':
