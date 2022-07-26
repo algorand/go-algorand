@@ -516,9 +516,9 @@ jobs:
       - checkout
       - prepare_go
       - generic_build
-      # - slack/notify: &slack-fail-event
-      #     event: fail
-      #     template: basic_fail_1
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
 
   test:
     parameters:
