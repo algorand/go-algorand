@@ -173,8 +173,20 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		ws = " "
 	}
 	stackEffects := stackMarkdown(op)
-	fmt.Fprintf(out, "\n## %s%s\n\n- Opcode: 0x%02x%s%s\n%s",
-		op.Name, immediateMarkdown(op), op.Opcode, ws, opextra, stackEffects)
+	encodingString := fmt.Sprintf("\n## %s%s\n\n- Encoding: ", op.Name, immediateMarkdown(op))
+	if logic.IsMultiLeaf(*op) {
+		deprecated := logic.GrabSpec(op.Deprecates)
+		if deprecated.Name != "" {
+			encodingString += fmt.Sprintf("0x%02x%s%s through v%d, %s%s%s in v%d and on",
+				deprecated.Opcode, ws, opextra, deprecated.DeprecatedVersion-1, logic.Serialize(op.MultiCode), ws, opextra, deprecated.DeprecatedVersion)
+		} else {
+			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(op.MultiCode), ws, opextra)
+		}
+	} else {
+		encodingString += fmt.Sprintf("0x%02x%s%s", op.Opcode, ws, opextra)
+	}
+	encodingString += "\n" + stackEffects
+	fmt.Fprint(out, encodingString)
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	// if cost changed with versions print all of them
 	costs := logic.OpAllCosts(op.Name)

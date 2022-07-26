@@ -67,6 +67,7 @@ const appAddressAvailableVersion = 7
 // their version, and fixup TestAssemble() in assembler_test.go.
 const fidoVersion = 7    // base64, json, secp256r1
 const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
+const multiVersion = 7
 
 type linearCost struct {
 	baseCost  int
@@ -117,9 +118,13 @@ type OpDetails struct {
 
 	Modes runMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
 
-	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
-	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
-	Immediates []immediate // details of each immediate arg to opcode
+	FullCost          linearCost  // if non-zero, the cost of the opcode, no immediates matter
+	Size              int         // if non-zero, the known size of opcode. if 0, check() determines.
+	Immediates        []immediate // details of each immediate arg to opcode
+	childOps          []OpSpec
+	MultiCode         []byte
+	Deprecates        specIdentifier
+	DeprecatedVersion uint64
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -166,11 +171,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func opDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, nil, nil, specIdentifier{}, 0}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, nil, nil, specIdentifier{}, 0}
 }
 
 func opBranch() OpDetails {
@@ -180,6 +185,36 @@ func opBranch() OpDetails {
 	d.Size = 3
 	d.Immediates = []immediate{imm("target", immLabel)}
 	return d
+}
+
+func multiOp(dispatch byte, name string, rootVersion uint64, children ...OpSpec) OpSpec {
+	ret := OpSpec{Opcode: dispatch, Name: name, OpDetails: opDefault()}
+	ret.childOps = children
+	ret.Version = rootVersion
+	return ret
+}
+
+func isMultiOp(spec *OpSpec) bool {
+	return spec.childOps != nil
+}
+
+func getLeafSpecs(spec *OpSpec) []OpSpec {
+	if spec.childOps == nil {
+		return []OpSpec{*spec}
+	}
+	specs := make([]OpSpec, 0)
+	for _, child := range spec.childOps {
+		specs = append(specs, getLeafSpecs(&child)...)
+	}
+	return specs
+}
+
+// GetFullCode returns the full opcode of an OpSpec as a byte slice
+func GetFullCode(spec OpSpec) []byte {
+	if spec.MultiCode != nil {
+		return spec.MultiCode
+	}
+	return []byte{spec.Opcode}
 }
 
 func assembler(asm asmFunc) OpDetails {
@@ -358,6 +393,25 @@ func (spec *OpSpec) deadens() bool {
 	default:
 		return false
 	}
+}
+
+type specIdentifier struct {
+	name    string
+	version uint64
+}
+
+// GrabSpec finds the OpSpec that matches the identifier
+func GrabSpec(id specIdentifier) OpSpec {
+	return OpsByName[id.version][id.name]
+}
+
+var deprecated = make(map[specIdentifier]uint64)
+
+func (spec OpSpec) deprecates(name string, version uint64) OpSpec {
+	id := specIdentifier{name, version}
+	deprecated[id] = spec.Version
+	spec.Deprecates = id
+	return spec
 }
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
@@ -570,6 +624,24 @@ var OpSpecs = []OpSpec{
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, opDefault()},
+	multiOp(0xa0, "b", multiVersion, []OpSpec{
+		OpSpec{0xa0, "+", opBytesPlus, proto("bb:b"), multiVersion, costly(10)}.deprecates("b+", 4),
+		OpSpec{0xa1, "-", opBytesMinus, proto("bb:b"), multiVersion, costly(10)}.deprecates("b-", 4),
+		OpSpec{0xa2, "/", opBytesDiv, proto("bb:b"), multiVersion, costly(20)}.deprecates("b/", 4),
+		OpSpec{0xa3, "*", opBytesMul, proto("bb:b"), multiVersion, costly(20)}.deprecates("b*", 4),
+		OpSpec{0xa4, "<", opBytesLt, proto("bb:i"), multiVersion, opDefault()}.deprecates("b<", 4),
+		OpSpec{0xa5, ">", opBytesGt, proto("bb:i"), multiVersion, opDefault()}.deprecates("b>", 4),
+		OpSpec{0xa6, "<=", opBytesLe, proto("bb:i"), multiVersion, opDefault()}.deprecates("b<=", 4),
+		OpSpec{0xa7, ">=", opBytesGe, proto("bb:i"), multiVersion, opDefault()}.deprecates("b>=", 4),
+		OpSpec{0xa8, "==", opBytesEq, proto("bb:i"), multiVersion, opDefault()}.deprecates("b==", 4),
+		OpSpec{0xa9, "!=", opBytesNeq, proto("bb:i"), multiVersion, opDefault()}.deprecates("b!=", 4),
+		OpSpec{0xaa, "%", opBytesModulo, proto("bb:b"), multiVersion, costly(20)}.deprecates("b%", 4),
+		OpSpec{0xab, "|", opBytesBitOr, proto("bb:b"), multiVersion, costly(6)}.deprecates("b|", 4),
+		OpSpec{0xac, "&", opBytesBitAnd, proto("bb:b"), multiVersion, costly(6)}.deprecates("b&", 4),
+		OpSpec{0xad, "^", opBytesBitXor, proto("bb:b"), multiVersion, costly(6)}.deprecates("b^", 4),
+		OpSpec{0xae, "~", opBytesBitNot, proto("b:b"), multiVersion, costly(4)}.deprecates("b~", 4),
+		OpSpec{0xaf, "zero", opBytesZero, proto("i:b"), multiVersion, opDefault()}.deprecates("bzero", 4)}...,
+	),
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(modeApp)},
@@ -594,9 +666,38 @@ var OpSpecs = []OpSpec{
 
 type sortByOpcode []OpSpec
 
-func (a sortByOpcode) Len() int           { return len(a) }
-func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
+func (a sortByOpcode) Len() int      { return len(a) }
+func (a sortByOpcode) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a sortByOpcode) Less(i, j int) bool {
+	first := GetFullCode(a[i])
+	second := GetFullCode(a[j])
+	for k := range first {
+		if len(second) == k {
+			return false
+		}
+		if first[k] != second[k] {
+			return first[k] < second[k]
+		}
+	}
+	return true
+}
+
+// Serialize is used to write multi-byte opcodes as strings
+func Serialize(bytes []byte) string {
+	if len(bytes) == 0 {
+		return ""
+	}
+	ret := ""
+	for _, b := range bytes {
+		ret += fmt.Sprintf("0x%02x ", b)
+	}
+	return strings.TrimSpace(ret)
+}
+
+// IsMultiLeaf identifies if a spec is a multi-op, but it only functions after the spec has been annotated in init()
+func IsMultiLeaf(spec OpSpec) bool {
+	return spec.MultiCode != nil
+}
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
@@ -608,10 +709,11 @@ func OpcodesByVersion(version uint64) []OpSpec {
 			maxOpcode = int(OpSpecs[i].Opcode)
 		}
 	}
-	updated := make([]int, maxOpcode+1)
+	updated := make(map[string]int, maxOpcode+1)
 	for idx := range OpSpecs {
-		op := OpSpecs[idx].Opcode
-		cv := updated[op]
+		name := OpSpecs[idx].Name
+		//op := serialize(GetFullCode(OpSpecs[idx]))
+		cv := updated[name]
 		if cv == 0 {
 			cv = int(OpSpecs[idx].Version)
 		} else {
@@ -619,20 +721,21 @@ func OpcodesByVersion(version uint64) []OpSpec {
 				cv = int(OpSpecs[idx].Version)
 			}
 		}
-		updated[op] = cv
+		updated[name] = cv
 	}
 
-	subv := make(map[byte]OpSpec)
+	subv := make(map[string]OpSpec)
 	for idx := range OpSpecs {
 		if OpSpecs[idx].Version <= version {
-			op := OpSpecs[idx].Opcode
-			subv[op] = OpSpecs[idx]
+			//op := serialize(GetFullCode(OpSpecs[idx]))
+			name := OpSpecs[idx].Name
+			subv[name] = OpSpecs[idx]
 			// if the opcode was updated then assume backward compatibility
 			// and set version to minimum available
-			if updated[op] < int(OpSpecs[idx].Version) {
+			if updated[name] < int(OpSpecs[idx].Version) {
 				copy := OpSpecs[idx]
-				copy.Version = uint64(updated[op])
-				subv[op] = copy
+				copy.Version = uint64(updated[name])
+				subv[name] = copy
 			}
 		}
 	}
@@ -650,6 +753,35 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
+var totalOps int
+
+func annotateMultiOp(spec *OpSpec, code []byte, name string) {
+	nextCode := append(code, spec.Opcode)
+	nextName := name + spec.Name
+	if spec.childOps == nil {
+		totalOps++
+		spec.MultiCode = append(spec.MultiCode, nextCode...)
+		spec.Name = nextName
+		extraBytes := len(spec.MultiCode) - 1
+		if spec.Size == 0 {
+			spec.check = func(cx *EvalContext) error {
+				cx.pc += extraBytes
+				return spec.check(cx)
+			}
+			spec.op = func(cx *EvalContext) error {
+				cx.pc += extraBytes
+				return spec.op(cx)
+			}
+		} else {
+			spec.Size += extraBytes
+		}
+	} else {
+		for i := range spec.childOps {
+			annotateMultiOp(&spec.childOps[i], nextCode, nextName)
+		}
+	}
+}
+
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -657,6 +789,17 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 // To preserve backward compatibility version 0 array is populated with v1 opcodes
 // with the version overwritten to 0.
 func init() {
+	for i, spec := range OpSpecs {
+		dVersion, ok := deprecated[specIdentifier{spec.Name, spec.Version}]
+		if ok {
+			OpSpecs[i].DeprecatedVersion = dVersion
+		}
+		if spec.childOps != nil {
+			annotateMultiOp(&OpSpecs[i], nil, "")
+		} else {
+			totalOps++
+		}
+	}
 	// First, initialize baseline v1 opcodes.
 	// Zero (empty) version is an alias for v1 opcodes and needed for compatibility with v1 code.
 	OpsByName[0] = make(map[string]OpSpec, 256)
@@ -689,8 +832,18 @@ func init() {
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
 				opsByOpcode[v][oi.Opcode] = oi
-				OpsByName[v][oi.Name] = oi
+			}
+			specs := getLeafSpecs(&oi)
+			for _, spec := range specs {
+				if spec.Version == v {
+					OpsByName[v][spec.Name] = spec
+				}
 			}
 		}
 	}
+	expandedSpecs := make([]OpSpec, 0, 256)
+	for _, spec := range OpSpecs {
+		expandedSpecs = append(expandedSpecs, getLeafSpecs(&spec)...)
+	}
+	OpSpecs = expandedSpecs
 }

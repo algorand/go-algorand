@@ -5,13 +5,13 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 ## err
 
-- Opcode: 0x00
+- Encoding: 0x00
 - Stack: ... &rarr; _exits_
 - Fail immediately.
 
 ## sha256
 
-- Opcode: 0x01
+- Encoding: 0x01
 - Stack: ..., A: []byte &rarr; ..., []byte
 - SHA256 hash of value A, yields [32]byte
 - **Cost**:
@@ -20,7 +20,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 ## keccak256
 
-- Opcode: 0x02
+- Encoding: 0x02
 - Stack: ..., A: []byte &rarr; ..., []byte
 - Keccak256 hash of value A, yields [32]byte
 - **Cost**:
@@ -29,7 +29,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 ## sha512_256
 
-- Opcode: 0x03
+- Encoding: 0x03
 - Stack: ..., A: []byte &rarr; ..., []byte
 - SHA512_256 hash of value A, yields [32]byte
 - **Cost**:
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 ## ed25519verify
 
-- Opcode: 0x04
+- Encoding: 0x04
 - Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
@@ -47,7 +47,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 
 ## ecdsa_verify v
 
-- Opcode: 0x05 {uint8 curve index}
+- Encoding: 0x05 {uint8 curve index}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., uint64
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**:  Secp256k1=1700 Secp256r1=2500
@@ -65,7 +65,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 
 ## ecdsa_pk_decompress v
 
-- Opcode: 0x06 {uint8 curve index}
+- Encoding: 0x06 {uint8 curve index}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
 - **Cost**:  Secp256k1=650 Secp256r1=2400
@@ -75,7 +75,7 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 
 ## ecdsa_pk_recover v
 
-- Opcode: 0x07 {uint8 curve index}
+- Encoding: 0x07 {uint8 curve index}
 - Stack: ..., A: []byte, B: uint64, C: []byte, D: []byte &rarr; ..., X: []byte, Y: []byte
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
@@ -85,7 +85,7 @@ S (top) and R elements of a signature, recovery id and data (bottom) are expecte
 
 ## +
 
-- Opcode: 0x08
+- Encoding: 0x08
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A plus B. Fail on overflow.
 
@@ -93,13 +93,13 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## -
 
-- Opcode: 0x09
+- Encoding: 0x09
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A minus B. Fail if B > A.
 
 ## /
 
-- Opcode: 0x0a
+- Encoding: 0x0a
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A divided by B (truncated division). Fail if B == 0.
 
@@ -107,7 +107,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## *
 
-- Opcode: 0x0b
+- Encoding: 0x0b
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A times B. Fail on overflow.
 
@@ -115,73 +115,73 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## <
 
-- Opcode: 0x0c
+- Encoding: 0x0c
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A less than B => {0 or 1}
 
 ## >
 
-- Opcode: 0x0d
+- Encoding: 0x0d
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A greater than B => {0 or 1}
 
 ## <=
 
-- Opcode: 0x0e
+- Encoding: 0x0e
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A less than or equal to B => {0 or 1}
 
 ## >=
 
-- Opcode: 0x0f
+- Encoding: 0x0f
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A greater than or equal to B => {0 or 1}
 
 ## &&
 
-- Opcode: 0x10
+- Encoding: 0x10
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A is not zero and B is not zero => {0 or 1}
 
 ## ||
 
-- Opcode: 0x11
+- Encoding: 0x11
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A is not zero or B is not zero => {0 or 1}
 
 ## ==
 
-- Opcode: 0x12
+- Encoding: 0x12
 - Stack: ..., A, B &rarr; ..., uint64
 - A is equal to B => {0 or 1}
 
 ## !=
 
-- Opcode: 0x13
+- Encoding: 0x13
 - Stack: ..., A, B &rarr; ..., uint64
 - A is not equal to B => {0 or 1}
 
 ## !
 
-- Opcode: 0x14
+- Encoding: 0x14
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - A == 0 yields 1; else 0
 
 ## len
 
-- Opcode: 0x15
+- Encoding: 0x15
 - Stack: ..., A: []byte &rarr; ..., uint64
 - yields length of byte value A
 
 ## itob
 
-- Opcode: 0x16
+- Encoding: 0x16
 - Stack: ..., A: uint64 &rarr; ..., []byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
 
-- Opcode: 0x17
+- Encoding: 0x17
 - Stack: ..., A: []byte &rarr; ..., uint64
 - converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.
 
@@ -189,50 +189,50 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## %
 
-- Opcode: 0x18
+- Encoding: 0x18
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A modulo B. Fail if B == 0.
 
 ## |
 
-- Opcode: 0x19
+- Encoding: 0x19
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A bitwise-or B
 
 ## &
 
-- Opcode: 0x1a
+- Encoding: 0x1a
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A bitwise-and B
 
 ## ^
 
-- Opcode: 0x1b
+- Encoding: 0x1b
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A bitwise-xor B
 
 ## ~
 
-- Opcode: 0x1c
+- Encoding: 0x1c
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - bitwise invert value A
 
 ## mulw
 
-- Opcode: 0x1d
+- Encoding: 0x1d
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low
 
 ## addw
 
-- Opcode: 0x1e
+- Encoding: 0x1e
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.
 - Availability: v2
 
 ## divmodw
 
-- Opcode: 0x1f
+- Encoding: 0x1f
 - Stack: ..., A: uint64, B: uint64, C: uint64, D: uint64 &rarr; ..., W: uint64, X: uint64, Y: uint64, Z: uint64
 - W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)
 - **Cost**: 20
@@ -242,7 +242,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intcblock uint ...
 
-- Opcode: 0x20 {varuint length} [{varuint value}, ...]
+- Encoding: 0x20 {varuint length} [{varuint value}, ...]
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
 
@@ -250,37 +250,37 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intc i
 
-- Opcode: 0x21 {uint8 int constant index}
+- Encoding: 0x21 {uint8 int constant index}
 - Stack: ... &rarr; ..., uint64
 - Ith constant from intcblock
 
 ## intc_0
 
-- Opcode: 0x22
+- Encoding: 0x22
 - Stack: ... &rarr; ..., uint64
 - constant 0 from intcblock
 
 ## intc_1
 
-- Opcode: 0x23
+- Encoding: 0x23
 - Stack: ... &rarr; ..., uint64
 - constant 1 from intcblock
 
 ## intc_2
 
-- Opcode: 0x24
+- Encoding: 0x24
 - Stack: ... &rarr; ..., uint64
 - constant 2 from intcblock
 
 ## intc_3
 
-- Opcode: 0x25
+- Encoding: 0x25
 - Stack: ... &rarr; ..., uint64
 - constant 3 from intcblock
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint length} [({varuint value length} bytes), ...]
+- Encoding: 0x26 {varuint length} [({varuint value length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -288,72 +288,72 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytec i
 
-- Opcode: 0x27 {uint8 byte constant index}
+- Encoding: 0x27 {uint8 byte constant index}
 - Stack: ... &rarr; ..., []byte
 - Ith constant from bytecblock
 
 ## bytec_0
 
-- Opcode: 0x28
+- Encoding: 0x28
 - Stack: ... &rarr; ..., []byte
 - constant 0 from bytecblock
 
 ## bytec_1
 
-- Opcode: 0x29
+- Encoding: 0x29
 - Stack: ... &rarr; ..., []byte
 - constant 1 from bytecblock
 
 ## bytec_2
 
-- Opcode: 0x2a
+- Encoding: 0x2a
 - Stack: ... &rarr; ..., []byte
 - constant 2 from bytecblock
 
 ## bytec_3
 
-- Opcode: 0x2b
+- Encoding: 0x2b
 - Stack: ... &rarr; ..., []byte
 - constant 3 from bytecblock
 
 ## arg n
 
-- Opcode: 0x2c {uint8 arg index N}
+- Encoding: 0x2c {uint8 arg index N}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
 - Mode: Signature
 
 ## arg_0
 
-- Opcode: 0x2d
+- Encoding: 0x2d
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 0
 - Mode: Signature
 
 ## arg_1
 
-- Opcode: 0x2e
+- Encoding: 0x2e
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 1
 - Mode: Signature
 
 ## arg_2
 
-- Opcode: 0x2f
+- Encoding: 0x2f
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 2
 - Mode: Signature
 
 ## arg_3
 
-- Opcode: 0x30
+- Encoding: 0x30
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 3
 - Mode: Signature
 
 ## txn f
 
-- Opcode: 0x31 {uint8 transaction field index}
+- Encoding: 0x31 {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
 - field F of current transaction
 
@@ -428,7 +428,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
 
-- Opcode: 0x32 {uint8 global field index}
+- Encoding: 0x32 {uint8 global field index}
 - Stack: ... &rarr; ..., any
 - global field F
 
@@ -455,7 +455,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## gtxn t f
 
-- Opcode: 0x33 {uint8 transaction group index} {uint8 transaction field index}
+- Encoding: 0x33 {uint8 transaction group index} {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the current group
 
@@ -463,19 +463,19 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## load i
 
-- Opcode: 0x34 {uint8 position in scratch space to load from}
+- Encoding: 0x34 {uint8 position in scratch space to load from}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value. All scratch spaces are 0 at program start.
 
 ## store i
 
-- Opcode: 0x35 {uint8 position in scratch space to store to}
+- Encoding: 0x35 {uint8 position in scratch space to store to}
 - Stack: ..., A &rarr; ...
 - store A to the Ith scratch space
 
 ## txna f i
 
-- Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
+- Encoding: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
 - Availability: v2
@@ -495,14 +495,14 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## gtxna t f i
 
-- Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
+- Encoding: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
 - Availability: v2
 
 ## gtxns f
 
-- Opcode: 0x38 {uint8 transaction field index}
+- Encoding: 0x38 {uint8 transaction field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of the Ath transaction in the current group
 - Availability: v3
@@ -511,14 +511,14 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gtxnsa f i
 
-- Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
+- Encoding: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
 - Availability: v3
 
 ## gload t i
 
-- Opcode: 0x3a {uint8 transaction group index} {uint8 position in scratch space to load from}
+- Encoding: 0x3a {uint8 transaction group index} {uint8 position in scratch space to load from}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value of the Tth transaction in the current group
 - Availability: v4
@@ -528,7 +528,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gloads i
 
-- Opcode: 0x3b {uint8 position in scratch space to load from}
+- Encoding: 0x3b {uint8 position in scratch space to load from}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith scratch space value of the Ath transaction in the current group
 - Availability: v4
@@ -538,7 +538,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gaid t
 
-- Opcode: 0x3c {uint8 transaction group index}
+- Encoding: 0x3c {uint8 transaction group index}
 - Stack: ... &rarr; ..., uint64
 - ID of the asset or application created in the Tth transaction of the current group
 - Availability: v4
@@ -548,7 +548,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gaids
 
-- Opcode: 0x3d
+- Encoding: 0x3d
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - ID of the asset or application created in the Ath transaction of the current group
 - Availability: v4
@@ -558,21 +558,21 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## loads
 
-- Opcode: 0x3e
+- Encoding: 0x3e
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath scratch space value.  All scratch spaces are 0 at program start.
 - Availability: v5
 
 ## stores
 
-- Opcode: 0x3f
+- Encoding: 0x3f
 - Stack: ..., A: uint64, B &rarr; ...
 - store B to the Ath scratch space
 - Availability: v5
 
 ## bnz target
 
-- Opcode: 0x40 {int16 branch offset, big-endian}
+- Encoding: 0x40 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
@@ -582,7 +582,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz target
 
-- Opcode: 0x41 {int16 branch offset, big-endian}
+- Encoding: 0x41 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
 - Availability: v2
@@ -591,7 +591,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {int16 branch offset, big-endian}
+- Encoding: 0x42 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
 - Availability: v2
@@ -600,75 +600,75 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## return
 
-- Opcode: 0x43
+- Encoding: 0x43
 - Stack: ..., A: uint64 &rarr; _exits_
 - use A as success value; end
 - Availability: v2
 
 ## assert
 
-- Opcode: 0x44
+- Encoding: 0x44
 - Stack: ..., A: uint64 &rarr; ...
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
 ## pop
 
-- Opcode: 0x48
+- Encoding: 0x48
 - Stack: ..., A &rarr; ...
 - discard A
 
 ## dup
 
-- Opcode: 0x49
+- Encoding: 0x49
 - Stack: ..., A &rarr; ..., A, A
 - duplicate A
 
 ## dup2
 
-- Opcode: 0x4a
+- Encoding: 0x4a
 - Stack: ..., A, B &rarr; ..., A, B, A, B
 - duplicate A and B
 - Availability: v2
 
 ## dig n
 
-- Opcode: 0x4b {uint8 depth}
+- Encoding: 0x4b {uint8 depth}
 - Stack: ..., A, [N items] &rarr; ..., A, [N items], A
 - Nth value from the top of the stack. dig 0 is equivalent to dup
 - Availability: v3
 
 ## swap
 
-- Opcode: 0x4c
+- Encoding: 0x4c
 - Stack: ..., A, B &rarr; ..., B, A
 - swaps A and B on stack
 - Availability: v3
 
 ## select
 
-- Opcode: 0x4d
+- Encoding: 0x4d
 - Stack: ..., A, B, C: uint64 &rarr; ..., A or B
 - selects one of two values based on top-of-stack: B if C != 0, else A
 - Availability: v3
 
 ## cover n
 
-- Opcode: 0x4e {uint8 depth}
+- Encoding: 0x4e {uint8 depth}
 - Stack: ..., [N items], A &rarr; ..., A, [N items]
 - remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.
 - Availability: v5
 
 ## uncover n
 
-- Opcode: 0x4f {uint8 depth}
+- Encoding: 0x4f {uint8 depth}
 - Stack: ..., A, [N items] &rarr; ..., [N items], A
 - remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.
 - Availability: v5
 
 ## concat
 
-- Opcode: 0x50
+- Encoding: 0x50
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - join A and B
 - Availability: v2
@@ -677,21 +677,21 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## substring s e
 
-- Opcode: 0x51 {uint8 start position} {uint8 end position}
+- Encoding: 0x51 {uint8 start position} {uint8 end position}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails
 - Availability: v2
 
 ## substring3
 
-- Opcode: 0x52
+- Encoding: 0x52
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails
 - Availability: v2
 
 ## getbit
 
-- Opcode: 0x53
+- Encoding: 0x53
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
 - Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
@@ -700,7 +700,7 @@ see explanation of bit ordering in setbit
 
 ## setbit
 
-- Opcode: 0x54
+- Encoding: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
 - Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
@@ -709,70 +709,70 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## getbyte
 
-- Opcode: 0x55
+- Encoding: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## setbyte
 
-- Opcode: 0x56
+- Encoding: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## extract s l
 
-- Opcode: 0x57 {uint8 start position} {uint8 length}
+- Encoding: 0x57 {uint8 start position} {uint8 length}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails
 - Availability: v5
 
 ## extract3
 
-- Opcode: 0x58
+- Encoding: 0x58
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates.
 - Availability: v5
 
 ## extract_uint16
 
-- Opcode: 0x59
+- Encoding: 0x59
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails
 - Availability: v5
 
 ## extract_uint32
 
-- Opcode: 0x5a
+- Encoding: 0x5a
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails
 - Availability: v5
 
 ## extract_uint64
 
-- Opcode: 0x5b
+- Encoding: 0x5b
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
 ## replace2 s
 
-- Opcode: 0x5c {uint8 start position}
+- Encoding: 0x5c {uint8 start position}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate.
 - Availability: v7
 
 ## replace3
 
-- Opcode: 0x5d
+- Encoding: 0x5d
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates.
 - Availability: v7
 
 ## base64_decode e
 
-- Opcode: 0x5e {uint8 encoding index}
+- Encoding: 0x5e {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
 - **Cost**: 1 + 1 per 16 bytes of A
@@ -790,7 +790,7 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 
 ## json_ref r
 
-- Opcode: 0x5f {string return type}
+- Encoding: 0x5f {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -809,7 +809,7 @@ specify the return type with an immediate arg either as JSONUint64 or JSONString
 
 ## balance
 
-- Opcode: 0x60
+- Encoding: 0x60
 - Stack: ..., A &rarr; ..., uint64
 - get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
 - Availability: v2
@@ -819,7 +819,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## app_opted_in
 
-- Opcode: 0x61
+- Encoding: 0x61
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
 - 1 if account A is opted in to application B, else 0
 - Availability: v2
@@ -829,7 +829,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## app_local_get
 
-- Opcode: 0x62
+- Encoding: 0x62
 - Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
@@ -839,7 +839,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 
 ## app_local_get_ex
 
-- Opcode: 0x63
+- Encoding: 0x63
 - Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: uint64
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
@@ -849,7 +849,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## app_global_get
 
-- Opcode: 0x64
+- Encoding: 0x64
 - Stack: ..., A: []byte &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
@@ -859,7 +859,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 
 ## app_global_get_ex
 
-- Opcode: 0x65
+- Encoding: 0x65
 - Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: uint64
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
@@ -869,7 +869,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 
 ## app_local_put
 
-- Opcode: 0x66
+- Encoding: 0x66
 - Stack: ..., A, B: []byte, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
@@ -879,7 +879,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 
 ## app_global_put
 
-- Opcode: 0x67
+- Encoding: 0x67
 - Stack: ..., A: []byte, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
@@ -887,7 +887,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 
 ## app_local_del
 
-- Opcode: 0x68
+- Encoding: 0x68
 - Stack: ..., A, B: []byte &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
@@ -899,7 +899,7 @@ Deleting a key which is already absent has no effect on the application local st
 
 ## app_global_del
 
-- Opcode: 0x69
+- Encoding: 0x69
 - Stack: ..., A: []byte &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
@@ -911,7 +911,7 @@ Deleting a key which is already absent has no effect on the application global s
 
 ## asset_holding_get f
 
-- Opcode: 0x70 {uint8 asset holding field index}
+- Encoding: 0x70 {uint8 asset holding field index}
 - Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
 - Availability: v2
@@ -929,7 +929,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 
 ## asset_params_get f
 
-- Opcode: 0x71 {uint8 asset params field index}
+- Encoding: 0x71 {uint8 asset params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from asset A. Y is 1 if A exists, else 0
 - Availability: v2
@@ -957,7 +957,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 
 ## app_params_get f
 
-- Opcode: 0x72 {uint8 app params field index}
+- Encoding: 0x72 {uint8 app params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from app A. Y is 1 if A exists, else 0
 - Availability: v5
@@ -982,7 +982,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 ## acct_params_get f
 
-- Opcode: 0x73 {uint8 account params field index}
+- Encoding: 0x73 {uint8 account params field index}
 - Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
@@ -999,7 +999,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 ## min_balance
 
-- Opcode: 0x78
+- Encoding: 0x78
 - Stack: ..., A &rarr; ..., uint64
 - get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
 - Availability: v3
@@ -1009,7 +1009,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## pushbytes bytes
 
-- Opcode: 0x80 {varuint length} {bytes}
+- Encoding: 0x80 {varuint length} {bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
 - Availability: v3
@@ -1018,7 +1018,7 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 ## pushint uint
 
-- Opcode: 0x81 {varuint int}
+- Encoding: 0x81 {varuint int}
 - Stack: ... &rarr; ..., uint64
 - immediate UINT
 - Availability: v3
@@ -1027,7 +1027,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## ed25519verify_bare
 
-- Opcode: 0x84
+- Encoding: 0x84
 - Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
@@ -1035,7 +1035,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88 {int16 branch offset, big-endian}
+- Encoding: 0x88 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
@@ -1044,7 +1044,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 ## retsub
 
-- Opcode: 0x89
+- Encoding: 0x89
 - Stack: ... &rarr; ...
 - pop the top instruction from the call stack and branch to it
 - Availability: v4
@@ -1053,21 +1053,21 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 ## shl
 
-- Opcode: 0x90
+- Encoding: 0x90
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A times 2^B, modulo 2^64
 - Availability: v4
 
 ## shr
 
-- Opcode: 0x91
+- Encoding: 0x91
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A divided by 2^B
 - Availability: v4
 
 ## sqrt
 
-- Opcode: 0x92
+- Encoding: 0x92
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - The largest integer I such that I^2 <= A
 - **Cost**: 4
@@ -1075,7 +1075,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 ## bitlen
 
-- Opcode: 0x93
+- Encoding: 0x93
 - Stack: ..., A &rarr; ..., uint64
 - The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4
 - Availability: v4
@@ -1084,14 +1084,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 ## exp
 
-- Opcode: 0x94
+- Encoding: 0x94
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A raised to the Bth power. Fail if A == B == 0 and on overflow
 - Availability: v4
 
 ## expw
 
-- Opcode: 0x95
+- Encoding: 0x95
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
@@ -1099,7 +1099,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 ## bsqrt
 
-- Opcode: 0x96
+- Encoding: 0x96
 - Stack: ..., A: []byte &rarr; ..., []byte
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
@@ -1107,7 +1107,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 ## divw
 
-- Opcode: 0x97
+- Encoding: 0x97
 - Stack: ..., A: uint64, B: uint64, C: uint64 &rarr; ..., uint64
 - A,B / C. Fail if C == 0 or if result overflows.
 - Availability: v6
@@ -1116,7 +1116,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## sha3_256
 
-- Opcode: 0x98
+- Encoding: 0x98
 - Stack: ..., A: []byte &rarr; ..., []byte
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
@@ -1124,7 +1124,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## bn256_add
 
-- Opcode: 0x99
+- Encoding: 0x99
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for (curve points A and B) return the curve point A + B
 - **Cost**: 70
@@ -1134,7 +1134,7 @@ A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y a
 
 ## bn256_scalar_mul
 
-- Opcode: 0x9a
+- Encoding: 0x9a
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for (curve point A, scalar K) return the curve point KA
 - **Cost**: 970
@@ -1144,7 +1144,7 @@ A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K
 
 ## bn256_pairing
 
-- Opcode: 0x9b
+- Encoding: 0x9b
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}
 - **Cost**: 8700
@@ -1154,7 +1154,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b+
 
-- Opcode: 0xa0
+- Encoding: 0xa0 through v6, 0xa0 0xa0 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A plus B. A and B are interpreted as big-endian unsigned integers
 - **Cost**: 10
@@ -1162,7 +1162,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b-
 
-- Opcode: 0xa1
+- Encoding: 0xa1 through v6, 0xa0 0xa1 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.
 - **Cost**: 10
@@ -1170,7 +1170,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b/
 
-- Opcode: 0xa2
+- Encoding: 0xa2 through v6, 0xa0 0xa2 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
@@ -1178,7 +1178,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b*
 
-- Opcode: 0xa3
+- Encoding: 0xa3 through v6, 0xa0 0xa3 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A times B. A and B are interpreted as big-endian unsigned integers.
 - **Cost**: 20
@@ -1186,49 +1186,49 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b<
 
-- Opcode: 0xa4
+- Encoding: 0xa4 through v6, 0xa0 0xa4 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b>
 
-- Opcode: 0xa5
+- Encoding: 0xa5 through v6, 0xa0 0xa5 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b<=
 
-- Opcode: 0xa6
+- Encoding: 0xa6 through v6, 0xa0 0xa6 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b>=
 
-- Opcode: 0xa7
+- Encoding: 0xa7 through v6, 0xa0 0xa7 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b==
 
-- Opcode: 0xa8
+- Encoding: 0xa8 through v6, 0xa0 0xa8 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b!=
 
-- Opcode: 0xa9
+- Encoding: 0xa9 through v6, 0xa0 0xa9 in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b%
 
-- Opcode: 0xaa
+- Encoding: 0xaa through v6, 0xa0 0xaa in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
@@ -1236,7 +1236,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b|
 
-- Opcode: 0xab
+- Encoding: 0xab through v6, 0xa0 0xab in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-or B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
@@ -1244,7 +1244,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b&
 
-- Opcode: 0xac
+- Encoding: 0xac through v6, 0xa0 0xac in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-and B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
@@ -1252,7 +1252,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b^
 
-- Opcode: 0xad
+- Encoding: 0xad through v6, 0xa0 0xad in v7 and on
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-xor B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
@@ -1260,7 +1260,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## b~
 
-- Opcode: 0xae
+- Encoding: 0xae through v6, 0xa0 0xae in v7 and on
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A with all bits inverted
 - **Cost**: 4
@@ -1268,14 +1268,14 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## bzero
 
-- Opcode: 0xaf
+- Encoding: 0xaf through v6, 0xa0 0xaf in v7 and on
 - Stack: ..., A: uint64 &rarr; ..., []byte
 - zero filled byte-array of length A
 - Availability: v4
 
 ## log
 
-- Opcode: 0xb0
+- Encoding: 0xb0
 - Stack: ..., A: []byte &rarr; ...
 - write A to log state of the current application
 - Availability: v5
@@ -1285,7 +1285,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxn_begin
 
-- Opcode: 0xb1
+- Encoding: 0xb1
 - Stack: ... &rarr; ...
 - begin preparation of a new inner transaction in a new transaction group
 - Availability: v5
@@ -1295,7 +1295,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxn_field f
 
-- Opcode: 0xb2 {uint8 transaction field index}
+- Encoding: 0xb2 {uint8 transaction field index}
 - Stack: ..., A &rarr; ...
 - set field F of the current inner transaction to A
 - Availability: v5
@@ -1305,7 +1305,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxn_submit
 
-- Opcode: 0xb3
+- Encoding: 0xb3
 - Stack: ... &rarr; ...
 - execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.
 - Availability: v5
@@ -1315,7 +1315,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxn f
 
-- Opcode: 0xb4 {uint8 transaction field index}
+- Encoding: 0xb4 {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
 - field F of the last inner transaction
 - Availability: v5
@@ -1323,7 +1323,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxna f i
 
-- Opcode: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
+- Encoding: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the last inner transaction
 - Availability: v5
@@ -1331,7 +1331,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxn_next
 
-- Opcode: 0xb6
+- Encoding: 0xb6
 - Stack: ... &rarr; ...
 - begin preparation of a new inner transaction in the same transaction group
 - Availability: v6
@@ -1341,7 +1341,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## gitxn t f
 
-- Opcode: 0xb7 {uint8 transaction group index} {uint8 transaction field index}
+- Encoding: 0xb7 {uint8 transaction group index} {uint8 transaction field index}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
 - Availability: v6
@@ -1349,7 +1349,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## gitxna t f i
 
-- Opcode: 0xb8 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
+- Encoding: 0xb8 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
@@ -1357,28 +1357,28 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## txnas f
 
-- Opcode: 0xc0 {uint8 transaction field index}
+- Encoding: 0xc0 {uint8 transaction field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the current transaction
 - Availability: v5
 
 ## gtxnas t f
 
-- Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
+- Encoding: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the current group
 - Availability: v5
 
 ## gtxnsas f
 
-- Opcode: 0xc2 {uint8 transaction field index}
+- Encoding: 0xc2 {uint8 transaction field index}
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth value of the array field F from the Ath transaction in the current group
 - Availability: v5
 
 ## args
 
-- Opcode: 0xc3
+- Encoding: 0xc3
 - Stack: ..., A: uint64 &rarr; ..., []byte
 - Ath LogicSig argument
 - Availability: v5
@@ -1386,7 +1386,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## gloadss
 
-- Opcode: 0xc4
+- Encoding: 0xc4
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth scratch space value of the Ath transaction in the current group
 - Availability: v6
@@ -1394,7 +1394,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## itxnas f
 
-- Opcode: 0xc5 {uint8 transaction field index}
+- Encoding: 0xc5 {uint8 transaction field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the last inner transaction
 - Availability: v6
@@ -1402,7 +1402,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 ## gitxnas t f
 
-- Opcode: 0xc6 {uint8 transaction group index} {uint8 transaction field index}
+- Encoding: 0xc6 {uint8 transaction group index} {uint8 transaction field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6

@@ -27,3 +27,43 @@ const pairingNonsense = `
 `
 
 const pairingCompiled = "80030123454999499a499b"
+const bmathCompiled = "800301234549a0a049a0a149a0a249a0a349a0a4a0af49a0a5a0af49a0a6a0af49a0a7a0af49a0a8a0af49a0a9a0af49a0aa49a0ab49a0ac49a0ada0ae"
+
+const bmathNonsense = `
+ pushbytes 0x012345
+ dup
+ b+
+ dup
+ b-
+ dup
+ b/
+ dup
+ b*
+ dup
+ b<
+ bzero
+ dup
+ b>
+ bzero
+ dup
+ b<=
+ bzero
+ dup
+ b>=
+ bzero
+ dup
+ b==
+ bzero
+ dup
+ b!=
+ bzero
+ dup
+ b%
+ dup
+ b|
+ dup
+ b&
+ dup
+ b^
+ b~
+`

@@ -902,6 +902,16 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func writeOp(ops *OpStream, spec *OpSpec) {
+	if spec.MultiCode != nil {
+		for _, b := range spec.MultiCode {
+			ops.pending.WriteByte(b)
+		}
+	} else {
+		ops.pending.WriteByte(spec.Opcode)
+	}
+}
+
 type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
@@ -913,7 +923,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 		return ops.errorf("%s expects %d immediate arguments", spec.Name, expected)
 	}
-	ops.pending.WriteByte(spec.Opcode)
+	writeOp(ops, spec)
 	for i, imm := range spec.OpDetails.Immediates {
 		var correctImmediates []string
 		var numImmediatesWithField []int
@@ -2435,6 +2445,26 @@ type disInfo struct {
 	hasStatefulOps bool
 }
 
+// Used in disassembly to parse multiOps
+// Pc returned is one less than actual b/c disassemble adds 1
+func getLeaf(program []byte, pc int, version uint64, root *OpSpec) (*OpSpec, int) {
+	if !isMultiOp(root) {
+		return root, pc
+	}
+	if pc >= len(program)-1 {
+		return nil, pc
+	}
+	for _, child := range root.childOps {
+		if child.Version > version {
+			continue
+		}
+		if child.Opcode == program[pc+1] {
+			return getLeaf(program, pc+1, version, &child)
+		}
+	}
+	return nil, pc
+}
+
 // disassembleInstrumented is like Disassemble, but additionally
 // returns where each program counter value maps in the
 // disassembly. If the labels names are known, they may be passed in.
@@ -2443,6 +2473,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
 	version, vlen := binary.Uvarint(program)
+	var op *OpSpec
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
 		text = out.String()
@@ -2460,12 +2491,15 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
-		op := opsByOpcode[version][program[dis.pc]]
+		savedPc := dis.pc
+		op, dis.pc = getLeaf(program, dis.pc, version, &opsByOpcode[version][program[dis.pc]])
 		if op.Modes == modeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
+			dis.pc = savedPc
 			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+			//TODO: Fix this error
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
 			out.WriteString(msg)
 			out.WriteRune('\n')
@@ -2479,7 +2513,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 
 		// Actually do the disassembly
 		var line string
-		line, err = disassemble(&dis, &op)
+		line, err = disassemble(&dis, op)
 		if err != nil {
 			return
 		}

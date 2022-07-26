@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
@@ -102,7 +103,7 @@ func testOpcodesByVersion(t *testing.T) {
 				cur := opSpecs[v-1][i]
 				next := opSpecs[v-1][i+1]
 				// check duplicates
-				if cur.Opcode == next.Opcode {
+				if cur.Opcode == next.Opcode && bytes.Equal(cur.MultiCode, next.MultiCode) {
 					isOk = false
 					break
 				}

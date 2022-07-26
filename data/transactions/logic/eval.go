@@ -893,11 +893,14 @@ func (cx *EvalContext) remainingInners() int {
 
 func (cx *EvalContext) step() error {
 	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
+	spec, _ := getLeaf(cx.program, cx.pc, cx.version, &opsByOpcode[cx.version][opcode])
 
 	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+	}
+	if cx.version >= spec.DeprecatedVersion && spec.DeprecatedVersion > 0 {
+		return fmt.Errorf("deprecated opcode 0x%02x", opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1044,9 +1047,12 @@ var blankStack = make([]stackValue, 5)
 func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
+	spec, _ := getLeaf(cx.program, cx.pc, cx.version, &opsByOpcode[cx.version][opcode])
 	if spec.op == nil {
 		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+	}
+	if cx.version >= spec.DeprecatedVersion && spec.DeprecatedVersion > 0 {
+		return 0, fmt.Errorf("deprecated opcode 0x%02x", opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
