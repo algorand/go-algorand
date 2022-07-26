@@ -837,7 +837,7 @@ func (ao *onlineAccounts) OnlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			continue
 		}
 		if dbRound < currentDbRound && dbRound != basics.Round(0) {
-			ao.log.Errorf("onlineAccounts.onlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			ao.log.Errorf("onlineAccounts.OnlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 			return nil, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 
