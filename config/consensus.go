@@ -1142,6 +1142,41 @@ func initConsensusProtocols() {
 	// Remove limits on maximum number of apps a single account can opt into
 	v32.MaxAppsOptedIn = 0
 
+	// Make v32 like vFuture without SP
+	/////////////////////////////////
+
+	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
+	v32.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	v32.CatchpointLookback = 320
+
+	// Require MaxTxnLife + X blocks and headers preserved by a node
+	v32.DeeperBlockHeaderHistory = 1
+
+	v32.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
+	v32.MinInnerApplVersion = 4
+
+	v32.UnifyInnerTxIDs = true
+
+	v32.EnableSHA256TxnCommitmentHeader = true
+	v32.EnableOnlineAccountCatchpoints = true
+
+	v32.MaxTxnBytesPerBlock = 6*1024*1024
+	v32.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+
+	v32.UnfundedSenders = true
+
+
+	////////////////////////////////	
+
+
+
+
+
+
+
+
 	Consensus[protocol.ConsensusV32] = v32
 
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
