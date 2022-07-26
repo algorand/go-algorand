@@ -813,13 +813,13 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 
 	actualLedger := v2.Node.LedgerForAPI()
 
-	// fetch previous block header just once to prevent racing with network
+	// Fetch previous block header just once to prevent racing with network
 	hdr, err := actualLedger.BlockHdr(actualLedger.Latest())
 	if err != nil {
 		return internalError(ctx, err, "current block error", v2.Log)
 	}
 
-	// simulate transaction
+	// Simulate transaction
 	simulator := MakeSimulatorFromAPILedger(actualLedger, hdr)
 	result, err := simulator.SimulateSignedTxGroup(txgroup)
 	if err != nil {
@@ -836,7 +836,14 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	}
 
 	res := generated.PostSimulationResponse(result)
-	return ctx.JSON(http.StatusOK, res)
+
+	// Return msgpack response
+	msgpack, err := encode(protocol.CodecHandle, &res)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
