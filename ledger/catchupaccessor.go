@@ -304,7 +304,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
 	var normalizedAccountBalances []normalizedAccountBalance
-	var isNotFinalEntry []bool
+	var expectingMoreEntries []bool
 
 	switch progress.Version {
 	default:
@@ -323,7 +323,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
-		isNotFinalEntry = make([]bool, len(balances.Balances))
+		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
@@ -337,9 +337,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
-		isNotFinalEntry = make([]bool, len(balances.Balances))
+		expectingMoreEntries = make([]bool, len(balances.Balances))
 		for i, balance := range balances.Balances {
-			isNotFinalEntry[i] = balance.IsNotFinalEntry
+			expectingMoreEntries[i] = balance.ExpectingMoreEntries
 		}
 	}
 
@@ -371,7 +371,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 		}
 		// check that counted resources adds up for this account
-		if !isNotFinalEntry[i] {
+		if !expectingMoreEntries[i] {
 			if c.totalAppParams != balance.accountData.TotalAppParams {
 				return fmt.Errorf(
 					"processStagingBalances received %d appParams for account %v, expected %d",

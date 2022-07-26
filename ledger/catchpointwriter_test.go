@@ -200,7 +200,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy := t.TempDir()
+	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 	}()
@@ -216,7 +216,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.data")
+	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -410,6 +410,92 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 }
 
+func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory := t.TempDir()
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll(temporaryDirectory)
+	}()
+
+	maxResourcesPerChunk := 5
+
+	accts := ledgertesting.RandomAccounts(1, false)
+	// force acct to have overflowing number of resources
+	for addr, acct := range accts {
+		if acct.AssetParams == nil {
+			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
+			accts[addr] = acct
+		}
+		for i := uint64(0); i < 20; i++ {
+			ap := ledgertesting.RandomAssetParams()
+			acct.AssetParams[basics.AssetIndex(i+100)] = ap
+		}
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
+	readDb := ml.trackerDB().Rdb
+
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		expectedTotalAccounts := uint64(1)
+		totalAccountsWritten := uint64(0)
+		totalResources := 0
+		totalChunks := 0
+		var expectedTotalResources int
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, uint64(maxResourcesPerChunk))
+		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		if err != nil {
+			return err
+		}
+		// repeat this until read all accts
+		for totalAccountsWritten < expectedTotalAccounts {
+			cw.balancesChunk.Balances = nil
+			err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			if err != nil {
+				return err
+			}
+			totalAccountsWritten += cw.balancesChunk.numAccounts
+			numResources := 0
+			for _, balance := range cw.balancesChunk.Balances {
+				numResources += len(balance.Resources)
+			}
+			if numResources > maxResourcesPerChunk {
+				return fmt.Errorf("too many resources in this chunk: found %d resources, maximum %d resources", numResources, maxResourcesPerChunk)
+			}
+			totalResources += numResources
+			totalChunks++
+		}
+
+		if totalChunks <= 1 {
+			return fmt.Errorf("expected more than one chunk due to overflow")
+		}
+
+		if expectedTotalResources != totalResources {
+			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
+		}
+
+		return
+	})
+
+	require.NoError(t, err)
+}
+
 func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -418,7 +504,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy := t.TempDir()
+	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectory)
@@ -501,7 +587,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy := t.TempDir()
+	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectory)

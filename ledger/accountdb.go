@@ -965,23 +965,20 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccou
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) (err error) {
-	var selectAcctStmt *sql.Stmt
-	selectAcctStmt, err = tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) error {
+	selectAcctStmt, err := tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
-		return
+		return err
 	}
 
-	var insertAcctStmt *sql.Stmt
-	insertAcctStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
-		return
+		return err
 	}
 
-	var insertRscStmt *sql.Stmt
-	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
+	insertRscStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
-		return
+		return err
 	}
 
 	var result sql.Result
@@ -990,25 +987,24 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		if prevAccount == balance.address {
 			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
 			if err != nil {
-				return
+				return err
 			}
 		} else {
 			result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 			if err != nil {
-				return
+				return err
 			}
 			var aff int64
 			aff, err = result.RowsAffected()
 			if err != nil {
-				return
+				return err
 			}
 			if aff != 1 {
-				err = fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-				return
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 			}
 			rowID, err = result.LastInsertId()
 			if err != nil {
-				return
+				return err
 			}
 		}
 		// write resources
@@ -1016,20 +1012,19 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			var result sql.Result
 			result, err = insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
 			if err != nil {
-				return
+				return err
 			}
 			var aff int64
 			aff, err = result.RowsAffected()
 			if err != nil {
-				return
+				return err
 			}
 			if aff != 1 {
-				err = fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-				return
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 			}
 		}
 	}
-	return
+	return nil
 }
 
 // writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
@@ -4036,7 +4031,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			baseAcct.TotalAssetParams == iterator.totalAssetParams &&
 			baseAcct.TotalAssets == iterator.totalAssets {
 
-			encodedRecord.IsNotFinalEntry = false
+			encodedRecord.ExpectingMoreEntries = false
 			bals = append(bals, encodedRecord)
 			numAccountsProcessed++
 
@@ -4050,7 +4045,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 		// max resources per chunk reached, stop iterating.
 		if totalResources == maxResources {
-			encodedRecord.IsNotFinalEntry = true
+			encodedRecord.ExpectingMoreEntries = true
 			bals = append(bals, encodedRecord)
 			encodedRecord.Resources = nil
 			return true, nil

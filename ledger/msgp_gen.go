@@ -2312,7 +2312,7 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
-	if (*z).IsNotFinalEntry == false {
+	if (*z).ExpectingMoreEntries == false {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
@@ -2350,9 +2350,9 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
-			// string "ile"
-			o = append(o, 0xa3, 0x69, 0x6c, 0x65)
-			o = msgp.AppendBool(o, (*z).IsNotFinalEntry)
+			// string "e"
+			o = append(o, 0xa1, 0x65)
+			o = msgp.AppendBool(o, (*z).ExpectingMoreEntries)
 		}
 	}
 	return
@@ -2430,9 +2430,9 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).IsNotFinalEntry, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).ExpectingMoreEntries, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "IsNotFinalEntry")
+				err = msgp.WrapError(err, "struct-from-array", "ExpectingMoreEntries")
 				return
 			}
 		}
@@ -2505,10 +2505,10 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					}
 					(*z).Resources[zb0001] = zb0002
 				}
-			case "ile":
-				(*z).IsNotFinalEntry, bts, err = msgp.ReadBoolBytes(bts)
+			case "e":
+				(*z).ExpectingMoreEntries, bts, err = msgp.ReadBoolBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "IsNotFinalEntry")
+					err = msgp.WrapError(err, "ExpectingMoreEntries")
 					return
 				}
 			default:
@@ -2539,13 +2539,13 @@ func (z *encodedBalanceRecordV6) Msgsize() (s int) {
 			s += 0 + msgp.Uint64Size + zb0002.Msgsize()
 		}
 	}
-	s += 4 + msgp.BoolSize
+	s += 2 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBalanceRecordV6) MsgIsZero() bool {
-	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).IsNotFinalEntry == false)
+	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).ExpectingMoreEntries == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
