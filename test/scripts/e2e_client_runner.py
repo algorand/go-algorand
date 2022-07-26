@@ -156,7 +156,7 @@ def _script_thread_inner(runset, scriptname, timeout):
     with runset.lock:
         with open(cmdlogpath, 'r') as fin:
             for line in fin:
-                event_log("output", scriptname, output=line)
+                runset.event_log("output", scriptname, output=line)
 
     if retcode != 0:
         with runset.lock:
@@ -203,6 +203,7 @@ class RunSet:
         self.maxpubaddr = None
         self.errors = []
         self.statuses = []
+        self.jsonfile = None
         return
 
     def connect(self):
@@ -245,7 +246,7 @@ class RunSet:
             return self.pubw, self.maxpubaddr
 
     def start(self, scriptname, timeout):
-        event_log("run", scriptname)
+        self.event_log("run", scriptname)
         t = threading.Thread(target=script_thread, args=(self, scriptname, timeout))
         t.start()
         with self.lock:
@@ -256,7 +257,7 @@ class RunSet:
             self.procs[scriptname] = p
 
     def done(self, scriptname, ok, seconds):
-        event_log("pass" if ok else "fail", scriptname, seconds)
+        self.event_log("pass" if ok else "fail", scriptname, seconds)
         with self.lock:
             self.statuses.append( {'script':scriptname, 'ok':ok, 'seconds':seconds} )
             if not ok:
@@ -292,13 +293,12 @@ class RunSet:
             with self.lock:
                 self._terminate()
 
-
-def event_log(action, scriptname, elapsed=0.0, **kwargs):
-    if jsonfile:
-        prefix, base = os.path.split(scriptname)
-        prefix, package = os.path.split(prefix)
-        j = json.dumps(test_event(action, package, base, elapsed, **kwargs))
-        jsonfile.write(j+"\n")
+    def event_log(self, action, scriptname, elapsed=0.0, **kwargs):
+        if self.jsonfile:
+            prefix, base = os.path.split(scriptname)
+            prefix, package = os.path.split(prefix)
+            j = json.dumps(test_event(action, package, base, elapsed, **kwargs))
+            self.jsonfile.write(j+"\n")
 
 
 def test_event(action, package, test, elapsed=0.0, output="", time=None):
@@ -403,8 +403,6 @@ def xrun(cmd, *args, **kwargs):
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
-jsonfile = None
-
 def main():
     start = time.time()
     ap = argparse.ArgumentParser()
@@ -461,6 +459,8 @@ def main():
     xrun(['goal', '-v'], env=env, timeout=5)
     xrun(['goal', 'node', 'status'], env=env, timeout=5)
 
+    rs = RunSet(env)
+
     trdir = os.environ.get("TEST_RESULTS")
     if trdir:
         prefix, base = os.path.split(args.scripts[0])
@@ -468,13 +468,11 @@ def main():
         trdir = os.path.join(trdir, package)
         os.makedirs(trdir, exist_ok=True)
 
-        global jsonfile
         jsonpath = os.path.join(trdir, "results.json")
-        jsonfile = open(jsonpath, "w")
+        rs.jsonfile = open(jsonpath, "w")
         junitpath = os.path.join(trdir, "testresults.xml")
-        atexit.register(finish_test_results, jsonpath, junitpath)
+        atexit.register(finish_test_results, rs.jsonfile, jsonpath, junitpath)
 
-    rs = RunSet(env)
     for scriptname in args.scripts:
         rs.start(os.path.abspath(scriptname), args.timeout-10)
     rs.wait(args.timeout)
@@ -497,11 +495,10 @@ def main():
     return retcode
 
 
-def finish_test_results(jsonpath, junitpath):
+def finish_test_results(jsonfile, jsonpath, junitpath):
     # This only runs in CI, since TEST_RESULTS env var controls the
     # block that opens the jsonfile, and registers this atexit. So we
     # assume jsonfile is open, and gotestsum available.
-    global jsonfile
     jsonfile.close()
     xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
 
