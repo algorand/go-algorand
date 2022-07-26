@@ -46,6 +46,8 @@ type Builder struct {
 	lnProvenWeight uint64
 	provenWeight   uint64
 	strengthTarget uint64
+	stateProof     *StateProof
+	skipBuild      bool
 }
 
 // MakeBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
@@ -125,6 +127,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 	b.sigs[pos].Weight = p.Weight
 	b.sigs[pos].Sig = sig
 	b.signedWeight += p.Weight
+	b.skipBuild = false // can rebuild a more optimized state proof
 	return nil
 }
 
@@ -170,6 +173,9 @@ again:
 // Build returns a state proof, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*StateProof, error) {
+	if b.skipBuild {
+		return b.stateProof, nil
+	}
 	if !b.Ready() {
 		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
@@ -252,5 +258,7 @@ func (b *Builder) Build() (*StateProof, error) {
 	s.PartProofs = *partProofs
 	s.PositionsToReveal = revealsSequence
 
+	b.stateProof = s // cache the built state proof
+	b.skipBuild = true
 	return s, nil
 }
