@@ -85,8 +85,16 @@ type validatedBlockAsLFE struct {
 // makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a
 // ValidatedBlock.
 func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
-	if vb.Block().Round().SubSaturate(1) != l.Latest() {
-		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger round %d mismatches next block round %d", l.Latest(), vb.Block().Round())
+	latestRound := l.Latest()
+	if vb.Block().Round().SubSaturate(1) != latestRound {
+		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, vb.Block().Round())
+	}
+	hdr, err := l.BlockHdr(latestRound)
+	if err != nil {
+		return nil, err
+	}
+	if vb.Block().Branch != hdr.Hash() {
+		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), vb.Block().Branch)
 	}
 	return &validatedBlockAsLFE{
 		l:  l,
@@ -172,12 +180,14 @@ func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Ad
 			return ledgercore.AppResource{AppParams: res.AppParams, AppLocalState: res.AppLocalState}, nil
 		}
 	}
+
+	// app didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
+	rnd = rnd.SubSaturate(1)
 	return v.l.LookupApplication(rnd, addr, aidx)
 }
 
 // LookupAsset loads an asset resource that matches the request parameters from the ledger.
 func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-
 	if rnd == v.vb.Block().Round() {
 		// Intentionally apply (pending) rewards up to rnd.
 		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
@@ -185,6 +195,9 @@ func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address,
 			return ledgercore.AssetResource{AssetParams: res.AssetParams, AssetHolding: res.AssetHolding}, nil
 		}
 	}
+
+	// asset didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
+	rnd = rnd.SubSaturate(1)
 	return v.l.LookupAsset(rnd, addr, aidx)
 }
 
@@ -197,6 +210,8 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Addr
 		}
 	}
 
+	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
+	r = r.SubSaturate(1)
 	return v.l.LookupWithoutRewards(r, a)
 }
 

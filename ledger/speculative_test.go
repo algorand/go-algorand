@@ -23,10 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -52,31 +53,17 @@ func TestSpeculative(t *testing.T) {
 	blk1.BlockHeader.GenesisHash = genesisInitState.GenesisHash
 	blk1.BlockHeader.Round = l.Latest() + 1
 
-	sl, err := MakeSpeculativeLedger(l)
+	//sl, err := MakeSpeculativeLedger(l)
+	//require.NoError(t, err)
+
+	state, err := internal.Eval(context.Background(), l, blk1, false, l.VerifiedTransactionCache(), nil)
+
 	require.NoError(t, err)
 
-	state, err := sl.eval(context.Background(), bookkeeping.BlockHash{}, blk1, false, nil)
+	vblk1 := ledgercore.MakeValidatedBlock(blk1, state)
+
+	blk1aslfe, err := MakeValidatedBlockAsLFE(&vblk1, l)
 	require.NoError(t, err)
-
-	vblk1 := ValidatedBlock{
-		blk:   blk1,
-		state: state,
-	}
-
-	err = sl.AddSpeculativeBlock(vblk1)
-	require.NoError(t, err)
-
-	_, err = sl.ConsensusVersion(blk1.BlockHeader.Round, bookkeeping.BlockHash{})
-	require.Error(t, err)
-
-	var randomLeaf bookkeeping.BlockHash
-	crypto.RandBytes(randomLeaf[:])
-	_, err = sl.ConsensusVersion(blk1.BlockHeader.Round, randomLeaf)
-	require.Error(t, err)
-
-	cv1, err := sl.ConsensusVersion(blk1.BlockHeader.Round, blk1.Hash())
-	require.NoError(t, err)
-	require.Equal(t, cv1, blk1.CurrentProtocol)
 
 	blk2 := blk1
 	blk2.BlockHeader.Round++
@@ -110,29 +97,22 @@ func TestSpeculative(t *testing.T) {
 		HasGenesisID: true,
 	})
 
-	state, err = sl.eval(context.Background(), bookkeeping.BlockHash{}, blk2, false, nil)
-	require.Error(t, err)
-
-	state, err = sl.eval(context.Background(), blk1.Hash(), blk2, false, nil)
+	state, err = internal.Eval(context.Background(), blk1aslfe, blk2, false, l.VerifiedTransactionCache(), nil)
 	require.NoError(t, err)
 
-	vblk2 := ValidatedBlock{
-		blk:   blk2,
-		state: state,
-	}
-
-	err = sl.AddSpeculativeBlock(vblk2)
+	vblk2 := ledgercore.MakeValidatedBlock(blk2, state)
+	blk2aslfe, err := MakeValidatedBlockAsLFE(&vblk2, blk1aslfe)
 	require.NoError(t, err)
 
-	ad11, err := sl.Lookup(blk1.Round(), blk1.Hash(), addr1)
+	ad11, rnd, err := blk2aslfe.LookupWithoutRewards(blk1.Round(), addr1)
 	require.NoError(t, err)
+	// account was never changed
+	require.Equal(t, rnd, basics.Round(0))
 
-	ad22, err := sl.Lookup(blk2.Round(), blk2.Hash(), addr1)
+	ad22, rnd, err := blk2aslfe.LookupWithoutRewards(blk2.Round(), addr1)
 	require.NoError(t, err)
+	// account changed at blk2
+	require.Equal(t, rnd, blk2.Round())
 
-	ad12, err := sl.Lookup(blk1.Round(), blk2.Hash(), addr1)
-	require.NoError(t, err)
-
-	require.Equal(t, ad12.MicroAlgos.Raw, ad11.MicroAlgos.Raw)
 	require.Equal(t, ad22.MicroAlgos.Raw, ad11.MicroAlgos.Raw-1000000)
 }

@@ -526,6 +526,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	vb := ledgercore.MakeValidatedBlock(block, delta)
 	speculativePool := pool.copyTransactionPoolOverSpecLedger(&vb, cancel)
 
+	// TODO(yossi): this would process _all_ pending transactions. We could, however, finish after we have a block.
 	speculativePool.OnNewBlock(block, delta)
 
 	if speculativePool.assemblyResults.err != nil {
