@@ -45,8 +45,8 @@ func (sp StateProofTxnFields) Empty() bool {
 		sp.Message.MsgIsZero()
 }
 
-// String returns a string representation of the StateProofTxnFields.
-func (sp StateProofTxnFields) String() string {
+// PrintFormatted returns a formatted string representation of the StateProofTxnFields.
+func (sp StateProofTxnFields) PrintFormatted() string {
 	return fmt.Sprintf(
 		"StateProofTxnFields {\n"+
 			"  StateProofIntervalLatestRound: %d, StateProofType: %d,\n"+
