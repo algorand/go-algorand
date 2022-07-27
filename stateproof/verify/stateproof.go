@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package verify
 
 import (
 	"errors"
@@ -177,7 +177,7 @@ func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, state
 		return err
 	}
 
-	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.IntoStateProofMessageHash(), stateProof)
+	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

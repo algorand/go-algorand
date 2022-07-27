@@ -211,11 +211,11 @@ func TestStateProofMessage(t *testing.T) {
 			a.NoError(err)
 
 			a.Equal(tx.Txn.Type, protocol.StateProofTx)
-			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+			if tx.Txn.StateProofIntervalLastRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			a.Equal(tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			a.Equal(tx.Txn.StateProofIntervalLastRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 			a.Equal(tx.Txn.Message.LastAttestedRound, (iter+2)*proto.StateProofInterval)
 			a.Equal(tx.Txn.Message.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
 
@@ -224,7 +224,7 @@ func TestStateProofMessage(t *testing.T) {
 			if !lastMessage.MsgIsZero() {
 				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}
@@ -236,7 +236,7 @@ func TestStateProofMessage(t *testing.T) {
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
-	blkHdrArr := make(blockHeadersArray, message.LastAttestedRound-message.FirstAttestedRound+1)
+	blkHdrArr := make(lightBlockHeaders, message.LastAttestedRound-message.FirstAttestedRound+1)
 	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
 		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
 		blkHdrArr[i] = hdr.ToLightBlockHeader()

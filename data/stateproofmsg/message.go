@@ -41,8 +41,8 @@ func (m Message) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.StateProofMessage, protocol.Encode(&m)
 }
 
-// IntoStateProofMessageHash returns a hashed representation fitting the state proof messages.
-func (m Message) IntoStateProofMessageHash() sp.MessageHash {
+// Hash returns a hashed representation fitting the state proof messages.
+func (m *Message) Hash() sp.MessageHash {
 	digest := crypto.GenericHashObj(crypto.HashFactory{HashType: sp.MessageHashType}.NewHash(), m)
 	result := sp.MessageHash{}
 	copy(result[:], digest)

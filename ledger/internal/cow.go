@@ -21,10 +21,8 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -55,7 +53,7 @@ type roundCowParent interface {
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	StateProofNext() basics.Round
+	GetStateProofNextRound() basics.Round
 	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
@@ -219,15 +217,11 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + cb.txnCount
 }
 
-func (cb *roundCowState) StateProofNext() basics.Round {
+func (cb *roundCowState) GetStateProofNextRound() basics.Round {
 	if cb.mods.StateProofNext != 0 {
 		return cb.mods.StateProofNext
 	}
-	return cb.lookupParent.StateProofNext()
-}
-
-func (cb *roundCowState) ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
-	return ValidateStateProof(latestRoundInIntervalHdr, stateProof, votersHdr, nextStateProofRnd, atRound, msg)
+	return cb.lookupParent.GetStateProofNextRound()
 }
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -250,7 +244,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	}
 }
 
-func (cb *roundCowState) SetStateProofNext(rnd basics.Round) {
+func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
 	cb.mods.StateProofNext = rnd
 }
 

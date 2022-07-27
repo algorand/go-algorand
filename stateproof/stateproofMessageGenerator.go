@@ -35,14 +35,14 @@ var errOutOfBound = errors.New("request pos is out of array bounds")
 var errProvenWeightOverflow = errors.New("overflow computing provenWeight")
 
 // The Array implementation for block headers, required to build the merkle tree from them.
-//msgp:ignore blockHeadersArray
-type blockHeadersArray []bookkeeping.LightBlockHeader
+//msgp:ignore lightBlockHeaders
+type lightBlockHeaders []bookkeeping.LightBlockHeader
 
-func (b blockHeadersArray) Length() uint64 {
+func (b lightBlockHeaders) Length() uint64 {
 	return uint64(len(b))
 }
 
-func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
+func (b lightBlockHeaders) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= b.Length() {
 		return nil, fmt.Errorf("%w: pos - %d, array length - %d", errOutOfBound, pos, b.Length())
 	}
@@ -95,14 +95,15 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams,
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	blkHdrArr, err := FetchLightHeaders(l, stateProofInterval, latestRoundHeader.Round)
+	var lightHeaders lightBlockHeaders
+	lightHeaders, err := FetchLightHeaders(l, stateProofInterval, latestRoundHeader.Round)
 	if err != nil {
 		return crypto.GenericDigest{}, err
 	}
 
 	// Build merkle tree from encoded headers
 	tree, err := merklearray.BuildVectorCommitmentTree(
-		blockHeadersArray(blkHdrArr),
+		lightHeaders,
 		crypto.HashFactory{HashType: crypto.Sha256},
 	)
 	if err != nil {
@@ -113,7 +114,7 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams,
 
 // FetchLightHeaders returns the headers of the blocks in the interval
 func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.LightBlockHeader, error) {
-	blkHdrArr := make(blockHeadersArray, stateProofInterval)
+	blkHdrArr := make(lightBlockHeaders, stateProofInterval)
 	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 
 	for i := uint64(0); i < stateProofInterval; i++ {
@@ -128,7 +129,7 @@ func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRo
 }
 
 // GenerateProofOfLightBlockHeaders sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
-func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
+func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr lightBlockHeaders, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
 	if blkHdrArr.Length() != stateProofInterval {
 		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), stateProofInterval)
 	}

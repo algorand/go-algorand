@@ -1309,7 +1309,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	au, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1326,7 +1326,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-3] = accountToBeUpdated
 
-	top, err = oa.onlineTop(1, 1, 5)
+	top, err = oa.TopOnlineAccounts(1, 1, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1346,7 +1346,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-2] = accountToBeUpdated
 
-	top, err = oa.onlineTop(2, 2, 5)
+	top, err = oa.TopOnlineAccounts(2, 2, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1362,7 +1362,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.VoteLastValid = basics.Round(1000)
 	allAccts[numAccts-1] = accountToBeUpdated
 
-	top, err = oa.onlineTop(3, 3, 5)
+	top, err = oa.TopOnlineAccounts(3, 3, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1400,7 +1400,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	_, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
-	top, err := oa.onlineTop(0, 0, 2048)
+	top, err := oa.TopOnlineAccounts(0, 0, 2048)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 }
@@ -1445,7 +1445,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1483,7 +1483,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 			time.Sleep(2 * time.Second)
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		top, err = oa.onlineTop(2, 2, 5)
+		top, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.NoError(err)
 
 		accountToBeUpdated := allAccts[numAccts-1]
@@ -1536,7 +1536,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1579,7 +1579,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			})
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		_, err = oa.onlineTop(2, 2, 5)
+		_, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.Error(err)
 		a.Contains(err.Error(), "is behind in-memory round")
 

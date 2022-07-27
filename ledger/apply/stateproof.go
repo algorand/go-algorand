@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
 // StateProof applies the StateProof transaction and setting the next StateProof round
@@ -31,9 +32,9 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		return fmt.Errorf("applyStateProof type %d not supported", spType)
 	}
 
-	nextStateProofRnd := sp.StateProofNext()
+	nextStateProofRnd := sp.GetStateProofNextRound()
 
-	latestRoundInInterval := tx.StateProofIntervalLatestRound
+	latestRoundInInterval := tx.StateProofIntervalLastRound
 	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)
 	if err != nil {
 		return err
@@ -48,12 +49,12 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 			return err
 		}
 
-		err = sp.ValidateStateProof(&latestRoundHdr, &tx.StateProof, &votersHdr, nextStateProofRnd, atRound, &tx.Message)
+		err = verify.ValidateStateProof(&latestRoundHdr, &tx.StateProof, &votersHdr, nextStateProofRnd, atRound, &tx.Message)
 		if err != nil {
 			return err
 		}
 	}
 
-	sp.SetStateProofNext(latestRoundInInterval + basics.Round(proto.StateProofInterval))
+	sp.SetStateProofNextRound(latestRoundInInterval + basics.Round(proto.StateProofInterval))
 	return nil
 }

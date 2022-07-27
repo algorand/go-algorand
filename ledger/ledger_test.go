@@ -1657,7 +1657,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval + 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
 
@@ -1735,7 +1735,7 @@ func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.Consensus
 	stxn.Txn.LastValid = stxn.Txn.FirstValid + basics.Round(proto.MaxTxnLife)
 	stxn.Txn.GenesisHash = genesisInitState.GenesisHash
 	stxn.Txn.StateProofType = protocol.StateProofBasic
-	stxn.Txn.StateProofIntervalLatestRound = 512
+	stxn.Txn.StateProofIntervalLastRound = 512
 	stxn.Txn.StateProof = sp
 
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
@@ -2775,7 +2775,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofRecoveryInterval + 1)); i++ {
+	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)); i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
