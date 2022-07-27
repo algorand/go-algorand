@@ -1327,7 +1327,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
-		// check input, see all valid keys are all still there
+		// check input, see all present keys are all still there
 		for _, storedBoxName := range testingBoxNames[:i+1] {
 			res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[storedBoxName], ""), 10000)
 			require.NoError(t, err)
@@ -1345,7 +1345,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): nil})
 		auCommitSync(t, currentRound, au, ml)
 
-		// ensure recently removed key is not valid and it is not part of the result
+		// ensure recently removed key is not present, and it is not part of the result
 		res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[boxName], ""), 10000)
 		require.NoError(t, err)
 		require.Len(t, res, 0)

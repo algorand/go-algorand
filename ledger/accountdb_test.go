@@ -85,6 +85,9 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
 	require.NoError(tb, err)
 
+	err = accountsCreateBoxTable(context.Background(), tx)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
