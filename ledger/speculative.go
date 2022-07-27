@@ -32,6 +32,7 @@ import (
 
 type LedgerForEvaluator interface {
 	// Needed for cow.go
+	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
@@ -100,6 +101,15 @@ func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator
 		l:  l,
 		vb: vb,
 	}, nil
+}
+
+// Block implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) Block(r basics.Round) (bookkeeping.Block, error) {
+	if r == v.vb.Block().Round() {
+		return v.vb.Block(), nil
+	}
+
+	return v.l.Block(r)
 }
 
 // BlockHdr implements the ledgerForEvaluator interface.

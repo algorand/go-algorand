@@ -180,11 +180,13 @@ type poolAsmResults struct {
 	blk   *ledgercore.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
-	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
-	// which round we started evaluating, but not a measure to whether the evaluation is complete.
+	// roundStartedEvaluating is the round which we were attempted to evaluate
+	// last. It's a good measure for which round we started evaluating, but not
+	// a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
-	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
-	// it's equivalent to the "ok" variable, and used for avoiding taking the lock.
+	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu
+	// lock and should be accessed only from the OnNewBlock goroutine. it's
+	// equivalent to the "ok" variable, and used for avoiding taking the lock.
 	assemblyCompletedOrAbandoned bool
 }
 
@@ -559,6 +561,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 }
 
 func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
+	// TODO(yossi) is taking the lock here necessary? is it safe (check lock taking order)?
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -961,19 +964,24 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	defer pool.assemblyMu.Unlock()
 
 	if pool.assemblyResults.roundStartedEvaluating > round {
-		// we've already assembled a round in the future. Since we're clearly won't go backward, it means
-		// that the agreement is far behind us, so we're going to return here with error code to let
-		// the agreement know about it.
-		// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
+		// we've already assembled a round in the future. Since we're clearly
+		// won't go backward, it means that the agreement is far behind us, so
+		// we're going to return here with error code to let the agreement know
+		// about it. since the network is already ahead of us, there is no issue
+		// here in not generating a block ( since the block would get discarded
+		// anyway )
 		pool.log.Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	}
 
-	// TODO(yossi) check: maybe we have something assembled!
-	validatedBlock, err := pool.tryReadSpeculativeBlock(branch)
+	// Maybe we have a block already assembled
+	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
-		assembled = validatedBlock
-		return assembled, nil
+		validatedBlock, err := pool.tryReadSpeculativeBlock(prev.Hash())
+		if err == nil {
+			assembled = validatedBlock
+			return assembled, nil
+		}
 	}
 
 	pool.assemblyDeadline = deadline
@@ -1026,9 +1034,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
-		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
-		// with "jumps" between consecutive blocks ( which is why it's a warning )
-		// The "normal" usecase is evaluated on the top of the function.
+		// this scenario should not happen unless the txpool is receiving the
+		// new blocks via OnNewBlock with "jumps" between consecutive blocks (
+		// which is why it's a warning ) The "normal" usecase is evaluated on
+		// the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
@@ -1044,8 +1053,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	return pool.assemblyResults.blk, nil
 }
 
-// assembleEmptyBlock construct a new block for the given round. Internally it's using the ledger database calls, so callers
-// need to be aware that it might take a while before it would return.
+// assembleEmptyBlock construct a new block for the given round. Internally it's
+// using the ledger database calls, so callers need to be aware that it might
+// take a while before it would return.
 func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *ledgercore.ValidatedBlock, err error) {
 	prevRound := round - 1
 	prev, err := pool.ledger.BlockHdr(prevRound)
@@ -1059,8 +1069,9 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
 		if errors.As(err, &nonSeqBlockEval) {
 			if nonSeqBlockEval.EvaluatorRound <= nonSeqBlockEval.LatestRound {
-				// in the case that the ledger have already moved beyond that round, just let the agreement know that
-				// we don't generate a block and it's perfectly fine.
+				// in the case that the ledger have already moved beyond that
+				// round, just let the agreement know that we don't generate a
+				// block and it's perfectly fine.
 				return nil, ErrStaleBlockAssemblyRequest
 			}
 		}
