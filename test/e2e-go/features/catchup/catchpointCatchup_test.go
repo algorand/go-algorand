@@ -81,7 +81,7 @@ func (ec *nodeExitErrorCollector) Print() {
 }
 
 // awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
-func awaitCatchpointCreation(client algodclient.RestClient, fixture fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
+func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
 	s, err := client.Status()
 	if err != nil {
 		return generatedV2.NodeStatusResponse{}, err
@@ -240,7 +240,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	}
 	log.Infof(" - done catching up!\n")
 
-	status, err := awaitCatchpointCreation(primaryNodeRestClient, fixture, 3)
+	status, err := awaitCatchpointCreation(primaryNodeRestClient, &fixture, 3)
 	a.NoError(err)
 
 	log.Infof("primary node latest catchpoint - %s!\n", status.LastCatchpoint)
