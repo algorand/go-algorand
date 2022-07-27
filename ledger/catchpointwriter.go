@@ -86,6 +86,7 @@ type encodedBalanceRecordV6 struct {
 	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
 	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
 
+	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`
 }
 
@@ -172,7 +173,6 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			if err != nil {
 				return
 			}
-			cw.numAccountsProcessed += cw.balancesChunk.numAccounts
 		}
 
 		// have we timed-out / canceled by that point ?
@@ -191,6 +191,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 		// write to disk.
 		if len(cw.balancesChunk.Balances) > 0 {
+			cw.numAccountsProcessed += cw.balancesChunk.numAccounts
 			cw.balancesChunkNum++
 			writerRequest <- cw.balancesChunk
 			if cw.numAccountsProcessed == cw.totalAccounts {
