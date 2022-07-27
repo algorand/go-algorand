@@ -1186,6 +1186,14 @@ func initConsensusProtocols() {
 
 	// vAlpha1 can be upgraded to vAlpha2, with a short update delay of a few hours
 	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
+
+	vAlpha3 := vAlpha2
+	vAlpha3.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
+
+	Consensus[protocol.ConsensusVAlpha3] = vAlpha3
+
+	// vAlpha2 can be upgraded to vAlpha3, with a short update delay of a few hours
+	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
