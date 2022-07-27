@@ -803,24 +803,6 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
-// GetProvenWeight computes the provenWeight for building or verifying
-// a state proof for block hdr, using voters from block votersHdr.
-func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (uint64, error) {
-	return internal.GetProvenWeight(votersHdr, hdr)
-}
-
-// AcceptableStateProofWeight computes the acceptable signed weight
-// of a state proof if it were to appear in a transaction with a
-// particular firstValid round.  Earlier rounds require a smaller proof.
-// votersHdr specifies the block that contains the vector commitment of
-// the voters for this state proof (and thus the state proof is for
-// votersHdr.Round() + StateProofInterval).
-//
-// logger must not be nil; use at least logging.Base()
-func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
-	return internal.AcceptableStateProofWeight(votersHdr, firstValid, logger)
-}
-
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
 type DebuggerLedger = internal.LedgerForCowBase
 

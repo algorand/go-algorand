@@ -17,11 +17,15 @@
 package bookkeeping
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestConvertSha256Header(t *testing.T) {
@@ -36,7 +40,25 @@ func TestConvertSha256Header(t *testing.T) {
 	blockHeader := BlockHeader{Round: 200, GenesisHash: gh, TxnCommitments: txnCommit}
 	sha256Header := blockHeader.ToLightBlockHeader()
 
-	a.Equal(basics.Round(200), sha256Header.RoundNumber)
+	a.Equal(basics.Round(200), sha256Header.Round)
 	a.Equal(txnCommit.Sha256Commitment[:], []byte(sha256Header.Sha256TxnCommitment))
 	a.Equal(gh, sha256Header.GenesisHash)
+}
+
+func TestFirstFieldsAreCommitteeSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var gh crypto.Digest
+	crypto.RandBytes(gh[:])
+
+	blockHeader := LightBlockHeader{
+		Seed:        committee.Seed{'1', '2', '3', '4', '5', '6', '7', '8', '9', 'a'},
+		Round:       200,
+		GenesisHash: gh,
+	}
+
+	o := protocol.Encode(&blockHeader)
+
+	a.True(strings.HasPrefix(string(o[5:]), "123456789a"))
 }

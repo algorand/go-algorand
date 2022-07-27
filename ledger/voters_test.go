@@ -40,7 +40,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	a := require.New(t)
 
 	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-	numOfIntervals := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval - 1
+	numOfIntervals := config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals - 1
 	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -108,7 +108,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	a := require.New(t)
 
 	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-	recoveryIntervalForTests := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval
+	recoveryIntervalForTests := config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals
 	numOfIntervals := recoveryIntervalForTests
 	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
 

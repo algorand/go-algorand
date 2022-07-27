@@ -125,7 +125,7 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		spw.log.Warnf("spw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 		return
 	}
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {

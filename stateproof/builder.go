@@ -28,10 +28,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
@@ -66,7 +66,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
+	provenWeight, err := verify.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -75,7 +75,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	res.votersHdr = votersHdr
 	res.voters = voters
 	res.message = msg
-	res.Builder, err = stateproof.MakeBuilder(msg.IntoStateProofMessageHash(),
+	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
 		uint64(hdr.Round),
 		provenWeight,
 		voters.Participants,
@@ -362,8 +362,8 @@ func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
 	}
 
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
-	// we add +1 to this number since we want exactly StateProofRecoveryInterval elements in the history
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
+	// we add +1 to this number since we want exactly StateProofMaxRecoveryIntervals elements in the history
 	oldestRoundOnRecoveryPeriod++
 
 	var oldestRoundToRemove basics.Round
@@ -412,7 +412,7 @@ func (spw *Worker) tryBroadcast() {
 	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
 		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue
@@ -436,7 +436,7 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
-		stxn.Txn.StateProofTxnFields.StateProofIntervalLatestRound = rnd
+		stxn.Txn.StateProofTxnFields.StateProofIntervalLastRound = rnd
 		stxn.Txn.StateProofTxnFields.StateProof = *sp
 		stxn.Txn.StateProofTxnFields.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
