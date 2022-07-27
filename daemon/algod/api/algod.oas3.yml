@@ -3538,7 +3538,7 @@
     },
     "/v2/stateproofs/{round}": {
       "get": {
-        "operationId": "StateProof",
+        "operationId": "GetStateProof",
         "parameters": [
           {
             "description": "The round for which a state proof is desired.",
