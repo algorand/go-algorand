@@ -309,16 +309,16 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+			if tx.Txn.StateProofIntervalLastRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			require.Equal(t, tx.Txn.StateProofIntervalLastRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
 			require.NoError(t, err)
 
-			votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+			votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 			require.NoError(t, err)
@@ -327,13 +327,13 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
 			verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
-			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 			require.NoError(t, err)
 			break
 		}
@@ -381,12 +381,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
+	require.Equal(t, tx.Txn.StateProofIntervalLastRound, 2*basics.Round(proto.StateProofInterval))
 
-	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
 	require.NoError(t, err)
 
-	votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 	require.NoError(t, err)
@@ -395,12 +395,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
 	verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
-	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 	require.NoError(t, err)
 }
 

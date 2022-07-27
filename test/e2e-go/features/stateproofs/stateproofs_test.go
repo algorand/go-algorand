@@ -331,7 +331,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	_, stateProofMessage := getStateProofByLastRound(r, libgoalClient, restClient, firstStateProofRound, 1)
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
@@ -365,7 +365,7 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	return consensusParams
 }
 
-func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+func getStateProofByLastRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
@@ -394,7 +394,7 @@ func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, r
 }
 
 func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
+	stateProof, stateProofMessage := getStateProofByLastRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
 	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 
 	r.NoError(err)

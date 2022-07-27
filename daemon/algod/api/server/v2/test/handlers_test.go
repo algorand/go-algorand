@@ -1005,8 +1005,8 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 			Type:   protocol.StateProofTx,
 			Header: transactions.Header{Sender: transactions.StateProofSender},
 			StateProofTxnFields: transactions.StateProofTxnFields{
-				StateProofIntervalLatestRound: basics.Round(stateProofRound + stateProofIntervalForHandlerTests),
-				StateProofType:                0,
+				StateProofIntervalLastRound: basics.Round(stateProofRound + stateProofIntervalForHandlerTests),
+				StateProofType:              0,
 				Message: stateproofmsg.Message{
 					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
 					FirstAttestedRound:     stateProofRound + 1,

@@ -34,7 +34,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 
 	nextStateProofRnd := sp.StateProofNextRound()
 
-	latestRoundInInterval := tx.StateProofIntervalLatestRound
+	latestRoundInInterval := tx.StateProofIntervalLastRound
 	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)
 	if err != nil {
 		return err

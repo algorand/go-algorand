@@ -1735,7 +1735,7 @@ func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.Consensus
 	stxn.Txn.LastValid = stxn.Txn.FirstValid + basics.Round(proto.MaxTxnLife)
 	stxn.Txn.GenesisHash = genesisInitState.GenesisHash
 	stxn.Txn.StateProofType = protocol.StateProofBasic
-	stxn.Txn.StateProofIntervalLatestRound = 512
+	stxn.Txn.StateProofIntervalLastRound = 512
 	stxn.Txn.StateProof = sp
 
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)

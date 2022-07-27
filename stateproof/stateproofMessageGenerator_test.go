@@ -211,11 +211,11 @@ func TestStateProofMessage(t *testing.T) {
 			a.NoError(err)
 
 			a.Equal(tx.Txn.Type, protocol.StateProofTx)
-			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+			if tx.Txn.StateProofIntervalLastRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			a.Equal(tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			a.Equal(tx.Txn.StateProofIntervalLastRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 			a.Equal(tx.Txn.Message.LastAttestedRound, (iter+2)*proto.StateProofInterval)
 			a.Equal(tx.Txn.Message.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
 
@@ -224,7 +224,7 @@ func TestStateProofMessage(t *testing.T) {
 			if !lastMessage.MsgIsZero() {
 				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}
