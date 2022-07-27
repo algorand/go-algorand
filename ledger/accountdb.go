@@ -3968,7 +3968,7 @@ type encodedAccountsBatchIter struct {
 	resourcesRows   *sql.Rows
 	nextBaseRow     pendingBaseRow
 	nextResourceRow pendingResourceRow
-	acctResCnt catchpointAccountResourceCounter
+	acctResCnt      catchpointAccountResourceCounter
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
