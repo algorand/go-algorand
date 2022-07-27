@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -69,7 +69,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime panic
+	// FirstValidTime timestamp of block(FirstValid-1)
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
@@ -270,7 +270,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{Sender, StackBytes, false, 0, 5, false, "32 byte address"},
 	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
-	{FirstValidTime, StackUint64, false, 0, 0, false, "Causes program to fail; reserved for future use"},
+	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
 	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
 	{Lease, StackBytes, false, 0, 0, false, "32 byte lease value"},
@@ -356,14 +356,14 @@ var txnFieldSpecs = [...]txnFieldSpec{
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
 var TxnFields = FieldGroup{
-	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	"txn", "",
 	TxnFieldNames[:],
 	txnFieldSpecByName,
 }
 
-// TxnScalarFields narows TxnFields to only have the names of scalar fetching opcodes
+// TxnScalarFields narrows TxnFields to only have the names of scalar fetching opcodes
 var TxnScalarFields = FieldGroup{
-	"txn", "",
+	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
 	txnScalarFieldNames(),
 	txnFieldSpecByName,
 }
@@ -386,7 +386,7 @@ func txnScalarFieldNames() []string {
 
 // TxnArrayFields narows TxnFields to only have the names of array fetching opcodes
 var TxnArrayFields = FieldGroup{
-	"txna", "",
+	"txna", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
 	txnaFieldNames(),
 	txnFieldSpecByName,
 }
@@ -564,7 +564,7 @@ func (fs globalFieldSpec) Note() string {
 }
 
 var globalFieldSpecs = [...]globalFieldSpec{
-	// version 0 is the same as TEAL v1 (initial TEAL release)
+	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
 	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
 	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
@@ -804,6 +804,145 @@ var JSONRefTypes = FieldGroup{
 	"json_ref", "Types",
 	jsonRefTypeNames[:],
 	jsonRefSpecByName,
+}
+
+// VrfStandard is an enum for the `vrf_verify` opcode
+type VrfStandard int
+
+const (
+	// VrfAlgorand is the built-in VRF of the Algorand chain
+	VrfAlgorand        VrfStandard = iota
+	invalidVrfStandard             // compile-time constant for number of fields
+)
+
+var vrfStandardNames [invalidVrfStandard]string
+
+type vrfStandardSpec struct {
+	field   VrfStandard
+	version uint64
+}
+
+var vrfStandardSpecs = [...]vrfStandardSpec{
+	{VrfAlgorand, randomnessVersion},
+}
+
+func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {
+	if int(r) >= len(vrfStandardSpecs) {
+		return vrfStandardSpec{}, false
+	}
+	return vrfStandardSpecs[r], true
+}
+
+var vrfStandardSpecByName = make(vrfStandardSpecMap, len(vrfStandardNames))
+
+type vrfStandardSpecMap map[string]vrfStandardSpec
+
+func (s vrfStandardSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs vrfStandardSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs vrfStandardSpec) Type() StackType {
+	return StackNone // Will not show, since all are the same
+}
+
+func (fs vrfStandardSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs vrfStandardSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs vrfStandardSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
+
+func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// VrfStandards describes the json_ref immediate
+var VrfStandards = FieldGroup{
+	"vrf_verify", "Standards",
+	vrfStandardNames[:],
+	vrfStandardSpecByName,
+}
+
+// BlockField is an enum for the `block` opcode
+type BlockField int
+
+const (
+	// BlkSeed is the Block's vrf seed
+	BlkSeed BlockField = iota
+	// BlkTimestamp is the Block's timestamp, seconds from epoch
+	BlkTimestamp
+	invalidBlockField // compile-time constant for number of fields
+)
+
+var blockFieldNames [invalidBlockField]string
+
+type blockFieldSpec struct {
+	field   BlockField
+	ftype   StackType
+	version uint64
+}
+
+var blockFieldSpecs = [...]blockFieldSpec{
+	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkTimestamp, StackUint64, randomnessVersion},
+}
+
+func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
+	if int(r) >= len(blockFieldSpecs) {
+		return blockFieldSpec{}, false
+	}
+	return blockFieldSpecs[r], true
+}
+
+var blockFieldSpecByName = make(blockFieldSpecMap, len(blockFieldNames))
+
+type blockFieldSpecMap map[string]blockFieldSpec
+
+func (s blockFieldSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs blockFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs blockFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs blockFieldSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs blockFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs blockFieldSpec) Note() string {
+	return ""
+}
+
+func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// BlockFields describes the json_ref immediate
+var BlockFields = FieldGroup{
+	"block", "Fields",
+	blockFieldNames[:],
+	blockFieldSpecByName,
 }
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
@@ -1163,6 +1302,20 @@ func init() {
 		equal(int(s.field), i)
 		jsonRefTypeNames[i] = s.field.String()
 		jsonRefSpecByName[s.field.String()] = s
+	}
+
+	equal(len(vrfStandardSpecs), len(vrfStandardNames))
+	for i, s := range vrfStandardSpecs {
+		equal(int(s.field), i)
+		vrfStandardNames[i] = s.field.String()
+		vrfStandardSpecByName[s.field.String()] = s
+	}
+
+	equal(len(blockFieldSpecs), len(blockFieldNames))
+	for i, s := range blockFieldSpecs {
+		equal(int(s.field), i)
+		blockFieldNames[i] = s.field.String()
+		blockFieldSpecByName[s.field.String()] = s
 	}
 
 	equal(len(assetHoldingFieldSpecs), len(assetHoldingFieldNames))

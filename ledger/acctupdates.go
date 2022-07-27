@@ -531,6 +531,8 @@ type accountUpdatesLedgerEvaluator struct {
 	au *accountUpdates
 	// ao is onlineAccounts for voters access
 	ao *onlineAccounts
+	// txtail allows implementation of BlockHdrCached
+	tail *txTail
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
@@ -558,6 +560,16 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 		return aul.prevHeader, nil
 	}
 	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
+}
+
+// BlockHdrCached returns the header of the given round. We use the txTail
+// tracker directly to avoid the tracker registry lock.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr, ok := aul.tail.blockHeader(r)
+	if !ok {
+		return bookkeeping.BlockHeader{}, fmt.Errorf("no cached header data for round %d", r)
+	}
+	return hdr, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number

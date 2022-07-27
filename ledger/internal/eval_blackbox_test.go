@@ -727,7 +727,7 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// teal v2 (apps)
+	// AVM v2 (apps)
 	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -889,14 +889,14 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV21,
 	protocol.ConsensusV22,
 	protocol.ConsensusV23,
-	protocol.ConsensusV24, // teal v2 (apps)
+	protocol.ConsensusV24, // AVM v2 (apps)
 	protocol.ConsensusV25,
 	protocol.ConsensusV26,
 	protocol.ConsensusV27,
 	protocol.ConsensusV28,
 	protocol.ConsensusV29,
-	protocol.ConsensusV30, // teal v5 (inner txs)
-	protocol.ConsensusV31, // teal v6 (inner txs with appls)
+	protocol.ConsensusV30, // AVM v5 (inner txs)
+	protocol.ConsensusV31, // AVM v6 (inner txs with appls)
 	protocol.ConsensusV32, // unlimited assets and apps
 	protocol.ConsensusFuture,
 }
@@ -960,6 +960,58 @@ func benchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B,
 		}
 		b.Run(fmt.Sprintf("cv=%s", version), func(b *testing.B) { bench(b, i) })
 	}
+}
+
+// TestHeaderAccess tests FirstValidTime and `block` which can access previous
+// block headers.
+func TestHeaderAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Added in v33
+	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+		cv := consensusByNumber[ver]
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		fvt := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			FirstValid:      0,
+			ApprovalProgram: "txn FirstValidTime",
+		}
+		dl.txn(&fvt, "round 0 is not available")
+
+		// advance current to 2
+		pay := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]}
+		dl.fullBlock(&pay)
+
+		fvt.FirstValid = 1
+		dl.txn(&fvt, "round 0 is not available")
+
+		fvt.FirstValid = 2
+		dl.txn(&fvt) // current becomes 3
+
+		// Advance current round far enough to test access MaxTxnLife ago
+		for i := 0; i < int(config.Consensus[cv].MaxTxnLife); i++ {
+			dl.fullBlock()
+		}
+
+		// current should be 1003. Confirm.
+		require.EqualValues(t, 1002, dl.generator.Latest())
+		require.EqualValues(t, 1002, dl.validator.Latest())
+
+		fvt.FirstValid = 1003
+		fvt.LastValid = 1010
+		dl.txn(&fvt) // success advances the round
+		// now we're confident current is 1004, so construct a txn that is as
+		// old as possible, and confirm access.
+		fvt.FirstValid = 1004 - basics.Round(config.Consensus[cv].MaxTxnLife)
+		fvt.LastValid = 1004
+		dl.txn(&fvt)
+	})
+
 }
 
 // TestLogsInBlock ensures that logs appear in the block properly
