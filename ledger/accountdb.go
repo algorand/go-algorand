@@ -3968,7 +3968,7 @@ type encodedAccountsBatchIter struct {
 	resourcesRows   *sql.Rows
 	nextBaseRow     pendingBaseRow
 	nextResourceRow pendingResourceRow
-	catchpointAccountResourceCounter
+	acctResCnt catchpointAccountResourceCounter
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
@@ -4011,31 +4011,31 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			}
 			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
 			if resData.IsApp() && resData.IsOwning() {
-				iterator.totalAppParams++
+				iterator.acctResCnt.totalAppParams++
 			}
 			if resData.IsApp() && resData.IsHolding() {
-				iterator.totalAppLocalStates++
+				iterator.acctResCnt.totalAppLocalStates++
 			}
 
 			if resData.IsAsset() && resData.IsOwning() {
-				iterator.totalAssetParams++
+				iterator.acctResCnt.totalAssetParams++
 			}
 			if resData.IsAsset() && resData.IsHolding() {
-				iterator.totalAssets++
+				iterator.acctResCnt.totalAssets++
 			}
 			totalResources++
 		}
 
-		if baseAcct.TotalAppParams == iterator.totalAppParams &&
-			baseAcct.TotalAppLocalStates == iterator.totalAppLocalStates &&
-			baseAcct.TotalAssetParams == iterator.totalAssetParams &&
-			baseAcct.TotalAssets == iterator.totalAssets {
+		if baseAcct.TotalAppParams == iterator.acctResCnt.totalAppParams &&
+			baseAcct.TotalAppLocalStates == iterator.acctResCnt.totalAppLocalStates &&
+			baseAcct.TotalAssetParams == iterator.acctResCnt.totalAssetParams &&
+			baseAcct.TotalAssets == iterator.acctResCnt.totalAssets {
 
 			encodedRecord.ExpectingMoreEntries = false
 			bals = append(bals, encodedRecord)
 			numAccountsProcessed++
 
-			iterator.catchpointAccountResourceCounter = catchpointAccountResourceCounter{}
+			iterator.acctResCnt = catchpointAccountResourceCounter{}
 
 			// max resources per chunk reached, stop iterating.
 			if totalResources == maxResources {

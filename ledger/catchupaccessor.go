@@ -95,7 +95,7 @@ type CatchpointCatchupAccessorImpl struct {
 	// log copied from ledger
 	log logging.Logger
 
-	catchpointAccountResourceCounter
+	acctResCnt catchpointAccountResourceCounter
 
 	// next expected balance account, empty address if not expecting specific account
 	nextExpectedAccount basics.Address
@@ -358,53 +358,53 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 		for _, resData := range balance.resources {
 			if resData.IsApp() && resData.IsOwning() {
-				c.totalAppParams++
+				c.acctResCnt.totalAppParams++
 			}
 			if resData.IsApp() && resData.IsHolding() {
-				c.totalAppLocalStates++
+				c.acctResCnt.totalAppLocalStates++
 			}
 			if resData.IsAsset() && resData.IsOwning() {
-				c.totalAssetParams++
+				c.acctResCnt.totalAssetParams++
 			}
 			if resData.IsAsset() && resData.IsHolding() {
-				c.totalAssets++
+				c.acctResCnt.totalAssets++
 			}
 		}
 		// check that counted resources adds up for this account
 		if !expectingMoreEntries[i] {
-			if c.totalAppParams != balance.accountData.TotalAppParams {
+			if c.acctResCnt.totalAppParams != balance.accountData.TotalAppParams {
 				return fmt.Errorf(
 					"processStagingBalances received %d appParams for account %v, expected %d",
-					c.totalAppParams,
+					c.acctResCnt.totalAppParams,
 					balance.address,
 					balance.accountData.TotalAppParams,
 				)
 			}
-			if c.totalAppLocalStates != balance.accountData.TotalAppLocalStates {
+			if c.acctResCnt.totalAppLocalStates != balance.accountData.TotalAppLocalStates {
 				return fmt.Errorf(
 					"processStagingBalances received %d appLocalStates for account %v, expected %d",
-					c.totalAppParams,
+					c.acctResCnt.totalAppParams,
 					balance.address,
 					balance.accountData.TotalAppLocalStates,
 				)
 			}
-			if c.totalAssetParams != balance.accountData.TotalAssetParams {
+			if c.acctResCnt.totalAssetParams != balance.accountData.TotalAssetParams {
 				return fmt.Errorf(
 					"processStagingBalances received %d assetParams for account %v, expected %d",
-					c.totalAppParams,
+					c.acctResCnt.totalAppParams,
 					balance.address,
 					balance.accountData.TotalAssetParams,
 				)
 			}
-			if c.totalAssets != balance.accountData.TotalAssets {
+			if c.acctResCnt.totalAssets != balance.accountData.TotalAssets {
 				return fmt.Errorf(
 					"processStagingBalances received %d assets for account %v, expected %d",
-					c.totalAppParams,
+					c.acctResCnt.totalAppParams,
 					balance.address,
 					balance.accountData.TotalAssets,
 				)
 			}
-			c.catchpointAccountResourceCounter = catchpointAccountResourceCounter{}
+			c.acctResCnt = catchpointAccountResourceCounter{}
 			nextExpectedAccount = basics.Address{}
 		} else {
 			nextExpectedAccount = balance.address
