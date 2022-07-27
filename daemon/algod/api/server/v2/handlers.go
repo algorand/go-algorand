@@ -1280,13 +1280,13 @@ func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) 
 	firstAttestedRound := stateProof.Message.FirstAttestedRound
 	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
 
-	blkHdrArr, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
+	lightHeaders, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
 	if err != nil {
 		return notFound(ctx, err, err.Error(), v2.Log)
 	}
 
 	blockIndex := round - firstAttestedRound
-	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, blkHdrArr, blockIndex)
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, lightHeaders, blockIndex)
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}

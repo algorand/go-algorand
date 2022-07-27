@@ -236,7 +236,7 @@ func TestStateProofMessage(t *testing.T) {
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
-	blkHdrArr := make(blockHeadersArray, message.LastAttestedRound-message.FirstAttestedRound+1)
+	blkHdrArr := make(lightBlockHeaders, message.LastAttestedRound-message.FirstAttestedRound+1)
 	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
 		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
 		blkHdrArr[i] = hdr.ToLightBlockHeader()
