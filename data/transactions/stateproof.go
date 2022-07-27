@@ -61,7 +61,7 @@ func (sp StateProofTxnFields) PrintFormatted() string {
 			"    LnProvenWeight: %d, FirstAttestedRound: %d, LastAttestedRound: %d\n"+
 			"  }\n"+
 			"}",
-		sp.StateProofIntervalLatestRound, sp.StateProofType,
+		sp.StateProofIntervalLastRound, sp.StateProofType,
 		base64.StdEncoding.EncodeToString(sp.StateProof.SigCommit),
 		sp.StateProof.SignedWeight,
 		len(sp.StateProof.PositionsToReveal),
