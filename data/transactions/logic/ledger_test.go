@@ -81,6 +81,12 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	return l
 }
 
+func MakeLedgerForRound(balances map[basics.Address]uint64, rnd uint64) *Ledger {
+	l := MakeLedger(balances)
+	l.rnd = basics.Round(rnd)
+	return l
+}
+
 // Reset removes all of the mods created by previous AVM execution
 func (l *Ledger) Reset() {
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
@@ -805,4 +811,50 @@ func (l *Ledger) round() basics.Round {
 		l.rnd = basics.Round(rand.Uint32() + 1)
 	}
 	return l.rnd
+}
+
+func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	appParams, ok := l.applications[aidx]
+	if !ok {
+		return ledgercore.AppResource{}, fmt.Errorf("could not find app with id: %d", aidx)
+	}
+	basicAppParams := basics.AppParams{
+		ApprovalProgram:   appParams.ApprovalProgram,
+		ClearStateProgram: appParams.ClearStateProgram,
+		GlobalState:       appParams.GlobalState,
+		StateSchemas:      appParams.StateSchemas,
+		ExtraProgramPages: appParams.ExtraProgramPages,
+	}
+
+	addrBalance, ok := l.balances[addr]
+	if !ok {
+		return ledgercore.AppResource{}, fmt.Errorf("could not find balance for address: %s", addr.String())
+	}
+
+	appLocalState, ok := addrBalance.locals[aidx]
+	if !ok {
+		return ledgercore.AppResource{}, fmt.Errorf("could not find local state for address: %s, app: %d", addr.String(), aidx)
+	}
+
+	basicAppLocalState := basics.AppLocalState{
+		Schema:   appParams.LocalStateSchema,
+		KeyValue: appLocalState,
+	}
+
+	return ledgercore.AppResource{&basicAppLocalState, &basicAppParams}, nil
+}
+
+func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	sum := uint64(0)
+	for _, b := range l.balances {
+		sum += b.balance
+	}
+
+	rewardUnits := uint64(1000) // to prevent overflow errors
+
+	at := ledgercore.AccountTotals{
+		Offline: ledgercore.AlgoCount{Money: basics.MicroAlgos{Raw: sum}, RewardUnits: rewardUnits},
+	}
+
+	return l.Round(), at, nil
 }

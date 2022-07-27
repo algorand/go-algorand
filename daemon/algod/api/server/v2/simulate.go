@@ -138,10 +138,15 @@ type Simulator struct {
 	ledger LedgerForSimulator
 }
 
-func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.BlockHeader) *Simulator {
+func MakeSimulator(ledger LedgerForSimulator) *Simulator {
 	return &Simulator{
-		ledger: makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI, hdr),
+		ledger: ledger,
 	}
+}
+
+func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.BlockHeader) *Simulator {
+	ledger := makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI, hdr)
+	return MakeSimulator(ledger)
 }
 
 // checkWellFormed checks that the transaction is well-formed. A failure message is returned if the transaction is not well-formed.
