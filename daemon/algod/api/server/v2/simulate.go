@@ -111,26 +111,6 @@ type ScopedSimulatorError struct {
 }
 
 // ==============================
-// > Simulator Utility Methods
-// ==============================
-
-func isAppBudgetError(err error) bool {
-	appBudgetErrorFragments := []string{
-		"approval program too long",
-		"clear state program too long",
-		"app programs too long",
-	}
-
-	for _, fragment := range appBudgetErrorFragments {
-		if strings.Contains(err.Error(), fragment) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// ==============================
 // > Simulator
 // ==============================
 
@@ -158,13 +138,6 @@ func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) (failureMes
 
 	_, err = verify.TxnGroupBatchVerify(txgroup, hdr, nil, nil)
 	if err != nil {
-		// catch app budget errors, let them through, but mark that the txgroup would fail
-		isBudgetError := isAppBudgetError(err)
-		if isBudgetError {
-			failureMessage = err.Error()
-			return
-		}
-
 		// catch verifier is nil error. This is an expected error if nothing else goes wrong.
 		if strings.Contains(err.Error(), "verifier is nil") {
 			return "", nil
