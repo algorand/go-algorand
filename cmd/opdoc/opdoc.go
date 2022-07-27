@@ -342,6 +342,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
+		//TODO: Add multi-op support
 	}
 	return &LanguageSpec{
 		EvalMaxVersion:  logic.LogicVersion,

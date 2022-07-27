@@ -5441,3 +5441,12 @@ func TestTypeComplaints(t *testing.T) {
 	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }
+
+func TestDeprecation(t *testing.T) {
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = []byte{byte(multiVersion), 0x80, 0x01, 0x01, 0x49, 0xa2}
+	ep := defaultEvalParamsWithVersion(&txn, multiVersion)
+	_, err := EvalSignature(0, ep)
+	require.ErrorContains(t, err, "deprecated opcode")
+
+}
