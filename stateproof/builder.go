@@ -403,13 +403,13 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	rounds := make([]basics.Round, 0, len(spw.builders))
+	sortedRounds := make([]basics.Round, 0, len(spw.builders))
 	for rnd := range spw.builders {
-		rounds = append(rounds, rnd)
+		sortedRounds = append(sortedRounds, rnd)
 	}
-	sort.Slice(rounds, func(i, j int) bool { return rounds[i] < rounds[j] })
+	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
 
-	for _, rnd := range rounds { // Iterate over the builders in a sequential manner
+	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
 		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
