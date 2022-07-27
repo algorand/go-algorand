@@ -140,9 +140,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 }
 
 func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, error) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
 	if err != nil {
 		return nil, nil, err
@@ -151,7 +148,6 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 	ctx, cancel := context.WithCancel(pool.ctx)
 
 	copy := TransactionPool{
-		// TODO(yossi) verify this assumption
 		pendingTxids:         pool.pendingTxids, // it is safe to shallow copy pendingTxids since this map is only (atomically) swapped and never directly changed
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
@@ -529,14 +525,26 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+
+	pool.mu.Lock()
+	// cancel any pending speculative assembly
+	if pool.cancelSpec != nil {
+		pool.cancelSpec()
+	}
+
+	// move remembered txns to pending
+	pool.rememberCommit(false)
+
+	// create shallow pool copy
 	vb := ledgercore.MakeValidatedBlock(block, delta)
 	speculativePool, outchan, err := pool.copyTransactionPoolOverSpecLedger(&vb)
 	if err != nil {
 		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
 		return
 	}
+	pool.mu.Unlock()
 
-	// TODO(yossi): this would process _all_ pending transactions. We could, however, finish after we have a block.
+	// process txns only until one block is full
 	speculativePool.onNewBlock(block, delta, true)
 
 	if speculativePool.assemblyResults.err != nil {
@@ -550,7 +558,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	}
 }
 
-func (pool *TransactionPool) TryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
+func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -595,11 +603,6 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
-
-	// cancel any pending speculative assembly
-	if pool.cancelSpec != nil {
-		pool.cancelSpec()
-	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
@@ -647,10 +650,13 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	}
 }
 
-// isAssemblyTimedOut determines if we should keep attempting complete the block assembly by adding more transactions to the pending evaluator,
-// or whether we've ran out of time. It takes into consideration the assemblyDeadline that was set by the AssembleBlock function as well as the
-// projected time it's going to take to call the GenerateBlock function before the block assembly would be ready.
-// The function expects that the pool.assemblyMu lock would be taken before being called.
+// isAssemblyTimedOut determines if we should keep attempting complete the block
+// assembly by adding more transactions to the pending evaluator, or whether
+// we've ran out of time. It takes into consideration the assemblyDeadline that
+// was set by the AssembleBlock function as well as the projected time it's
+// going to take to call the GenerateBlock function before the block assembly
+// would be ready. The function expects that the pool.assemblyMu lock would be
+// taken before being called.
 func (pool *TransactionPool) isAssemblyTimedOut() bool {
 	if pool.assemblyDeadline.IsZero() {
 		// we have no deadline, so no reason to timeout.
@@ -687,9 +693,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
-				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
-				// to finish generating the block, it would also be pointless to spend time on it.
-				// we're going to set the ok and assemblyCompletedOrAbandoned to "true" so we can complete this loop asap
+				// the block we're assembling now isn't the one the the
+				// AssembleBlock is waiting for. While it would be really cool
+				// to finish generating the block, it would also be pointless to
+				// spend time on it. we're going to set the ok and
+				// assemblyCompletedOrAbandoned to "true" so we can complete
+				// this loop asap
 				pool.assemblyResults.ok = true
 				pool.assemblyResults.assemblyCompletedOrAbandoned = true
 				stats.StopReason = telemetryspec.AssembleBlockAbandon
@@ -960,6 +969,13 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, ErrStaleBlockAssemblyRequest
 	}
 
+	// TODO(yossi) check: maybe we have something assembled!
+	validatedBlock, err := pool.tryReadSpeculativeBlock(branch)
+	if err == nil {
+		assembled = validatedBlock
+		return assembled, nil
+	}
+
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
@@ -967,17 +983,23 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	if !pool.assemblyResults.ok {
-		// we've passed the deadline, so we're either going to have a partial block, or that we won't make it on time.
-		// start preparing an empty block in case we'll miss the extra time (assemblyWaitEps).
-		// the assembleEmptyBlock is using the database, so we want to unlock here and take the lock again later on.
+		// we've passed the deadline, so we're either going to have a partial
+		// block, or that we won't make it on time. start preparing an empty
+		// block in case we'll miss the extra time (assemblyWaitEps). the
+		// assembleEmptyBlock is using the database, so we want to unlock here
+		// and take the lock again later on.
 		pool.assemblyMu.Unlock()
 		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
 		pool.assemblyMu.Lock()
 
 		if pool.assemblyResults.roundStartedEvaluating > round {
-			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
-			// while this is extreamly unlikely, we need to handle this. the handling it quite straight-forward :
-			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
+			// this case is expected to happen only if the transaction pool was
+			// able to construct *two* rounds during the time we were trying to
+			// assemble the empty block. while this is extreamly unlikely, we
+			// need to handle this. the handling it quite straight-forward :
+			// since the network is already ahead of us, there is no issue here
+			// in not generating a block ( since the block would get discarded
+			// anyway )
 			pool.log.Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 			return nil, ErrStaleBlockAssemblyRequest
 		}
