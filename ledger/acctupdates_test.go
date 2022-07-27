@@ -608,6 +608,9 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
+	// remove the txtail from the list of trackers
+	ml.trackers.trackers = ml.trackers.trackers[:2]
+
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
 	for i := 1; i < initialBlocksCount; i++ {
