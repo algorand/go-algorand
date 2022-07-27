@@ -99,7 +99,7 @@ type onlineAccounts struct {
 	accountsReadCond *sync.Cond
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters *votersTracker
+	voters votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
@@ -196,10 +196,8 @@ func (ao *onlineAccounts) close() {
 		ao.accountsq.close()
 		ao.accountsq = nil
 	}
-	if ao.voters != nil {
-		ao.voters.close()
-		ao.voters = nil
-	}
+
+	ao.voters.close()
 
 	ao.baseOnlineAccounts.prune(0)
 }
@@ -249,9 +247,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	ao.baseOnlineAccounts.prune(newBaseAccountSize)
 
-	if ao.voters != nil {
-		ao.voters.newBlock(blk.BlockHeader)
-	}
+	ao.voters.newBlock(blk.BlockHeader)
+
 }
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
@@ -304,10 +301,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
-	var lowestRound basics.Round
-	if ao.voters != nil {
-		lowestRound = ao.voters.lowestRound(newBase)
-	}
+	lowestRound := ao.voters.lowestRound(newBase)
 
 	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)

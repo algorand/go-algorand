@@ -53,7 +53,7 @@ type roundCowParent interface {
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	StateProofNextRound() basics.Round
+	GetStateProofNextRound() basics.Round
 	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
@@ -217,11 +217,11 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + cb.txnCount
 }
 
-func (cb *roundCowState) StateProofNextRound() basics.Round {
+func (cb *roundCowState) GetStateProofNextRound() basics.Round {
 	if cb.mods.StateProofNext != 0 {
 		return cb.mods.StateProofNext
 	}
-	return cb.lookupParent.StateProofNextRound()
+	return cb.lookupParent.GetStateProofNextRound()
 }
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {

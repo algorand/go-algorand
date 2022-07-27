@@ -28,7 +28,7 @@ import (
 // StateProofs allows fetching and updating state-proofs state on the ledger
 type StateProofs interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
-	StateProofNextRound() basics.Round
+	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
 }
 

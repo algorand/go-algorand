@@ -147,6 +147,7 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	return participationKey
 }
 
+// ErrNoStateProofForRound returned when a state proof transaction could not be found
 var ErrNoStateProofForRound = errors.New("no state proof can be found for that round")
 
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the

@@ -114,8 +114,8 @@ func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) 
 	panic("not implemented")
 }
 
-func (m *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
-	blk := m.blocks[r]
+func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
+	blk := l.blocks[r]
 
 	spec := transactions.SpecialAddresses{
 		FeeSink:     blk.FeeSink,

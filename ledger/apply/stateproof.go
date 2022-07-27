@@ -32,7 +32,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		return fmt.Errorf("applyStateProof type %d not supported", spType)
 	}
 
-	nextStateProofRnd := sp.StateProofNextRound()
+	nextStateProofRnd := sp.GetStateProofNextRound()
 
 	latestRoundInInterval := tx.StateProofIntervalLastRound
 	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)

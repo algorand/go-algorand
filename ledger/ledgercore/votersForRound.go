@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
+// OnlineAccountsFetcher captures the functionality of querying online accounts status
 type OnlineAccountsFetcher interface {
 	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 	// balance and address, whose voting keys are valid in voteRnd.  See the
