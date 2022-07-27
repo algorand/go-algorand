@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -421,7 +420,6 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectory)
 	}()
 
 	maxResourcesPerChunk := 5
@@ -507,7 +505,6 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectory)
 	}()
 
 	maxResourcesPerChunk := 5
@@ -592,7 +589,6 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectory)
 	}()
 
 	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
