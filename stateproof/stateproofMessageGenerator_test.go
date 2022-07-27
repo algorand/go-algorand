@@ -100,6 +100,7 @@ func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round
 
 	voters.Tree = tree
 	voters.TotalWeight = basics.MicroAlgos{Raw: wt}
+	voters.TotalOnline = basics.MicroAlgos{Raw: wt}
 	return voters, nil
 }
 
@@ -126,6 +127,7 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 	var ccBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofTotalOnlineWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
 
@@ -133,6 +135,7 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 		voters, _ := s.VotersForStateProof(hdr.Round.SubSaturate(basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofVotersLookback)))
 		ccBasic.StateProofVotersCommitment = voters.Tree.Root()
 		ccBasic.StateProofVotersTotalWeight = voters.TotalWeight
+		ccBasic.StateProofTotalOnlineWeight = voters.TotalOnline
 
 	}
 
@@ -289,6 +292,7 @@ func TestMessageLnApproxError(t *testing.T) {
 	s.advanceLatest(2*config.Consensus[protocol.ConsensusFuture].StateProofInterval + config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
 	tracking := s.w.blocks[512].StateProofTracking[protocol.StateProofBasic]
 	tracking.StateProofVotersTotalWeight = basics.MicroAlgos{}
+	tracking.StateProofTotalOnlineWeight = basics.MicroAlgos{}
 	newtracking := tracking
 	s.w.blocks[512].StateProofTracking[protocol.StateProofBasic] = newtracking
 

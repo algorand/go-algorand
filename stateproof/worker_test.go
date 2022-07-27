@@ -92,9 +92,11 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofTotalOnlineWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
 	stateProofBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
+	stateProofBasic.StateProofTotalOnlineWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
@@ -165,6 +167,7 @@ func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.Voter
 		Proto:       config.Consensus[protocol.ConsensusFuture],
 		AddrToPos:   make(map[basics.Address]uint64),
 		TotalWeight: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
+		TotalOnline: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
 	}
 
 	for i, k := range s.keysForVoters {

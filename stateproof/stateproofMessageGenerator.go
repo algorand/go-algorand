@@ -73,7 +73,12 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestR
 }
 
 func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, proto *config.ConsensusParams) (uint64, error) {
-	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+	var totalWeight uint64
+	if proto.EnableStateProofTotalOnlineWeightThreshold {
+		totalWeight = latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight.ToUint64()
+	} else {
+		totalWeight = latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+	}
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		err := fmt.Errorf("calculateLnProvenWeight err: %w -  %d %d * %d / (1<<32)",

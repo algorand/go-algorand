@@ -156,6 +156,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -165,6 +166,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 		} else {
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
@@ -268,6 +270,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -408,7 +411,13 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	var votersRoot = make([]byte, sp.HashSize)
 	copy(votersRoot[:], lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
 
-	provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
+	var totalWeight uint64
+	if consensusParams.EnableStateProofTotalOnlineWeightThreshold {
+		totalWeight = lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight.Raw
+	} else {
+		totalWeight = lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
+	}
+	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
 	r.False(overflowed)
 
 	verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
@@ -492,6 +501,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -580,6 +590,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -698,8 +709,14 @@ func TestAttestorsChangeTest(t *testing.T) {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight != basics.MicroAlgos{})
 
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+			var stake uint64
+			if consensusParams.EnableStateProofTotalOnlineWeightThreshold {
+				stake = blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight.ToUint64()
+			} else {
+				stake = blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+			}
 
 			// the main part of the test (computing the total stake of the nodes):
 			sum := uint64(0)
@@ -723,6 +740,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 			}
 		} else {
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofTotalOnlineWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
