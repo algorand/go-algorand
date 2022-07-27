@@ -816,7 +816,7 @@ func (l *Ledger) round() basics.Round {
 func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	appParams, ok := l.applications[aidx]
 	if !ok {
-		return ledgercore.AppResource{}, fmt.Errorf("could not find app with id: %d", aidx)
+		return ledgercore.AppResource{}, nil
 	}
 	basicAppParams := basics.AppParams{
 		ApprovalProgram:   appParams.ApprovalProgram,

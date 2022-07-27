@@ -212,6 +212,40 @@ func MakeSimulationTestLedger() *SimulationTestLedger {
 	return &l
 }
 
+func MakeBasicTxnHeader(sender basics.Address) transactions.Header {
+	hdr := MakeTestBlockHeader()
+
+	return transactions.Header{
+		Fee:         basics.MicroAlgos{Raw: 1000},
+		FirstValid:  basics.Round(1),
+		GenesisID:   hdr.GenesisID,
+		GenesisHash: hdr.GenesisHash,
+		LastValid:   basics.Round(1001),
+		Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
+		Sender:      sender,
+	}
+}
+
+// Attach group ID to a transaction group. Mutates the group directly.
+func AttachGroupID(txgroup []transactions.SignedTxn) error {
+	txnArray := make([]transactions.Transaction, len(txgroup))
+	for i, txn := range txgroup {
+		txnArray[i] = txn.Txn
+	}
+
+	client := MakeTestClient()
+	groupID, err := client.GroupID(txnArray)
+	if err != nil {
+		return err
+	}
+
+	for i := range txgroup {
+		txgroup[i].Txn.Header.Group = groupID
+	}
+
+	return nil
+}
+
 // ==============================
 // > Simulation Tests
 // ==============================
@@ -226,21 +260,11 @@ func TestPayTxn(t *testing.T) {
 	accounts := MakeTestAccounts()
 	sender := accounts[0]
 
-	hdr := MakeTestBlockHeader()
-
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Fee:         basics.MicroAlgos{Raw: 1000},
-					FirstValid:  basics.Round(1),
-					GenesisID:   hdr.GenesisID,
-					GenesisHash: hdr.GenesisHash,
-					LastValid:   basics.Round(1001),
-					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
-					Sender:      sender,
-				},
+				Type:   protocol.PaymentTx,
+				Header: MakeBasicTxnHeader(sender),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender,
 					Amount:   basics.MicroAlgos{Raw: 0},
@@ -265,21 +289,11 @@ func TestOverspendPayTxn(t *testing.T) {
 	sender := accounts[0]
 	balances := MakeTestBalances()
 
-	hdr := MakeTestBlockHeader()
-
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Fee:         basics.MicroAlgos{Raw: 1000},
-					FirstValid:  basics.Round(1),
-					GenesisID:   hdr.GenesisID,
-					GenesisHash: hdr.GenesisHash,
-					LastValid:   basics.Round(1001),
-					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
-					Sender:      sender,
-				},
+				Type:   protocol.PaymentTx,
+				Header: MakeBasicTxnHeader(sender),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender,
 					Amount:   basics.MicroAlgos{Raw: balances[sender] + 100}, // overspend
@@ -304,22 +318,12 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender1 := accounts[0]
 	sender2 := accounts[1]
 
-	hdr := MakeTestBlockHeader()
-
 	// Send money back and forth
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Fee:         basics.MicroAlgos{Raw: 1000},
-					FirstValid:  basics.Round(1),
-					GenesisID:   hdr.GenesisID,
-					GenesisHash: hdr.GenesisHash,
-					LastValid:   basics.Round(1001),
-					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
-					Sender:      sender1,
-				},
+				Type:   protocol.PaymentTx,
+				Header: MakeBasicTxnHeader(sender1),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender2,
 					Amount:   basics.MicroAlgos{Raw: 1000000},
@@ -328,16 +332,8 @@ func TestSimpleGroupTxn(t *testing.T) {
 		},
 		{
 			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Fee:         basics.MicroAlgos{Raw: 500},
-					FirstValid:  basics.Round(1),
-					GenesisID:   hdr.GenesisID,
-					GenesisHash: hdr.GenesisHash,
-					LastValid:   basics.Round(1001),
-					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
-					Sender:      sender2,
-				},
+				Type:   protocol.PaymentTx,
+				Header: MakeBasicTxnHeader(sender2),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender1,
 					Amount:   basics.MicroAlgos{Raw: 0},
@@ -352,16 +348,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Contains(t, *result.FailureMessage, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
-	txnArray := make([]transactions.Transaction, len(txgroup))
-	for i, txn := range txgroup {
-		txnArray[i] = txn.Txn
-	}
-	client := MakeTestClient()
-	groupID, err := client.GroupID(txnArray)
-	require.NoError(t, err)
-	for i := range txgroup {
-		txgroup[i].Txn.Header.Group = groupID
-	}
+	AttachGroupID(txgroup)
 
 	// Check balances before transaction
 	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
@@ -385,4 +372,63 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender2Data, _, err = l.LookupWithoutRewards(l.Latest(), sender2)
 	require.NoError(t, err)
 	require.Equal(t, basics.MicroAlgos{Raw: 0}, sender2Data.MicroAlgos)
+}
+
+const trivialAVMProgram = `#pragma version 2
+int 1`
+
+func TestSimpleAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := MakeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := MakeTestAccounts()
+	sender := accounts[0]
+
+	// Compile AVM program
+	ops, err := AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	prog := ops.Program
+
+	// Create program and call it
+	futureAppID := 1
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: MakeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   prog,
+					ClearStateProgram: prog,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: MakeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     basics.AppIndex(futureAppID),
+					ApprovalProgram:   prog,
+					ClearStateProgram: prog,
+				},
+			},
+		},
+	}
+
+	AttachGroupID(txgroup)
+	result, err := s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, *result.FailureMessage)
 }
