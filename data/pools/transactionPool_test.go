@@ -1461,7 +1461,7 @@ func generateProofForTesting(
 	allKeys []*merklesignature.Secrets,
 	t *testing.T) *cryptostateproof.StateProof {
 
-	data := msg.IntoStateProofMessageHash()
+	data := msg.Hash()
 
 	// Sign with the participation keys
 	sigs := make(map[merklesignature.Verifier]merklesignature.Signature)

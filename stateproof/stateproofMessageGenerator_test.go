@@ -224,7 +224,7 @@ func TestStateProofMessage(t *testing.T) {
 			if !lastMessage.MsgIsZero() {
 				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}

@@ -402,7 +402,7 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	if !prevStateProofMessage.MsgIsZero() {
 		//if we have a previous stateproof message we can verify the current stateproof using data from it
 		verifier := sp.MkVerifierWithLnProvenWeight(prevStateProofMessage.VotersCommitment, prevStateProofMessage.LnProvenWeight, consensusParams.StateProofStrengthTarget)
-		err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
+		err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.Hash(), &stateProof)
 		r.NoError(err)
 	}
 	var votersRoot = make([]byte, sp.HashSize)
@@ -414,7 +414,7 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
 	r.NoError(err)
 
-	err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
+	err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.Hash(), &stateProof)
 	r.NoError(err)
 	return stateProofMessage, nextStateProofBlock
 }

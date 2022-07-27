@@ -333,7 +333,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
-			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 			require.NoError(t, err)
 			break
 		}
@@ -400,7 +400,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
-	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), msg.Hash(), &tx.Txn.StateProof)
 	require.NoError(t, err)
 }
 
@@ -753,7 +753,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	spRecords := tns.StateProofKeys(round)
 	sigs := make([]sigFromAddr, 0, len(keys))
 	stateproofMessage := stateproofmsg.Message{}
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	for _, key := range spRecords {
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		require.NoError(t, err)
@@ -1072,7 +1072,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)
@@ -1114,7 +1114,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)

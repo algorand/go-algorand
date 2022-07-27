@@ -177,7 +177,7 @@ func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, state
 		return err
 	}
 
-	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.IntoStateProofMessageHash(), stateProof)
+	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

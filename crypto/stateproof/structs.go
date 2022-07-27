@@ -26,9 +26,6 @@ import (
 // MessageHash represents the message that a state proof will attest to.
 type MessageHash [32]byte
 
-// MessageHashType is the type of hash used to generate MessageHash
-const MessageHashType = crypto.Sha256
-
 //msgp:ignore sigslot
 type sigslot struct {
 	// Weight is the weight of the participant signing this message.
