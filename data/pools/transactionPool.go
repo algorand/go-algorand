@@ -95,9 +95,10 @@ type TransactionPool struct {
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
 
-	ctx        context.Context
-	cancelSpec context.CancelFunc
-	specBlock  chan *ledgercore.ValidatedBlock
+	ctx         context.Context
+	cancelSpec  context.CancelFunc
+	specBlock   chan *ledgercore.ValidatedBlock
+	specAsmDone chan struct{}
 
 	cfg config.Local
 }
@@ -161,11 +162,13 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
 		cfg:                  pool.cfg,
 		ctx:                  ctx,
+		specAsmDone:          make(chan struct{}),
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
 
 	pool.cancelSpec = cancel
+	pool.specAsmDone = copy.specAsmDone
 	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
 
 	return &copy, pool.specBlock, nil
@@ -532,6 +535,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	// cancel any pending speculative assembly
 	if pool.cancelSpec != nil {
 		pool.cancelSpec()
+		<-pool.specAsmDone
 	}
 
 	// move remembered txns to pending
@@ -540,11 +544,14 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	// create shallow pool copy
 	vb := ledgercore.MakeValidatedBlock(block, delta)
 	speculativePool, outchan, err := pool.copyTransactionPoolOverSpecLedger(&vb)
+	pool.mu.Unlock()
+
+	defer close(pool.specAsmDone)
+
 	if err != nil {
 		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
 		return
 	}
-	pool.mu.Unlock()
 
 	// process txns only until one block is full
 	speculativePool.onNewBlock(block, delta, true)
