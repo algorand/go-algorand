@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	. "github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -122,6 +123,21 @@ func (sl *SimulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basi
 	return acctData, sl.Latest(), nil
 }
 
+// ==============================
+// > Simulation Test Helpers
+// ==============================
+
+func MakeTestClient() libgoal.Client {
+	c, err := libgoal.MakeClientFromConfig(libgoal.ClientConfig{
+		AlgodDataDir: "NO_DIR",
+	}, libgoal.DynamicClient)
+	if err != nil {
+		panic(err)
+	}
+
+	return c
+}
+
 func MakeSpecialAccounts() (sink, rewards basics.Address) {
 	// irrelevant, but deterministic
 	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
@@ -169,7 +185,12 @@ func MakeTestAccounts() []basics.Address {
 		panic(err)
 	}
 
-	return []basics.Address{account1}
+	account2, err := basics.UnmarshalChecksumAddress("NNQ6QBRYXZSSPJAJZETWHCEM7G2MMMJG3ZB232672QBPIWTWQL2MUP3TJI")
+	if err != nil {
+		panic(err)
+	}
+
+	return []basics.Address{account1, account2}
 }
 
 func MakeTestBalances() map[basics.Address]uint64 {
@@ -270,4 +291,98 @@ func TestOverspendPayTxn(t *testing.T) {
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Contains(t, *result.FailureMessage, "tried to spend {1000000100}")
+}
+
+func TestSimpleGroupTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := MakeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := MakeTestAccounts()
+	sender1 := accounts[0]
+	sender2 := accounts[1]
+
+	hdr := MakeTestBlockHeader()
+
+	// Send money back and forth
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Fee:         basics.MicroAlgos{Raw: 1000},
+					FirstValid:  basics.Round(1),
+					GenesisID:   hdr.GenesisID,
+					GenesisHash: hdr.GenesisHash,
+					LastValid:   basics.Round(1001),
+					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
+					Sender:      sender1,
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender2,
+					Amount:   basics.MicroAlgos{Raw: 1000000},
+				},
+			},
+		},
+		{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Fee:         basics.MicroAlgos{Raw: 500},
+					FirstValid:  basics.Round(1),
+					GenesisID:   hdr.GenesisID,
+					GenesisHash: hdr.GenesisHash,
+					LastValid:   basics.Round(1001),
+					Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
+					Sender:      sender2,
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender1,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			},
+		},
+	}
+
+	// Should fail if there is no group parameter
+	result, err := s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Contains(t, *result.FailureMessage, "had zero Group but was submitted in a group of 2")
+
+	// Add group parameter
+	txnArray := make([]transactions.Transaction, len(txgroup))
+	for i, txn := range txgroup {
+		txnArray[i] = txn.Txn
+	}
+	client := MakeTestClient()
+	groupID, err := client.GroupID(txnArray)
+	require.NoError(t, err)
+	for i := range txgroup {
+		txgroup[i].Txn.Header.Group = groupID
+	}
+
+	// Check balances before transaction
+	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: 1000000000}, sender1Data.MicroAlgos)
+
+	sender2Data, _, err := l.LookupWithoutRewards(l.Latest(), sender2)
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: 0}, sender2Data.MicroAlgos)
+
+	// Should now pass
+	result, err = s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, *result.FailureMessage)
+
+	// Confirm balances have not changed
+	sender1Data, _, err = l.LookupWithoutRewards(l.Latest(), sender1)
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: 1000000000}, sender1Data.MicroAlgos)
+
+	sender2Data, _, err = l.LookupWithoutRewards(l.Latest(), sender2)
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: 0}, sender2Data.MicroAlgos)
 }
