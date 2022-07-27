@@ -98,7 +98,7 @@ type TransactionPool struct {
 	ctx         context.Context
 	cancelSpec  context.CancelFunc
 	specBlock   chan *ledgercore.ValidatedBlock
-	specAsmDone chan struct{}
+	specAsmDone <-chan struct{}
 
 	cfg config.Local
 }
@@ -140,10 +140,10 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, error) {
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	ctx, cancel := context.WithCancel(pool.ctx)
@@ -162,16 +162,16 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore
 		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
 		cfg:                  pool.cfg,
 		ctx:                  ctx,
-		specAsmDone:          make(chan struct{}),
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
 
 	pool.cancelSpec = cancel
-	pool.specAsmDone = copy.specAsmDone
+	specDoneCh := make(chan struct{})
+	pool.specAsmDone = specDoneCh
 	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
 
-	return &copy, pool.specBlock, nil
+	return &copy, pool.specBlock, specDoneCh, nil
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process.
@@ -543,15 +543,14 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 
 	// create shallow pool copy
 	vb := ledgercore.MakeValidatedBlock(block, delta)
-	speculativePool, outchan, err := pool.copyTransactionPoolOverSpecLedger(&vb)
+	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(&vb)
 	pool.mu.Unlock()
-
-	defer close(pool.specAsmDone)
 
 	if err != nil {
 		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
 		return
 	}
+	defer close(specAsmDoneCh)
 
 	// process txns only until one block is full
 	speculativePool.onNewBlock(block, delta, true)
@@ -563,7 +562,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	select {
 	case outchan <- speculativePool.assemblyResults.blk:
 	default:
-		speculativePool.log.Errorf("failed writing speculated block to channel, channel already has a block")
+		speculativePool.log.Errorf("failed writing speculative block to channel, channel already has a block")
 	}
 }
 
@@ -760,7 +759,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, stopAtFirstFullBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, speculativeAsm bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -843,7 +842,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			asmStats.EarlyCommittedCount++
 			continue
 		}
-		stoppedAtBlock, err := pool.add(txgroup, &asmStats, stopAtFirstFullBlock)
+		hasBlock, err := pool.add(txgroup, &asmStats, speculativeAsm)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
@@ -865,8 +864,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
-		}
-		if stoppedAtBlock {
+		} else if hasBlock {
 			break
 		}
 	}
@@ -896,7 +894,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 	pool.assemblyMu.Unlock()
 
-	pool.rememberCommit(true)
+	// remember the changes made to the tx pool if we're not in speculative assembly
+	if !speculativeAsm {
+		pool.rememberCommit(true)
+	}
 	return
 }
 
