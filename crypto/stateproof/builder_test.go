@@ -608,7 +608,7 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 
 }
 
-func TestBuilder_Build(t *testing.T) {
+func TestBuilder_BuildStateProofCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	p := generateProofForTesting(a, true)
