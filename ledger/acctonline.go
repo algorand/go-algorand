@@ -136,9 +136,7 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 		return err
 	}
 
-	// the votes have a special dependency on the online accounts, so we need to initialize these separately.
-	ao.voters = &votersTracker{onlineTopFunction: ao.onlineTop}
-	err = ao.voters.loadFromDisk(l, lastBalancesRound)
+	err = ao.voters.loadFromDisk(l, ao, lastBalancesRound)
 	if err != nil {
 		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
 	}
@@ -725,10 +723,10 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-// onlineTop returns the top n online accounts, sorted by their normalized
+// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.  See the
 // normalization description in AccountData.NormalizedOnlineBalance().
-func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
 	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {
