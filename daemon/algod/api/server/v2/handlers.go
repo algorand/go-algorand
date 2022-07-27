@@ -147,6 +147,30 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	return participationKey
 }
 
+var ErrNoStateProofForRound = errors.New("no state proof can be found for that round")
+
+// GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
+// attestation period). the latestRound should be provided as an upper bound for the search
+func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round) (transactions.Transaction, error) {
+	for i := round + 1; i < latestRound; i++ {
+		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
+		if err != nil {
+			return transactions.Transaction{}, err
+		}
+		for _, txn := range txns {
+			if txn.Txn.Type != protocol.StateProofTx {
+				continue
+			}
+
+			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
+				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
+				return txn.Txn, nil
+			}
+		}
+	}
+	return transactions.Transaction{}, ErrNoStateProofForRound
+}
+
 // GetParticipationKeys Return a list of participation keys
 // (GET /v2/participation)
 func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
@@ -1220,9 +1244,9 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
 	if err != nil {
-		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
+		if errors.Is(err, ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)
 		}
 		return internalError(ctx, err, err.Error(), v2.Log)
@@ -1244,9 +1268,9 @@ func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) 
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
 	if err != nil {
-		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
+		if errors.Is(err, ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)
 		}
 		return internalError(ctx, err, err.Error(), v2.Log)

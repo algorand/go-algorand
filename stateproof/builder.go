@@ -27,10 +27,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
@@ -65,7 +65,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
+	provenWeight, err := verify.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -361,8 +361,8 @@ func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
 	}
 
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
-	// we add +1 to this number since we want exactly StateProofRecoveryInterval elements in the history
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
+	// we add +1 to this number since we want exactly StateProofMaxRecoveryIntervals elements in the history
 	oldestRoundOnRecoveryPeriod++
 
 	var oldestRoundToRemove basics.Round
@@ -404,7 +404,7 @@ func (spw *Worker) tryBroadcast() {
 
 	for rnd, b := range spw.builders {
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue

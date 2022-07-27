@@ -181,17 +181,17 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // 1 - Voters are for a round which was already been confirmed by stateproof
 // 2 - Voters are for a round which is older than the allowed recovery interval.
 // notice that if state proof chain is delayed, votersForRoundCache will not be larger than
-// StateProofRecoveryInterval + 1
+// StateProofMaxRecoveryIntervals + 1
 // ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
 //
 // It is possible to optimize this function and not to travers votersForRoundCache on every round.
-// Since the map is small (Usually  0 - 2 elements and up to StateProofRecoveryInterval) we decided to keep the code simple
+// Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
 	proto := config.Consensus[hdr.CurrentProtocol]
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)

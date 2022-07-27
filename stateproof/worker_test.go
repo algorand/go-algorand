@@ -643,7 +643,7 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	a := require.New(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	expectedStateProofs := proto.StateProofRecoveryInterval + 1
+	expectedStateProofs := proto.StateProofMaxRecoveryIntervals + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -675,14 +675,14 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
-	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(w.builders)))
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
 		return
 	})
-	a.Equal(proto.StateProofRecoveryInterval, uint64(len(roundSigs)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(roundSigs)))
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {

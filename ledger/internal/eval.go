@@ -324,7 +324,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) StateProofNext() basics.Round {
+func (x *roundCowBase) StateProofNextRound() basics.Round {
 	return x.stateProofNextRnd
 }
 
@@ -1142,7 +1142,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
 	case protocol.StateProofTx:
-		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNext depending on
+		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNextRound depending on
 		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
@@ -1229,7 +1229,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				return err
 			}
 
-			basicStateProof.StateProofNextRound = eval.state.StateProofNext()
+			basicStateProof.StateProofNextRound = eval.state.StateProofNextRound()
 
 			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 			eval.block.StateProofTracking[protocol.StateProofBasic] = basicStateProof
@@ -1274,8 +1274,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
 			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.StateProofNext() {
-			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.StateProofNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.StateProofNextRound() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.StateProofNextRound())
 		}
 		for ccType := range eval.block.StateProofTracking {
 			if ccType != protocol.StateProofBasic {

@@ -3607,7 +3607,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "get a state proof that covers a given round"
+        "summary": "Get a state proof that covers a given round"
       }
     },
     "/v2/status": {

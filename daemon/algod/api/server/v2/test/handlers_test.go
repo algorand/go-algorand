@@ -1128,3 +1128,35 @@ func TestGetBlockProof200(t *testing.T) {
 	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
 	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))
 }
+
+func TestStateproofTransactionForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i < 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	a.NoError(err)
+	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000)
+	a.NoError(err)
+	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000)
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+}
