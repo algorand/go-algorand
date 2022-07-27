@@ -2013,6 +2013,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
 			return err
 		}
+		// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
+		// or in later version where we need kvstore table, this test will fail
+		if err := accountsCreateBoxTable(ctx, tx); err != nil {
+			return err
+		}
 		return nil
 	})
 	require.NoError(t, err)

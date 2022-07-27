@@ -2523,7 +2523,6 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	//if accountDBVersion > int32(7) {
 	qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 	if err != nil {
 		return nil, err
@@ -2533,7 +2532,6 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	if err != nil {
 		return nil, err
 	}
-	//}
 
 	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
