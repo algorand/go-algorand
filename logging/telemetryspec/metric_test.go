@@ -17,9 +17,7 @@
 package telemetryspec
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -52,38 +50,6 @@ func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
 	require.Equal(t, []byte("{\"ProcessingTime\":[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"), bytes)
 }
 
-func getAssembleAsString(m *AssembleBlockStats) string {
-	b := &bytes.Buffer{}
-	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
-	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
-	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
-	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
-	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
-	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
-	b.WriteString(fmt.Sprintf("MinLength:%d, ", m.MinLength))
-	b.WriteString(fmt.Sprintf("MaxLength:%d, ", m.MaxLength))
-	b.WriteString(fmt.Sprintf("MinPriority:%d, ", m.MinPriority))
-	b.WriteString(fmt.Sprintf("MaxPriority:%d, ", m.MaxPriority))
-	b.WriteString(fmt.Sprintf("CommittedCount:%d, ", m.CommittedCount))
-	b.WriteString(fmt.Sprintf("StopReason:%s, ", m.StopReason))
-	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
-	b.WriteString(fmt.Sprintf("EarlyCommittedCount:%d, ", m.EarlyCommittedCount))
-	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
-	b.WriteString(fmt.Sprintf("ProcessingTime:%v, ", m.ProcessingTime))
-	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
-	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
-	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
-	emptySPStats := StateProofStats{}
-	if m.StateProofStats != emptySPStats {
-		b.WriteString(fmt.Sprintf("ProvenWeight:%d, ", m.StateProofStats.ProvenWeight))
-		b.WriteString(fmt.Sprintf("SignedWeight:%d, ", m.StateProofStats.SignedWeight))
-		b.WriteString(fmt.Sprintf("NumReveals:%d, ", m.StateProofStats.NumReveals))
-		b.WriteString(fmt.Sprintf("NumPosToReveal:%d, ", m.StateProofStats.NumPosToReveal))
-		b.WriteString(fmt.Sprintf("TxnSize:%d", m.StateProofStats.TxnSize))
-	}
-	return b.String()
-}
-
 func TestAssembleBlockStatsString(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -92,7 +58,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 
 	// Empty StateProofStats will not be reported. Set a filed to check it printed
 	abs.StateProofStats.ProvenWeight = 1
-	absString := getAssembleAsString(&abs)
+	absString := abs.String()
 	for f := 0; f < localType.NumField(); f++ {
 		field := localType.Field(f)
 		if field.Type.Kind() == reflect.Struct && field.Type.NumField() > 1 {
@@ -107,7 +73,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 
 	// Make sure the StateProofStats is not reported if they are empty
 	abs.StateProofStats.ProvenWeight = 0
-	absString = getAssembleAsString(&abs)
+	absString = abs.String()
 	for f := 0; f < localType.NumField(); f++ {
 		field := localType.Field(f)
 		if field.Name == "StateProofStats" {
