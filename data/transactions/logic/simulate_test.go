@@ -122,32 +122,45 @@ func (sl *SimulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basi
 	return acctData, sl.Latest(), nil
 }
 
+func MakeSpecialAccounts() (sink, rewards basics.Address) {
+	// irrelevant, but deterministic
+	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
+	if err != nil {
+		panic(err)
+	}
+	rewards, err = basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+
 func MakeTestBlockHeader() bookkeeping.BlockHeader {
+	// arbitrary genesis information
+	genesisID := "simulation-test-v1"
 	genesisHash, err := crypto.DigestFromString("3QF7SU53VLAQV6YIWENHUVANS4OFG5PHCTXPPX4EH7FEI3WIMJOQ")
 	if err != nil {
 		panic(err)
 	}
 
-	// timestamp := time.Now().Unix()
+	feeSink, rewardsPool := MakeSpecialAccounts()
 
-	hdr := bookkeeping.BlockHeader{
-		GenesisID:   "private-v1",
-		GenesisHash: genesisHash,
-		TimeStamp:   0,
+	// convert test balances to AccountData balances
+	testBalances := MakeTestBalances()
+	acctDataBalances := make(map[basics.Address]basics.AccountData)
+	for addr, balance := range testBalances {
+		acctDataBalances[addr] = basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: balance},
+		}
 	}
-	hdr.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-	// TODO: These should be set in a more standard way.
-	// Answer: Use genesis.go > MakeGenesisBlock()
-	curRewardsState := bookkeeping.RewardsState{
-		RewardsLevel:              0,
-		RewardsRate:               11,
-		RewardsResidue:            3,
-		RewardsRecalculationRound: 110,
+	genesisBalances := bookkeeping.MakeGenesisBalances(acctDataBalances, feeSink, rewardsPool)
+	genesisBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusCurrentVersion, genesisBalances, genesisID, genesisHash)
+	if err != nil {
+		panic(err)
 	}
-	hdr.RewardsState = curRewardsState
 
-	return hdr
+	return genesisBlock.BlockHeader
 }
 
 func MakeTestAccounts() []basics.Address {
