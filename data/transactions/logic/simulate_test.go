@@ -41,17 +41,17 @@ import (
 // > Simulation Test Ledger
 // ==============================
 
-type SimulationTestLedger struct {
+type simulationTestLedger struct {
 	*Ledger
 
 	hdr bookkeeping.BlockHeader
 }
 
-func (sl *SimulationTestLedger) Latest() basics.Round {
+func (sl *simulationTestLedger) Latest() basics.Round {
 	return sl.hdr.Round
 }
 
-func (sl *SimulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+func (sl *simulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 	if rnd != sl.Latest() {
 		err = fmt.Errorf(
 			"BlockHdr() evaluator called this function for the wrong round %d, "+
@@ -63,25 +63,25 @@ func (sl *SimulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.Bloc
 	return sl.hdr, nil
 }
 
-func (sl *SimulationTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+func (sl *simulationTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	// Never throw an error during these tests since it's a simulation ledger.
 	// In production, the actual ledger method is used.
 	return nil
 }
 
-func (sl *SimulationTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+func (sl *simulationTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	panic("CompactCertVoters() should not be called in a simulation ledger")
 }
 
-func (sl *SimulationTestLedger) GenesisHash() crypto.Digest {
+func (sl *simulationTestLedger) GenesisHash() crypto.Digest {
 	return sl.hdr.GenesisHash
 }
 
-func (sl *SimulationTestLedger) GenesisProto() config.ConsensusParams {
+func (sl *simulationTestLedger) GenesisProto() config.ConsensusParams {
 	return config.Consensus[sl.hdr.CurrentProtocol]
 }
 
-func (sl *SimulationTestLedger) GetCreatorForRound(round basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+func (sl *simulationTestLedger) GetCreatorForRound(round basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	if round != sl.Latest() {
 		err = fmt.Errorf(
 			"GetCreatorForRound() evaluator called this function for the wrong round %d, "+
@@ -93,7 +93,7 @@ func (sl *SimulationTestLedger) GetCreatorForRound(round basics.Round, cidx basi
 	return sl.GetCreator(cidx, ctype)
 }
 
-func (sl *SimulationTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+func (sl *simulationTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	assetParams, addr, err := sl.AssetParams(aidx)
 	if err != nil {
 		return ledgercore.AssetResource{}, err
@@ -110,7 +110,7 @@ func (sl *SimulationTestLedger) LookupAsset(rnd basics.Round, addr basics.Addres
 	}, nil
 }
 
-func (sl *SimulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+func (sl *simulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	if rnd != sl.Latest() {
 		return ledgercore.AccountData{}, basics.Round(0), fmt.Errorf(
 			"LookupWithoutRewards() evaluator called this function for the wrong round %d, "+
@@ -130,7 +130,7 @@ func (sl *SimulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basi
 // > Simulation Test Helpers
 // ==============================
 
-func MakeTestClient() libgoal.Client {
+func makeTestClient() libgoal.Client {
 	c, err := libgoal.MakeClientFromConfig(libgoal.ClientConfig{
 		AlgodDataDir: "NO_DIR",
 	}, libgoal.DynamicClient)
@@ -141,7 +141,7 @@ func MakeTestClient() libgoal.Client {
 	return c
 }
 
-func MakeSpecialAccounts() (sink, rewards basics.Address) {
+func makeSpecialAccounts() (sink, rewards basics.Address) {
 	// irrelevant, but deterministic
 	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
 	if err != nil {
@@ -154,7 +154,7 @@ func MakeSpecialAccounts() (sink, rewards basics.Address) {
 	return
 }
 
-func MakeTestBlockHeader() bookkeeping.BlockHeader {
+func makeTestBlockHeader() bookkeeping.BlockHeader {
 	// arbitrary genesis information
 	genesisID := "simulation-test-v1"
 	genesisHash, err := crypto.DigestFromString("3QF7SU53VLAQV6YIWENHUVANS4OFG5PHCTXPPX4EH7FEI3WIMJOQ")
@@ -162,10 +162,10 @@ func MakeTestBlockHeader() bookkeeping.BlockHeader {
 		panic(err)
 	}
 
-	feeSink, rewardsPool := MakeSpecialAccounts()
+	feeSink, rewardsPool := makeSpecialAccounts()
 
 	// convert test balances to AccountData balances
-	testBalances := MakeTestBalances()
+	testBalances := makeTestBalances()
 	acctDataBalances := make(map[basics.Address]basics.AccountData)
 	for addr, balance := range testBalances {
 		acctDataBalances[addr] = basics.AccountData{
@@ -188,7 +188,7 @@ type account struct {
 	Address    basics.Address
 }
 
-func AccountFromMnemonic(mnemonic string) (account, error) {
+func accountFromMnemonic(mnemonic string) (account, error) {
 	key, err := passphrase.MnemonicToKey(mnemonic)
 	if err != nil {
 		return account{}, err
@@ -213,21 +213,21 @@ func AccountFromMnemonic(mnemonic string) (account, error) {
 	}, nil
 }
 
-func SignatureSecretsFromAccount(acc account) (*crypto.SignatureSecrets, error) {
+func signatureSecretsFromAccount(acc account) (*crypto.SignatureSecrets, error) {
 	var sk crypto.PrivateKey
 	copy(sk[:], acc.PrivateKey)
 	return crypto.SecretKeyToSignatureSecrets(sk)
 }
 
-func MakeTestAccounts() []account {
+func makeTestAccounts() []account {
 	// funded
-	account1, err := AccountFromMnemonic("enforce voyage media inform embody borrow truck flat brave goose edit glide poet describe oxygen teach home choice motion engine wolf iron bachelor ability view")
+	account1, err := accountFromMnemonic("enforce voyage media inform embody borrow truck flat brave goose edit glide poet describe oxygen teach home choice motion engine wolf iron bachelor ability view")
 	if err != nil {
 		panic(err)
 	}
 
 	// unfunded
-	account2, err := AccountFromMnemonic("husband around three crystal canvas arrive beach dumb pill sock inflict drink salmon modify gas monkey jungle chronic senior flavor ability witness resist abandon just")
+	account2, err := accountFromMnemonic("husband around three crystal canvas arrive beach dumb pill sock inflict drink salmon modify gas monkey jungle chronic senior flavor ability witness resist abandon just")
 	if err != nil {
 		panic(err)
 	}
@@ -235,27 +235,27 @@ func MakeTestAccounts() []account {
 	return []account{account1, account2}
 }
 
-func MakeTestBalances() map[basics.Address]uint64 {
-	accounts := MakeTestAccounts()
+func makeTestBalances() map[basics.Address]uint64 {
+	accounts := makeTestAccounts()
 
 	return map[basics.Address]uint64{
 		accounts[0].Address: 1000000000,
 	}
 }
 
-func MakeSimulationTestLedger() *SimulationTestLedger {
-	hdr := MakeTestBlockHeader()
-	balances := MakeTestBalances()
+func makeSimulationTestLedger() *simulationTestLedger {
+	hdr := makeTestBlockHeader()
+	balances := makeTestBalances()
 	balances[hdr.RewardsPool] = 1000000 // pool is always 1000000
 	round := uint64(1)
 	logicLedger := MakeLedgerForRound(balances, round)
 	hdr.Round = basics.Round(round)
-	l := SimulationTestLedger{logicLedger, hdr}
+	l := simulationTestLedger{logicLedger, hdr}
 	return &l
 }
 
-func MakeBasicTxnHeader(sender basics.Address) transactions.Header {
-	hdr := MakeTestBlockHeader()
+func makeBasicTxnHeader(sender basics.Address) transactions.Header {
+	hdr := makeTestBlockHeader()
 
 	return transactions.Header{
 		Fee:         basics.MicroAlgos{Raw: 1000},
@@ -269,13 +269,13 @@ func MakeBasicTxnHeader(sender basics.Address) transactions.Header {
 }
 
 // Attach group ID to a transaction group. Mutates the group directly.
-func AttachGroupID(txgroup []transactions.SignedTxn) error {
+func attachGroupID(txgroup []transactions.SignedTxn) error {
 	txnArray := make([]transactions.Transaction, len(txgroup))
 	for i, txn := range txgroup {
 		txnArray[i] = txn.Txn
 	}
 
-	client := MakeTestClient()
+	client := makeTestClient()
 	groupID, err := client.GroupID(txnArray)
 	if err != nil {
 		return err
@@ -296,17 +296,17 @@ func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := MakeSimulationTestLedger()
+	l := makeSimulationTestLedger()
 	s := v2.MakeSimulator(l)
 
-	accounts := MakeTestAccounts()
+	accounts := makeTestAccounts()
 	sender := accounts[0].Address
 
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.PaymentTx,
-				Header: MakeBasicTxnHeader(sender),
+				Header: makeBasicTxnHeader(sender),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender,
 					Amount:   basics.MicroAlgos{Raw: 0},
@@ -324,18 +324,18 @@ func TestOverspendPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := MakeSimulationTestLedger()
+	l := makeSimulationTestLedger()
 	s := v2.MakeSimulator(l)
 
-	accounts := MakeTestAccounts()
+	accounts := makeTestAccounts()
 	sender := accounts[0].Address
-	balances := MakeTestBalances()
+	balances := makeTestBalances()
 
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.PaymentTx,
-				Header: MakeBasicTxnHeader(sender),
+				Header: makeBasicTxnHeader(sender),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender,
 					Amount:   basics.MicroAlgos{Raw: balances[sender] + 100}, // overspend
@@ -353,10 +353,10 @@ func TestSimpleGroupTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := MakeSimulationTestLedger()
+	l := makeSimulationTestLedger()
 	s := v2.MakeSimulator(l)
 
-	accounts := MakeTestAccounts()
+	accounts := makeTestAccounts()
 	sender1 := accounts[0].Address
 	sender2 := accounts[1].Address
 
@@ -365,7 +365,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.PaymentTx,
-				Header: MakeBasicTxnHeader(sender1),
+				Header: makeBasicTxnHeader(sender1),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender2,
 					Amount:   basics.MicroAlgos{Raw: 1000000},
@@ -375,7 +375,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.PaymentTx,
-				Header: MakeBasicTxnHeader(sender2),
+				Header: makeBasicTxnHeader(sender2),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender1,
 					Amount:   basics.MicroAlgos{Raw: 0},
@@ -390,7 +390,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Contains(t, *result.FailureMessage, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
-	AttachGroupID(txgroup)
+	attachGroupID(txgroup)
 
 	// Check balances before transaction
 	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
@@ -423,10 +423,10 @@ func TestSimpleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := MakeSimulationTestLedger()
+	l := makeSimulationTestLedger()
 	s := v2.MakeSimulator(l)
 
-	accounts := MakeTestAccounts()
+	accounts := makeTestAccounts()
 	sender := accounts[0].Address
 
 	// Compile AVM program
@@ -440,7 +440,7 @@ func TestSimpleAppCall(t *testing.T) {
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.ApplicationCallTx,
-				Header: MakeBasicTxnHeader(sender),
+				Header: makeBasicTxnHeader(sender),
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID:     0,
 					ApprovalProgram:   prog,
@@ -459,7 +459,7 @@ func TestSimpleAppCall(t *testing.T) {
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.ApplicationCallTx,
-				Header: MakeBasicTxnHeader(sender),
+				Header: makeBasicTxnHeader(sender),
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID:     basics.AppIndex(futureAppID),
 					ApprovalProgram:   prog,
@@ -469,7 +469,7 @@ func TestSimpleAppCall(t *testing.T) {
 		},
 	}
 
-	AttachGroupID(txgroup)
+	attachGroupID(txgroup)
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
@@ -479,17 +479,17 @@ func TestSignatureCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := MakeSimulationTestLedger()
+	l := makeSimulationTestLedger()
 	s := v2.MakeSimulator(l)
 
-	accounts := MakeTestAccounts()
+	accounts := makeTestAccounts()
 	sender := accounts[0].Address
 
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
 				Type:   protocol.PaymentTx,
-				Header: MakeBasicTxnHeader(sender),
+				Header: makeBasicTxnHeader(sender),
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: sender,
 					Amount:   basics.MicroAlgos{Raw: 0},
@@ -505,7 +505,7 @@ func TestSignatureCheck(t *testing.T) {
 	require.Contains(t, *result.SignatureFailureMessage, "signedtxn has no sig")
 
 	// add signature
-	signatureSecrets, err := SignatureSecretsFromAccount(accounts[0])
+	signatureSecrets, err := signatureSecretsFromAccount(accounts[0])
 	require.NoError(t, err)
 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
