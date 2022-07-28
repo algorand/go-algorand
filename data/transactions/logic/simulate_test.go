@@ -18,6 +18,7 @@ package logic_test
 
 import (
 	"crypto/ed25519"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"testing"
@@ -288,6 +289,12 @@ func attachGroupID(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
+func uint64ToBytes(num uint64) []byte {
+	ibytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(ibytes, num)
+	return ibytes
+}
+
 // ==============================
 // > Simulation Tests
 // ==============================
@@ -514,4 +521,110 @@ func TestSignatureCheck(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
 	require.Empty(t, result.SignatureFailureMessage)
+}
+
+const accountBalanceCheckProgram = `#pragma version 4
+  txn ApplicationID      // [appId]
+	bz end                 // []
+  int 1                  // [1]
+  balance                // [bal[1]]
+  itob                   // [itob(bal[1])]
+  txn ApplicationArgs 0  // [itob(bal[1]), args[0]]
+  ==                     // [itob(bal[1])=?=args[0]]
+	assert
+	b end
+end:
+  int 1                  // [1]
+`
+
+func TestBalanceChangesWithApp(t *testing.T) {
+	// Send a payment transaction to a new account and confirm its balance within an app call
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := makeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := makeTestAccounts()
+	sender := accounts[0].Address
+	receiver := accounts[1].Address
+	sendAmount := uint64(100000000)
+
+	// Compile approval program
+	ops, err := AssembleString(accountBalanceCheckProgram)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	futureAppID := 1
+	txgroup := []transactions.SignedTxn{
+		// create app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+		// check balance
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     basics.AppIndex(futureAppID),
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					Accounts:          []basics.Address{receiver},
+					ApplicationArgs:   [][]byte{uint64ToBytes(0)},
+				},
+			},
+		},
+		// send payment
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeBasicTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: sendAmount},
+				},
+			},
+		},
+		// check balance changed
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     basics.AppIndex(futureAppID),
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					Accounts:          []basics.Address{receiver},
+					ApplicationArgs:   [][]byte{uint64ToBytes(sendAmount)},
+				},
+			},
+		},
+	}
+
+	attachGroupID(txgroup)
+	result, err := s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, result.FailureMessage)
 }
