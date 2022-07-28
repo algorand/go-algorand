@@ -80,9 +80,7 @@ type peerClass struct {
 	peerClass   network.PeerOption
 }
 
-// PeerClassExported defines the type of peer we want to have in a particular "class",
-// and define the network.PeerOption that would be used to retrieve that type of
-// peer. Its an exported peerClass struct
+// PeerClassExported exports peerClass struct
 type PeerClassExported struct {
 	InitialRank int
 	PeerClass   network.PeerOption
@@ -276,6 +274,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	return bounded
 }
 
+// MakePeerSelectorExported exports makePeerSelector function
 func MakePeerSelectorExported(net peersRetriever, initialPeersClasses []PeerClassExported) *PeerSelector {
 	var peerClasses []peerClass
 	for _, v := range initialPeersClasses {
