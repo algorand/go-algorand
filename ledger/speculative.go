@@ -47,6 +47,7 @@ type LedgerForEvaluator interface {
 	Latest() basics.Round
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 	GenesisProto() config.ConsensusParams
+	BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error)
 }
 
 // validatedBlockAsLFE presents a LedgerForEvaluator interface on top of
@@ -231,6 +232,14 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(rnd basics.Round, a basics.Ad
 // TODO(yossi) should we forward this cache?
 func (v *validatedBlockAsLFE) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return v.l.VerifiedTransactionCache()
+}
+
+// VerifiedTransactionCache implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
+	if rnd == v.vb.Block().Round() {
+		return v.vb.Block().BlockHeader, nil
+	}
+	return v.l.BlockHdrCached(rnd)
 }
 
 // StartEvaluator implements the ledgerForEvaluator interface.
