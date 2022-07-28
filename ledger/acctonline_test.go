@@ -603,14 +603,31 @@ func TestAcctOnlineCache(t *testing.T) {
 	acctIdx := (int(targetRound) - 1) % numAccts
 	bal := allAccts[acctIdx]
 	delete(oa.onlineAccountsCache.accounts, bal.Addr)
-	oldRound := targetRound - basics.Round(maxBalLookback+maxDeltaLookback) + 1
+	// the account acctIdx was modified:
+	// at round targetRound - 0*numAccts and set offline (see the loop above)
+	// at round targetRound - 1*numAccts it was set online
+	// at round targetRound - 2*numAccts it was set offline...
+	// find the oldest round in DB that is online and not deleted yet
+	// 1. thus must be even cycles back
+	// 2. this should be some cycles back from persisting round that is targetRound - maxDeltaLookback
+	candidate := targetRound - basics.Round(maxDeltaLookback) - maxBalLookback
+	cycle := (targetRound - candidate) / numAccts
+	oldRound := candidate - candidate%numAccts
+	if cycle%4 != 0 {
+		oldRound += numAccts
+	}
+	expectedRound := oldRound
+	minLookupRound := targetRound - basics.Round(maxBalLookback+maxDeltaLookback) + 1
+	if oldRound < minLookupRound {
+		// if below than the min round online accounts support than adjust
+		oldRound = minLookupRound
+	}
 
 	// cache should be repopulated on this command
 	oa.lookupOnlineAccountData(oldRound, bal.Addr)
 	cachedData, has := oa.onlineAccountsCache.read(bal.Addr, oldRound)
 	require.True(t, has)
-	// next entry is at targetRound - 25, oldround = targetRound-22
-	require.Equal(t, oldRound-3, cachedData.updRound)
+	require.Equal(t, expectedRound, cachedData.updRound)
 	require.NotEmpty(t, cachedData.baseOnlineAccountData)
 
 	// cache should contain data for new rounds
