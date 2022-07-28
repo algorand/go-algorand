@@ -126,10 +126,10 @@ func TestPeerSelector(t *testing.T) {
 
 	peers := []network.Peer{&mockHTTPPeer{address: "12345"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return peers
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}},
 	)
 
 	psp, err := peerSelector.GetNextPeer()
@@ -187,7 +187,7 @@ func TestPeerDownloadRanking(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "1234"}, &mockHTTPPeer{address: "5678"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -197,8 +197,8 @@ func TestPeerDownloadRanking(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 	archivalPeer, err := peerSelector.GetNextPeer()
 	require.NoError(t, err)
@@ -235,10 +235,10 @@ func TestPeerDownloadRanking(t *testing.T) {
 func TestFindMissingPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return []network.Peer{}
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}},
 	)
 
 	poolIdx, peerIdx := peerSelector.findPeer(&PeerSelectorPeer{mockHTTPPeer{address: "abcd"}, 0})
@@ -252,7 +252,7 @@ func TestHistoricData(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -262,8 +262,8 @@ func TestHistoricData(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 
 	var counters [5]int
@@ -325,7 +325,7 @@ func TestPeersDownloadFailed(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -335,8 +335,8 @@ func TestPeersDownloadFailed(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 
 	var counters [5]int
@@ -400,7 +400,7 @@ func TestPenalty(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -410,8 +410,8 @@ func TestPenalty(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 
 	var counters [5]int
@@ -460,7 +460,7 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 	peers3 := []network.Peer{&mockHTTPPeer{address: "c1"}, &mockHTTPPeer{address: "c2"}}
 	peers4 := []network.Peer{&mockHTTPPeer{address: "d1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -474,10 +474,10 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays},
-			{InitialRank: peerRankInitialThirdPriority, PeerClass: network.PeersConnectedOut},
-			{InitialRank: peerRankInitialFourthPriority, PeerClass: network.PeersConnectedIn}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
+			{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}},
 	)
 
 	_, err := peerSelector.GetNextPeer()
@@ -496,10 +496,10 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 func TestLowerUpperBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	classes := []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-		{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays},
-		{InitialRank: peerRankInitialThirdPriority, PeerClass: network.PeersConnectedOut},
-		{InitialRank: peerRankInitialFourthPriority, PeerClass: network.PeersConnectedIn}}
+	classes := []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+		{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
+		{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}}
 
 	require.Equal(t, peerRank0LowBlockTime, lowerBound(classes[0]))
 	require.Equal(t, peerRank1LowBlockTime, lowerBound(classes[1]))
@@ -515,7 +515,7 @@ func TestLowerUpperBounds(t *testing.T) {
 func TestFullResetRequestPenalty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	class := PeerClass{InitialRank: 10, PeerClass: network.PeersPhonebookArchivers}
+	class := peerClass{initialRank: 10, peerClass: network.PeersPhonebookArchivers}
 	hs := makeHistoricStatus(10, class)
 	hs.push(5, 1, class)
 	require.Equal(t, 1, len(hs.requestGaps))
@@ -531,8 +531,8 @@ func TestClassUpperBound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
-	pClass := PeerClass{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookArchivers}
-	peerSelector := MakePeerSelector(
+	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -540,7 +540,7 @@ func TestClassUpperBound(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{pClass})
+		}), []peerClass{pClass})
 
 	_, err := peerSelector.GetNextPeer()
 	require.NoError(t, err)
@@ -560,13 +560,13 @@ func TestClassUpperBound(t *testing.T) {
 
 // TestClassLowerBound makes sure the peer rank does not go under the class lower bound
 // This was a bug where the resetRequestPenalty was not bounding the returned rank, and the rankSum was not
-// initialized to give the average of class.InitialRank
+// initialized to give the average of class.initialRank
 func TestClassLowerBound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
-	pClass := PeerClass{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookArchivers}
-	peerSelector := MakePeerSelector(
+	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -574,7 +574,7 @@ func TestClassLowerBound(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{pClass})
+		}), []peerClass{pClass})
 
 	_, err := peerSelector.GetNextPeer()
 	require.NoError(t, err)
@@ -584,7 +584,7 @@ func TestClassLowerBound(t *testing.T) {
 		peerSelector.RankPeer(psp, lowerBound(pClass))
 
 		for _, pool := range peerSelector.pools {
-			require.GreaterOrEqual(t, pool.rank, pool.peers[0].class.InitialRank)
+			require.GreaterOrEqual(t, pool.rank, pool.peers[0].class.initialRank)
 		}
 	}
 }
@@ -596,7 +596,7 @@ func TestEvictionAndUpgrade(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 
-	peerSelector := MakePeerSelector(
+	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
@@ -606,8 +606,8 @@ func TestEvictionAndUpgrade(t *testing.T) {
 				}
 			}
 			return
-		}), []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-			{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays}},
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 
 	_, err := peerSelector.GetNextPeer()

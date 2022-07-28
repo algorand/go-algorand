@@ -834,15 +834,15 @@ func TestCreatePeerSelector(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps := s.createPeerSelector(true)
 	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].PeerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = true;
 	cfg.EnableCatchupFromArchiveServers = true
@@ -850,13 +850,13 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = s.createPeerSelector(true)
 	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
 
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].PeerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
@@ -865,15 +865,15 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(false)
 
 	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].PeerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[3].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[3].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
@@ -882,13 +882,13 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[2].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[2].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = true
 	cfg.EnableCatchupFromArchiveServers = false
@@ -897,13 +897,13 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(true)
 
 	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[2].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[2].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = true
 	cfg.EnableCatchupFromArchiveServers = false
@@ -912,11 +912,11 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(true)
 
 	require.Equal(t, 2, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
@@ -925,13 +925,13 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
@@ -940,11 +940,11 @@ func TestCreatePeerSelector(t *testing.T) {
 	ps = s.createPeerSelector(false)
 
 	require.Equal(t, 2, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].InitialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].InitialRank)
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].PeerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].PeerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
 }
 
 func TestServiceStartStop(t *testing.T) {

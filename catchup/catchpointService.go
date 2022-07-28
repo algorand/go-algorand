@@ -274,7 +274,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := MakePeerSelector(cs.net, []PeerClass{{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookRelays}})
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -743,17 +743,17 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 
 func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 	if cs.config.EnableCatchupFromArchiveServers {
-		cs.blocksDownloadPeerSelector = MakePeerSelector(
+		cs.blocksDownloadPeerSelector = makePeerSelector(
 			cs.net,
-			[]PeerClass{
-				{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookArchivers},
-				{InitialRank: peerRankInitialSecondPriority, PeerClass: network.PeersPhonebookRelays},
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	} else {
-		cs.blocksDownloadPeerSelector = MakePeerSelector(
+		cs.blocksDownloadPeerSelector = makePeerSelector(
 			cs.net,
-			[]PeerClass{
-				{InitialRank: peerRankInitialFirstPriority, PeerClass: network.PeersPhonebookRelays},
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
 }
