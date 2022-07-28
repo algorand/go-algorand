@@ -143,7 +143,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, make(chan struct{}), err
 	}
 
 	ctx, cancel := context.WithCancel(pool.ctx)
@@ -544,13 +544,13 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	// create shallow pool copy
 	vb := ledgercore.MakeValidatedBlock(block, delta)
 	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(&vb)
+	defer close(specAsmDoneCh)
 	pool.mu.Unlock()
 
 	if err != nil {
 		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
 		return
 	}
-	defer close(specAsmDoneCh)
 
 	// process txns only until one block is full
 	speculativePool.onNewBlock(block, delta, true)
