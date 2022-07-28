@@ -456,7 +456,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalResources := 0
 		totalChunks := 0
 		var expectedTotalResources int
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, uint64(maxResourcesPerChunk))
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
 		if err != nil {
 			return err
@@ -545,7 +545,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		var expectedTotalResources int
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, uint64(maxResourcesPerChunk))
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
 		if err != nil {
 			return err

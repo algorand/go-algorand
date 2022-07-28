@@ -1459,7 +1459,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 
 	if rootHash.IsZero() {
 		ct.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize, DefaultMaxResourcesPerChunk)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0

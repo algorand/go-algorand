@@ -60,7 +60,7 @@ type catchpointWriter struct {
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
-	maxResourcesPerChunk uint64
+	maxResourcesPerChunk int
 }
 
 type encodedBalanceRecordV5 struct {
@@ -96,7 +96,7 @@ type catchpointFileBalancesChunkV6 struct {
 	numAccounts uint64
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk uint64) (*catchpointWriter, error) {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	totalAccounts, err := totalAccounts(ctx, tx)
 	if err != nil {
 		return nil, err
