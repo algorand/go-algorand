@@ -27,6 +27,8 @@ const configFileName = "loadgenerator.config"
 type config struct {
 	// AccountMnemonic is the mnemonic of the account from which we would like to spend Algos.
 	AccountMnemonic string
+	// AccountMnemonicList, if provided, is a series of mnemonics for accounts from which to spend Algos.
+	AccountMnemonicList []string
 	// ClientURL is the url ( such as http://127.0.0.1:8080 ) that would be used to communicate with a node REST endpoint
 	ClientURL *url.URL `json:"-"`
 	// APIToken is the API token used to communicate with the node.
