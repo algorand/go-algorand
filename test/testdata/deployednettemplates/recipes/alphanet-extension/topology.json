@@ -5,22 +5,6 @@
       "Template": "AWS-US-EAST-1-c5d.4xl"
     },
     {
-      "Name": "R2-alphanet",
-      "Template": "AWS-US-WEST-1-c5d.4xl"
-    },
-    {
-      "Name": "R3-alphanet",
-      "Template": "AWS-SA-EAST-1-c5d.4xl"
-    },
-    {
-      "Name": "R4-alphanet",
-      "Template": "AWS-EU-NORTH-1-c5d.4xl"
-    },
-    {
-      "Name": "R5-alphanet",
-      "Template": "AWS-AP-SOUTHEAST-1-c5d.4xl"
-    },
-    {
       "Name": "N1-alphanet",
       "Template": "AWS-US-EAST-1-c5d.4xl"
     },
@@ -99,38 +83,6 @@
     {
       "Name": "N20-alphanet",
       "Template": "AWS-AP-SOUTHEAST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN1-alphanet",
-      "Template": "AWS-US-EAST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN2-alphanet",
-      "Template": "AWS-US-WEST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN3-alphanet",
-      "Template": "AWS-SA-EAST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN4-alphanet",
-      "Template": "AWS-EU-NORTH-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN5-alphanet",
-      "Template": "AWS-AP-SOUTHEAST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN6-alphanet",
-      "Template": "AWS-US-EAST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN7-alphanet",
-      "Template": "AWS-US-WEST-1-c5d.4xl"
-    },
-    {
-      "Name": "NPN8-alphanet",
-      "Template": "AWS-SA-EAST-1-c5d.4xl"
     }
   ]
 }
