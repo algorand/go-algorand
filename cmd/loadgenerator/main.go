@@ -165,8 +165,8 @@ func nextSpendRound(cfg config, round uint64) uint64 {
 func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (err error) {
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
 	for {
-		waitForRound(restClient, cfg, true)
-		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey)
+		nodeStatus := waitForRound(restClient, cfg, true)
+		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey, nodeStatus)
 		if queueFull {
 			// done for this round, wait for a non-send round
 			waitForRound(restClient, cfg, false)
@@ -179,8 +179,7 @@ func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics
 	return nil
 }
 
-func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) {
-	var nodeStatus generatedV2.NodeStatusResponse
+func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) (nodeStatus generatedV2.NodeStatusResponse) {
 	var err error
 	for {
 		nodeStatus, err = restClient.Status()
@@ -214,14 +213,9 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 
 const transactionBlockSize = 800
 
-func generateTransactions(restClient client.RestClient, cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (queueFull bool) {
-	var nodeStatus generatedV2.NodeStatusResponse
+func generateTransactions(restClient client.RestClient, cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address, nodeStatus generatedV2.NodeStatusResponse) (queueFull bool) {
+	start := time.Now()
 	var err error
-	nodeStatus, err = restClient.Status()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to check status : %v", err)
-		return false
-	}
 	var vers common.Version
 	vers, err = restClient.Versions()
 	if err != nil {
@@ -283,6 +277,8 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 	for i := 0; i < nroutines; i++ {
 		totalSent += sent[i]
 	}
+	dt := time.Now().Sub(start)
+	fmt.Fprintf(os.Stdout, "sent %d/%d in %s (%.1f/s)\n", totalSent, sendSize, dt.String(), float64(totalSent)/dt.Seconds())
 	if cfg.TxnsToSend != 0 {
 		// We attempted what we were asked. We're done.
 		return true

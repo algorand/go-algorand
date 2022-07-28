@@ -49,6 +49,7 @@ type fileConfig struct {
 func loadConfig(configFileName string) (cfg config, err error) {
 	var fin io.Reader
 	if len(configFileName) > 0 && configFileName[0] == '{' {
+		// read -config "{json literal}"
 		fin = strings.NewReader(configFileName)
 	} else {
 		var fd *os.File
