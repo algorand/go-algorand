@@ -17,44 +17,68 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
+)
+
+var (
+	errStateProofNotEnabled             = errors.New("state proofs are not enabled")
+	errNotAtRightMultiple               = errors.New("state proof is not in a valid round multiple")
+	errInvalidVotersRound               = errors.New("invalid voters round")
+	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
+	errInsufficientWeight               = errors.New("insufficient state proof weight")
+	errStateProofTypeNotSupported       = errors.New("state proof type is not supported")
 )
 
 // StateProof applies the StateProof transaction and setting the next StateProof round
 func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofs, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {
-		return fmt.Errorf("applyStateProof type %d not supported", spType)
+		return fmt.Errorf("%w %d", errStateProofTypeNotSupported, spType)
 	}
 
-	nextStateProofRnd := sp.GetStateProofNextRound()
-
-	latestRoundInInterval := tx.StateProofIntervalLastRound
-	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)
+	lastRoundInInterval := tx.StateProofIntervalLastRound
+	lastRoundInIntervalHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return err
 	}
 
-	proto := config.Consensus[latestRoundHdr.CurrentProtocol]
+	proto := config.Consensus[lastRoundInIntervalHdr.CurrentProtocol]
 
 	if validate {
-		votersRnd := latestRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
-		votersHdr, err := sp.BlockHdr(votersRnd)
+		if proto.StateProofInterval == 0 {
+			return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errStateProofNotEnabled)
+		}
+
+		nextStateProofRnd := sp.GetStateProofNextRound()
+		if nextStateProofRnd == 0 || nextStateProofRnd != lastRoundInIntervalHdr.Round {
+			return fmt.Errorf("expecting state proof for %d, but new state proof is for %d :%w",
+				nextStateProofRnd, lastRoundInIntervalHdr.Round, errExpectedDifferentStateProofRound)
+		}
+
+		if lastRoundInIntervalHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
+			return fmt.Errorf("state proof at %d for non-multiple of %d: %w", lastRoundInIntervalHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
+		}
+
+		votersRound := lastRoundInIntervalHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
+		votersHdr, err := sp.BlockHdr(votersRound)
 		if err != nil {
 			return err
 		}
 
-		err = verify.ValidateStateProof(&latestRoundHdr, &tx.StateProof, &votersHdr, nextStateProofRnd, atRound, &tx.Message)
-		if err != nil {
-			return err
+		acceptableWeight := verify.AcceptableStateProofWeight(votersHdr, atRound, logging.Base())
+		if tx.StateProof.SignedWeight < acceptableWeight {
+			return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
+				atRound, tx.StateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
 		}
 	}
 
-	sp.SetStateProofNextRound(latestRoundInInterval + basics.Round(proto.StateProofInterval))
+	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(proto.StateProofInterval))
 	return nil
 }

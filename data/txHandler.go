@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	stateproofverify "github.com/algorand/go-algorand/stateproof/verify"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -204,6 +205,9 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
 		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
+		if tx.verificationErr == nil {
+			tx.verificationErr = stateproofverify.ValidateStateProof(tx.unverifiedTxGroup, handler.ledger)
+		}
 	}
 
 	select {

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	stateproofverify "github.com/algorand/go-algorand/stateproof/verify"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -500,6 +502,12 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
 	if err != nil {
 		node.log.Warnf("malformed transaction: %v", err)
+		return err
+	}
+
+	err = stateproofverify.ValidateStateProof(txgroup, node.ledger)
+	if err != nil {
+		node.log.Warnf("txn contains invalid state proof: %w", err)
 		return err
 	}
 

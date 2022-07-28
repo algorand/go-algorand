@@ -19,24 +19,25 @@ package verify
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	cryptosp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// BlockHeaderFetcher captures the aspects of the Ledger that is used to fetch block headers
+type BlockHeaderFetcher interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+// state proof verification errors
 var (
-	errStateProofCrypto                 = errors.New("state proof crypto error")
-	errStateProofParamCreation          = errors.New("state proof param creation error")
-	errStateProofNotEnabled             = errors.New("state proofs are not enabled")
-	errNotAtRightMultiple               = errors.New("state proof is not in a valid round multiple")
-	errInvalidVotersRound               = errors.New("invalid voters round")
-	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
-	errInsufficientWeight               = errors.New("insufficient state proof weight")
+	ErrStateProofCrypto        = errors.New("state proof crypto error")
+	ErrStateProofParamCreation = errors.New("state proof param creation error")
+	errStateProofNotEnabled    = errors.New("state proofs are not enabled")
 )
 
 // AcceptableStateProofWeight computes the acceptable signed weight
@@ -136,50 +137,54 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 	return provenWeight, nil
 }
 
-// ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
-	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
+// ValidateStateProof validates that the cryptographic proof of the state proof transaction is correct with respect to the headers.
+func ValidateStateProof(txgroup []transactions.SignedTxn, fetcher BlockHeaderFetcher) error {
+	for i := 0; i < len(txgroup); i++ {
+		if txgroup[i].Txn.Type != protocol.StateProofTx || txgroup[i].Txn.StateProofTxnFields.StateProofType != protocol.StateProofBasic {
+			continue
+		}
+		err := validateProof(&txgroup[i].Txn.StateProofTxnFields, fetcher)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func validateProof(stateProofTxn *transactions.StateProofTxnFields, fetcher BlockHeaderFetcher) error {
+	lastRoundInInterval := stateProofTxn.StateProofIntervalLastRound
+	lastRoundInIntervalHdr, err := fetcher.BlockHdr(lastRoundInInterval)
+	if err != nil {
+		return err
+	}
+
+	proto := config.Consensus[lastRoundInIntervalHdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
 		return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errStateProofNotEnabled)
 	}
 
-	if latestRoundInIntervalHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
-		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", latestRoundInIntervalHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
-	}
-
-	votersRound := latestRoundInIntervalHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
-	if votersRound != votersHdr.Round {
-		return fmt.Errorf("new state proof is for %d (voters %d), but votersHdr from %d: %w",
-			latestRoundInIntervalHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
-	}
-
-	if nextStateProofRnd == 0 || nextStateProofRnd != latestRoundInIntervalHdr.Round {
-		return fmt.Errorf("expecting state proof for %d, but new state proof is for %d (voters %d):%w",
-			nextStateProofRnd, latestRoundInIntervalHdr.Round, votersRound, errExpectedDifferentStateProofRound)
-	}
-
-	acceptableWeight := AcceptableStateProofWeight(*votersHdr, atRound, logging.Base())
-	if stateProof.SignedWeight < acceptableWeight {
-		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
-			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
-	}
-
-	provenWeight, err := GetProvenWeight(*votersHdr, *latestRoundInIntervalHdr)
+	votersRound := lastRoundInIntervalHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersHdr, err := fetcher.BlockHdr(votersRound)
 	if err != nil {
-		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
+		return err
 	}
 
-	verifier, err := stateproof.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+	provenWeight, err := GetProvenWeight(votersHdr, lastRoundInIntervalHdr)
+	if err != nil {
+		return fmt.Errorf("%v: %w", err, ErrStateProofParamCreation)
+	}
+
+	verifier, err := cryptosp.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		provenWeight,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return err
 	}
 
-	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.Hash(), stateProof)
+	err = verifier.Verify(uint64(lastRoundInIntervalHdr.Round), stateProofTxn.Message.Hash(), &stateProofTxn.StateProof)
 	if err != nil {
-		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
+		return fmt.Errorf("%v: %w", err, ErrStateProofCrypto)
 	}
 	return nil
+
 }
