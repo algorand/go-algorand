@@ -270,11 +270,18 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 }
 
 // checkPendingQueueSize tests to see if we can grow the pending group transaction list
-// by adding txCount more transactions. The limits comes from the total number of transactions
+// by adding len(txnGroup) more transactions. The limits comes from the total number of transactions
 // and not from the total number of transaction groups.
 // As long as we haven't surpassed the size limit, we should be good to go.
-func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
+func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.SignedTxn) error {
+	// The state proof transactions sent from a StateProofSender with 0 fee can exceed the txPoolMaxSize
+	if len(txnGroup) == 1 {
+		if txnGroup[0].Txn.Type == protocol.StateProofTx && txnGroup[0].Txn.Sender == transactions.StateProofSender && txnGroup[0].Txn.Fee.IsZero() {
+			return nil
+		}
+	}
 	pendingSize := pool.pendingTxIDsCount()
+	txCount := len(txnGroup)
 	if pendingSize+txCount > pool.txPoolMaxSize {
 		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
@@ -356,7 +363,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
@@ -443,7 +450,7 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
