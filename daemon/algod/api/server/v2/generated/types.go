@@ -445,6 +445,9 @@ type SimulationResult struct {
 
 	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
 	FailureMessage *string `json:"failure-message,omitempty"`
+
+	// \[sfm\] Signature failure message, if the signature check would have failed.
+	SignatureFailureMessage *string `json:"signature-failure-message,omitempty"`
 }
 
 // StateDelta defines model for StateDelta.

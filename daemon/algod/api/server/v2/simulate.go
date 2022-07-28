@@ -103,11 +103,36 @@ type InvalidTxGroupError struct {
 	SimulatorError
 }
 
+type InvalidSignatureError struct {
+	SimulatorError
+}
+
 // A scoped simulator error is a simulator error that has 2 errors, one for internal use and one for
 // displaying publicly. THe external error is useful for API routes/etc.
 type ScopedSimulatorError struct {
 	SimulatorError        // the original error for internal use
 	External       string // the external error for public use
+}
+
+// ==============================
+// > Simulator Helper Methods
+// ==============================
+
+func isInvalidSignatureError(err error) bool {
+	invalidSignatureErrorFragments := []string{
+		"signedtxn has no sig",
+		"signedtxn should only have one of Sig or Msig or LogicSig",
+		"multisig validation failed",
+		"has one mystery sig",
+	}
+
+	for _, fragment := range invalidSignatureErrorFragments {
+		if strings.Contains(err.Error(), fragment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ==============================
@@ -130,35 +155,43 @@ func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.Block
 }
 
 // checkWellFormed checks that the transaction is well-formed. A failure message is returned if the transaction is not well-formed.
-func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) (failureMessage string, err error) {
+func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) error {
 	hdr, err := s.ledger.BlockHdr(s.ledger.Latest())
 	if err != nil {
-		return "", ScopedSimulatorError{SimulatorError{fmt.Errorf("Please contact us, this shouldn't happen. Current block error: %v.", err)}, "current block error"}
+		return ScopedSimulatorError{SimulatorError{fmt.Errorf("Please contact us, this shouldn't happen. Current block error: %v.", err)}, "current block error"}
 	}
 
-	_, err = verify.TxnGroupBatchVerify(txgroup, hdr, nil, nil)
+	batchVerifier := crypto.MakeBatchVerifier()
+	_, err = verify.TxnGroupBatchVerify(txgroup, hdr, nil, batchVerifier)
 	if err != nil {
-		// catch verifier is nil error. This is an expected error if nothing else goes wrong.
-		if strings.Contains(err.Error(), "verifier is nil") {
-			return "", nil
+		// invalid signature error
+		if isInvalidSignatureError(err) {
+			return InvalidSignatureError{SimulatorError{err}}
 		}
 
-		// otherwise the transaction group was invalid in some way and we should return an error
-		return "", InvalidTxGroupError{SimulatorError{err}}
+		// otherwise the transaction group was invalid in some way
+		return InvalidTxGroupError{SimulatorError{err}}
 	}
 
-	return "", nil
+	return nil
 }
 
 // Simulate a transaction group using the simulator. Will error if the transaction group is not well-formed or an
 // unexpected error occurs. Otherwise, evaluation failure messages are returned.
-func (s Simulator) SimulateSignedTxGroup(txgroup []transactions.SignedTxn) (result generated.SimulationResult, err error) {
+func (s Simulator) SimulateSignedTxGroup(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
+	var result generated.SimulationResult
+
 	// check that the transaction is well-formed. Signatures are checked after evaluation
-	failureMessage, err := s.checkWellFormed(txgroup)
+	err := s.checkWellFormed(txgroup)
 	if err != nil {
-		return
+		errMessage := err.Error()
+		switch err.(type) {
+		case InvalidSignatureError:
+			result.SignatureFailureMessage = &errMessage
+		default:
+			return result, err
+		}
 	}
-	result.FailureMessage = &failureMessage
 
 	_, _, evalErr := ledger.EvalForDebugger(s.ledger, txgroup)
 	if evalErr != nil {
@@ -166,5 +199,5 @@ func (s Simulator) SimulateSignedTxGroup(txgroup []transactions.SignedTxn) (resu
 		result.FailureMessage = &errStr
 	}
 
-	return
+	return result, nil
 }

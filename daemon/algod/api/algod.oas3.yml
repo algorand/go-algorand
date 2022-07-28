@@ -1582,6 +1582,10 @@
           "failure-message": {
             "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
             "type": "string"
+          },
+          "signature-failure-message": {
+            "description": "\\[sfm\\] Signature failure message, if the signature check would have failed.",
+            "type": "string"
           }
         },
         "type": "object"

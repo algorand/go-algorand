@@ -17,11 +17,14 @@
 package logic_test
 
 import (
+	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/passphrase"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -179,25 +182,64 @@ func MakeTestBlockHeader() bookkeeping.BlockHeader {
 	return genesisBlock.BlockHeader
 }
 
-func MakeTestAccounts() []basics.Address {
-	account1, err := basics.UnmarshalChecksumAddress("DYFRROWPOCWPJ544DEUV7WMXIBRIDDXR4QMBLR2S2IHRL3OXQB6YLEGNRU")
+type account struct {
+	PublicKey  ed25519.PublicKey
+	PrivateKey ed25519.PrivateKey
+	Address    basics.Address
+}
+
+func AccountFromMnemonic(mnemonic string) (account, error) {
+	key, err := passphrase.MnemonicToKey(mnemonic)
+	if err != nil {
+		return account{}, err
+	}
+
+	decoded := ed25519.NewKeyFromSeed(key)
+
+	pk := decoded.Public().(ed25519.PublicKey)
+	sk := decoded
+
+	// Convert the public key to an address
+	var addr basics.Address
+	n := copy(addr[:], pk)
+	if n != ed25519.PublicKeySize {
+		return account{}, errors.New("generated public key is the wrong size")
+	}
+
+	return account{
+		PublicKey:  pk,
+		PrivateKey: sk,
+		Address:    addr,
+	}, nil
+}
+
+func SignatureSecretsFromAccount(acc account) (*crypto.SignatureSecrets, error) {
+	var sk crypto.PrivateKey
+	copy(sk[:], acc.PrivateKey)
+	return crypto.SecretKeyToSignatureSecrets(sk)
+}
+
+func MakeTestAccounts() []account {
+	// funded
+	account1, err := AccountFromMnemonic("enforce voyage media inform embody borrow truck flat brave goose edit glide poet describe oxygen teach home choice motion engine wolf iron bachelor ability view")
 	if err != nil {
 		panic(err)
 	}
 
-	account2, err := basics.UnmarshalChecksumAddress("NNQ6QBRYXZSSPJAJZETWHCEM7G2MMMJG3ZB232672QBPIWTWQL2MUP3TJI")
+	// unfunded
+	account2, err := AccountFromMnemonic("husband around three crystal canvas arrive beach dumb pill sock inflict drink salmon modify gas monkey jungle chronic senior flavor ability witness resist abandon just")
 	if err != nil {
 		panic(err)
 	}
 
-	return []basics.Address{account1, account2}
+	return []account{account1, account2}
 }
 
 func MakeTestBalances() map[basics.Address]uint64 {
 	accounts := MakeTestAccounts()
 
 	return map[basics.Address]uint64{
-		accounts[0]: 1000000000,
+		accounts[0].Address: 1000000000,
 	}
 }
 
@@ -258,7 +300,7 @@ func TestPayTxn(t *testing.T) {
 	s := v2.MakeSimulator(l)
 
 	accounts := MakeTestAccounts()
-	sender := accounts[0]
+	sender := accounts[0].Address
 
 	txgroup := []transactions.SignedTxn{
 		{
@@ -275,7 +317,7 @@ func TestPayTxn(t *testing.T) {
 
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, *result.FailureMessage)
+	require.Empty(t, result.FailureMessage)
 }
 
 func TestOverspendPayTxn(t *testing.T) {
@@ -286,7 +328,7 @@ func TestOverspendPayTxn(t *testing.T) {
 	s := v2.MakeSimulator(l)
 
 	accounts := MakeTestAccounts()
-	sender := accounts[0]
+	sender := accounts[0].Address
 	balances := MakeTestBalances()
 
 	txgroup := []transactions.SignedTxn{
@@ -315,8 +357,8 @@ func TestSimpleGroupTxn(t *testing.T) {
 	s := v2.MakeSimulator(l)
 
 	accounts := MakeTestAccounts()
-	sender1 := accounts[0]
-	sender2 := accounts[1]
+	sender1 := accounts[0].Address
+	sender2 := accounts[1].Address
 
 	// Send money back and forth
 	txgroup := []transactions.SignedTxn{
@@ -362,7 +404,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	// Should now pass
 	result, err = s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, *result.FailureMessage)
+	require.Empty(t, result.FailureMessage)
 
 	// Confirm balances have not changed
 	sender1Data, _, err = l.LookupWithoutRewards(l.Latest(), sender1)
@@ -385,7 +427,7 @@ func TestSimpleAppCall(t *testing.T) {
 	s := v2.MakeSimulator(l)
 
 	accounts := MakeTestAccounts()
-	sender := accounts[0]
+	sender := accounts[0].Address
 
 	// Compile AVM program
 	ops, err := AssembleString(trivialAVMProgram)
@@ -430,5 +472,46 @@ func TestSimpleAppCall(t *testing.T) {
 	AttachGroupID(txgroup)
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, *result.FailureMessage)
+	require.Empty(t, result.FailureMessage)
+}
+
+func TestSignatureCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := MakeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := MakeTestAccounts()
+	sender := accounts[0].Address
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: MakeBasicTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			},
+		},
+	}
+
+	// should error without a signature
+	result, err := s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, result.FailureMessage)
+	require.Contains(t, *result.SignatureFailureMessage, "signedtxn has no sig")
+
+	// add signature
+	signatureSecrets, err := SignatureSecretsFromAccount(accounts[0])
+	require.NoError(t, err)
+	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
+
+	// should not error now that we have a signature
+	result, err = s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, result.FailureMessage)
+	require.Empty(t, result.SignatureFailureMessage)
 }
