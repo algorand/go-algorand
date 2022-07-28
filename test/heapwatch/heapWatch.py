@@ -12,6 +12,7 @@ import configparser
 import fnmatch
 import json
 import logging
+import math
 import os
 import queue
 import re
@@ -248,6 +249,8 @@ class watcher:
             shutil.copy2(args.tf_inventory, self.args.out)
             for role in args.tf_roles.split(','):
                 role_name = 'role_' + role
+                if role_name not in cp:
+                    continue
                 for net in cp[role_name].keys():
                     logger.debug('addnet role %s %s', role, net)
                     self._addnet(net)
@@ -284,9 +287,16 @@ class watcher:
             logger.error('bad algod: %r', net, exc_info=True)
 
 
-    def do_snap(self, now, get_cpu=False):
+    def do_snap(self, now, get_cpu=False, fraction=False):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
         snapshot_isotime = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(now))
+        if fraction:
+            sf = now - math.floor(now)
+            sfs = '{:.6f}'.format(sf)
+            if sfs[0] == '0':
+                sfs = sfs[1:]
+            snapshot_name += sfs
+            snapshot_isotime += sfs
         logger.debug('begin snapshot %s', snapshot_name)
         psheaps = {}
         newsnapshots = {}
@@ -418,6 +428,7 @@ def main():
 
     if args.period:
         periodSecs = durationToSeconds(args.period)
+        snap_fraction = periodSecs < 1.0
 
         periodi = 1
         nextt = start + (periodi * periodSecs)
@@ -436,7 +447,7 @@ def main():
             if (cpuAfter is not None) and (now > cpuAfter):
                 get_cpu = True
                 cpuAfter = None
-            app.do_snap(now, get_cpu)
+            app.do_snap(now, get_cpu, fraction=snap_fraction)
             now = time.time()
             if (endtime is not None) and (now > endtime):
                 return

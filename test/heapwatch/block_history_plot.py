@@ -8,7 +8,7 @@ import statistics
 from algosdk.encoding import msgpack
 from matplotlib import pyplot as plt
 
-def process(path):
+def process(path, args):
     prevtime = None
     prevtc = 0
     prevts = None
@@ -70,20 +70,23 @@ def process(path):
         mintps,maxtps,
     ))
 
-    # find the real start of the test
-    start = 1
-    for i in range(len(txnv)):
-        if len(list(filter(lambda x: x > 100, txnv[i:i+5]))) == 5:
-            start = i + 5
-            break
-    txmean = statistics.mean(txnv[start:])
-    txstd = statistics.stdev(txnv[start:])
-    end = len(txnv)
-    for i in range(start,len(txnv)):
-        if len(list(filter(lambda x: x > txmean-(txstd*2), txnv[i:i+5]))) < 4:
-            print(i)
-            end = i
-            break
+    start = 0
+    end = len(txnv)-1
+    if not args.all:
+        # find the real start of the test
+        start = 1
+        for i in range(len(txnv)):
+            if len(list(filter(lambda x: x > 100, txnv[i:i+5]))) == 5:
+                start = i + 5
+                break
+        txmean = statistics.mean(txnv[start:])
+        txstd = statistics.stdev(txnv[start:])
+        end = len(txnv)
+        for i in range(start,len(txnv)):
+            if len(list(filter(lambda x: x > txmean-(txstd*2), txnv[i:i+5]))) < 4:
+                print(i)
+                end = i
+                break
 
     print('core test rounds [{}:{}]'.format(start,end))
     print('block txns [{}-{}], block seconds [{}-{}], tps [{}-{}]'.format(
@@ -91,24 +94,16 @@ def process(path):
         min(dtv[start:end]), max(dtv[start:end]),
         min(tpsv[start:end]), max(tpsv[start:end]),
     ))
-    print('long round times: {}'.format(' '.join(list(filter(lambda x: x >= 9,dtv[start:end])))))
+    print('long round times: {}'.format(' '.join(list(map(str,filter(lambda x: x >= 9,dtv[start:end]))))))
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
     ax1.set_title('round time (seconds)')
     ax1.hist(list(filter(lambda x: x < 9,dtv[start:end])),bins=20)
-    #plt.savefig(path + '_round_time_hist.svg', format='svg')
-    #plt.savefig(path + '_round_time_hist.png', format='png')
-    #plt.close()
 
     ax2.set_title('TPS')
     ax2.hist(tpsv[start:end],bins=20)
-    #plt.savefig(path + '_tps_hist.svg', format='svg')
-    #plt.savefig(path + '_tps_hist.png', format='png')
-    #plt.close()
 
     ax3.set_title('txn/block')
     ax3.hist(txnv[start:end],bins=20)
-    #plt.savefig(path + '_btxn_hist.svg', format='svg')
-    #plt.savefig(path + '_btxn_hist.png', format='png')
 
     # 10 round moving average TPS
     tpsv10 = []
@@ -120,8 +115,13 @@ def process(path):
         dt = tsa-ts0
         dtxn = tca-tc0
         tpsv10.append(dtxn/dt)
-    ax4.set_title('TPS(10 round window)')
-    ax4.plot(tpsv10)
+    if args.tps1:
+        ax4.set_title('TPS')
+        ax4.plot(tpsv)
+        print('fullish block sizes: {}'.format(list(filter(lambda x: x > 100, txnv))))
+    else:
+        ax4.set_title('TPS(10 round window)')
+        ax4.plot(tpsv10)
     fig.tight_layout()
     plt.savefig(path + '_hist.svg', format='svg')
     plt.savefig(path + '_hist.png', format='png')
@@ -130,10 +130,12 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('files', nargs='+')
+    ap.add_argument('--all', default=False, action='store_true')
+    ap.add_argument('--tps1', default=False, action='store_true')
     args = ap.parse_args()
 
     for fname in args.files:
-        process(fname)
+        process(fname, args)
 
 if __name__ == '__main__':
     main()
