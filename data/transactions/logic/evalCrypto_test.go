@@ -449,10 +449,6 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 }
 
 func TestEcdsaWithSecp256r1(t *testing.T) {
-	if LogicVersion < fidoVersion {
-		return
-	}
-
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
