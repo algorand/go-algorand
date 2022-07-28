@@ -1046,7 +1046,7 @@ func TestStateProofNotFound(t *testing.T) {
 
 	insertRounds(a, handler, 700)
 
-	a.NoError(handler.StateProof(ctx, 650))
+	a.NoError(handler.GetStateProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1057,7 +1057,7 @@ func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	a.NoError(handler.StateProof(ctx, 2))
+	a.NoError(handler.GetStateProof(ctx, 2))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1070,7 +1070,7 @@ func TestStateProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.StateProof(ctx, stateProofIntervalForHandlerTests+1))
+	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
 	a.Equal(200, responseRecorder.Code)
 
 	stprfResp := generated.StateProofResponse{}

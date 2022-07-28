@@ -1238,9 +1238,9 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// StateProof returns the state proof for a given round.
+// GetStateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
-func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)

@@ -1255,7 +1255,7 @@
           "http"
         ],
         "summary": "Get a state proof that covers a given round",
-        "operationId": "StateProof",
+        "operationId": "GetStateProof",
         "parameters": [
           {
             "type": "integer",
