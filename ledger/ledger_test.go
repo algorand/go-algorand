@@ -1707,11 +1707,17 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	// We now create block with stateproof transaction. since we don't want to complicate the test and create
-	// a cryptographically correct stateproof we would make sure that only the crypto part of the verification fails.
+	// We now create block with stateproof transaction.
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
+
+	// since this block contains a state proof txn we also needs to move the state proof in the header
+	st := blk.StateProofTracking[protocol.StateProofBasic]
+	st.StateProofNextRound = st.StateProofNextRound + 256
+	blk.StateProofTracking[protocol.StateProofBasic] = st
+
+	// the ledger is able to validate our state proof txn since blocks exsits
 	_, err = l.Validate(context.Background(), blk, backlogPool)
-	require.ErrorContains(t, err, "state proof crypto error")
+	require.NoError(t, err)
 
 	for i := uint64(0); i < proto.StateProofInterval; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
