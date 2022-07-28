@@ -123,5 +123,5 @@ var defaultLocal = Local{
 	TxSyncServeResponseSize:                    1000000,
 	TxSyncTimeoutSeconds:                       30,
 	UseXForwardedForAddressField:               "",
-	VerifiedTransactionsCacheSize:              30000,
+	VerifiedTranscationsCacheSize:              30000,
 }
