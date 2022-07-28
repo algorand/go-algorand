@@ -477,7 +477,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTransactionsCacheSize)
+	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
 
 	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool)
 	if err != nil {
