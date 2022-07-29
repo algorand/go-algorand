@@ -787,6 +787,7 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
