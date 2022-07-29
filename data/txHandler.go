@@ -38,7 +38,7 @@ import (
 // The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
 // It should be configured to be higher then the number of CPU cores, so that the execution pool get saturated, but not too high to avoid lockout of the
 // execution pool for a long duration of time.
-const txBacklogSize = 1000
+const txBacklogSize = 26000
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
