@@ -182,14 +182,14 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 }
 
 // Register is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
+func (ddr *dryrunDebugReceiver) BeforeAppEval(state *logic.DebugState) error {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
 	return nil
 }
 
 // Update is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
+func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
@@ -197,8 +197,8 @@ func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
 }
 
 // Complete is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
-	return ddr.Update(state)
+func (ddr *dryrunDebugReceiver) AfterAppEval(state *logic.DebugState) error {
+	return ddr.AfterAppEval(state)
 }
 
 type dryrunLedger struct {

@@ -34,14 +34,152 @@ import (
 )
 
 // DebuggerHook functions are called by eval function during TEAL program execution
-// if provided
+// if provided. The interface is empty because none of the hooks are required by default.
+//
+// See `debuggerBeforeTxnHook`, `debuggerBeforeAppEvalHook`, etc. for supported
+// interface methods.
+//
+// Refer to the lifecycle graph within the DebuggerHook interface definition for
+// the sequence of hooks called.
 type DebuggerHook interface {
-	// Register is fired on program creation
-	Register(state *DebugState) error
-	// Update is fired on every step
-	Update(state *DebugState) error
-	// Complete is called when the program exits
-	Complete(state *DebugState) error
+
+	// LIFECYCLE GRAPH
+	// ┌────────────────────────────────────────────────┐
+	// │ Transaction Evaluation                         │
+	// ├────────────────────────────────────────────────┤
+	// │ > BeforeTxn                                    │
+	// │                                                │
+	// │  ┌──────────────────────────────────────────┐  │
+	// │  │ ? App Call                               │  │
+	// │  ├──────────────────────────────────────────┤  │
+	// │  │ > BeforeAppEval                          │  │
+	// │  │                                          │  │
+	// │  │  ┌────────────────────────────────────┐  │  │
+	// │  │  │ Teal Operation                     │  │  │
+	// │  │  ├────────────────────────────────────┤  │  │
+	// │  │  │ > BeforeTealOp                     │  │  │
+	// │  │  │  ┌──────────────────────────────┐  │  │  │
+	// │  │  │  │ ? Inner Transaction          │  │  │  │
+	// │  │  │  ├──────────────────────────────┤  │  │  │
+	// │  │  │  │ > BeforeInnerTxn             │  │  │  │
+	// │  │  │  │  ┌────────────────────────┐  │  │  │  │
+	// │  │  │  │  │ Transaction Evaluation │  │  │  │  │
+	// │  │  │  │  ├────────────────────────┤  │  │  │  │
+	// │  │  │  │  │ ...                    │  │  │  │  │
+	// │  │  │  │  └────────────────────────┘  │  │  │  │
+	// │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │
+	// │  │  │  │                              │  │  │  │
+	// │  │  │  │ > AfterInnerTxn              │  │  │  │
+	// │  │  │  └──────────────────────────────┘  │  │  │
+	// │  │  │ > AfterTealOp                      │  │  │
+	// │  │  └────────────────────────────────────┘  │  │
+	// │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │
+	// │  │                                          │  │
+	// │  │ > AfterAppEval                           │  │
+	// │  └──────────────────────────────────────────┘  │
+	// |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │
+	// │                                                │
+	// │ > AfterTxn                                     │
+	// └────────────────────────────────────────────────┘
+
+}
+
+type debuggerBeforeTxnHook interface {
+	// BeforeTxn is called before the transaction is executed
+	BeforeTxn(ep *EvalParams, groupIndex int) error
+}
+
+func callBeforeTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
+	if dhWithBeforeTxnHook, ok := dh.(debuggerBeforeTxnHook); ok {
+		return dhWithBeforeTxnHook.BeforeTxn(ep, groupIndex)
+	}
+	return nil
+}
+
+type debuggerAfterTxnHook interface {
+	// AfterTxn is called after the transaction has been executed.
+	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
+	AfterTxn(ep *EvalParams, groupIndex int) error
+}
+
+func callAfterTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
+	if dhWithAfterTxnHook, ok := dh.(debuggerAfterTxnHook); ok {
+		return dhWithAfterTxnHook.AfterTxn(ep, groupIndex)
+	}
+	return nil
+}
+
+type debuggerBeforeAppEvalHook interface {
+	// BeforeAppEval is called before the app is evaluated.
+	// This hook is similar to BeforeTxn, but includes debug state information instead of eval params.
+	BeforeAppEval(state *DebugState) error
+}
+
+func callBeforeAppEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithBeforeAppEvalHook, ok := dh.(debuggerBeforeAppEvalHook); ok {
+		return dhWithBeforeAppEvalHook.BeforeAppEval(state)
+	}
+	return nil
+}
+
+type debuggerAfterAppEvalHook interface {
+	// AfterAppEval is called after the app has been evaluated.
+	AfterAppEval(state *DebugState) error
+}
+
+func callAfterAppEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithAfterAppEvalHook, ok := dh.(debuggerAfterAppEvalHook); ok {
+		return dhWithAfterAppEvalHook.AfterAppEval(state)
+	}
+	return nil
+}
+
+type debuggerBeforeTealOpHook interface {
+	// BeforeTealOp is called before the op is evaluated
+	BeforeTealOp(state *DebugState) error
+}
+
+func callBeforeTealOpEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithBeforeTealOpHook, ok := dh.(debuggerBeforeTealOpHook); ok {
+		return dhWithBeforeTealOpHook.BeforeTealOp(state)
+	}
+	return nil
+}
+
+type debuggerAfterTealOpHook interface {
+	// AfterTealOp is called after the op has been evaluated
+	AfterTealOp(state *DebugState) error
+}
+
+func callAfterTealOpEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithAfterTealOpHook, ok := dh.(debuggerAfterTealOpHook); ok {
+		return dhWithAfterTealOpHook.AfterTealOp(state)
+	}
+	return nil
+}
+
+type debuggerBeforeInnerTxnHook interface {
+	// BeforeInnerTxn is called before the inner transaction is executed
+	BeforeInnerTxn(ep *EvalParams) error
+}
+
+func callBeforeInnerTxnHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
+	if dhWithBeforeInnerTxnHook, ok := dh.(debuggerBeforeInnerTxnHook); ok {
+		return dhWithBeforeInnerTxnHook.BeforeInnerTxn(ep)
+	}
+	return nil
+}
+
+type debuggerAfterInnerTxnHook interface {
+	// AfterInnerTxn is called after the inner transaction has been executed
+	AfterInnerTxn(ep *EvalParams) error
+}
+
+func callAfterInnerTxnHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
+	if dhWithAfterInnerTxnHook, ok := dh.(debuggerAfterInnerTxnHook); ok {
+		return dhWithAfterInnerTxnHook.AfterInnerTxn(ep)
+	}
+	return nil
 }
 
 // WebDebuggerHook represents a connection to tealdbg
@@ -284,8 +422,8 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 	return err
 }
 
-// Register sends state to remote debugger
-func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+// BeforeAppEval sends state to remote debugger
+func (dbg *WebDebuggerHook) BeforeAppEval(state *DebugState) error {
 	u, err := url.Parse(dbg.URL)
 	if err != nil {
 		logging.Base().Errorf("Failed to parse url: %s", err.Error())
@@ -298,12 +436,12 @@ func (dbg *WebDebuggerHook) Register(state *DebugState) error {
 	return dbg.postState(state, "exec/register")
 }
 
-// Update sends state to remote debugger
-func (dbg *WebDebuggerHook) Update(state *DebugState) error {
+// BeforeTealOp sends state to remote debugger
+func (dbg *WebDebuggerHook) BeforeTealOp(state *DebugState) error {
 	return dbg.postState(state, "exec/update")
 }
 
-// Complete sends state to remote debugger
-func (dbg *WebDebuggerHook) Complete(state *DebugState) error {
+// AfterAppEval sends state to remote debugger
+func (dbg *WebDebuggerHook) AfterAppEval(state *DebugState) error {
 	return dbg.postState(state, "exec/complete")
 }

@@ -681,7 +681,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	defer func() {
 		// Ensure we update the debugger before exiting
 		if cx.Debugger != nil {
-			errDbg := cx.Debugger.Complete(cx.refreshDebugState(err))
+			errDbg := callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
 			if err == nil {
 				err = errDbg
 			}
@@ -713,14 +713,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
-		if derr := cx.Debugger.Register(cx.refreshDebugState(err)); derr != nil {
+		if derr := callBeforeAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
 			return false, derr
 		}
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
 		if cx.Debugger != nil {
-			if derr := cx.Debugger.Update(cx.refreshDebugState(err)); derr != nil {
+			if derr := callBeforeTealOpEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
 				return false, derr
 			}
 		}

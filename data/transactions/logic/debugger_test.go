@@ -91,19 +91,19 @@ type testDbgHook struct {
 	state    *DebugState
 }
 
-func (d *testDbgHook) Register(state *DebugState) error {
+func (d *testDbgHook) BeforeAppEval(state *DebugState) error {
 	d.register++
 	d.state = state
 	return nil
 }
 
-func (d *testDbgHook) Update(state *DebugState) error {
+func (d *testDbgHook) BeforeTealOp(state *DebugState) error {
 	d.update++
 	d.state = state
 	return nil
 }
 
-func (d *testDbgHook) Complete(state *DebugState) error {
+func (d *testDbgHook) AfterAppEval(state *DebugState) error {
 	d.complete++
 	d.state = state
 	return nil
