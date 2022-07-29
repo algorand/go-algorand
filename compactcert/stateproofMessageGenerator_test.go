@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package stateproof
+package compactcert
 
 import (
 	"context"
@@ -27,8 +27,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -93,7 +93,7 @@ func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round
 		wt += partWe
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: stateproof.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
 	var ccBasic = bookkeeping.StateProofTrackingData{
-		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
+		StateProofVotersCommitment:  make([]byte, compactcert.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
@@ -222,7 +222,7 @@ func TestStateProofMessage(t *testing.T) {
 			verifySha256BlockHeadersCommitments(a, tx.Txn.Message, s.w.blocks)
 
 			if !lastMessage.MsgIsZero() {
-				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
+				verifier := compactcert.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
 				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 				a.NoError(err)
@@ -293,7 +293,7 @@ func TestMessageLnApproxError(t *testing.T) {
 	s.w.blocks[512].StateProofTracking[protocol.StateProofBasic] = newtracking
 
 	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
-	a.ErrorIs(err, stateproof.ErrIllegalInputForLnApprox)
+	a.ErrorIs(err, compactcert.ErrIllegalInputForLnApprox)
 }
 
 func TestMessageMissingHeaderOnInterval(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -137,7 +137,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
+func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *compactcert.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -170,7 +170,7 @@ func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, state
 		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
 	}
 
-	verifier, err := stateproof.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+	verifier, err := compactcert.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		provenWeight,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {

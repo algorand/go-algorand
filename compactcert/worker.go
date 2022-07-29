@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package stateproof
+package compactcert
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -35,7 +35,7 @@ import (
 )
 
 type builder struct {
-	*stateproof.Builder
+	*compactcert.Builder
 
 	voters    *ledgercore.VotersForRound
 	votersHdr bookkeeping.BlockHeader

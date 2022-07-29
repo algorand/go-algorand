@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -35,7 +35,7 @@ func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	spHdr := &bookkeeping.BlockHeader{}
-	sp := &stateproof.StateProof{}
+	sp := &compactcert.StateProof{}
 	votersHdr := &bookkeeping.BlockHeader{}
 	var nextSPRnd basics.Round
 	var atRound basics.Round
@@ -82,7 +82,7 @@ func TestValidateStateProof(t *testing.T) {
 	err = ValidateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	// since proven weight is zero, we cann't create the verifier
-	require.ErrorIs(t, err, stateproof.ErrIllegalInputForLnApprox)
+	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
 
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]

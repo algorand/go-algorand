@@ -25,8 +25,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
@@ -139,7 +139,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: stateproof.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return err
 	}

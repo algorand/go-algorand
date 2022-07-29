@@ -18,11 +18,11 @@ package apply
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/compactcert/verify"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
 // StateProof applies the StateProof transaction and setting the next StateProof round

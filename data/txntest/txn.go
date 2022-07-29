@@ -39,7 +39,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -103,7 +103,7 @@ type Txn struct {
 
 	StateProofIntervalLastRound basics.Round
 	StateProofType              protocol.StateProofType
-	StateProof                  stateproof.StateProof
+	StateProof                  compactcert.StateProof
 	StateProofMsg               stateproofmsg.Message
 }
 

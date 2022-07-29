@@ -18,7 +18,7 @@ package transactions
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
@@ -30,7 +30,7 @@ type StateProofTxnFields struct {
 
 	StateProofIntervalLastRound basics.Round            `codec:"sprnd"`
 	StateProofType              protocol.StateProofType `codec:"sptype"`
-	StateProof                  stateproof.StateProof   `codec:"sp"`
+	StateProof                  compactcert.StateProof  `codec:"sp"`
 	Message                     stateproofmsg.Message   `codec:"spmsg"`
 }
 

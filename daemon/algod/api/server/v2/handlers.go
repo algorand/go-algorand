@@ -30,6 +30,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -46,7 +47,6 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -1281,13 +1281,13 @@ func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) 
 	firstAttestedRound := stateProof.Message.FirstAttestedRound
 	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
 
-	lightHeaders, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
+	lightHeaders, err := compactcert.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
 	if err != nil {
 		return notFound(ctx, err, err.Error(), v2.Log)
 	}
 
 	blockIndex := round - firstAttestedRound
-	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, lightHeaders, blockIndex)
+	leafproof, err := compactcert.GenerateProofOfLightBlockHeaders(stateProofInterval, lightHeaders, blockIndex)
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}

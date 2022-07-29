@@ -18,7 +18,7 @@ package stateproofmsg
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	sp "github.com/algorand/go-algorand/crypto/stateproof"
+	sp "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/protocol"
 )
 

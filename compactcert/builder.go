@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package stateproof
+package compactcert
 
 import (
 	"context"
@@ -22,15 +22,15 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/algorand/go-algorand/compactcert/verify"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
@@ -74,7 +74,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	res.votersHdr = votersHdr
 	res.voters = voters
 	res.message = msg
-	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
+	res.Builder, err = compactcert.MakeBuilder(msg.Hash(),
 		uint64(hdr.Round),
 		provenWeight,
 		voters.Participants,
