@@ -219,10 +219,10 @@ func TestCowStateProof(t *testing.T) {
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
 	stateProofTx := transactions.StateProofTxnFields{
-		StateProofIntervalLatestRound: atRound,
-		StateProofType:                spType,
-		StateProof:                    stateProof,
-		Message:                       msg,
+		StateProofIntervalLastRound: atRound,
+		StateProofType:              spType,
+		StateProof:                  stateProof,
+		Message:                     msg,
 	}
 	err := apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
@@ -231,7 +231,7 @@ func TestCowStateProof(t *testing.T) {
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
-	stateProofTx.StateProofIntervalLatestRound = 3
+	stateProofTx.StateProofIntervalLastRound = 3
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
@@ -248,14 +248,14 @@ func TestCowStateProof(t *testing.T) {
 
 	spHdr.Round = 15
 	blocks[spHdr.Round] = spHdr
-	stateProofTx.StateProofIntervalLatestRound = spHdr.Round
+	stateProofTx.StateProofIntervalLastRound = spHdr.Round
 	blockErr[13] = noBlockErr
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 
 	// validate fail
 	spHdr.Round = 1
-	stateProofTx.StateProofIntervalLatestRound = spHdr.Round
+	stateProofTx.StateProofIntervalLastRound = spHdr.Round
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 

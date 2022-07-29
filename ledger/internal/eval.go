@@ -324,7 +324,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) StateProofNext() basics.Round {
+func (x *roundCowBase) GetStateProofNextRound() basics.Round {
 	return x.stateProofNextRnd
 }
 
@@ -1107,49 +1107,46 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
-	balances := apply.Balances(cow)
-
-	params := balances.ConsensusParams()
+	params := cow.ConsensusParams()
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
 		return
 	}
 
-	err = apply.Rekey(balances, &tx)
+	err = apply.Rekey(cow, &tx)
 	if err != nil {
 		return
 	}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, cow.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, cow, eval.specials, &ad, cow.round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, cow, eval.specials, &ad, ctr)
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
+		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)
 
 	case protocol.StateProofTx:
-		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNext depending on
+		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNextRound depending on
 		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			stateProofApplier := apply.StateProofs(cow)
-			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, stateProofApplier, eval.validate)
+			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 		}
 
 	default:
@@ -1229,7 +1226,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				return err
 			}
 
-			basicStateProof.StateProofNextRound = eval.state.StateProofNext()
+			basicStateProof.StateProofNextRound = eval.state.GetStateProofNextRound()
 
 			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 			eval.block.StateProofTracking[protocol.StateProofBasic] = basicStateProof
@@ -1274,8 +1271,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
 			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.StateProofNext() {
-			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.StateProofNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.GetStateProofNextRound())
 		}
 		for ccType := range eval.block.StateProofTracking {
 			if ccType != protocol.StateProofBasic {

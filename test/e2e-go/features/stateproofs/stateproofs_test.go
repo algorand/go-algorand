@@ -331,7 +331,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLatestRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	_, stateProofMessage := getStateProofByLastRound(r, libgoalClient, restClient, firstStateProofRound, 1)
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
@@ -357,7 +357,7 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.StateProofStrengthTarget = 256
-	consensusParams.StateProofRecoveryInterval = 6
+	consensusParams.StateProofMaxRecoveryIntervals = 6
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
@@ -365,7 +365,7 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	return consensusParams
 }
 
-func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+func getStateProofByLastRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
 	curRound, err := libgoal.CurrentRound()
 	r.NoError(err)
 
@@ -394,7 +394,7 @@ func getStateProofByLatestRound(r *require.Assertions, libgoal libgoal.Client, r
 }
 
 func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLatestRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
+	stateProof, stateProofMessage := getStateProofByLastRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
 	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 
 	r.NoError(err)
@@ -402,7 +402,7 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	if !prevStateProofMessage.MsgIsZero() {
 		//if we have a previous stateproof message we can verify the current stateproof using data from it
 		verifier := sp.MkVerifierWithLnProvenWeight(prevStateProofMessage.VotersCommitment, prevStateProofMessage.LnProvenWeight, consensusParams.StateProofStrengthTarget)
-		err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
+		err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.Hash(), &stateProof)
 		r.NoError(err)
 	}
 	var votersRoot = make([]byte, sp.HashSize)
@@ -414,13 +414,13 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
 	r.NoError(err)
 
-	err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
+	err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.Hash(), &stateProof)
 	r.NoError(err)
 	return stateProofMessage, nextStateProofBlock
 }
 
 // TestRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
-// If the missing data is being accepted before  StateProofRecoveryInterval * StateProofInterval rounds have passed, nodes should
+// If the missing data is being accepted before  StateProofMaxRecoveryIntervals * StateProofInterval rounds have passed, nodes should
 // be able to produce stateproofs and continue as normal
 func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -440,7 +440,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofRecoveryInterval = 4
+	consensusParams.StateProofMaxRecoveryIntervals = 4
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -469,7 +469,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Start the node in the last interval after which the SP will be abandoned if SPs are not generated.
-		if rnd == (consensusParams.StateProofRecoveryInterval)*consensusParams.StateProofInterval {
+		if rnd == (consensusParams.StateProofMaxRecoveryIntervals)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			fixture.StartNode(dir)
@@ -536,7 +536,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofRecoveryInterval = 4
+	consensusParams.StateProofMaxRecoveryIntervals = 4
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -557,7 +557,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == (consensusParams.StateProofRecoveryInterval+2)*consensusParams.StateProofInterval {
+		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+2)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			fixture.StartNode(dir)

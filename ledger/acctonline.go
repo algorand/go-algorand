@@ -99,7 +99,7 @@ type onlineAccounts struct {
 	accountsReadCond *sync.Cond
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters *votersTracker
+	voters votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
@@ -136,9 +136,7 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 		return err
 	}
 
-	// the votes have a special dependency on the online accounts, so we need to initialize these separately.
-	ao.voters = &votersTracker{onlineTopFunction: ao.onlineTop}
-	err = ao.voters.loadFromDisk(l, lastBalancesRound)
+	err = ao.voters.loadFromDisk(l, ao, lastBalancesRound)
 	if err != nil {
 		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
 	}
@@ -198,10 +196,8 @@ func (ao *onlineAccounts) close() {
 		ao.accountsq.close()
 		ao.accountsq = nil
 	}
-	if ao.voters != nil {
-		ao.voters.close()
-		ao.voters = nil
-	}
+
+	ao.voters.close()
 
 	ao.baseOnlineAccounts.prune(0)
 }
@@ -251,9 +247,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	ao.baseOnlineAccounts.prune(newBaseAccountSize)
 
-	if ao.voters != nil {
-		ao.voters.newBlock(blk.BlockHeader)
-	}
+	ao.voters.newBlock(blk.BlockHeader)
+
 }
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
@@ -306,10 +301,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
-	var lowestRound basics.Round
-	if ao.voters != nil {
-		lowestRound = ao.voters.lowestRound(newBase)
-	}
+	lowestRound := ao.voters.lowestRound(newBase)
 
 	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)
@@ -726,10 +718,10 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-// onlineTop returns the top n online accounts, sorted by their normalized
+// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.  See the
 // normalization description in AccountData.NormalizedOnlineBalance().
-func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
 	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {

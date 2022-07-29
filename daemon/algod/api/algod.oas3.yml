@@ -3538,7 +3538,7 @@
     },
     "/v2/stateproofs/{round}": {
       "get": {
-        "operationId": "StateProof",
+        "operationId": "GetStateProof",
         "parameters": [
           {
             "description": "The round for which a state proof is desired.",
@@ -3607,7 +3607,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "get a state proof that covers a given round"
+        "summary": "Get a state proof that covers a given round"
       }
     },
     "/v2/status": {

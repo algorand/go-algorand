@@ -32,4 +32,6 @@ const (
 	VersionForCoinGenerator = byte(0)
 	// MaxTreeDepth defines the maximal size of a merkle tree depth the state proof allows.
 	MaxTreeDepth = 20
+	// MessageHashType is the type of hash used to generate MessageHash
+	MessageHashType = crypto.Sha256
 )

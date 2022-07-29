@@ -309,16 +309,16 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+			if tx.Txn.StateProofIntervalLastRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			require.Equal(t, tx.Txn.StateProofIntervalLastRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
 			require.NoError(t, err)
 
-			votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+			votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 			require.NoError(t, err)
@@ -327,13 +327,13 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
 			verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
-			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 			require.NoError(t, err)
 			break
 		}
@@ -381,12 +381,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
+	require.Equal(t, tx.Txn.StateProofIntervalLastRound, 2*basics.Round(proto.StateProofInterval))
 
-	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
 	require.NoError(t, err)
 
-	votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 	require.NoError(t, err)
@@ -395,12 +395,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
 	verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
-	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), msg.Hash(), &tx.Txn.StateProof)
 	require.NoError(t, err)
 }
 
@@ -643,7 +643,7 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	a := require.New(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	expectedStateProofs := proto.StateProofRecoveryInterval + 1
+	expectedStateProofs := proto.StateProofMaxRecoveryIntervals + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -675,14 +675,14 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
-	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(w.builders)))
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
 		return
 	})
-	a.Equal(proto.StateProofRecoveryInterval, uint64(len(roundSigs)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(roundSigs)))
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {
@@ -753,7 +753,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	spRecords := tns.StateProofKeys(round)
 	sigs := make([]sigFromAddr, 0, len(keys))
 	stateproofMessage := stateproofmsg.Message{}
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	for _, key := range spRecords {
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		require.NoError(t, err)
@@ -1072,7 +1072,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)
@@ -1114,7 +1114,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
-	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	hashedStateproofMessage := stateproofMessage.Hash()
 	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
 	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 	require.NoError(t, err)
@@ -1240,6 +1240,10 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	msg := sigFromAddr{}
 	msgBytes := protocol.Encode(&msg)
 	crypto.RandBytes(msgBytes[:])
+
+	// since the handler ignores messages for already approved state proof (and does not disconnect the peer), we need to have a fixed round number to check for disconnection
+	msg.Round = s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound +
+		basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
