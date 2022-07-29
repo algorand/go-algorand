@@ -1678,27 +1678,6 @@
       ]
     },
     {
-      "Opcode": 0,
-      "Name": "",
-      "Size": 0,
-      "Doc": "",
-      "Groups": null
-    },
-    {
-      "Opcode": 0,
-      "Name": "",
-      "Size": 0,
-      "Doc": "",
-      "Groups": null
-    },
-    {
-      "Opcode": 0,
-      "Name": "",
-      "Size": 0,
-      "Doc": "",
-      "Groups": null
-    },
-    {
       "Opcode": 160,
       "Name": "b+",
       "Args": "BB",

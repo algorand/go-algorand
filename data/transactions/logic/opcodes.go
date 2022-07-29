@@ -779,7 +779,7 @@ func DeprecatedVersion(spec OpSpec) uint64 {
 func annotateMultiOp(spec *OpSpec, code []byte, opNamesListed map[string]bool) {
 	nextCode := append(code, spec.Opcode)
 	if spec.childOps == nil {
-		if !opNamesListed[spec.Name] {
+		if !opNamesListed[spec.Name] && spec.Version <= LogicVersion {
 			OpNames = append(OpNames, spec.Name)
 			opNamesListed[spec.Name] = true
 		}
@@ -817,7 +817,7 @@ func init() {
 		if spec.childOps != nil {
 			annotateMultiOp(&OpSpecs[i], nil, opNamesListed)
 		} else {
-			if !opNamesListed[spec.Name] {
+			if !opNamesListed[spec.Name] && spec.Version <= LogicVersion {
 				opNamesListed[spec.Name] = true
 				OpNames = append(OpNames, spec.Name)
 			}
