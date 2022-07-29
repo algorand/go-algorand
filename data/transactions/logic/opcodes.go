@@ -644,7 +644,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
 }
 
-var OpNames map[string]bool
+var OpNames = make([]string, 0)
 
 type sortByOpcode []OpSpec
 
@@ -764,9 +764,13 @@ func DeprecatedVersion(spec OpSpec) uint64 {
 	return 0
 }
 
-func annotateMultiOp(spec *OpSpec, code []byte) {
+func annotateMultiOp(spec *OpSpec, code []byte, opNamesListed map[string]bool) {
 	nextCode := append(code, spec.Opcode)
 	if spec.childOps == nil {
+		if !opNamesListed[spec.Name] {
+			OpNames = append(OpNames, spec.Name)
+			opNamesListed[spec.Name] = true
+		}
 		totalOps++
 		spec.MultiCode = append(spec.MultiCode, nextCode...)
 		extraBytes := len(spec.MultiCode) - 1
@@ -784,7 +788,7 @@ func annotateMultiOp(spec *OpSpec, code []byte) {
 		}
 	} else {
 		for i := range spec.childOps {
-			annotateMultiOp(&spec.childOps[i], nextCode)
+			annotateMultiOp(&spec.childOps[i], nextCode, opNamesListed)
 		}
 	}
 }
@@ -796,10 +800,15 @@ func annotateMultiOp(spec *OpSpec, code []byte) {
 // To preserve backward compatibility version 0 array is populated with v1 opcodes
 // with the version overwritten to 0.
 func init() {
+	opNamesListed := make(map[string]bool)
 	for i, spec := range OpSpecs {
 		if spec.childOps != nil {
-			annotateMultiOp(&OpSpecs[i], nil)
+			annotateMultiOp(&OpSpecs[i], nil, opNamesListed)
 		} else {
+			if !opNamesListed[spec.Name] {
+				opNamesListed[spec.Name] = true
+				OpNames = append(OpNames, spec.Name)
+			}
 			totalOps++
 		}
 	}

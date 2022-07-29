@@ -166,8 +166,11 @@ func stackMarkdown(op *logic.OpSpec) string {
 	return out + "\n"
 }
 
-func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[string]bool /*whaaaaaaaaaaat?*/) (err error) {
+func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[string]bool) (err error) {
 	ws := ""
+	if len(specs) == 0 {
+		return nil
+	}
 	newest := specs[len(specs)-1]
 	oldest := specs[0]
 	opextra := logic.OpImmediateNote(newest.Name)
@@ -243,10 +246,9 @@ func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[strin
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	//opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
 
 	written := make(map[string]bool)
-	for name := range logic.OpNames {
+	for _, name := range logic.OpNames {
 		specs := logic.SpecsByName(name)
 		err = opToMarkdown(out, specs, written)
 		if err != nil {
@@ -341,9 +343,10 @@ func argEnums(name string) ([]string, string) {
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
-	records := make([]OpRecord, len(opSpecs))
-	for i, spec := range opSpecs {
+	records := make([]OpRecord, len(logic.OpNames))
+	i := 0
+	for _, name := range logic.OpNames {
+		spec := logic.OpsByName[logic.LogicVersion][name]
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Arg.Types)
@@ -354,6 +357,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
+		i++
 		//TODO: Add multi-op support
 	}
 	return &LanguageSpec{
@@ -374,6 +378,8 @@ func create(file string) *os.File {
 
 func main() {
 	opcodesMd := create("TEAL_opcodes.md")
+	fmt.Printf("Spec0: %s", logic.OpNames[0])
+	fmt.Printf("Specs: %+v", logic.OpNames)
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
@@ -392,19 +398,7 @@ func main() {
 	constants.Close()
 
 	written := make(map[string]bool)
-	/*opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
-	for _, spec := range opSpecs {
-		for _, imm := range spec.OpDetails.Immediates {
-			if imm.Group != nil && !written[imm.Group.Name] {
-				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
-				fieldGroupMarkdown(out, imm.Group)
-				out.Close()
-				written[imm.Group.Name] = true
-			}
-		}
-	}
-	*/
-	for name := range logic.OpNames {
+	for _, name := range logic.OpNames {
 		spec := logic.SpecsByName(name)[len(logic.SpecsByName(name))-1]
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
