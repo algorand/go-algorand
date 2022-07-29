@@ -47,9 +47,7 @@ programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
 bytecode, the version is an incrementing integer, currently 6, and
-denoted vX throughout this document. User friendly version numbers
-that correspond to programmer expectations, such as `AVM 1.0` map to
-these integers.  AVM 0.9 is v4. AVM 1.0 is v5. AVM 1.1 is v6.
+denoted vX throughout this document.
 
 ## Execution Modes
 
@@ -276,9 +274,7 @@ return stack matches the name of the input value.
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
-| `bn256_add` | for (curve points A and B) return the curve point A + B |
-| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
-| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -428,7 +424,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -619,6 +615,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
 
 ### Inner Transactions
 
@@ -684,7 +681,7 @@ The assembler parses line by line. Ops that only take stack arguments
 appear on a line by themselves. Immediate arguments follow the opcode
 on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting AVM v2. By default, the assembler targets AVM v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -750,7 +747,7 @@ This requirement is enforced as follows:
   all the fields and values in this transaction. For example, a
   transaction with a nonzero RekeyTo field will be (at least) v2.
 
-* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
+* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
 In addition, applications must be version 6 or greater to be eligible
 for being called in an inner transaction.

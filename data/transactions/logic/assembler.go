@@ -1608,7 +1608,7 @@ func (ops *OpStream) assemble(text string) error {
 		}
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
+	// backward compatibility: do not allow jumps behind last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
@@ -1664,7 +1664,7 @@ func (ops *OpStream) pragma(line string) error {
 
 		// We initialize Version with assemblerNoVersion as a marker for
 		// non-specified version because version 0 is valid
-		// version for TEAL v1.
+		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
 		} else if ops.Version != ver {
