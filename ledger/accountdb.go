@@ -3401,7 +3401,7 @@ func accountsNewRound(
 	tx *sql.Tx,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedBoxes map[string]persistedBoxData, err error) {
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
 	hasKvPairs := len(kvPairs) > 0
@@ -3439,7 +3439,7 @@ func accountsNewRoundImpl(
 	writer accountsWriter,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedBoxes map[string]persistedBoxData, err error) {
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
@@ -3637,11 +3637,14 @@ func accountsNewRoundImpl(
 		}
 	}
 
+	updatedBoxes = make(map[string]persistedBoxData)
 	for key, value := range kvPairs {
 		if value.data != nil {
 			err = writer.upsertKvPair(key, *value.data)
+			updatedBoxes[key] = persistedBoxData{value: value.data, round: lastUpdateRound}
 		} else {
 			err = writer.deleteKvPair(key)
+			updatedBoxes[key] = persistedBoxData{value: nil, round: lastUpdateRound}
 		}
 		if err != nil {
 			return

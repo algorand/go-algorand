@@ -1643,7 +1643,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedBoxes, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -1732,6 +1732,10 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 			mval.ndeltas -= cnt
 			au.kvStore[key] = mval
 		}
+	}
+
+	for key, persistedBox := range dcc.updatedPersistedBoxes {
+		au.baseBoxes.write(persistedBox, key)
 	}
 
 	for cidx, modCrt := range dcc.compactCreatableDeltas {

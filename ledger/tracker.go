@@ -247,6 +247,7 @@ type deferredCommitContext struct {
 
 	updatedPersistedAccounts  []persistedAccountData
 	updatedPersistedResources map[basics.Address][]persistedResourcesData
+	updatedPersistedBoxes     map[string]persistedBoxData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
 	updatedPersistedOnlineAccounts []persistedOnlineAccountData
