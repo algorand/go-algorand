@@ -38,6 +38,16 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 	return config.Consensus[v].AgreementFilterTimeout
 }
 
+func SpeculativeBlockAsmTime(p period, v protocol.ConsensusVersion) time.Duration {
+	hardwait := FilterTimeout(p, v)
+	// TODO(yossi) change from default config to actual config
+	if hardwait > config.GetDefaultLocal().ProposalAssemblyTime+time.Duration(100*time.Millisecond) {
+		// TODO(yossi) consider another check that makes sure we waited at least for a bit, so we don't start spec asm for nothing
+		return hardwait - (config.GetDefaultLocal().ProposalAssemblyTime + time.Duration(100*time.Millisecond))
+	}
+	return time.Duration(0)
+}
+
 // DeadlineTimeout is the duration of the second agreement step.
 func DeadlineTimeout() time.Duration {
 	return deadlineTimeout

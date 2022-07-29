@@ -79,6 +79,9 @@ func (p *player) handle(r routerHandle, e event) []action {
 		if e.T == fastTimeout {
 			return p.handleFastTimeout(r, e)
 		}
+		if e.T == speculationTimeout {
+			return p.handleSpeculationTimeout(r, e)
+		}
 
 		if !p.Napping {
 			r.t.logTimeout(*p)
@@ -120,6 +123,15 @@ func (p *player) handle(r routerHandle, e event) []action {
 	default:
 		panic("bad event")
 	}
+}
+
+func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
+	// start speculative block assembly
+	if e.Proto.Err != nil {
+		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
+		return nil
+	}
+	return p.startSpeculativeBlockAsm(r)
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
@@ -214,6 +226,10 @@ func (p *player) issueNextVote(r routerHandle) []action {
 	p.Napping = false
 	p.Deadline = upper
 	return actions
+}
+
+func (p *player) startSpeculativeBlockAsm(r routerHandle) (actions []action) {
+	return append(actions, pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period})
 }
 
 func (p *player) issueFastVote(r routerHandle) (actions []action) {

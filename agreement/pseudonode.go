@@ -60,6 +60,8 @@ type pseudonode interface {
 	// It returns an error if the pseudonode is unable to perform this.
 	MakeProposals(ctx context.Context, r round, p period) (<-chan externalEvent, error)
 
+	StartSpeculativeBlockAssembly(ctx context.Context, r round, p period) (<-chan externalEvent, error)
+
 	// MakeVotes returns a vote for a given proposal in some round, period, and step.
 	//
 	// The passed-in context may be used to cancel vote creation and close the channel immediately.
@@ -183,6 +185,9 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 		pseudonodeBacklogFullByType.Add("proposal", 1)
 		return nil, fmt.Errorf("unable to make proposal for (%d, %d): %w", r, p, errPseudonodeBacklogFull)
 	}
+}
+
+func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, r round, p period) (<-chan externalEvent, error) {
 }
 
 func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) (chan externalEvent, error) {

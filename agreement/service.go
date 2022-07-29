@@ -80,9 +80,10 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
-	FastRecoveryDeadline time.Duration
-	CurrentRound         round
+	Deadline                    time.Duration
+	FastRecoveryDeadline        time.Duration
+	SpeculativeBlockAsmDeadline time.Duration
+	CurrentRound                round
 }
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
@@ -162,7 +163,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
-		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.CurrentRound)
+		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.SpeculativeBlockAsmDeadline, extSignals.CurrentRound)
 		if !ok {
 			close(input)
 			break
@@ -220,9 +221,15 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		s.Clock = clock
 	}
 
+	nextVersion, err := s.Ledger.ConsensusVersion(status.Round)
+	speculativeBlockAsmTime := time.Duration(0)
+	if err == nil {
+		speculativeBlockAsmTime = SpeculativeBlockAsmTime(0, nextVersion)
+	}
+
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: speculativeBlockAsmTime, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break

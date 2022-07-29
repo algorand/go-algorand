@@ -190,7 +190,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, speculationDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -249,6 +249,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
+	speculationDeadlineCh := s.Clock.TimeoutAt(speculationDeadline)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
@@ -266,7 +267,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		// the pseudonode channel got closed. remove it from the queue and try again.
 		d.queue = d.queue[1:]
 		d.UpdateEventsQueue(eventQueuePseudonode, 0)
-		return d.next(s, deadline, fastDeadline, currentRound)
+		return d.next(s, deadline, fastDeadline, speculationDeadline, currentRound)
 
 	// control
 	case <-s.quit:
@@ -297,6 +298,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		d.monitor.dec(clockCoserviceType)
 	case <-fastDeadlineCh:
 		e = timeoutEvent{T: fastTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(clockCoserviceType)
+	case <-speculationDeadlineCh:
+		e = timeoutEvent{T: speculationTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(clockCoserviceType)
