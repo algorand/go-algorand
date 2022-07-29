@@ -780,14 +780,16 @@ func TestSPWithTXPoolFull(t *testing.T) {
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], params.GenesisHash)
 
-	for {
+	round := uint64(0)
+	for round < uint64(20) {
 		params, err = relay.SuggestedParams()
 		require.NoError(t, err)
-		
-		err = fixture.WaitForRound(params.LastRound+1, 30*time.Second)
+
+		round = params.LastRound
+		err = fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
-		
-		b, err := 	relay.Block(params.LastRound+1)
+
+		b, err := relay.Block(round + 1)
 		require.NoError(t, err)
 		if len(b.Transactions.Transactions) == 0 {
 			continue
@@ -796,4 +798,5 @@ func TestSPWithTXPoolFull(t *testing.T) {
 		require.Equal(t, uint64(8), b.Transactions.Transactions[0].StateProof.StateProofIntervalLatestRound)
 		break
 	}
+	require.Less(t, round, uint64(20))
 }
