@@ -150,6 +150,7 @@ class summary:
 
     def __call__(self, ttr, nick):
         if not ttr:
+            logger.debug('no summary for %s', nick)
             return
         self.nodes[nick] = ttr
         logger.debug('%d points from %s', len(ttr.tpsList), nick)
@@ -225,6 +226,27 @@ class summary:
             labelspace = self.label + " "
         return '{byMsg}\n{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes)
 
+    def plot_pool(self, outpath):
+        from matplotlib import pyplot as plt
+        any = False
+        for nick, ns in self.nodes.items():
+            if not ns.txPool:
+                continue
+            any = True
+            plt.plot(ns.times, ns.txPool, label=nick)
+            csvoutpath = outpath + nick + '.csv'
+            with open(csvoutpath, 'w') as fout:
+                writer = csv.writer(fout)
+                writer.writerow(['time', 'pool'])
+                for t, p in zip(ns.times, ns.txPool):
+                    writer.writerow([t,p])
+        if not any:
+            logger.error('no txPool in {}'.format(list(self.nodes.keys())))
+            return
+        plt.legend(loc='upper right')
+        plt.savefig(outpath + '.svg', format='svg')
+        plt.savefig(outpath + '.png', format='png')
+
 def anynickre(nick_re, nicks):
     if not nick_re:
         return True
@@ -237,7 +259,7 @@ def anynickre(nick_re, nicks):
 
 def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
     '''return {"node nickname":[path, path, ...], ...}'''
-    metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
+    metrics_fname_re = re.compile(r'(.*?)\.([0-9_]+\.?\d+)\.metrics')
     filesByNick = {}
     nonick = []
     tf_inventory_path = None
@@ -265,6 +287,8 @@ def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args):
             rsum(process_files(args, nick, paths), nick)
 
 def main():
+    os.environ['TZ'] = 'UTC'
+    time.tzset()
     test_metric_line_re()
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_files', nargs='*')
@@ -274,6 +298,7 @@ def main():
     ap.add_argument('--report', default=None, help='path to write csv report')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
+    ap.add_argument('--pool-plot-root', help='write to foo.svg and .png')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -288,6 +313,7 @@ def main():
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
     tf_inventory_path, filesByNick, nonick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
+    logger.debug('%d files gathered into %d nicks', len(metrics_files), len(filesByNick))
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')
@@ -307,6 +333,7 @@ def main():
                     ip_to_name[ip] = k
         #logger.debug('names: %r', sorted(ip_to_name.values()))
         #logger.debug('ip to name %r', ip_to_name)
+        unfound = []
         for ip, name in ip_to_name.items():
             found = []
             for nick in filesByNick.keys():
@@ -317,8 +344,12 @@ def main():
             elif len(found) > 1:
                 logger.warning('ip %s (%s) found in nicks: %r', ip, name, found)
             else:
+                unfound.append((ip,name))
+        if not nick_to_tfname:
+            for ip,name in unfound:
                 logger.warning('ip %s (%s) no nick', ip, name)
         #logger.debug('nick_to_tfname %r', nick_to_tfname)
+    logger.debug('nicks: %s', ' '.join(map(lambda x: nick_to_tfname.get(x,x), filesByNick.keys())))
 
     if args.nick_re:
         # use each --nick-re=foo as a group
@@ -344,7 +375,10 @@ def main():
         rsum(process_files(args, None, nonick), 'no nick')
     for rnick, paths in filesByNick.items():
         nick = nick_to_tfname.get(rnick, rnick)
+        logger.debug('%s: %d files', nick, len(paths))
         rsum(process_files(args, nick, paths), nick)
+    if args.pool_plot_root:
+        rsum.plot_pool(args.pool_plot_root)
     print(rsum)
     return 0
 
@@ -359,6 +393,19 @@ def perProtocol(prefix, lists, sums, deltas, dt):
 def process_files(args, nick, paths):
     "returns a nodestats object"
     return nodestats().process_files(args, nick, paths)
+
+path_time_re = re.compile(r'(\d\d\d\d)(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d\.+\d+)')
+
+def parse_path_time(path):
+    m = path_time_re.search(path)
+    if not m:
+        return None
+    ts = float(m.group(6))
+    si = math.floor(ts)
+    t = time.mktime((int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                     int(m.group(4)), int(m.group(5)), si, 0, 0, 0))
+    t += ts - si
+    return t
 
 class nodestats:
     def __init__(self):
@@ -378,6 +425,7 @@ class nodestats:
         # algod_network_sent_bytes_*
         self.txPLists = {}
         self.txPSums = {}
+        self.times = []
         # algod_tx_pool_count{}
         self.txPool = []
         # total across all measurements
@@ -389,6 +437,7 @@ class nodestats:
         self.args = args
         self.nick = nick
         if metrics_files is None:
+            logger.debug('nodestats(%s) no metrics files', nick)
             return self
         reportf = None
         writer = None
@@ -419,7 +468,8 @@ class nodestats:
             if os.path.exists(bijsonpath):
                 with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
-            curtime = os.path.getmtime(path)
+            curtime = parse_path_time(path) or os.path.getmtime(path)
+            self.times.append(curtime)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
             #logger.debug('%s: %r', path, cur)
             if prev is not None:
@@ -471,7 +521,7 @@ class nodestats:
             prevtime = curtime
             prevbi = bi
         if prevbi is None or firstBi is None:
-            return
+            return self
         txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
         rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
         totalDt = prevtime - firstTime

@@ -242,6 +242,8 @@ class watcher:
         self.they = []
         self.netseen = set()
         self.latest_round = None
+        self.bi_hosts = []
+        self.netToAd = {}
         os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
             cp = configparser.ConfigParser(allow_no_value=True)
@@ -262,6 +264,19 @@ class watcher:
                     for net in v.keys():
                         logger.debug('addnet re %s %s', nre, net)
                         self._addnet(net)
+            if args.tf_bi_re:
+                namere = re.compile(args.tf_bi_re)
+                for k,v in cp.items():
+                    if not namere.match(k):
+                        continue
+                    for net in v.keys():
+                        logger.debug('bi net %s %s', nre, net)
+                        ad = self.netToAd.get(net)
+                        if not ad:
+                            self._addnet(net)
+                            ad = self.netToAd.get(net)
+                        if ad:
+                            self.bi_hosts.append(ad)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -283,6 +298,7 @@ class watcher:
         try:
             ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
             self.they.append(ad)
+            self.netToAd[net] = ad
         except:
             logger.error('bad algod: %r', net, exc_info=True)
 
@@ -326,7 +342,8 @@ class watcher:
             biq = queue.SimpleQueue()
             mr = maxrnd(biq)
             mrt = mr.start()
-            for ad in self.they:
+            bi_hosts = self.bi_hosts or self.they
+            for ad in bi_hosts:
                 threads.append(ad.go_blockinfo(snapshot_name, outdir=self.args.out, biqueue=biq))
             for t in threads:
                 t.join()
@@ -386,6 +403,7 @@ def main():
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
+    ap.add_argument('--tf-bi-re', help='hosts to get blocks from')
     ap.add_argument('--svg', dest='svg', default=False, action='store_true', help='automatically run `go tool pprof` to generate performance profile svg from collected data')
     ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
@@ -420,6 +438,7 @@ def main():
         end_round = app.latest_round + args.rounds
     if args.runtime:
         endtime = durationToSeconds(args.runtime) + start
+        logger.debug('now %.1f; endtime %.1f', start, endtime)
 
     cpuAfter = durationToSeconds(args.cpu_after)
     if cpuAfter is not None:
@@ -439,7 +458,7 @@ def main():
                 logger.debug('sleep %f', nextt - now)
                 time.sleep(nextt - now)
                 if graceful_stop:
-                    return
+                    return 0
                 now = time.time()
             periodi += 1
             nextt += periodSecs
@@ -450,9 +469,9 @@ def main():
             app.do_snap(now, get_cpu, fraction=snap_fraction)
             now = time.time()
             if (endtime is not None) and (now > endtime):
-                return
+                return 0
             if (end_round is not None) and (app.latest_round is not None) and (app.latest_round >= end_round):
-                return
+                return 0
     return 0
 
 if __name__ == '__main__':
