@@ -166,65 +166,75 @@ func stackMarkdown(op *logic.OpSpec) string {
 	return out + "\n"
 }
 
-func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bool) (err error) {
+func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[string]bool /*whaaaaaaaaaaat?*/) (err error) {
 	ws := ""
-	opextra := logic.OpImmediateNote(op.Name)
+	newest := specs[len(specs)-1]
+	oldest := specs[0]
+	opextra := logic.OpImmediateNote(newest.Name)
 	if opextra != "" {
 		ws = " "
 	}
-	stackEffects := stackMarkdown(op)
-	encodingString := fmt.Sprintf("\n## %s%s\n\n- Encoding: ", op.Name, immediateMarkdown(op))
-	if logic.IsMultiLeaf(*op) {
-		deprecated := logic.GrabSpec(op.Deprecates)
-		if deprecated.Name != "" {
+	stackEffects := stackMarkdown(&newest)
+	encodingString := fmt.Sprintf("\n## %s%s\n\n- Encoding: ", newest.Name, immediateMarkdown(&newest))
+	dVersion := logic.DeprecatedVersion(oldest)
+	if logic.IsMultiLeaf(newest) {
+		if dVersion != 0 {
 			encodingString += fmt.Sprintf("0x%02x%s%s through v%d, %s%s%s in v%d and on",
-				deprecated.Opcode, ws, opextra, deprecated.DeprecatedVersion-1, logic.Serialize(op.MultiCode), ws, opextra, deprecated.DeprecatedVersion)
+				oldest.Opcode, ws, opextra, dVersion-1, logic.Serialize(newest.MultiCode), ws, opextra, dVersion)
 		} else {
-			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(op.MultiCode), ws, opextra)
+			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(newest.MultiCode), ws, opextra)
 		}
 	} else {
-		encodingString += fmt.Sprintf("0x%02x%s%s", op.Opcode, ws, opextra)
+		encodingString += fmt.Sprintf("0x%02x%s%s", newest.Opcode, ws, opextra)
 	}
 	encodingString += "\n" + stackEffects
 	fmt.Fprint(out, encodingString)
-	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
+	fmt.Fprintf(out, "- %s\n", logic.OpDoc(newest.Name))
 	// if cost changed with versions print all of them
-	costs := logic.OpAllCosts(op.Name)
-	if len(costs) > 1 {
-		fmt.Fprintf(out, "- **Cost**:\n")
-		for _, cost := range costs {
-			if cost.From == cost.To {
-				fmt.Fprintf(out, "    - %s (v%d)\n", cost.Cost, cost.To)
+	from := specs[0].Version
+	var to uint64
+	cost := specs[0].OpDetails.DocCost(len(specs[0].Arg.Types))
+	costString := "- **Cost**:\n"
+	for _, spec := range specs {
+		if cost != spec.OpDetails.DocCost(len(spec.Arg.Types)) {
+			to = spec.Version - 1
+			if from == to {
+				costString += fmt.Sprintf("    - %s (v%d)\n", cost, to)
 			} else {
-				if cost.To < logic.LogicVersion {
-					fmt.Fprintf(out, "    - %s (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
-				} else {
-					fmt.Fprintf(out, "    - %s (since v%d)\n", cost.Cost, cost.From)
-				}
+				costString += fmt.Sprintf("    - %s (v%d - v%d)\n", cost, from, to)
 			}
-		}
-	} else {
-		cost := costs[0].Cost
-		if cost != "1" {
-			fmt.Fprintf(out, "- **Cost**: %s\n", cost)
+			cost = spec.OpDetails.DocCost(len(spec.Arg.Types))
+			from = spec.Version
 		}
 	}
-	if op.Version > 1 {
-		fmt.Fprintf(out, "- Availability: v%d\n", op.Version)
+	if cost == specs[len(specs)-1].OpDetails.DocCost(len(specs[len(specs)-1].Arg.Types)) {
+		costString += fmt.Sprintf("    - %s (since v%d)\n", cost, from)
 	}
-	if !op.Modes.Any() {
-		fmt.Fprintf(out, "- Mode: %s\n", op.Modes)
+	if from == specs[0].Version {
+		// All costs were the same
+		if cost == "1" {
+			costString = ""
+		} else {
+			costString = fmt.Sprintf("- **Cost**: %s\n", cost)
+		}
+	}
+	fmt.Fprint(out, costString)
+	if oldest.Version > 1 {
+		fmt.Fprintf(out, "- Availability: v%d\n", oldest.Version)
+	}
+	if !newest.Modes.Any() {
+		fmt.Fprintf(out, "- Mode: %s\n", newest.Modes)
 	}
 
-	for i := range op.OpDetails.Immediates {
-		group := op.OpDetails.Immediates[i].Group
+	for i := range newest.OpDetails.Immediates {
+		group := newest.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
 			fmt.Fprintf(out, "\n`%s` %s:\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
 			groupDocWritten[group.Name] = true
 		}
 	}
-	ode := logic.OpDocExtra(op.Name)
+	ode := logic.OpDocExtra(newest.Name)
 	if ode != "" {
 		fmt.Fprintf(out, "\n%s\n", ode)
 	}
@@ -233,10 +243,12 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	//opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+
 	written := make(map[string]bool)
-	for _, spec := range opSpecs {
-		err = opToMarkdown(out, &spec, written)
+	for name := range logic.OpNames {
+		specs := logic.SpecsByName(name)
+		err = opToMarkdown(out, specs, written)
 		if err != nil {
 			return
 		}
@@ -380,8 +392,20 @@ func main() {
 	constants.Close()
 
 	written := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	/*opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
 	for _, spec := range opSpecs {
+		for _, imm := range spec.OpDetails.Immediates {
+			if imm.Group != nil && !written[imm.Group.Name] {
+				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
+				fieldGroupMarkdown(out, imm.Group)
+				out.Close()
+				written[imm.Group.Name] = true
+			}
+		}
+	}
+	*/
+	for name := range logic.OpNames {
+		spec := logic.SpecsByName(name)[len(logic.SpecsByName(name))-1]
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")

@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-// LogicVersion defines default assembler and max eval versions
+// LogicVersion defines default max eval version
 const LogicVersion = 7
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
@@ -118,16 +118,15 @@ type OpDetails struct {
 
 	Modes runMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
 
-	FullCost          linearCost  // if non-zero, the cost of the opcode, no immediates matter
-	Size              int         // if non-zero, the known size of opcode. if 0, check() determines.
-	Immediates        []immediate // details of each immediate arg to opcode
-	childOps          []OpSpec
-	MultiCode         []byte
-	Deprecates        specIdentifier
-	DeprecatedVersion uint64
+	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
+	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
+	Immediates []immediate // details of each immediate arg to opcode
+
+	childOps  []OpSpec
+	MultiCode []byte
 }
 
-func (d *OpDetails) docCost(argLen int) string {
+func (d *OpDetails) DocCost(argLen int) string {
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
@@ -171,11 +170,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func opDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, nil, nil, specIdentifier{}, 0}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, nil, nil}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, nil, nil, specIdentifier{}, 0}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, nil, nil}
 }
 
 func opBranch() OpDetails {
@@ -395,25 +394,6 @@ func (spec *OpSpec) deadens() bool {
 	}
 }
 
-type specIdentifier struct {
-	name    string
-	version uint64
-}
-
-// GrabSpec finds the OpSpec that matches the identifier
-func GrabSpec(id specIdentifier) OpSpec {
-	return OpsByName[id.version][id.name]
-}
-
-var deprecated = make(map[specIdentifier]uint64)
-
-func (spec OpSpec) deprecates(name string, version uint64) OpSpec {
-	id := specIdentifier{name, version}
-	deprecated[id] = spec.Version
-	spec.Deprecates = id
-	return spec
-}
-
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
 // Any changes should be reflected in README_in.md which serves as the language spec.
@@ -624,23 +604,23 @@ var OpSpecs = []OpSpec{
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, opDefault()},
-	multiOp(0xa0, "b", multiVersion, []OpSpec{
-		OpSpec{0xa0, "+", opBytesPlus, proto("bb:b"), multiVersion, costly(10)}.deprecates("b+", 4),
-		OpSpec{0xa1, "-", opBytesMinus, proto("bb:b"), multiVersion, costly(10)}.deprecates("b-", 4),
-		OpSpec{0xa2, "/", opBytesDiv, proto("bb:b"), multiVersion, costly(20)}.deprecates("b/", 4),
-		OpSpec{0xa3, "*", opBytesMul, proto("bb:b"), multiVersion, costly(20)}.deprecates("b*", 4),
-		OpSpec{0xa4, "<", opBytesLt, proto("bb:i"), multiVersion, opDefault()}.deprecates("b<", 4),
-		OpSpec{0xa5, ">", opBytesGt, proto("bb:i"), multiVersion, opDefault()}.deprecates("b>", 4),
-		OpSpec{0xa6, "<=", opBytesLe, proto("bb:i"), multiVersion, opDefault()}.deprecates("b<=", 4),
-		OpSpec{0xa7, ">=", opBytesGe, proto("bb:i"), multiVersion, opDefault()}.deprecates("b>=", 4),
-		OpSpec{0xa8, "==", opBytesEq, proto("bb:i"), multiVersion, opDefault()}.deprecates("b==", 4),
-		OpSpec{0xa9, "!=", opBytesNeq, proto("bb:i"), multiVersion, opDefault()}.deprecates("b!=", 4),
-		OpSpec{0xaa, "%", opBytesModulo, proto("bb:b"), multiVersion, costly(20)}.deprecates("b%", 4),
-		OpSpec{0xab, "|", opBytesBitOr, proto("bb:b"), multiVersion, costly(6)}.deprecates("b|", 4),
-		OpSpec{0xac, "&", opBytesBitAnd, proto("bb:b"), multiVersion, costly(6)}.deprecates("b&", 4),
-		OpSpec{0xad, "^", opBytesBitXor, proto("bb:b"), multiVersion, costly(6)}.deprecates("b^", 4),
-		OpSpec{0xae, "~", opBytesBitNot, proto("b:b"), multiVersion, costly(4)}.deprecates("b~", 4),
-		OpSpec{0xaf, "zero", opBytesZero, proto("i:b"), multiVersion, opDefault()}.deprecates("bzero", 4)}...,
+	multiOp(0xa0, "bmath", multiVersion, []OpSpec{
+		{0xa0, "b+", opBytesPlus, proto("bb:b"), multiVersion, costly(10)},
+		{0xa1, "b-", opBytesMinus, proto("bb:b"), multiVersion, costly(10)},
+		{0xa2, "b/", opBytesDiv, proto("bb:b"), multiVersion, costly(20)},
+		{0xa3, "b*", opBytesMul, proto("bb:b"), multiVersion, costly(20)},
+		{0xa4, "b<", opBytesLt, proto("bb:i"), multiVersion, opDefault()},
+		{0xa5, "b>", opBytesGt, proto("bb:i"), multiVersion, opDefault()},
+		{0xa6, "b<=", opBytesLe, proto("bb:i"), multiVersion, opDefault()},
+		{0xa7, "b>=", opBytesGe, proto("bb:i"), multiVersion, opDefault()},
+		{0xa8, "b==", opBytesEq, proto("bb:i"), multiVersion, opDefault()},
+		{0xa9, "b!=", opBytesNeq, proto("bb:i"), multiVersion, opDefault()},
+		{0xaa, "b%", opBytesModulo, proto("bb:b"), multiVersion, costly(20)},
+		{0xab, "b|", opBytesBitOr, proto("bb:b"), multiVersion, costly(6)},
+		{0xac, "b&", opBytesBitAnd, proto("bb:b"), multiVersion, costly(6)},
+		{0xad, "b^", opBytesBitXor, proto("bb:b"), multiVersion, costly(6)},
+		{0xae, "b~", opBytesBitNot, proto("b:b"), multiVersion, costly(4)},
+		{0xaf, "bzero", opBytesZero, proto("i:b"), multiVersion, opDefault()}}...,
 	),
 
 	// AVM "effects"
@@ -663,6 +643,8 @@ var OpSpecs = []OpSpec{
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
 }
+
+var OpNames map[string]bool
 
 type sortByOpcode []OpSpec
 
@@ -697,6 +679,19 @@ func Serialize(bytes []byte) string {
 // IsMultiLeaf identifies if a spec is a multi-op, but it only functions after the spec has been annotated in init()
 func IsMultiLeaf(spec OpSpec) bool {
 	return spec.MultiCode != nil
+}
+
+func SpecsByName(name string) []OpSpec {
+	var specs []OpSpec
+	highestVersion := uint64(0)
+	for v := 1; v <= AssemblerMaxVersion; v++ {
+		spec := OpsByName[v][name]
+		if highestVersion < spec.Version {
+			specs = append(specs, spec)
+			highestVersion = spec.Version
+		}
+	}
+	return specs
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
@@ -755,13 +750,25 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 var totalOps int
 
-func annotateMultiOp(spec *OpSpec, code []byte, name string) {
+func DeprecatedVersion(spec OpSpec) uint64 {
+	if spec.MultiCode != nil || OpsByName[LogicVersion][spec.Name].MultiCode == nil {
+		return 0
+	}
+	for v := spec.Version + 1; v <= LogicVersion; v++ {
+		new := OpsByName[v][spec.Name]
+		if new.MultiCode != nil {
+			return new.Version
+		}
+	}
+	// Can't get to end, but leaving return here
+	return 0
+}
+
+func annotateMultiOp(spec *OpSpec, code []byte) {
 	nextCode := append(code, spec.Opcode)
-	nextName := name + spec.Name
 	if spec.childOps == nil {
 		totalOps++
 		spec.MultiCode = append(spec.MultiCode, nextCode...)
-		spec.Name = nextName
 		extraBytes := len(spec.MultiCode) - 1
 		if spec.Size == 0 {
 			spec.check = func(cx *EvalContext) error {
@@ -777,7 +784,7 @@ func annotateMultiOp(spec *OpSpec, code []byte, name string) {
 		}
 	} else {
 		for i := range spec.childOps {
-			annotateMultiOp(&spec.childOps[i], nextCode, nextName)
+			annotateMultiOp(&spec.childOps[i], nextCode)
 		}
 	}
 }
@@ -790,12 +797,8 @@ func annotateMultiOp(spec *OpSpec, code []byte, name string) {
 // with the version overwritten to 0.
 func init() {
 	for i, spec := range OpSpecs {
-		dVersion, ok := deprecated[specIdentifier{spec.Name, spec.Version}]
-		if ok {
-			OpSpecs[i].DeprecatedVersion = dVersion
-		}
 		if spec.childOps != nil {
-			annotateMultiOp(&OpSpecs[i], nil, "")
+			annotateMultiOp(&OpSpecs[i], nil)
 		} else {
 			totalOps++
 		}

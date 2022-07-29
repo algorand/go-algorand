@@ -360,7 +360,7 @@ func OpAllCosts(opName string) []VerCost {
 			continue
 		}
 		argLen := len(spec.Arg.Types)
-		cost := spec.OpDetails.docCost(argLen)
+		cost := spec.OpDetails.DocCost(argLen)
 		if costs == nil || cost != costs[len(costs)-1].Cost {
 			costs = append(costs, VerCost{v, v, cost})
 		} else {

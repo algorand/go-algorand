@@ -899,7 +899,8 @@ func (cx *EvalContext) step() error {
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
-	if cx.version >= spec.DeprecatedVersion && spec.DeprecatedVersion > 0 {
+	dVersion := DeprecatedVersion(*spec)
+	if cx.version >= dVersion && dVersion > 0 {
 		return fmt.Errorf("deprecated opcode 0x%02x", opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
@@ -1051,7 +1052,8 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if spec.op == nil {
 		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
 	}
-	if cx.version >= spec.DeprecatedVersion && spec.DeprecatedVersion > 0 {
+	dVersion := DeprecatedVersion(*spec)
+	if cx.version >= dVersion && dVersion > 0 {
 		return 0, fmt.Errorf("deprecated opcode 0x%02x", opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
