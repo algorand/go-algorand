@@ -717,11 +717,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if derr := callBeforeTealOpEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
+		if derr := callBeforeTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
 			return false, derr
 		}
 
 		err = cx.step()
+
+		if derr := callAfterTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
+			return false, derr
+		}
 	}
 	if err != nil {
 		if cx.Trace != nil {

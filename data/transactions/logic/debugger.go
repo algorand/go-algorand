@@ -139,7 +139,7 @@ type debuggerBeforeTealOpHook interface {
 	BeforeTealOp(state *DebugState) error
 }
 
-func callBeforeTealOpEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+func callBeforeTealOpHookIfItExists(dh DebuggerHook, state *DebugState) error {
 	if dhWithBeforeTealOpHook, ok := dh.(debuggerBeforeTealOpHook); ok {
 		return dhWithBeforeTealOpHook.BeforeTealOp(state)
 	}
@@ -151,7 +151,7 @@ type debuggerAfterTealOpHook interface {
 	AfterTealOp(state *DebugState) error
 }
 
-func callAfterTealOpEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+func callAfterTealOpHookIfItExists(dh DebuggerHook, state *DebugState) error {
 	if dhWithAfterTealOpHook, ok := dh.(debuggerAfterTealOpHook); ok {
 		return dhWithAfterTealOpHook.AfterTealOp(state)
 	}
