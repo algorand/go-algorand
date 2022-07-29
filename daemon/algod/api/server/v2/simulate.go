@@ -63,6 +63,11 @@ func (l apiSimulatorLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.B
 	return l.LedgerForAPI.BlockHdr(round)
 }
 
+// BlockHdrCached is part of the LedgerForSimulator interface.
+func (l apiSimulatorLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.BlockHdr(round)
+}
+
 // GenesisHash is part of LedgerForSimulator interface.
 func (l apiSimulatorLedgerConnector) GenesisHash() crypto.Digest {
 	return l.hdr.GenesisHash

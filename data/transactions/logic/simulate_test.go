@@ -64,6 +64,11 @@ func (sl *simulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.Bloc
 	return sl.hdr, nil
 }
 
+// override the test ledger's BlockHdrCached method to return the same header
+func (sl *simulationTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return sl.BlockHdr(rnd)
+}
+
 func (sl *simulationTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	// Never throw an error during these tests since it's a simulation ledger.
 	// In production, the actual ledger method is used.
