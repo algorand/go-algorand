@@ -364,7 +364,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -423,8 +423,6 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
-
-FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
 
@@ -1122,36 +1120,6 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - **Cost**: 130
 - Availability: v7
 
-## bn256_add
-
-- Encoding: 0x99
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
-- for (curve points A and B) return the curve point A + B
-- **Cost**: 70
-- Availability: v7
-
-A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
-
-## bn256_scalar_mul
-
-- Encoding: 0x9a
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
-- for (curve point A, scalar K) return the curve point KA
-- **Cost**: 970
-- Availability: v7
-
-A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
-
-## bn256_pairing
-
-- Encoding: 0x9b
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
-- for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}
-- **Cost**: 8700
-- Availability: v7
-
-G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
-
 ## b+
 
 - Encoding: 0xa0 through v6, 0xa0 0xa0 in v7 and on
@@ -1407,3 +1375,33 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
+
+## vrf_verify s
+
+- Encoding: 0xd0 {uint8 parameters index}
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: uint64
+- Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
+- **Cost**: 5700
+- Availability: v7
+
+`vrf_verify` Standards:
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | VrfAlgorand |  |
+
+
+## block f
+
+- Encoding: 0xd1 {uint8 block field}
+- Stack: ..., A: uint64 &rarr; ..., any
+- field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.
+- Availability: v7
+
+`block` Fields:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | BlkSeed | []byte |  |
+| 1 | BlkTimestamp | uint64 |  |
+

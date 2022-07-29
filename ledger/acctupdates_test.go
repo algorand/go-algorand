@@ -270,7 +270,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(l, []ledgerTracker{au, ao}, conf)
+	l.trackers.initialize(l, []ledgerTracker{au, ao, &txTail{}}, conf)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 
@@ -607,6 +607,11 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 	defer ao.close()
+
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	ml.trackers.trackers = ml.trackers.trackers[:2]
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
