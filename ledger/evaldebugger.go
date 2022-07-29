@@ -27,12 +27,14 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-type LedgerForDebugger interface {
+// DebuggerLedgerForEval is a ledger interface for the debugger.
+type DebuggerLedgerForEval interface {
 	internal.LedgerForEvaluator
 	Latest() basics.Round
 }
 
-func EvalForDebugger(l LedgerForDebugger, stxns []transactions.SignedTxn) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+// EvalForDebugger processes a transaction group for the debugger.
+func EvalForDebugger(l DebuggerLedgerForEval, stxns []transactions.SignedTxn) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	prevBlockHdr, err := l.BlockHdr(l.Latest())
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{}, err

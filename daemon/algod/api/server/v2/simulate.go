@@ -34,8 +34,9 @@ import (
 // > Simulation Ledger
 // ==============================
 
+// LedgerForSimulator is a ledger interface for the simulator.
 type LedgerForSimulator interface {
-	ledger.LedgerForDebugger
+	ledger.DebuggerLedgerForEval
 }
 
 type apiSimulatorLedgerConnector struct {
@@ -99,20 +100,22 @@ func makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI LedgerForAPI, hdr bookk
 // > Simulator Errors
 // ==============================
 
+// SimulatorError is the base error type for all simulator errors.
 type SimulatorError struct {
 	error
 }
 
-// An invalid transaction group was submitted to the simulator.
+// InvalidTxGroupError occurs when an invalid transaction group was submitted to the simulator.
 type InvalidTxGroupError struct {
 	SimulatorError
 }
 
+// InvalidSignatureError occurs when a transaction has an invalid signature.
 type InvalidSignatureError struct {
 	SimulatorError
 }
 
-// A scoped simulator error is a simulator error that has 2 errors, one for internal use and one for
+// ScopedSimulatorError is a simulator error that has 2 errors, one for internal use and one for
 // displaying publicly. THe external error is useful for API routes/etc.
 type ScopedSimulatorError struct {
 	SimulatorError        // the original error for internal use
@@ -144,16 +147,19 @@ func isInvalidSignatureError(err error) bool {
 // > Simulator
 // ==============================
 
+// Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
 	ledger LedgerForSimulator
 }
 
+// MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger LedgerForSimulator) *Simulator {
 	return &Simulator{
 		ledger: ledger,
 	}
 }
 
+// MakeSimulatorFromAPILedger creates a new simulator from an API ledger.
 func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.BlockHeader) *Simulator {
 	ledger := makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI, hdr)
 	return MakeSimulator(ledger)
@@ -163,7 +169,7 @@ func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.Block
 func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) error {
 	hdr, err := s.ledger.BlockHdr(s.ledger.Latest())
 	if err != nil {
-		return ScopedSimulatorError{SimulatorError{fmt.Errorf("Please contact us, this shouldn't happen. Current block error: %v.", err)}, "current block error"}
+		return ScopedSimulatorError{SimulatorError{fmt.Errorf("please contact us, this shouldn't happen. Current block error: %v", err)}, "current block error"}
 	}
 
 	batchVerifier := crypto.MakeBatchVerifier()
@@ -181,7 +187,7 @@ func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
-// Simulate a transaction group using the simulator. Will error if the transaction group is not well-formed or an
+// SimulateSignedTxGroup simulates a transaction group using the simulator. Will error if the transaction group is not well-formed or an
 // unexpected error occurs. Otherwise, evaluation failure messages are returned.
 func (s Simulator) SimulateSignedTxGroup(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
 	var result generated.SimulationResult
