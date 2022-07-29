@@ -16,14 +16,57 @@
 
 package logic
 
-const pairingNonsense = `
+import (
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+const bmathCompiled = "800301234549a0a049a0a149a0a249a0a349a0a4a0af49a0a5a0af49a0a6a0af49a0a7a0af49a0a8a0af49a0a9a0af49a0aa49a0ab49a0ac49a0ada0ae"
+
+const bmathNonsense = `
  pushbytes 0x012345
  dup
- bn256_add
+ b+
  dup
- bn256_scalar_mul
+ b-
  dup
- bn256_pairing
+ b/
+ dup
+ b*
+ dup
+ b<
+ bzero
+ dup
+ b>
+ bzero
+ dup
+ b<=
+ bzero
+ dup
+ b>=
+ bzero
+ dup
+ b==
+ bzero
+ dup
+ b!=
+ bzero
+ dup
+ b%
+ dup
+ b|
+ dup
+ b&
+ dup
+ b^
+ b~
 `
 
-const pairingCompiled = "80030123454999499a499b"
+func TestDeprecation(t *testing.T) {
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = []byte{byte(multiVersion), 0x80, 0x01, 0x01, 0x49, 0xa2}
+	ep := defaultEvalParamsWithVersion(&txn, multiVersion)
+	_, err := EvalSignature(0, ep)
+	require.ErrorContains(t, err, "deprecated opcode")
+}
