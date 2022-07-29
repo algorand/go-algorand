@@ -864,7 +864,7 @@ func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx b
 		KeyValue: appLocalState,
 	}
 
-	return ledgercore.AppResource{&basicAppLocalState, &basicAppParams}, nil
+	return ledgercore.AppResource{AppLocalState: &basicAppLocalState, AppParams: &basicAppParams}, nil
 }
 
 func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
