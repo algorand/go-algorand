@@ -66,13 +66,28 @@ func main() {
 	}
 	fmt.Printf("Configuration file loaded successfully.\n")
 
-	seed := loadMnemonic(cfg.AccountMnemonic)
-	privateKey := crypto.GenerateSignatureSecrets(seed)
-	publicKey := basics.Address(privateKey.SignatureVerifier)
+	var privateKeys []*crypto.SignatureSecrets
+	var publicKeys []basics.Address
+	addKey := func(mnemonic string) {
+		seed := loadMnemonic(mnemonic)
+		privateKeys = append(privateKeys, crypto.GenerateSignatureSecrets(seed))
+		publicKeys = append(publicKeys, basics.Address(privateKeys[0].SignatureVerifier))
+	}
+	if cfg.AccountMnemonic != "" { // one mnemonic provided
+		addKey(cfg.AccountMnemonic)
+	} else if len(cfg.AccountMnemonicList) > 0 {
+		for _, mnemonic := range cfg.AccountMnemonicList {
+			addKey(mnemonic)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "no keys specified in config files")
+	}
 
-	fmt.Printf("Spending account public key : %v\n", publicKey.String())
+	for i, publicKey := range publicKeys {
+		fmt.Printf("Spending account public key %d: %v\n", i, publicKey.String())
+	}
 
-	err = spendLoop(cfg, privateKey, publicKey)
+	err = spendLoop(cfg, privateKeys, publicKeys)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spend loop error : %v\n", err)
 		os.Exit(1)
@@ -92,7 +107,7 @@ func nextSpendRound(cfg config, round uint64) uint64 {
 	return ((round+cfg.RoundOffset)/cfg.RoundModulator)*cfg.RoundModulator + cfg.RoundModulator
 }
 
-func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (err error) {
+func spendLoop(cfg config, privateKey []*crypto.SignatureSecrets, publicKey []basics.Address) (err error) {
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
 	for {
 		waitForRound(restClient, cfg, true)
@@ -141,7 +156,7 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 	}
 }
 
-func generateTransactions(restClient client.RestClient, cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (queueFull bool) {
+func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address) (queueFull bool) {
 	var nodeStatus generatedV2.NodeStatusResponse
 	var err error
 	nodeStatus, err = restClient.Status()
@@ -162,7 +177,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 	for i := range txns {
 		tx := transactions.Transaction{
 			Header: transactions.Header{
-				Sender:      publicKey,
+				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},
 				FirstValid:  basics.Round(nodeStatus.LastRound),
 				LastValid:   basics.Round(nodeStatus.LastRound + 2),
@@ -171,13 +186,13 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 				GenesisHash: genesisHash,
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: publicKey,
+				Receiver: publicKeys[i%len(publicKeys)],
 				Amount:   basics.MicroAlgos{Raw: 0},
 			},
 			Type: protocol.PaymentTx,
 		}
 		crypto.RandBytes(tx.Note[:])
-		txns[i] = tx.Sign(privateKey)
+		txns[i] = tx.Sign(privateKeys[i%len(privateKeys)])
 	}
 
 	// create multiple go-routines to send all these requests.
