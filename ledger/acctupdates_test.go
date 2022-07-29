@@ -653,6 +653,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 			ml.trackers.committedUpTo(round)
 		}(i)
 	}
+	ml.trackers.waitAccountsWriting()
 	wg.Wait()
 }
 
