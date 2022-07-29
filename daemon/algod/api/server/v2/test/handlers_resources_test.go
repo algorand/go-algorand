@@ -42,6 +42,7 @@ import (
 type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
 	latest   basics.Round
+	blocks   []bookkeeping.Block
 }
 
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
@@ -114,7 +115,22 @@ func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) 
 }
 
 func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
-	panic("not implemented")
+	blk := l.blocks[r]
+
+	spec := transactions.SpecialAddresses{
+		FeeSink:     blk.FeeSink,
+		RewardsPool: blk.RewardsPool,
+	}
+
+	var res []transactions.SignedTxnWithAD
+
+	for _, tx := range blk.Payset {
+		if tx.Txn.MatchAddress(id, spec) {
+			signedTxn := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: tx.Txn}}
+			res = append(res, signedTxn)
+		}
+	}
+	return res, nil
 }
 
 func randomAccountWithResources(N int) basics.AccountData {

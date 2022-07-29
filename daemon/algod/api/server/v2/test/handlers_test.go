@@ -1005,8 +1005,8 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 			Type:   protocol.StateProofTx,
 			Header: transactions.Header{Sender: transactions.StateProofSender},
 			StateProofTxnFields: transactions.StateProofTxnFields{
-				StateProofIntervalLatestRound: basics.Round(stateProofRound + stateProofIntervalForHandlerTests),
-				StateProofType:                0,
+				StateProofIntervalLastRound: basics.Round(stateProofRound + stateProofIntervalForHandlerTests),
+				StateProofType:              0,
 				Message: stateproofmsg.Message{
 					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
 					FirstAttestedRound:     stateProofRound + 1,
@@ -1046,7 +1046,7 @@ func TestStateProofNotFound(t *testing.T) {
 
 	insertRounds(a, handler, 700)
 
-	a.NoError(handler.StateProof(ctx, 650))
+	a.NoError(handler.GetStateProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1057,7 +1057,7 @@ func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	a.NoError(handler.StateProof(ctx, 2))
+	a.NoError(handler.GetStateProof(ctx, 2))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1070,7 +1070,7 @@ func TestStateProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.StateProof(ctx, stateProofIntervalForHandlerTests+1))
+	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
 	a.Equal(200, responseRecorder.Code)
 
 	stprfResp := generated.StateProofResponse{}
@@ -1127,4 +1127,36 @@ func TestGetBlockProof200(t *testing.T) {
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &proofResp))
 	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
 	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))
+}
+
+func TestStateproofTransactionForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i < 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	a.NoError(err)
+	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000)
+	a.NoError(err)
+	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000)
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }

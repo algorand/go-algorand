@@ -18,10 +18,8 @@ package apply
 
 import (
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -30,9 +28,8 @@ import (
 // StateProofs allows fetching and updating state-proofs state on the ledger
 type StateProofs interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
-	StateProofNext() basics.Round
-	SetStateProofNext(rnd basics.Round)
-	ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error
+	GetStateProofNextRound() basics.Round
+	SetStateProofNextRound(rnd basics.Round)
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records

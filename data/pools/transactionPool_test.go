@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/crypto/stateproof"
+	cryptostateproof "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -42,7 +42,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	astateproof "github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/stateproof/verify"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -1382,7 +1383,7 @@ func TestTStateProofLogging(t *testing.T) {
 	votersRoundHdr, err := mockLedger.BlockHdr(votersRound)
 	require.NoError(t, err)
 
-	provenWeight, err := ledger.GetProvenWeight(votersRoundHdr, spRoundHdr)
+	provenWeight, err := verify.GetProvenWeight(votersRoundHdr, spRoundHdr)
 	require.NoError(t, err)
 
 	lookback := votersRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))
@@ -1391,7 +1392,7 @@ func TestTStateProofLogging(t *testing.T) {
 	require.NotNil(t, voters)
 
 	// Get the message
-	msg, err := astateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
+	msg, err := stateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
 
 	// Get the SP
 	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, t)
@@ -1403,7 +1404,7 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.FirstValid = 512
 	stxn.Txn.LastValid = 1024
 	stxn.Txn.GenesisHash = mockLedger.GenesisHash()
-	stxn.Txn.StateProofIntervalLatestRound = 512
+	stxn.Txn.StateProofIntervalLastRound = 512
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
 	require.NoError(t, err)
@@ -1458,9 +1459,9 @@ func generateProofForTesting(
 	partArray basics.ParticipantsArray,
 	partTree *merklearray.Tree,
 	allKeys []*merklesignature.Secrets,
-	t *testing.T) *stateproof.StateProof {
+	t *testing.T) *cryptostateproof.StateProof {
 
-	data := msg.IntoStateProofMessageHash()
+	data := msg.Hash()
 
 	// Sign with the participation keys
 	sigs := make(map[merklesignature.Verifier]merklesignature.Signature)
@@ -1473,7 +1474,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusFuture].StateProofStrengthTarget
-	b, err := stateproof.MakeBuilder(data, round, provenWeight,
+	b, err := cryptostateproof.MakeBuilder(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 

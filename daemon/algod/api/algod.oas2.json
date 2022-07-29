@@ -1254,8 +1254,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "get a state proof that covers a given round",
-        "operationId": "StateProof",
+        "summary": "Get a state proof that covers a given round",
+        "operationId": "GetStateProof",
         "parameters": [
           {
             "type": "integer",
