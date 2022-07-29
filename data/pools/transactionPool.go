@@ -450,7 +450,7 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
