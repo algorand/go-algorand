@@ -739,3 +739,61 @@ func TestAttestorsChangeTest(t *testing.T) {
 
 	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
+
+func TestSPWithTXPoolFull(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("future")
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofInterval = 4
+	configurableConsensus[consensusVersion] = consensusParams
+
+	fixture.SetConsensus(configurableConsensus)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+
+	dir, err := fixture.GetNodeDir("Primary")
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(dir)
+	a.NoError(err)
+	cfg.TxPoolSize = 0
+	cfg.SaveToDisk(dir)
+
+	dir, err = fixture.GetNodeDir("Node")
+	a.NoError(err)
+	cfg.SaveToDisk(dir)
+
+	fixture.Start()
+	defer fixture.Shutdown()
+
+	relay := fixture.GetLibGoalClientForNamedNode("Primary")
+
+	params, err := relay.SuggestedParams()
+	require.NoError(t, err)
+
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], params.GenesisHash)
+
+	for {
+		params, err = relay.SuggestedParams()
+		require.NoError(t, err)
+		
+		err = fixture.WaitForRound(params.LastRound+1, 30*time.Second)
+		require.NoError(t, err)
+		
+		b, err := 	relay.Block(params.LastRound+1)
+		require.NoError(t, err)
+		if len(b.Transactions.Transactions) == 0 {
+			continue
+		}
+		require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[0].Type)
+		require.Equal(t, uint64(8), b.Transactions.Transactions[0].StateProof.StateProofIntervalLatestRound)
+		break
+	}
+}
