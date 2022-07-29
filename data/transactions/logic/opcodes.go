@@ -126,6 +126,7 @@ type OpDetails struct {
 	MultiCode []byte
 }
 
+// DocCost helps document the cost of OpSpecs
 func (d *OpDetails) DocCost(argLen int) string {
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
@@ -644,6 +645,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
 }
 
+// OpNames lists all spec names in order they are introduced in the OpSpecs table
 var OpNames = make([]string, 0)
 
 type sortByOpcode []OpSpec
@@ -681,10 +683,11 @@ func IsMultiLeaf(spec OpSpec) bool {
 	return spec.MultiCode != nil
 }
 
+// SpecsByName returns a slice of all OpSpecs throughout the versions with the given name and without repetition
 func SpecsByName(name string) []OpSpec {
 	var specs []OpSpec
 	highestVersion := uint64(0)
-	for v := 1; v <= AssemblerMaxVersion; v++ {
+	for v := 1; v <= LogicVersion; v++ {
 		spec := OpsByName[v][name]
 		if highestVersion < spec.Version {
 			specs = append(specs, spec)
@@ -750,6 +753,9 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 var totalOps int
 
+// DeprecatedVersion returns the version an OpSpec was deprecated, which is currently only
+// possible if a multi-op of the same name was introduced in a later version and the spec is not a multi-op
+// A return of 0 indicates the spec has not been deprecated
 func DeprecatedVersion(spec OpSpec) uint64 {
 	if spec.MultiCode != nil || OpsByName[LogicVersion][spec.Name].MultiCode == nil {
 		return 0

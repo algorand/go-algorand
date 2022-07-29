@@ -378,8 +378,6 @@ func create(file string) *os.File {
 
 func main() {
 	opcodesMd := create("TEAL_opcodes.md")
-	fmt.Printf("Spec0: %s", logic.OpNames[0])
-	fmt.Printf("Specs: %+v", logic.OpNames)
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
@@ -399,7 +397,7 @@ func main() {
 
 	written := make(map[string]bool)
 	for _, name := range logic.OpNames {
-		spec := logic.SpecsByName(name)[len(logic.SpecsByName(name))-1]
+		spec := logic.OpsByName[logic.LogicVersion][name]
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
