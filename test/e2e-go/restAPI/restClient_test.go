@@ -1264,7 +1264,9 @@ func TestBoxNamesByAppID(t *testing.T) {
     bz del                  // "create" ? continue : goto del
     int 5                   // [5]
     txn ApplicationArgs 1   // [5, arg[1]]
+    swap
     box_create              // [] // boxes: arg[1] -> [5]byte
+    assert
     b end
 del:                        // delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
@@ -1273,6 +1275,7 @@ del:                        // delete box arg[1]
 	bz set                  // "delete" ? continue : goto set
     txn ApplicationArgs 1   // [arg[1]]
     box_del                 // del boxes[arg[1]]
+    assert
     b end
 set:						// put arg[1] at start of box arg[0] ... so actually a _partial_ "set"
     txn ApplicationArgs 0   // [arg[0]]

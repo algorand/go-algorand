@@ -615,13 +615,13 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
-| `box_create` | make a box |
-| `box_extract` | read from a box |
-| `box_replace` | write to a box |
-| `box_del` | delete a box |
-| `box_len` | length of a box |
-| `box_get` | full contents of a box |
-| `box_put` | write contents of box |
+| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,384. |
+| `box_extract` | read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size. |
+| `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
+| `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
+| `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. Fails if len(box A) > 4096. |
+| `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does exist. |
 
 ### Inner Transactions
 

@@ -202,43 +202,50 @@ func (cs *roundCowState) kvDel(key string) error {
 	return nil
 }
 
-func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+func errOnMismatch(x string, y string) error {
+	if len(x) != len(y) {
+		return fmt.Errorf("new box size mismatch %d %d", len(x), len(y))
+	}
+	return nil
+}
+
+func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) (bool, error) {
 	// Use same limit on key length as for global/local storage
 	if len(key) > cs.proto.MaxAppKeyLen {
-		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
+		return false, fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
 	}
 	// This rule is NOT like global/local storage, but seems like it will limit
 	// confusion, since these are standalone entities.
 	if len(key) == 0 {
-		return fmt.Errorf("box names may not be zero length")
+		return false, fmt.Errorf("box names may not be zero length")
 	}
 
 	size := uint64(len(value))
 	if size > cs.proto.MaxBoxSize {
-		return fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
+		return false, fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
 	}
 
 	fullKey := logic.MakeBoxKey(appIdx, key)
-	_, ok, err := cs.kvGet(fullKey)
+	existing, ok, err := cs.kvGet(fullKey)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if ok {
-		return fmt.Errorf("box %s exists for %d", key, appIdx)
+		return false, errOnMismatch(existing, value)
 	}
 
 	record, err := cs.Get(appAddr, false)
 	if err != nil {
-		return err
+		return false, err
 	}
 	record.TotalBoxes = basics.AddSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.AddSaturate(record.TotalBoxBytes, uint64(len(key))+size)
 	err = cs.Put(appAddr, record)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return cs.kvPut(fullKey, value)
+	return true, cs.kvPut(fullKey, value)
 }
 
 func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
@@ -262,29 +269,29 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string
 	return cs.kvPut(fullKey, value)
 }
 
-func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
+func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
 	fullKey := logic.MakeBoxKey(appIdx, key)
 
 	value, ok, err := cs.kvGet(fullKey)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
+		return false, nil
 	}
 
 	record, err := cs.Get(appAddr, false)
 	if err != nil {
-		return err
+		return false, err
 	}
 	record.TotalBoxes = basics.SubSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.SubSaturate(record.TotalBoxBytes, uint64(len(key)+len(value)))
 	err = cs.Put(appAddr, record)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return cs.kvDel(fullKey)
+	return true, cs.kvDel(fullKey)
 }
 
 func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {

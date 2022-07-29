@@ -345,28 +345,35 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return nil
 }
 
+func errOnMismatch(x string, y string) error {
+	if len(x) != len(y) {
+		return fmt.Errorf("new box size mismatch %d %d", len(x), len(y))
+	}
+	return nil
+}
+
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) (bool, error) {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
+		return false, fmt.Errorf("no such app %d", appIdx)
 	}
 	if params.boxMods == nil {
 		params.boxMods = make(map[string]*string)
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
-			return fmt.Errorf("box already exists 1 %#v %d", key, len(*current))
+			return false, errOnMismatch(value, *current)
 		}
 	} else if current, ok := params.boxes[key]; ok {
-		return fmt.Errorf("box already exists 2 %#v %d", key, len(current))
+		return false, errOnMismatch(value, current)
 	}
 	params.boxMods[key] = &value
 	l.applications[appIdx] = params
-	return nil
+	return true, nil
 }
 
 func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
@@ -410,23 +417,23 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error 
 }
 
 // DelBox deletes a value through moxMods mechanism
-func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
+func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
 	_, ok, err := l.GetBox(appIdx, key)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return fmt.Errorf("no such box %d", appIdx)
+		return false, nil
 	}
 	params := l.applications[appIdx] // assured, based on above
 	if params.boxMods == nil {
 		params.boxMods = make(map[string]*string)
 	}
 	params.boxMods[key] = nil
-	return nil
+	return true, nil
 }
 
 // GetLocal returns the current value bound to a local key, taking

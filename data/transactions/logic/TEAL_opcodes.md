@@ -1352,8 +1352,8 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 ## box_create
 
 - Opcode: 0xb9
-- Stack: ..., A: uint64, B: []byte &rarr; ...
-- make a box
+- Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
+- create a box named A, of length B. Fail if A is empty or B exceeds 32,384.
 - Availability: v7
 - Mode: Application
 
@@ -1361,7 +1361,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xba
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- read from a box
+- read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size.
 - Availability: v7
 - Mode: Application
 
@@ -1369,15 +1369,15 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xbb
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ...
-- write to a box
+- write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v7
 - Mode: Application
 
 ## box_del
 
 - Opcode: 0xbc
-- Stack: ..., A: []byte &rarr; ...
-- delete a box
+- Stack: ..., A: []byte &rarr; ..., uint64
+- delete box named A if it exists. Return 1 if A existed, 0 otherwise
 - Availability: v7
 - Mode: Application
 
@@ -1385,7 +1385,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xbd
 - Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
-- length of a box
+- X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
 - Availability: v7
 - Mode: Application
 
@@ -1393,7 +1393,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xbe
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
-- full contents of a box
+- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. Fails if len(box A) > 4096.
 - Availability: v7
 - Mode: Application
 
@@ -1401,7 +1401,7 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xbf
 - Stack: ..., A: []byte, B: []byte &rarr; ...
-- write contents of box
+- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does exist.
 - Availability: v7
 - Mode: Application
 
