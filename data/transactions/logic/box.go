@@ -83,9 +83,9 @@ func opBoxCreate(cx *EvalContext) error {
 	appAddr := cx.getApplicationAddress(cx.appID)
 
 	cx.stack = cx.stack[:last]
-	existed, err := createBox(cx, name, string(make([]byte, size)), appAddr)
+	created, err := createBox(cx, name, string(make([]byte, size)), appAddr)
 	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(existed)
+	cx.stack[prev].Uint = boolToUint(created)
 	return err
 
 }
