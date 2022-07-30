@@ -1353,9 +1353,11 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xb9
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
-- create a box named A, of length B. Fail if A is empty or B exceeds 32,384.
+- create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1
 - Availability: v7
 - Mode: Application
+
+Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.
 
 ## box_extract
 
@@ -1393,17 +1395,21 @@ G1s are encoded by the concatenation of encoded G1 points, as described in `bn25
 
 - Opcode: 0xbe
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
-- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. Fails if len(box A) > 4096.
+- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
 - Availability: v7
 - Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
 ## box_put
 
 - Opcode: 0xbf
 - Stack: ..., A: []byte, B: []byte &rarr; ...
-- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does exist.
+- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist.
 - Availability: v7
 - Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
 ## txnas f
 

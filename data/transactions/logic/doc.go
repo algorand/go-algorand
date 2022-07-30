@@ -325,6 +325,10 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref":            "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+
+	"box_create": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
+	"box_get":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+	"box_put":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
 }
 
 // OpDocExtra returns extra documentation text about an op
