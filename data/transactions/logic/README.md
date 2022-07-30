@@ -440,7 +440,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
+| 19 | AssetSender | []byte |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
 | 20 | AssetReceiver | []byte |      | 32 byte address |
 | 21 | AssetCloseTo | []byte |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
@@ -737,10 +737,12 @@ fields from breaking assumptions made by programs written before they
 existed. If one of the transactions in a group will execute a program
 whose version predates a transaction type or field that can violate
 expectations, that transaction type or field must not be used anywhere
-in the transaction group. A v1 program included in a transaction group
-that includes a ApplicationCall transaction, or a non-zero RekeyTo
-field, will fail regardless of the other contents of the program
-itself.
+in the transaction group.
+
+Concretely, the above requirement is translated as follows: A v1
+program included in a transaction group that includes a
+ApplicationCall transaction or a non-zero RekeyTo field will fail
+regardless of the program itself.
 
 This requirement is enforced as follows:
 
@@ -749,8 +751,7 @@ This requirement is enforced as follows:
   
 * Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
-In addition, applications must be v6 or greater to be eligible for
-being called in an inner transaction.
+In addition, applications must be v4 or greater to be called in an inner transaction.
 
 ## Varuint
 

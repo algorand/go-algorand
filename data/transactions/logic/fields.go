@@ -287,7 +287,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
 	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
 	{AssetSender, StackBytes, false, 0, 5, false,
-		"32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset."},
+		"32 byte address. Source of assets if Sender is the Asset's Clawback address."},
 	{AssetReceiver, StackBytes, false, 0, 5, false, "32 byte address"},
 	{AssetCloseTo, StackBytes, false, 0, 5, false, "32 byte address"},
 	{GroupIndex, StackUint64, false, 0, 0, false,

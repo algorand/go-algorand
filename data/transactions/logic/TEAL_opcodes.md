@@ -380,7 +380,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
+| 19 | AssetSender | []byte |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
 | 20 | AssetReceiver | []byte |      | 32 byte address |
 | 21 | AssetCloseTo | []byte |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
