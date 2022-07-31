@@ -1301,7 +1301,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 	}
 }
 
-func TestWellFormedStatePro1ofTxn(t *testing.T) {
+func TestStateProofTxnShouldBeZero(t *testing.T) {
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 
@@ -1321,26 +1321,31 @@ func TestWellFormedStatePro1ofTxn(t *testing.T) {
 		StateProofTxnFields: StateProofTxnFields{},
 	}
 
+	const erroMsg = "type pay has non-zero fields for type stpf"
 	txn.StateProofType = 1
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "type pay has non-zero fields for type stpf")
+	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProofType = 0
 	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "type pay has non-zero fields for type stpf")
+	require.Contains(t, err.Error(), erroMsg)
 
 	txn.Message = stateproofmsg.Message{}
 	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "type pay has non-zero fields for type stpf")
+	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProof = stateproof.StateProof{}
 	txn.StateProofIntervalLastRound = 512
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "type pay has non-zero fields for type stpf")
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProofIntervalLastRound = 0
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.NoError(t, err)
 }
