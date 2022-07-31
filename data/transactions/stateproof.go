@@ -38,6 +38,7 @@ type StateProofTxnFields struct {
 // in the sense of being omitted in a msgpack encoding.
 func (sp StateProofTxnFields) Empty() bool {
 	return sp.StateProofIntervalLastRound == 0 &&
+		sp.StateProofType == 0 &&
 		sp.StateProof.MsgIsZero() &&
 		sp.Message.MsgIsZero()
 }

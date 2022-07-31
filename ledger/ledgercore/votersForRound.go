@@ -60,7 +60,7 @@ type VotersForRound struct {
 	// in participants.
 	Proto config.ConsensusParams
 
-	// Participants is the array of top #StateProofVotersCommitment online accounts
+	// Participants is the array of top #StateProofTopVoters online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
 	Participants basics.ParticipantsArray

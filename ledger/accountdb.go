@@ -3657,7 +3657,7 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
-			var chunkSize = sqliteMaxVariableNumber
+			chunkSize := sqliteMaxVariableNumber
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}
