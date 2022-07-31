@@ -31,17 +31,15 @@ import (
 type StateProofTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	StateProofIntervalLastRound basics.Round            `codec:"sprnd"`
-	StateProofType              protocol.StateProofType `codec:"sptype"`
-	StateProof                  stateproof.StateProof   `codec:"sp"`
-	Message                     stateproofmsg.Message   `codec:"spmsg"`
+	StateProofType protocol.StateProofType `codec:"sptype"`
+	StateProof     stateproof.StateProof   `codec:"sp"`
+	Message        stateproofmsg.Message   `codec:"spmsg"`
 }
 
 // Empty returns whether the StateProofTxnFields are all zero,
 // in the sense of being omitted in a msgpack encoding.
 func (sp StateProofTxnFields) Empty() bool {
-	return sp.StateProofIntervalLastRound == 0 &&
-		sp.StateProof.MsgIsZero() &&
+	return sp.StateProof.MsgIsZero() &&
 		sp.Message.MsgIsZero()
 }
 
@@ -49,7 +47,7 @@ func (sp StateProofTxnFields) Empty() bool {
 func (sp StateProofTxnFields) PrintFormatted() string {
 	return fmt.Sprintf(
 		"StateProofTxnFields {\n"+
-			"  StateProofIntervalLatestRound: %d, StateProofType: %d,\n"+
+			"  StateProofType: %d,\n"+
 			"  StateProof {\n"+
 			"    SigCommit: %s\n"+
 			"    SignedWeight: %d\n"+
@@ -61,7 +59,7 @@ func (sp StateProofTxnFields) PrintFormatted() string {
 			"    LnProvenWeight: %d, FirstAttestedRound: %d, LastAttestedRound: %d\n"+
 			"  }\n"+
 			"}",
-		sp.StateProofIntervalLastRound, sp.StateProofType,
+		sp.StateProofType,
 		base64.StdEncoding.EncodeToString(sp.StateProof.SigCommit),
 		sp.StateProof.SignedWeight,
 		len(sp.StateProof.PositionsToReveal),

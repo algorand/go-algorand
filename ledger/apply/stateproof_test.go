@@ -82,7 +82,7 @@ func TestValidateStateProof(t *testing.T) {
 	stateProofValidator := makeMockStateProof(stateProofBlockHeader, votersBlockHeader)
 
 	stateProofTxn := transactions.StateProofTxnFields{}
-	stateProofTxn.StateProofIntervalLastRound = 512
+	stateProofTxn.Message.LastAttestedRound = 512
 	stateProofTxn.StateProof.SignedWeight = 3000
 
 	atRound := basics.Round(770)
@@ -109,7 +109,7 @@ func TestValidateStateProof(t *testing.T) {
 	proto.StateProofInterval = 256
 	config.Consensus["testVersion"] = proto
 
-	stateProofTxn.StateProofIntervalLastRound = 255
+	stateProofTxn.Message.LastAttestedRound = 255
 	bk := bookkeeping.BlockHeader{}
 	bk.CurrentProtocol = testVersion
 	bk.Round = 255
@@ -118,7 +118,7 @@ func TestValidateStateProof(t *testing.T) {
 	err = StateProof(stateProofTxn, atRound, &stateProofValidator, true)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
-	stateProofTxn.StateProofIntervalLastRound = 1280
+	stateProofTxn.Message.LastAttestedRound = 1280
 	bk = bookkeeping.BlockHeader{}
 	bk.CurrentProtocol = testVersion
 	bk.Round = 1280
@@ -127,7 +127,7 @@ func TestValidateStateProof(t *testing.T) {
 	err = StateProof(stateProofTxn, atRound, &stateProofValidator, true)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
-	stateProofTxn.StateProofIntervalLastRound = 255
+	stateProofTxn.Message.LastAttestedRound = 255
 	bk = bookkeeping.BlockHeader{}
 	bk.CurrentProtocol = testVersion
 	bk.Round = 255
@@ -138,7 +138,7 @@ func TestValidateStateProof(t *testing.T) {
 	require.ErrorIs(t, err, errNotAtRightMultiple)
 
 	stateProofValidator.stateProofRound = 512
-	stateProofTxn.StateProofIntervalLastRound = 512
+	stateProofTxn.Message.LastAttestedRound = 512
 
 	// the first round is even before the state proof round -> we need 100% of the stake
 	stateProofTxn.StateProof.SignedWeight = 3000 - 1

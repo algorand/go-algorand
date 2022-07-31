@@ -779,11 +779,6 @@ type ApplicationCallTransactionType struct {
 // StateProofTransactionType contains the additional fields for a state proof transaction
 // swagger:model StateProofTransactionType
 type StateProofTransactionType struct {
-	// StateProofIntervalLatestRound is the latest round in the interval this state proof attests to.
-	//
-	// required: true
-	StateProofIntervalLatestRound uint64 `json:"sprnd"`
-
 	// StateProof is the msgpack encoding of the state proof.
 	//
 	// required: true

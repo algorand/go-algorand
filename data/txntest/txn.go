@@ -243,10 +243,9 @@ func (tx Txn) Txn() transactions.Transaction {
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
 		StateProofTxnFields: transactions.StateProofTxnFields{
-			StateProofIntervalLastRound: tx.StateProofIntervalLastRound,
-			StateProofType:              tx.StateProofType,
-			StateProof:                  tx.StateProof,
-			Message:                     tx.StateProofMsg,
+			StateProofType: tx.StateProofType,
+			StateProof:     tx.StateProof,
+			Message:        tx.StateProofMsg,
 		},
 	}
 }
