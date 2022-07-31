@@ -539,7 +539,7 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	// Expect all signatures to be broadcast.
 
 	require.Zero(t, len(s.deletedStateProofKeys))
-	w.signBlock(s.blocks[basics.Round(proto.StateProofInterval)])
+	w.signStateProofMessage(s.blocks[basics.Round(proto.StateProofInterval)])
 	require.Equal(t, len(s.deletedStateProofKeys), nParticipants)
 }
 
@@ -577,7 +577,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	)
 
 	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
-	w.signBlock(s.blocks[3*basics.Round(proto.StateProofInterval)])
+	w.signStateProofMessage(s.blocks[3*basics.Round(proto.StateProofInterval)])
 	require.Zero(t, len(s.deletedStateProofKeys))
 }
 
