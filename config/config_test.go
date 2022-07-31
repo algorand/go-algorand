@@ -471,7 +471,7 @@ func TestLocalStructTags(t *testing.T) {
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
-	require.True(t, true, ok)
+	require.True(t, ok)
 	ver := 0
 	versionTags := []string{}
 	for {
@@ -488,7 +488,7 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
-		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// the field named "Version" is tested separately in TestLocalVersionField, so we'll be skipping
 		// it on this test.
 		if field.Name == "Version" {
 			continue
@@ -502,7 +502,7 @@ func TestLocalStructTags(t *testing.T) {
 				expectedTag = expectedTag + ver + ":\"" + val + "\" "
 			}
 		}
-		require.True(t, foundTag)
+		require.True(t, foundTag, "%s not found", ver)
 		expectedTag = expectedTag[:len(expectedTag)-1]
 		require.Equal(t, expectedTag, string(field.Tag))
 	}

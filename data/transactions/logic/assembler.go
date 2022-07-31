@@ -466,7 +466,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 
 func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("int needs one argument")
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	// check txn type constants
 	i, ok := txnTypeMap[args[0]]
@@ -491,7 +491,7 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 // Explicit invocation of const lookup and push
 func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("intc operation needs one argument")
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	constIndex, err := simpleImm(args[0], "constant")
 	if err != nil {
@@ -502,7 +502,7 @@ func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("bytec operation needs one argument")
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	constIndex, err := simpleImm(args[0], "constant")
 	if err != nil {
@@ -514,7 +514,7 @@ func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.errorf("%s needs one argument", spec.Name)
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
@@ -528,14 +528,14 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
-		return ops.errorf("%s operation needs byte literal argument", spec.Name)
+		return ops.errorf("%s needs byte literal argument", spec.Name)
 	}
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
 	}
 	if len(args) != consumed {
-		return ops.errorf("%s operation with extraneous argument", spec.Name)
+		return ops.errorf("%s with extraneous argument", spec.Name)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -694,14 +694,14 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte "this is a string\n"
 func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
-		return ops.errorf("%s operation needs byte literal argument", spec.Name)
+		return ops.errorf("%s needs byte literal argument", spec.Name)
 	}
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
 	}
 	if len(args) != consumed {
-		return ops.errorf("%s operation with extraneous argument", spec.Name)
+		return ops.errorf("%s with extraneous argument", spec.Name)
 	}
 	ops.ByteLiteral(val)
 	return nil
@@ -787,7 +787,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 // parses base32-with-checksum account address strings into a byte literal
 func asmAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("addr operation needs one argument")
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	addr, err := basics.UnmarshalChecksumAddress(args[0])
 	if err != nil {
@@ -799,7 +799,7 @@ func asmAddr(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("arg operation needs one argument")
+		return ops.errorf("%s needs one immediate argument, was given %d", spec.Name, len(args))
 	}
 	val, err := simpleImm(args[0], "argument")
 	if err != nil {
@@ -824,7 +824,7 @@ func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("branch operation needs label argument")
+		return ops.errorf("%s needs a single label argument", spec.Name)
 	}
 
 	ops.referToLabel(ops.pending.Len(), args[0])

@@ -94,6 +94,7 @@ type Txn struct {
 	Accounts          []basics.Address
 	ForeignApps       []basics.AppIndex
 	ForeignAssets     []basics.AssetIndex
+	Boxes             []transactions.BoxRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
 	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
@@ -107,10 +108,20 @@ type Txn struct {
 
 // Noted returns a new Txn with the given note field.
 func (tx *Txn) Noted(note string) *Txn {
-	copy := &Txn{}
-	*copy = *tx
+	copy := *tx
 	copy.Note = []byte(note)
-	return copy
+	return &copy
+}
+
+// Args returns a new Txn with the given strings as app args
+func (tx *Txn) Args(strings ...string) *Txn {
+	copy := *tx
+	bytes := make([][]byte, len(strings))
+	for i, s := range strings {
+		bytes[i] = []byte(s)
+	}
+	copy.ApplicationArgs = bytes
+	return &copy
 }
 
 // FillDefaults populates some obvious defaults from config params,
@@ -234,6 +245,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			Accounts:          tx.Accounts,
 			ForeignApps:       tx.ForeignApps,
 			ForeignAssets:     tx.ForeignAssets,
+			Boxes:             tx.Boxes,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
 			ApprovalProgram:   assemble(tx.ApprovalProgram),

@@ -33,6 +33,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/transactions/logic"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -81,6 +83,9 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	require.NoError(tb, err)
 
 	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
+	require.NoError(tb, err)
+
+	err = accountsCreateBoxTable(context.Background(), tx)
 	require.NoError(tb, err)
 
 	return newDB
@@ -309,7 +314,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
-		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		numResUpdates := 0
@@ -446,7 +451,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
+			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
 			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
 			require.Equal(t,
@@ -717,6 +722,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(b, err)
+	defer qs.close()
 
 	// read all the balances in the database, shuffled
 	addrs := make([]basics.Address, len(accounts))
@@ -1065,6 +1071,69 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 		b.Run(fmt.Sprintf("AscendingInsertOrder-%d", size), func(b *testing.B) {
 			b.N = size
 			benchmarkWriteCatchpointStagingBalancesSub(b, true)
+		})
+	}
+}
+
+func BenchmarkLookupKeyByPrefix(b *testing.B) {
+	// learn something from BenchmarkWritingRandomBalancesDisk
+
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(b, 1, dbs, protocol.ConsensusCurrentVersion)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(b, err)
+	defer qs.close()
+
+	currentDBSize := 0
+	nextDBSize := 4
+	increment := 4
+
+	nameBuffer := make([]byte, 5)
+	valueBuffer := make([]byte, 5)
+
+	// from 2^2 -> 2^4 -> ... -> 2^22 sized DB
+	for bIndex := 0; bIndex < 11; bIndex++ {
+		// make writer to DB
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+
+		// writer is only for kvstore
+		writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+		if err != nil {
+			return
+		}
+
+		var prefix string
+		// how to write to dbs a bunch of stuffs?
+		for i := 0; i < nextDBSize-currentDBSize; i++ {
+			crypto.RandBytes(nameBuffer)
+			crypto.RandBytes(valueBuffer)
+			appID := basics.AppIndex(crypto.RandUint64())
+			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
+			err = writer.upsertKvPair(boxKey, string(valueBuffer))
+			require.NoError(b, err)
+
+			if i == 0 {
+				prefix = logic.MakeBoxKey(appID, "")
+			}
+		}
+		tx.Commit()
+		writer.close()
+
+		// benchmark the query against large DB, see if we have O(log N) speed
+		currentDBSize = nextDBSize
+		nextDBSize *= increment
+
+		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
+			results := make(map[string]bool)
+			_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+			require.NoError(b, err)
+			require.True(b, len(results) >= 1)
 		})
 	}
 }
@@ -2374,6 +2443,8 @@ type mockAccountWriter struct {
 	rowids    map[int64]basics.Address
 	resources map[mockResourcesKey]ledgercore.AccountResource
 
+	kvStore map[string]string
+
 	lastRowid   int64
 	availRowIds []int64
 }
@@ -2562,6 +2633,16 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 	}
 	m.resources[key] = new
 	return 1, nil
+}
+
+func (m *mockAccountWriter) upsertKvPair(key string, value string) error {
+	m.kvStore[key] = value
+	return nil
+}
+
+func (m *mockAccountWriter) deleteKvPair(key string) error {
+	delete(m.kvStore, key)
+	return nil
 }
 
 func (m *mockAccountWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
@@ -2808,7 +2889,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
 				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
+					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
 				a.Equal(3, len(updatedAccounts))
@@ -2890,7 +2971,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
 	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+		&mock, acctDeltas, resDeltas, nil, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))
@@ -3038,7 +3119,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
+		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 

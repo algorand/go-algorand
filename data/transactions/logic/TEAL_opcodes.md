@@ -1323,6 +1323,62 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v6
 - Mode: Application
 
+## box_create
+
+- Opcode: 0xb9
+- Stack: ..., A: uint64, B: []byte &rarr; ...
+- make a box
+- Availability: v7
+- Mode: Application
+
+## box_extract
+
+- Opcode: 0xba
+- Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
+- read from a box
+- Availability: v7
+- Mode: Application
+
+## box_replace
+
+- Opcode: 0xbb
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ...
+- write to a box
+- Availability: v7
+- Mode: Application
+
+## box_del
+
+- Opcode: 0xbc
+- Stack: ..., A: []byte &rarr; ...
+- delete a box
+- Availability: v7
+- Mode: Application
+
+## box_len
+
+- Opcode: 0xbd
+- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
+- length of a box
+- Availability: v7
+- Mode: Application
+
+## box_get
+
+- Opcode: 0xbe
+- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
+- full contents of a box
+- Availability: v7
+- Mode: Application
+
+## box_put
+
+- Opcode: 0xbf
+- Stack: ..., A: []byte, B: []byte &rarr; ...
+- write contents of box
+- Availability: v7
+- Mode: Application
+
 ## txnas f
 
 - Opcode: 0xc0 {uint8 transaction field index}

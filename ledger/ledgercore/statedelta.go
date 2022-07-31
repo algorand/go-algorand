@@ -81,6 +81,9 @@ type StateDelta struct {
 	// modified new accounts
 	Accts AccountDeltas
 
+	// modified kv pairs (nil == delete)
+	KvMods map[string]*string
+
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]IncludedTransactions
 
@@ -181,6 +184,7 @@ type AccountDeltas struct {
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
+		KvMods:   make(map[string]*string),
 		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
 		Txleases: make(map[Txlease]basics.Round),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them

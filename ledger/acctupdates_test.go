@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -1208,7 +1209,7 @@ func TestListCreatables(t *testing.T) {
 	// sync with the database
 	var updates compactAccountDeltas
 	var resUpdates compactResourcesDeltas
-	_, _, err = accountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
+	_, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1224,12 +1225,136 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, _, err = accountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
+	_, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
+}
+
+func TestBoxNamesByAppIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	initialBlocksCount := 1
+	accts := make(map[basics.Address]basics.AccountData)
+
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 8
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+		[]map[basics.Address]basics.AccountData{accts},
+	)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+
+	testingBoxNames := []string{
+		` `,
+		`     	`,
+		` % `,
+		` ? = % ;`,
+		`; DROP *;`,
+		`OR 1 = 1;`,
+		`"      ;  SELECT * FROM kvstore; DROP acctrounds; `,
+		`; SELECT key from kvstore WHERE key LIKE %;`,
+		`?&%!=`,
+		"SELECT * FROM kvstore " + string([]byte{0, 0}) + " WHERE key LIKE %; ",
+		`b64:APj/AA==`,
+		`str:123.3/aa\\0`,
+		string([]byte{0, 255, 254, 254}),
+		string([]byte{0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF}),
+		string([]byte{'%', 'a', 'b', 'c', 0, 0, '%', 'a', '!'}),
+		`
+`,
+		`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`,
+		`∑´´˙©˚¬∆ßåƒ√¬`,
+		`背负青天而莫之夭阏者，而后乃今将图南。`,
+		`於浩歌狂熱之際中寒﹔於天上看見深淵。`,
+		`於一切眼中看見無所有﹔於無所希望中得救。`,
+		`有一遊魂，化為長蛇，口有毒牙。`,
+		`不以嚙人，自嚙其身，終以殞顛。`,
+		`那些智力超常的人啊`,
+		`认为已经，熟悉了云和闪电的脾气`,
+		`就不再迷惑，就不必了解自己，世界和他人`,
+		`每天只管，被微风吹拂，与猛虎谈情`,
+		`他们从来，不需要楼梯，只有窗口`,
+		`把一切交付于梦境，和优美的浪潮`,
+		`在这颗行星所有的酒馆，青春自由似乎理所应得`,
+		`面向涣散的未来，只唱情歌，看不到坦克`,
+		`在科学和啤酒都不能安抚的夜晚`,
+		`他们丢失了四季，惶惑之行开始`,
+		`这颗行星所有的酒馆，无法听到远方的呼喊`,
+		`野心勃勃的灯火，瞬间吞没黑暗的脸庞`,
+	}
+
+	appIDset := make(map[basics.AppIndex]struct{}, len(testingBoxNames))
+	boxNameToAppID := make(map[string]basics.AppIndex, len(testingBoxNames))
+	var currentRound basics.Round
+
+	// keep adding one box key and one random appID (non-duplicated)
+	for i, boxName := range testingBoxNames {
+		currentRound = basics.Round(i + 1)
+
+		var appID basics.AppIndex
+		for {
+			appID = basics.AppIndex(crypto.RandUint64())
+			_, preExisting := appIDset[appID]
+			if !preExisting {
+				break
+			}
+		}
+
+		appIDset[appID] = struct{}{}
+		boxNameToAppID[boxName] = appID
+
+		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): &boxName})
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > protoParams.MaxBalLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
+		}
+
+		// check input, see all present keys are all still there
+		for _, storedBoxName := range testingBoxNames[:i+1] {
+			res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[storedBoxName], ""), 10000)
+			require.NoError(t, err)
+			require.Len(t, res, 1)
+			require.Equal(t, logic.MakeBoxKey(boxNameToAppID[storedBoxName], storedBoxName), res[0])
+		}
+	}
+
+	// removing inserted boxes
+	for _, boxName := range testingBoxNames {
+		currentRound++
+
+		// remove inserted box
+		appID := boxNameToAppID[boxName]
+		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): nil})
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure recently removed key is not present, and it is not part of the result
+		res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[boxName], ""), 10000)
+		require.NoError(t, err)
+		require.Len(t, res, 0)
+	}
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
@@ -1311,7 +1436,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
+			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
@@ -1663,9 +1788,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
+			BlockHeader: bookkeeping.BlockHeader{Round: i},
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion
@@ -2445,7 +2568,7 @@ type auNewBlockOpts struct {
 	knownCreatables map[basics.CreatableIndex]bool
 }
 
-func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts) {
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]*string) {
 	rewardLevel := uint64(0)
 	prevRound, prevTotals, err := au.LatestTotals()
 	require.Equal(t, rnd-1, prevRound)
@@ -2454,9 +2577,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, data.updates, rewardLevel, data.protoParams, base, prevTotals)
 
 	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(rnd),
-		},
+		BlockHeader: bookkeeping.BlockHeader{Round: rnd},
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = data.version
@@ -2464,6 +2585,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	delta.Accts.MergeAccounts(data.updates)
 	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
 	delta.Totals = newTotals
+	delta.KvMods = kvMods
 
 	au.newBlock(blk, delta)
 }
@@ -2529,7 +2651,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		// commit changes synchroniously
 		auCommitSync(t, i, au, ml)
@@ -2593,7 +2715,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	au.cachedDBRound = oldCachedDBRound
 	au.accountsMu.Unlock()
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
-	auNewBlock(t, rnd+1, au, accts[rnd], opts)
+	auNewBlock(t, rnd+1, au, accts[rnd], opts, nil)
 	auCommitSync(t, rnd+1, au, ml)
 
 	wg.Wait()
@@ -2677,7 +2799,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		if i <= basics.Round(protoParams.MaxBalLookback+1) {
 			auCommitSync(t, i, au, ml)
