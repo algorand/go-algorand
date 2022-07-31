@@ -377,10 +377,10 @@ func getStateProofByLastRound(r *require.Assertions, libgoal libgoal.Client, res
 	for _, txn := range res.Transactions {
 		r.Equal(txn.Type, string(protocol.StateProofTx))
 		r.True(txn.StateProof != nil)
-		if txn.StateProof.StateProofIntervalLatestRound == stateProofLatestRound {
+		err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
+		r.NoError(err)
+		if stateProofMessage.LastAttestedRound == stateProofLatestRound {
 			err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
-			r.NoError(err)
-			err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 			r.NoError(err)
 
 			return stateProof, stateProofMessage

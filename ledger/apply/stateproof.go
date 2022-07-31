@@ -43,7 +43,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		return fmt.Errorf("%w %d", errStateProofTypeNotSupported, spType)
 	}
 
-	lastRoundInInterval := tx.StateProofIntervalLastRound
+	lastRoundInInterval := basics.Round(tx.Message.LastAttestedRound)
 	lastRoundInIntervalHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return err

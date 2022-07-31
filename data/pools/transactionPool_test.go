@@ -1404,7 +1404,6 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.FirstValid = 512
 	stxn.Txn.LastValid = 1024
 	stxn.Txn.GenesisHash = mockLedger.GenesisHash()
-	stxn.Txn.StateProofIntervalLastRound = 512
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
 	require.NoError(t, err)

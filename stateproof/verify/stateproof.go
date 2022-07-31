@@ -152,7 +152,7 @@ func ValidateStateProof(txgroup []transactions.SignedTxn, fetcher BlockHeaderFet
 }
 
 func validateProof(stateProofTxn *transactions.StateProofTxnFields, fetcher BlockHeaderFetcher) error {
-	lastRoundInInterval := stateProofTxn.StateProofIntervalLastRound
+	lastRoundInInterval := basics.Round(stateProofTxn.Message.LastAttestedRound)
 	lastRoundInIntervalHdr, err := fetcher.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return err
