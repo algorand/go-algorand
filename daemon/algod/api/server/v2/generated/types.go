@@ -259,6 +259,23 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// Box defines model for Box.
+type Box struct {
+
+	// \[name\] box name, base64 encoded
+	Name []byte `json:"name"`
+
+	// \[value\] box value, base64 encoded.
+	Value []byte `json:"value"`
+}
+
+// BoxDescriptor defines model for BoxDescriptor.
+type BoxDescriptor struct {
+
+	// Base64 encoded box name
+	Name []byte `json:"name"`
+}
+
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {
 	Branch      string `json:"branch"`
@@ -594,6 +611,14 @@ type BlockResponse struct {
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
+// BoxResponse defines model for BoxResponse.
+type BoxResponse Box
+
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+	Boxes []BoxDescriptor `json:"boxes"`
+}
+
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {
 
@@ -812,6 +837,20 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
+type GetApplicationBoxByNameParams struct {
+
+	// A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
+	Name string `json:"name"`
+}
+
+// GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParams struct {
+
+	// Max number of box names to return. If max is not set, or max == 0, returns all box-names.
+	Max *uint64 `json:"max,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

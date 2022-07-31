@@ -2167,6 +2167,79 @@
       ]
     },
     {
+      "Opcode": 185,
+      "Name": "box_create",
+      "Args": "UB",
+      "Size": 1,
+      "Doc": "make a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 186,
+      "Name": "box_extract",
+      "Args": "BUU",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "read from a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 187,
+      "Name": "box_replace",
+      "Args": "BUB",
+      "Size": 1,
+      "Doc": "write to a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 188,
+      "Name": "box_del",
+      "Args": "B",
+      "Size": 1,
+      "Doc": "delete a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 189,
+      "Name": "box_len",
+      "Args": "B",
+      "Returns": "UU",
+      "Size": 1,
+      "Doc": "length of a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 190,
+      "Name": "box_get",
+      "Args": "B",
+      "Returns": "BU",
+      "Size": 1,
+      "Doc": "full contents of a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 191,
+      "Name": "box_put",
+      "Args": "BB",
+      "Size": 1,
+      "Doc": "write contents of box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
       "Opcode": 192,
       "Name": "txnas",
       "Args": "U",

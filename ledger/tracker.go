@@ -227,7 +227,7 @@ type deferredCommitRange struct {
 	catchpointSecondStage bool
 }
 
-// deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
+// deferredCommitContext is used in order to synchronize the persistence of a given deferredCommitRange.
 // prepareCommit, commitRound and postCommit are all using it to exchange data.
 type deferredCommitContext struct {
 	deferredCommitRange
@@ -243,6 +243,7 @@ type deferredCommitContext struct {
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
+	compactKvDeltas        map[string]modifiedValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
 	updatedPersistedAccounts  []persistedAccountData

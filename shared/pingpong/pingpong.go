@@ -1050,7 +1050,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 			}
 			accounts = accounts[1:]
 		}
-		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
+		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, nil)
 		if err != nil {
 			return
 		}

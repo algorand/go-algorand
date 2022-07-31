@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    23,
+	Version:                                    24,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        7,
@@ -84,6 +84,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIBoxPerApplication:                    10000,
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxAcctLookback:                            8,
 	MaxCatchpointDownloadDuration:              7200000000000,

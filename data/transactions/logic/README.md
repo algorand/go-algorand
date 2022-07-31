@@ -616,6 +616,13 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
+| `box_create` | make a box |
+| `box_extract` | read from a box |
+| `box_replace` | write to a box |
+| `box_del` | delete a box |
+| `box_len` | length of a box |
+| `box_get` | full contents of a box |
+| `box_put` | write contents of box |
 
 ### Inner Transactions
 

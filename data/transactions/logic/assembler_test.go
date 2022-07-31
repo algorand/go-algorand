@@ -369,6 +369,16 @@ block BlkTimestamp
 vrf_verify VrfAlgorand
 `
 
+const boxNonsense = `
+  box_create
+  box_extract
+  box_replace
+  box_del
+  box_len
+  box_put
+  box_get
+`
+
 const v7Nonsense = v6Nonsense + `
 base64_decode URLEncoding
 json_ref JSONUint64
@@ -398,9 +408,8 @@ const v8Nonsense = v7Nonsense + pairingNonsense
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
 const randomnessCompiled = "81ffff03d101d000"
-
-const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
-	randomnessCompiled + "800243218001775c0280018881015d"
+const boxCompiled = "b9babbbcbdbfbe"
+const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" + randomnessCompiled + "800243218001775c0280018881015d" + boxCompiled
 
 const v8Compiled = v7Compiled + pairingCompiled
 
@@ -804,8 +813,8 @@ func TestAssembleBytes(t *testing.T) {
 	expectedOptimizedConsts := "018006616263646566"
 
 	bad := [][]string{
-		{"byte", "...operation needs byte literal argument"},
-		{`byte "john" "doe"`, "...operation with extraneous argument"},
+		{"byte", "...needs byte literal argument"},
+		{`byte "john" "doe"`, "...with extraneous argument"},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1591,17 +1600,40 @@ func TestConstantArgs(t *testing.T) {
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "int", v, Expect{1, "int needs one argument"})
-		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
-		testProg(t, "byte", v, Expect{1, "byte operation needs byte literal argument"})
-		testProg(t, "bytec", v, Expect{1, "bytec operation needs one argument"})
-		testProg(t, "addr", v, Expect{1, "addr operation needs one argument"})
+		testProg(t, "int", v, Expect{1, "int needs one immediate argument, was given 0"})
+		testProg(t, "int 1 2", v, Expect{1, "int needs one immediate argument, was given 2"})
+		testProg(t, "intc", v, Expect{1, "intc needs one immediate argument, was given 0"})
+		testProg(t, "intc hi bye", v, Expect{1, "intc needs one immediate argument, was given 2"})
+		testProg(t, "byte", v, Expect{1, "byte needs byte literal argument"})
+		testProg(t, "bytec", v, Expect{1, "bytec needs one immediate argument, was given 0"})
+		testProg(t, "bytec 1 x", v, Expect{1, "bytec needs one immediate argument, was given 2"})
+		testProg(t, "addr", v, Expect{1, "addr needs one immediate argument, was given 0"})
+		testProg(t, "addr x y", v, Expect{1, "addr needs one immediate argument, was given 2"})
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "pushint", v, Expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, Expect{1, "pushbytes operation needs byte literal argument"})
+		testProg(t, "pushint", v, Expect{1, "pushint needs one immediate argument, was given 0"})
+		testProg(t, "pushint 3 4", v, Expect{1, "pushint needs one immediate argument, was given 2"})
+		testProg(t, "pushbytes", v, Expect{1, "pushbytes needs byte literal argument"})
+	}
+}
+
+func TestBranchArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "b", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "b lab1 lab2", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "int 1; bz", v, Expect{2, "bz needs a single label argument"})
+		testProg(t, "int 1; bz a b", v, Expect{2, "bz needs a single label argument"})
+		testProg(t, "int 1; bnz", v, Expect{2, "bnz needs a single label argument"})
+		testProg(t, "int 1; bnz c d", v, Expect{2, "bnz needs a single label argument"})
 	}
 
+	for v := uint64(4); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "callsub", v, Expect{1, "callsub needs a single label argument"})
+		testProg(t, "callsub one two", v, Expect{1, "callsub needs a single label argument"})
+	}
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {

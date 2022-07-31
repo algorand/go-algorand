@@ -85,7 +85,11 @@ func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global b
 	return basics.TealValue{}, false, nil
 }
 
-func (ml *mockLedger) txnCounter() uint64 {
+func (ml *mockLedger) kvGet(key string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (ml *mockLedger) Counter() uint64 {
 	return 0
 }
 

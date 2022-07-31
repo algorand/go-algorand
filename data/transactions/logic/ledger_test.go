@@ -16,6 +16,20 @@
 
 package logic
 
+/* This Ledger implements LedgerForLogic for unit tests in the logic package. It
+   does *not* carry the protocol around, so it does *not* enforce the various
+   limits imposed there.  This helps ensure that the logic package itself
+   enforces those limits, rather than rely on the ledger package. (Which should
+   also do so, to be defensive.)
+
+   This Ledger is not clever enough to have a good mechanism for making changes
+   and rolling them back if the program that makes them fails. It just has a
+   Reset() method that throws away all changes made by programs.  Generally,
+   it's probably best to call Reset() after any error test, though you can keep
+   testing if you take into account that changes made before the failure will
+   take effect.
+*/
+
 import (
 	"errors"
 	"fmt"
@@ -39,15 +53,14 @@ type balanceRecord struct {
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
-func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
-	br := balanceRecord{
+func newBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
+	return balanceRecord{
 		addr:     addr,
 		balance:  balance,
 		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
 		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
 	}
-	return br
 }
 
 // In our test ledger, we don't store the creatables with their
@@ -55,6 +68,9 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 type appParams struct {
 	basics.AppParams
 	Creator basics.Address
+
+	boxes   map[string]string
+	boxMods map[string]*string
 }
 
 type asaParams struct {
@@ -71,8 +87,8 @@ type Ledger struct {
 	rnd          basics.Round
 }
 
-// MakeLedger constructs a Ledger with the given balances.
-func MakeLedger(balances map[basics.Address]uint64) *Ledger {
+// NewLedger constructs a Ledger with the given balances.
+func NewLedger(balances map[basics.Address]uint64) *Ledger {
 	l := new(Ledger)
 	l.balances = make(map[basics.Address]balanceRecord)
 	for addr, balance := range balances {
@@ -91,11 +107,15 @@ func (l *Ledger) Reset() {
 		br.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 		l.balances[addr] = br
 	}
+	for id, app := range l.applications {
+		app.boxMods = nil
+		l.applications[id] = app
+	}
 }
 
 // NewAccount adds a new account with a given balance to the Ledger.
 func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
-	l.balances[addr] = makeBalanceRecord(addr, balance)
+	l.balances[addr] = newBalanceRecord(addr, balance)
 }
 
 // NewApp add a new AVM app to the Ledger.  In most uses, it only sets up the id
@@ -120,7 +140,7 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	}
 	br, ok := l.balances[creator]
 	if !ok {
-		br = makeBalanceRecord(creator, 0)
+		br = newBalanceRecord(creator, 0)
 	}
 	br.holdings[assetID] = basics.AssetHolding{Amount: params.Total, Frozen: params.DefaultFrozen}
 	l.balances[creator] = br
@@ -147,7 +167,7 @@ func (l *Ledger) Counter() uint64 {
 func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
 	if !ok {
-		br = makeBalanceRecord(addr, 0)
+		br = newBalanceRecord(addr, 0)
 	}
 	br.holdings[basics.AssetIndex(assetID)] = basics.AssetHolding{Amount: amount, Frozen: frozen}
 	l.balances[addr] = br
@@ -156,7 +176,7 @@ func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, 
 // NewLocals essentially "opts in" an address to an app id.
 func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
 	if _, ok := l.balances[addr]; !ok {
-		l.balances[addr] = makeBalanceRecord(addr, 0)
+		l.balances[addr] = newBalanceRecord(addr, 0)
 	}
 	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
 }
@@ -189,14 +209,9 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 	}
 }
 
-// Round gives the current Round of the test ledger, which is random but consistent
-func (l *Ledger) Round() basics.Round {
-	return l.round()
-}
-
 // LatestTimestamp gives a uint64, chosen randomly.  It should
 // probably increase monotonically, but no tests care yet.
-func (l *Ledger) LatestTimestamp() int64 {
+func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
@@ -352,6 +367,90 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return nil
 }
 
+// NewBox makes a new box, through the boxMods mechanism. It can be Reset()
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+	if appIdx.Address() != appAddr {
+		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
+	}
+	params, ok := l.applications[appIdx]
+	if !ok {
+		return fmt.Errorf("no such app %d", appIdx)
+	}
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
+	}
+	if current, ok := params.boxMods[key]; ok {
+		if current != nil {
+			return fmt.Errorf("box already exists 1 %#v %d", key, len(*current))
+		}
+	} else if current, ok := params.boxes[key]; ok {
+		return fmt.Errorf("box already exists 2 %#v %d", key, len(current))
+	}
+	params.boxMods[key] = &value
+	l.applications[appIdx] = params
+	return nil
+}
+
+func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
+	params, ok := l.applications[appIdx]
+	if !ok {
+		return "", false, nil
+	}
+	if params.boxMods != nil {
+		if ps, ok := params.boxMods[key]; ok {
+			if ps == nil { // deletion in mod
+				return "", false, nil
+			}
+			return *ps, true, nil
+		}
+	}
+	if params.boxes == nil {
+		return "", false, nil
+	}
+	box, ok := params.boxes[key]
+	return box, ok, nil
+}
+
+// SetBox set a box value through the boxMods mechanism. It can be Reset()
+func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error {
+	current, ok, err := l.GetBox(appIdx, key)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no such box %d", appIdx)
+	}
+	params := l.applications[appIdx] // assured, based on above
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
+	}
+	if len(current) != len(value) {
+		return fmt.Errorf("wrong box size %#v %d != %d", key, len(current), len(value))
+	}
+	params.boxMods[key] = &value
+	return nil
+}
+
+// DelBox deletes a value through moxMods mechanism
+func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
+	if appIdx.Address() != appAddr {
+		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
+	}
+	_, ok, err := l.GetBox(appIdx, key)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no such box %d", appIdx)
+	}
+	params := l.applications[appIdx] // assured, based on above
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
+	}
+	params.boxMods[key] = nil
+	return nil
+}
+
 // GetLocal returns the current value bound to a local key, taking
 // into account mods caused by earlier executions.
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
@@ -480,11 +579,11 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
 	fbr, ok := l.balances[from]
 	if !ok {
-		fbr = makeBalanceRecord(from, 0)
+		fbr = newBalanceRecord(from, 0)
 	}
 	tbr, ok := l.balances[to]
 	if !ok {
-		tbr = makeBalanceRecord(to, 0)
+		tbr = newBalanceRecord(to, 0)
 	}
 	if fbr.balance < amount {
 		return fmt.Errorf("insufficient balance")
@@ -546,7 +645,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 
 	fbr, ok := l.balances[from]
 	if !ok {
-		fbr = makeBalanceRecord(from, 0)
+		fbr = newBalanceRecord(from, 0)
 	}
 	fholding, ok := fbr.holdings[aid]
 	if !ok {
@@ -567,7 +666,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	}
 	tbr, ok := l.balances[to]
 	if !ok {
-		tbr = makeBalanceRecord(to, 0)
+		tbr = newBalanceRecord(to, 0)
 	}
 	tholding, ok := tbr.holdings[aid]
 	if !ok && amount > 0 {
@@ -595,7 +694,7 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	if !close.IsZero() && fholding.Amount > 0 {
 		cbr, ok := l.balances[close]
 		if !ok {
-			cbr = makeBalanceRecord(close, 0)
+			cbr = newBalanceRecord(close, 0)
 		}
 		cholding, ok := cbr.holdings[aid]
 		if !ok {
@@ -822,7 +921,7 @@ func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 	return nil
 }
 
-func (l *Ledger) round() basics.Round {
+func (l *Ledger) Round() basics.Round {
 	if l.rnd == basics.Round(0) {
 		// Something big enough to shake out bugs from width
 		l.rnd = basics.Round(uint64(math.MaxUint32) + 5)
