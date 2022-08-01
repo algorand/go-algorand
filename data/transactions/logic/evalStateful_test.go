@@ -2545,8 +2545,8 @@ func TestBlockSeed(t *testing.T) {
 	// in l.  Nothing in most tests cares. But the rule for `block` is
 	// related to lv and the current round, so we set the fv,lv more
 	// realistically.
-	txn.FirstValid = l.round() - 10
-	txn.LastValid = l.round() + 10
+	txn.FirstValid = l.Round() - 10
+	txn.LastValid = l.Round() + 10
 
 	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
 	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep) // current - 1

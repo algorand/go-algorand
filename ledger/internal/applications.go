@@ -142,20 +142,24 @@ func (cs *roundCowState) AppParams(appIdx basics.AppIndex) (basics.AppParams, ba
 	return params, creator, nil
 }
 
-func (al *logicLedger) Round() basics.Round {
-	return al.cow.round()
-}
+// func (al *logicLedger) Round() basics.Round {
+// 	return al.cow.round()
+// }
 
-func (al *logicLedger) LatestTimestamp() int64 {
-	return al.cow.prevTimestamp()
-}
+// func (al *logicLedger) LatestTimestamp() int64 {
+// 	return al.cow.prevTimestamp()
+// }
 
-func (al *logicLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return al.cow.blockHdrCached(round)
-}
+// func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+// 	return al.cow.allocated(addr, appIdx, false)
+// }
 
-func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	return al.cow.allocated(addr, appIdx, false)
+// func (al *logicLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+// 	return al.cow.blockHdrCached(round)
+// }
+
+func (cs *roundCowState) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return cs.blockHdrCached(round)
 }
 
 func (cs *roundCowState) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {

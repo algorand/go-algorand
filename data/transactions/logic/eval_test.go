@@ -140,7 +140,6 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
 		ep.TxnGroup[0].Txn.Type = "" // set it back
-		ep.MinTealVersion = nil      // will recalculate in eval()
 	}
 	return ep
 }

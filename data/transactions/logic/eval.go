@@ -200,7 +200,6 @@ type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
-	LatestTimestamp() int64
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 	PrevTimestamp() int64
 
