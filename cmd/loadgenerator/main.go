@@ -66,7 +66,7 @@ func loadMnemonic(mnemonic string) crypto.Seed {
 // Like shared/pingpong/accounts.go
 func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 	keylist := make([]*crypto.SignatureSecrets, 0, 5)
-	filepath.Walk(algodDir, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, err error) error {
 		var handle db.Accessor
 		handle, err = db.MakeErasableAccessor(path)
 		if err != nil {
@@ -82,6 +82,9 @@ func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 		keylist = append(keylist, root.Secrets())
 		return nil
 	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: warning, %v\n", algodDir, err)
+	}
 	return keylist
 }
 
