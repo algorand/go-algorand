@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -120,29 +119,39 @@ func main() {
 	}
 	fmt.Printf("Configuration file loaded successfully.\n")
 
-	var privateKey *crypto.SignatureSecrets
-	var publicKey basics.Address
-	if len(cfg.AccountMnemonic) > 0 {
-		seed := loadMnemonic(cfg.AccountMnemonic)
-		privateKey = crypto.GenerateSignatureSecrets(seed)
-		publicKey = basics.Address(privateKey.SignatureVerifier)
+	var privateKeys []*crypto.SignatureSecrets
+	var publicKeys []basics.Address
+	addKey := func(mnemonic string) {
+		seed := loadMnemonic(mnemonic)
+		privateKeys = append(privateKeys, crypto.GenerateSignatureSecrets(seed))
+		publicKeys = append(publicKeys, basics.Address(privateKeys[0].SignatureVerifier))
+	}
+	if cfg.AccountMnemonic != "" { // one mnemonic provided
+		addKey(cfg.AccountMnemonic)
+	} else if len(cfg.AccountMnemonicList) > 0 {
+		for _, mnemonic := range cfg.AccountMnemonicList {
+			addKey(mnemonic)
+		}
 	} else if len(algodDir) > 0 {
 		// get test cluster local unlocked wallet
-		keys := findRootKeys(algodDir)
-		if len(keys) == 0 {
+		privateKeys := findRootKeys(algodDir)
+		if len(privateKeys) == 0 {
 			fmt.Fprintf(os.Stderr, "%s: found no root keys\n", algodDir)
 			os.Exit(1)
 		}
-		privateKey = keys[rand.Intn(len(keys))]
-		publicKey = basics.Address(privateKey.SignatureVerifier)
+		publicKeys = make([]basics.Address, len(privateKeys))
+		for i, sk := range privateKeys {
+			publicKeys[i] = basics.Address(sk.SignatureVerifier)
+		}
 	} else {
-		fmt.Fprintf(os.Stderr, "need either config.AccountMnemonic or -d ALGORAND_DATA for spendable account")
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "no keys specified in config files or -d algod dir")
 	}
 
-	fmt.Printf("Spending account public key : %v\n", publicKey.String())
+	for i, publicKey := range publicKeys {
+		fmt.Printf("Spending account public key %d: %v\n", i, publicKey.String())
+	}
 
-	err = spendLoop(cfg, privateKey, publicKey)
+	err = spendLoop(cfg, privateKeys, publicKeys)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spend loop error : %v\n", err)
 		os.Exit(1)
@@ -162,7 +171,7 @@ func nextSpendRound(cfg config, round uint64) uint64 {
 	return ((round+cfg.RoundOffset)/cfg.RoundModulator)*cfg.RoundModulator + cfg.RoundModulator
 }
 
-func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (err error) {
+func spendLoop(cfg config, privateKey []*crypto.SignatureSecrets, publicKey []basics.Address) (err error) {
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
 	for {
 		nodeStatus := waitForRound(restClient, cfg, true)
@@ -213,7 +222,7 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 
 const transactionBlockSize = 800
 
-func generateTransactions(restClient client.RestClient, cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address, nodeStatus generatedV2.NodeStatusResponse) (queueFull bool) {
+func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address, nodeStatus generatedV2.NodeStatusResponse) (queueFull bool) {
 	start := time.Now()
 	var err error
 	var vers common.Version
@@ -233,7 +242,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 	for i := range txns {
 		tx := transactions.Transaction{
 			Header: transactions.Header{
-				Sender:      publicKey,
+				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},
 				FirstValid:  basics.Round(nodeStatus.LastRound),
 				LastValid:   basics.Round(nodeStatus.LastRound + 2),
@@ -242,13 +251,13 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 				GenesisHash: genesisHash,
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: publicKey,
+				Receiver: publicKeys[i%len(publicKeys)],
 				Amount:   basics.MicroAlgos{Raw: 0},
 			},
 			Type: protocol.PaymentTx,
 		}
 		crypto.RandBytes(tx.Note[:])
-		txns[i] = tx.Sign(privateKey)
+		txns[i] = tx.Sign(privateKeys[i%len(privateKeys)])
 	}
 
 	// create multiple go-routines to send all these requests.
