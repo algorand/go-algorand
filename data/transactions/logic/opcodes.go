@@ -17,13 +17,14 @@
 package logic
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-// LogicVersion defines default max eval version
+// LogicVersion defines max eval version
 const LogicVersion = 7
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
@@ -190,14 +191,19 @@ func opBranch() OpDetails {
 }
 
 func multiOp(dispatch byte, name string, rootVersion uint64, children ...OpSpec) OpSpec {
-	ret := OpSpec{Opcode: dispatch, Name: name, OpDetails: opDefault()}
+	ret := OpSpec{Opcode: dispatch, Name: name, Version: rootVersion, OpDetails: opDefault()}
 	ret.childOps = children
-	ret.Version = rootVersion
 	return ret
 }
 
-func isMultiOp(spec *OpSpec) bool {
+func isMultiRoot(spec *OpSpec) bool {
 	return spec.childOps != nil
+}
+
+// IsMultiLeaf identifies if a spec has a multi-byte opcode;
+// note this returns false for the root of a multi-byte family
+func IsMultiLeaf(spec *OpSpec) bool {
+	return spec.MultiCode != nil
 }
 
 func getLeafSpecs(spec *OpSpec) []OpSpec {
@@ -684,11 +690,6 @@ func Serialize(bytes []byte) string {
 	return strings.TrimSpace(ret)
 }
 
-// IsMultiLeaf identifies if a spec is a multi-op, but it only functions after the spec has been annotated in init()
-func IsMultiLeaf(spec OpSpec) bool {
-	return spec.MultiCode != nil
-}
-
 // SpecsByName returns a slice of all OpSpecs throughout the versions with the given name and without repetition
 func SpecsByName(name string) []OpSpec {
 	var specs []OpSpec
@@ -861,6 +862,13 @@ func init() {
 			for _, spec := range specs {
 				if spec.Version == v {
 					OpsByName[v][spec.Name] = spec
+				}
+				if spec.Name == oi.Name && !bytes.Equal(GetFullCode(spec), GetFullCode(oi)) {
+					// oi has been deprecated, so we need to prevent it from being evaluated,
+					// but we would like to keep a non-empty entry at the index, so we can error well in eval
+					deprecated := opsByOpcode[v][oi.Opcode]
+					deprecated.op = nil
+					opsByOpcode[v][oi.Opcode] = deprecated
 				}
 			}
 		}

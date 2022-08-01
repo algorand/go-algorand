@@ -1054,13 +1054,16 @@ var blankStack = make([]stackValue, 5)
 func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
-	spec, _ := getLeaf(cx.program, cx.pc, cx.version, &opsByOpcode[cx.version][opcode])
-	if spec.op == nil {
-		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+	spec := opsByOpcode[cx.version][opcode]
+	if isMultiRoot(&spec) {
+		specPointer, _ := getLeaf(cx.program, cx.pc, cx.version, &spec)
+		spec = *specPointer
 	}
-	dVersion := DeprecatedVersion(*spec)
-	if cx.version >= dVersion && dVersion > 0 {
-		return 0, fmt.Errorf("deprecated opcode 0x%02x", opcode)
+	if spec.op == nil {
+		if spec.asm != nil {
+			return 0, fmt.Errorf("deprecated opcode 0x%02x", opcode)
+		}
+		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)

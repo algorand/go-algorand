@@ -19,13 +19,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"strings"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"io"
+	"os"
+	"strings"
 )
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
@@ -171,28 +170,28 @@ func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[strin
 	if len(specs) == 0 {
 		return nil
 	}
-	newest := specs[len(specs)-1]
+	op := specs[len(specs)-1]
 	oldest := specs[0]
-	opextra := logic.OpImmediateNote(newest.Name)
+	opextra := logic.OpImmediateNote(op.Name)
 	if opextra != "" {
 		ws = " "
 	}
-	stackEffects := stackMarkdown(&newest)
-	encodingString := fmt.Sprintf("\n## %s%s\n\n- Encoding: ", newest.Name, immediateMarkdown(&newest))
+	stackEffects := stackMarkdown(&op)
+	encodingString := fmt.Sprintf("\n## %s%s\n\n- Encoding: ", op.Name, immediateMarkdown(&op))
 	dVersion := logic.DeprecatedVersion(oldest)
-	if logic.IsMultiLeaf(newest) {
+	if logic.IsMultiLeaf(&op) {
 		if dVersion != 0 {
 			encodingString += fmt.Sprintf("0x%02x%s%s through v%d, %s%s%s in v%d and on",
-				oldest.Opcode, ws, opextra, dVersion-1, logic.Serialize(newest.MultiCode), ws, opextra, dVersion)
+				oldest.Opcode, ws, opextra, dVersion-1, logic.Serialize(op.MultiCode), ws, opextra, dVersion)
 		} else {
-			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(newest.MultiCode), ws, opextra)
+			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(op.MultiCode), ws, opextra)
 		}
 	} else {
-		encodingString += fmt.Sprintf("0x%02x%s%s", newest.Opcode, ws, opextra)
+		encodingString += fmt.Sprintf("0x%02x%s%s", op.Opcode, ws, opextra)
 	}
 	encodingString += "\n" + stackEffects
 	fmt.Fprint(out, encodingString)
-	fmt.Fprintf(out, "- %s\n", logic.OpDoc(newest.Name))
+	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	// if cost changed with versions print all of them
 	from := specs[0].Version
 	var to uint64
@@ -225,19 +224,19 @@ func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[strin
 	if oldest.Version > 1 {
 		fmt.Fprintf(out, "- Availability: v%d\n", oldest.Version)
 	}
-	if !newest.Modes.Any() {
-		fmt.Fprintf(out, "- Mode: %s\n", newest.Modes)
+	if !op.Modes.Any() {
+		fmt.Fprintf(out, "- Mode: %s\n", op.Modes)
 	}
 
-	for i := range newest.OpDetails.Immediates {
-		group := newest.OpDetails.Immediates[i].Group
+	for i := range op.OpDetails.Immediates {
+		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
 			fmt.Fprintf(out, "\n`%s` %s:\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
 			groupDocWritten[group.Name] = true
 		}
 	}
-	ode := logic.OpDocExtra(newest.Name)
+	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
 		fmt.Fprintf(out, "\n%s\n", ode)
 	}
@@ -344,8 +343,7 @@ func argEnums(name string) ([]string, string) {
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	records := make([]OpRecord, len(logic.OpNames))
-	i := 0
-	for _, name := range logic.OpNames {
+	for i, name := range logic.OpNames {
 		spec := logic.OpsByName[logic.LogicVersion][name]
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
@@ -357,7 +355,6 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
-		i++
 		//TODO: Add multi-op support
 	}
 	return &LanguageSpec{

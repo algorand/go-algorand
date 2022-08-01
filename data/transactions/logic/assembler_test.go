@@ -1534,11 +1534,8 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
 	// original version, unspecified version (so it should pick up
-	// the pragma) and current version with pragma removed. That
-	// doesn't *have* to be true, as we can introduce
-	// optimizations in later versions that change the bytecode
-	// emitted. But currently it is, so we test it for now to
-	// catch any suprises.
+	// the pragma) and with the pragma removed in the latest version
+	// that did not change bytecode from previous versions
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
 		if v > LogicVersion {
@@ -1550,12 +1547,13 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 			require.NoError(t, err)
 			none := testProg(t, notrack(t2), assemblerNoVersion)
 			require.Equal(t, ops.Program[1:], none.Program[1:])
-			/*
-				Commenting out for now b/c we have changed bytecode
+			if v < multiVersion {
+				// Bytecode was changed in multi-version, so we only perform this check
+				// in versions before multi-version
 				t3 := "// " + t2 // This comments out the #pragma version
-				current := testProg(t, notrack(t3), AssemblerMaxVersion)
+				current := testProg(t, notrack(t3), multiVersion-1)
 				require.Equal(t, ops.Program[1:], current.Program[1:])
-			*/
+			}
 		})
 	}
 }
@@ -2690,21 +2688,5 @@ func TestReplacePseudo(t *testing.T) {
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
 		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace without immediates expects 3 stack arguments but stack height is 2"})
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
-	}
-}
-
-func TestMultiBytes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	sources := []string{"pushbytes 0x01; pushbytes 0x02; b/"}
-	for _, source := range sources {
-		program := strings.ReplaceAll(source, ";", "\n")
-		ops, err := AssembleStringWithVersion(program, AssemblerMaxVersion)
-		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, AssemblerMaxVersion))
-		}
-		require.Empty(t, ops.Errors)
-		require.Equal(t, []byte{AssemblerMaxVersion, 0x80, 0x01, 0x01, 0x80, 0x01, 0x02, 0xa0, 0xa2}, ops.Program)
-		testProg(t, source, AssemblerMaxVersion)
 	}
 }

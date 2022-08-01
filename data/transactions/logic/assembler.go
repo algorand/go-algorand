@@ -903,13 +903,8 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func writeOp(ops *OpStream, spec *OpSpec) {
-	if spec.MultiCode != nil {
-		for _, b := range spec.MultiCode {
-			ops.pending.WriteByte(b)
-		}
-	} else {
-		ops.pending.WriteByte(spec.Opcode)
-	}
+	code := GetFullCode(*spec)
+	ops.pending.Write(code)
 }
 
 type asmFunc func(*OpStream, *OpSpec, []string) error
@@ -2448,7 +2443,7 @@ type disInfo struct {
 // Used in disassembly to parse multiOps
 // Pc returned is one less than actual b/c disassemble adds 1
 func getLeaf(program []byte, pc int, version uint64, root *OpSpec) (*OpSpec, int) {
-	if !isMultiOp(root) {
+	if !isMultiRoot(root) {
 		return root, pc
 	}
 	if pc >= len(program)-1 {

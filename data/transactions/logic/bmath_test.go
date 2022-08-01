@@ -18,7 +18,9 @@ package logic
 
 import (
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
 
@@ -64,9 +66,27 @@ const bmathNonsense = `
 `
 
 func TestDeprecation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = []byte{byte(multiVersion), 0x80, 0x01, 0x01, 0x49, 0xa2}
 	ep := defaultEvalParamsWithVersion(&txn, multiVersion)
 	_, err := EvalSignature(0, ep)
 	require.ErrorContains(t, err, "deprecated opcode")
+}
+
+func TestMultiBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	sources := []string{"pushbytes 0x01; pushbytes 0x02; b/"}
+	for _, source := range sources {
+		program := strings.ReplaceAll(source, ";", "\n")
+		ops, err := AssembleStringWithVersion(program, AssemblerMaxVersion)
+		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
+			t.Log(assemblyTrace(program, AssemblerMaxVersion))
+		}
+		require.Empty(t, ops.Errors)
+		require.Equal(t, []byte{AssemblerMaxVersion, 0x80, 0x01, 0x01, 0x80, 0x01, 0x02, 0xa0, 0xa2}, ops.Program)
+		testProg(t, source, AssemblerMaxVersion)
+	}
 }
