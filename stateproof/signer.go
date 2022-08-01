@@ -50,7 +50,7 @@ func (spw *Worker) signer(latest basics.Round) {
 				nextRnd = spw.nextStateProofRound(spw.ledger.Latest())
 				continue
 			}
-			spw.signStateProofMessage(hdr)
+			spw.signStateProof(hdr)
 			spw.invokeBuilder(nextRnd)
 			nextRnd++
 
@@ -84,7 +84,7 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 	return nextrnd
 }
 
-func (spw *Worker) signStateProofMessage(hdr bookkeeping.BlockHeader) {
+func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
 		return

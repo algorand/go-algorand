@@ -1302,6 +1302,8 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 }
 
 func TestStateProofTxnShouldBeZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 

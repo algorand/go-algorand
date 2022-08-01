@@ -81,7 +81,7 @@ func (p paymentSender) sendPayment(a *require.Assertions, f *fixtures.RestClient
 	a.NoError(err)
 }
 
-const roundTimeForStateproofTests = 3 * time.Minute
+const timeoutUntilNextRound = 3 * time.Minute
 
 func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -144,7 +144,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 			amount: 1,
 		}.sendPayment(r, fixture, rnd)
 
-		err := fixture.WaitForRound(rnd, roundTimeForStateproofTests)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -253,7 +253,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, roundTimeForStateproofTests)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -314,7 +314,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err := fixture.WaitForRound(rnd, roundTimeForStateproofTests)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -444,7 +444,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
-	err := fixture.WaitForRound(1, roundTimeForStateproofTests)
+	err := fixture.WaitForRound(1, timeoutUntilNextRound)
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
@@ -475,7 +475,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, roundTimeForStateproofTests)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -537,7 +537,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
-	err := fixture.WaitForRound(1, roundTimeForStateproofTests)
+	err := fixture.WaitForRound(1, timeoutUntilNextRound)
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
@@ -563,7 +563,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, roundTimeForStateproofTests)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -680,7 +680,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 			a.True(paymentMaker.to.getBalance(a, &fixture) > paymentMaker.from.getBalance(a, &fixture))
 		}
 
-		a.NoError(fixture.WaitForRound(rnd, roundTimeForStateproofTests))
+		a.NoError(fixture.WaitForRound(rnd, timeoutUntilNextRound))
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 

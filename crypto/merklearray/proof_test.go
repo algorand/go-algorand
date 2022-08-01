@@ -185,8 +185,7 @@ func TestConcatenatedProofsFullTree(t *testing.T) {
 	computedPath := recomputePath(concatenatedProof)
 
 	// verify that the concatenated proof can be verified correctly
-	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
-	newP.Path = computedPath
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: computedPath, HashFactory: p.HashFactory}}
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, newP.ToProof())
 	a.NoError(err)
 
@@ -215,8 +214,7 @@ func TestConcatenatedProofsOneLeaf(t *testing.T) {
 	computedPath := recomputePath(concatenatedProof)
 
 	// verify that the concatenated proof can be verified correctly
-	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
-	newP.Path = computedPath
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: computedPath, HashFactory: p.HashFactory}}
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: array[0]}, newP.ToProof())
 	a.NoError(err)
 

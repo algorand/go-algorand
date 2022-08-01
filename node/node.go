@@ -144,7 +144,7 @@ type AlgorandFullNode struct {
 
 	tracer messagetracer.MessageTracer
 
-	stateProofService *stateproof.Worker
+	stateProofWorker *stateproof.Worker
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -314,7 +314,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load state proof data: %v", err)
 		return nil, err
 	}
-	node.stateProofService = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -353,7 +353,7 @@ func (node *AlgorandFullNode) Start() {
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
-		node.stateProofService.Start()
+		node.stateProofWorker.Start()
 		startNetwork()
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
@@ -404,8 +404,8 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofService.Shutdown()
-		node.stateProofService = nil
+		node.stateProofWorker.Shutdown()
+		node.stateProofWorker = nil
 	}()
 
 	node.net.ClearHandlers()
