@@ -56,7 +56,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet ./...
+make vet
 
 echo "Running gofmt..."
 runGoFmt
