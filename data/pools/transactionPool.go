@@ -140,8 +140,8 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
-	specLedger, err := ledger.MakeValidatedBlockAsLFE(block, pool.ledger)
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping.Block) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
+	specLedger, err := ledger.MakeBlockAsLFE(block, pool.ledger)
 	if err != nil {
 		return nil, nil, make(chan struct{}), err
 	}
@@ -542,8 +542,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	pool.rememberCommit(false)
 
 	// create shallow pool copy
-	vb := ledgercore.MakeValidatedBlock(block, delta)
-	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(&vb)
+	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(block)
 	defer close(specAsmDoneCh)
 	pool.mu.Unlock()
 

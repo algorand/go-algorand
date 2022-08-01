@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -41,6 +42,7 @@ type LedgerForEvaluator interface {
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	VerifiedTransactionCache() verify.VerifiedTransactionCache
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
@@ -84,23 +86,29 @@ type validatedBlockAsLFE struct {
 	vb *ledgercore.ValidatedBlock
 }
 
-// makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a
-// ValidatedBlock.
-func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
+// makedBlockAsLFE constructs a new BlockAsLFE from a Block.
+func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
 	latestRound := l.Latest()
-	if vb.Block().Round().SubSaturate(1) != latestRound {
-		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, vb.Block().Round())
+	if blk.Round().SubSaturate(1) != latestRound {
+		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, blk.Round())
 	}
 	hdr, err := l.BlockHdr(latestRound)
 	if err != nil {
 		return nil, err
 	}
-	if vb.Block().Branch != hdr.Hash() {
-		return nil, fmt.Errorf("MakeValidatedBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), vb.Block().Branch)
+	if blk.Branch != hdr.Hash() {
+		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), blk.Branch)
 	}
+
+	state, err := internal.Eval(context.Background(), l, blk, false, l.VerifiedTransactionCache(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error computing deltas for block %d round %d: %v", blk.Hash(), blk.Round(), err)
+	}
+
+	vb := ledgercore.MakeValidatedBlock(blk, state)
 	return &validatedBlockAsLFE{
 		l:  l,
-		vb: vb,
+		vb: &vb,
 	}, nil
 }
 
@@ -141,6 +149,11 @@ func (v *validatedBlockAsLFE) Latest() basics.Round {
 	return v.vb.Block().Round()
 }
 
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
+func (v *validatedBlockAsLFE) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return v.Latest(), v.vb.Delta().Totals, nil
+}
+
 // CompactCertVoters implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
 	if r >= v.vb.Block().Round() {
@@ -169,11 +182,6 @@ func (v *validatedBlockAsLFE) GetCreatorForRound(r basics.Round, cidx basics.Cre
 	}
 
 	return v.l.GetCreatorForRound(r, cidx, ctype)
-}
-
-// Totals implements the ledgerForEvaluator interface.
-func (v *validatedBlockAsLFE) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
-	return v.vb.Block().Round(), v.vb.Delta().Totals, nil
 }
 
 // GenesisProto returns the initial protocol for this ledger.

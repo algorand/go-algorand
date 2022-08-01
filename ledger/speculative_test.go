@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,8 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -56,13 +53,9 @@ func TestSpeculative(t *testing.T) {
 	//sl, err := MakeSpeculativeLedger(l)
 	//require.NoError(t, err)
 
-	state, err := internal.Eval(context.Background(), l, blk1, false, l.VerifiedTransactionCache(), nil)
-
 	require.NoError(t, err)
 
-	vblk1 := ledgercore.MakeValidatedBlock(blk1, state)
-
-	blk1aslfe, err := MakeValidatedBlockAsLFE(&vblk1, l)
+	blk1aslfe, err := MakeBlockAsLFE(blk1, l)
 	require.NoError(t, err)
 
 	blk2 := blk1
@@ -97,11 +90,7 @@ func TestSpeculative(t *testing.T) {
 		HasGenesisID: true,
 	})
 
-	state, err = internal.Eval(context.Background(), blk1aslfe, blk2, false, l.VerifiedTransactionCache(), nil)
-	require.NoError(t, err)
-
-	vblk2 := ledgercore.MakeValidatedBlock(blk2, state)
-	blk2aslfe, err := MakeValidatedBlockAsLFE(&vblk2, blk1aslfe)
+	blk2aslfe, err := MakeBlockAsLFE(blk2, blk1aslfe)
 	require.NoError(t, err)
 
 	ad11, rnd, err := blk2aslfe.LookupWithoutRewards(blk1.Round(), addr1)
