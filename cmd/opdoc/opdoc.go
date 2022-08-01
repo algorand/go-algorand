@@ -19,12 +19,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/protocol"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
@@ -165,11 +166,19 @@ func stackMarkdown(op *logic.OpSpec) string {
 	return out + "\n"
 }
 
+func serialize(bytes []byte) string {
+	if len(bytes) == 0 {
+		return ""
+	}
+	ret := ""
+	for _, b := range bytes {
+		ret += fmt.Sprintf("0x%02x ", b)
+	}
+	return strings.TrimSpace(ret)
+}
+
 func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[string]bool) (err error) {
 	ws := ""
-	if len(specs) == 0 {
-		return nil
-	}
 	op := specs[len(specs)-1]
 	oldest := specs[0]
 	opextra := logic.OpImmediateNote(op.Name)
@@ -182,9 +191,9 @@ func opToMarkdown(out io.Writer, specs []logic.OpSpec, groupDocWritten map[strin
 	if logic.IsMultiLeaf(&op) {
 		if dVersion != 0 {
 			encodingString += fmt.Sprintf("0x%02x%s%s through v%d, %s%s%s in v%d and on",
-				oldest.Opcode, ws, opextra, dVersion-1, logic.Serialize(op.MultiCode), ws, opextra, dVersion)
+				oldest.Opcode, ws, opextra, dVersion-1, serialize(op.MultiCode), ws, opextra, dVersion)
 		} else {
-			encodingString += fmt.Sprintf("%s%s%s", logic.Serialize(op.MultiCode), ws, opextra)
+			encodingString += fmt.Sprintf("%s%s%s", serialize(op.MultiCode), ws, opextra)
 		}
 	} else {
 		encodingString += fmt.Sprintf("0x%02x%s%s", op.Opcode, ws, opextra)

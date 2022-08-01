@@ -667,27 +667,10 @@ func (a sortByOpcode) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a sortByOpcode) Less(i, j int) bool {
 	first := GetFullCode(a[i])
 	second := GetFullCode(a[j])
-	for k := range first {
-		if len(second) == k {
-			return false
-		}
-		if first[k] != second[k] {
-			return first[k] < second[k]
-		}
+	if bytes.Compare(first, second) <= 0 {
+		return true
 	}
-	return true
-}
-
-// Serialize is used to write multi-byte opcodes as strings
-func Serialize(bytes []byte) string {
-	if len(bytes) == 0 {
-		return ""
-	}
-	ret := ""
-	for _, b := range bytes {
-		ret += fmt.Sprintf("0x%02x ", b)
-	}
-	return strings.TrimSpace(ret)
+	return false
 }
 
 // SpecsByName returns a slice of all OpSpecs throughout the versions with the given name and without repetition
