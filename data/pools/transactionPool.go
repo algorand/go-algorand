@@ -140,10 +140,10 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping.Block) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
-	specLedger, err := ledger.MakeBlockAsLFE(block, pool.ledger)
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping.Block) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, ledgercore.StateDelta, error) {
+	specLedger, statedelta, err := ledger.MakeBlockAsLFE(block, pool.ledger)
 	if err != nil {
-		return nil, nil, make(chan struct{}), err
+		return nil, nil, make(chan struct{}), ledgercore.StateDelta{}, err
 	}
 
 	ctx, cancel := context.WithCancel(pool.ctx)
@@ -171,7 +171,7 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping
 	pool.specAsmDone = specDoneCh
 	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
 
-	return &copy, pool.specBlock, specDoneCh, nil
+	return &copy, pool.specBlock, specDoneCh, statedelta, nil
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process.
@@ -529,7 +529,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block) {
 
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
@@ -542,7 +542,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block, delt
 	pool.rememberCommit(false)
 
 	// create shallow pool copy
-	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(block)
+	speculativePool, outchan, specAsmDoneCh, delta, err := pool.copyTransactionPoolOverSpecLedger(block)
 	defer close(specAsmDoneCh)
 	pool.mu.Unlock()
 

@@ -87,29 +87,29 @@ type validatedBlockAsLFE struct {
 }
 
 // makedBlockAsLFE constructs a new BlockAsLFE from a Block.
-func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
+func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, ledgercore.StateDelta, error) {
 	latestRound := l.Latest()
 	if blk.Round().SubSaturate(1) != latestRound {
-		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, blk.Round())
+		return nil, ledgercore.StateDelta{}, fmt.Errorf("MakeBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, blk.Round())
 	}
 	hdr, err := l.BlockHdr(latestRound)
 	if err != nil {
-		return nil, err
+		return nil, ledgercore.StateDelta{}, err
 	}
 	if blk.Branch != hdr.Hash() {
-		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), blk.Branch)
+		return nil, ledgercore.StateDelta{}, fmt.Errorf("MakeBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), blk.Branch)
 	}
 
 	state, err := internal.Eval(context.Background(), l, blk, false, l.VerifiedTransactionCache(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("error computing deltas for block %d round %d: %v", blk.Hash(), blk.Round(), err)
+		return nil, ledgercore.StateDelta{}, fmt.Errorf("error computing deltas for block %d round %d: %v", blk.Hash(), blk.Round(), err)
 	}
 
 	vb := ledgercore.MakeValidatedBlock(blk, state)
 	return &validatedBlockAsLFE{
 		l:  l,
 		vb: &vb,
-	}, nil
+	}, state, nil
 }
 
 // Block implements the ledgerForEvaluator interface.

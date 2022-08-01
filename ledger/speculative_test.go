@@ -55,8 +55,9 @@ func TestSpeculative(t *testing.T) {
 
 	require.NoError(t, err)
 
-	blk1aslfe, err := MakeBlockAsLFE(blk1, l)
+	blk1aslfe, statedelta, err := MakeBlockAsLFE(blk1, l)
 	require.NoError(t, err)
+	require.Equal(t, blk1aslfe.vb.Delta(), statedelta)
 
 	blk2 := blk1
 	blk2.BlockHeader.Round++
@@ -90,8 +91,9 @@ func TestSpeculative(t *testing.T) {
 		HasGenesisID: true,
 	})
 
-	blk2aslfe, err := MakeBlockAsLFE(blk2, blk1aslfe)
+	blk2aslfe, statedelta, err := MakeBlockAsLFE(blk2, blk1aslfe)
 	require.NoError(t, err)
+	require.Equal(t, blk2aslfe.vb.Delta(), statedelta)
 
 	ad11, rnd, err := blk2aslfe.LookupWithoutRewards(blk1.Round(), addr1)
 	require.NoError(t, err)
