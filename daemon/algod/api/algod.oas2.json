@@ -1102,7 +1102,6 @@
           "application/x-binary"
         ],
         "produces": [
-          "application/json",
           "application/msgpack"
         ],
         "schemes": [
@@ -1112,7 +1111,7 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The byte encoded signed transaction to broadcast to network",
+            "description": "The byte encoded transaction to broadcast to network",
             "name": "rawtxn",
             "in": "body",
             "required": true,
@@ -1124,7 +1123,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/PostSimulationResponse"
+            "$ref": "#/responses/SimulationResponse"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
@@ -3095,7 +3094,7 @@
         }
       }
     },
-    "PostSimulationResponse": {
+    "SimulationResponse": {
       "description": "Simulation results.",
       "schema": {
         "$ref": "#/definitions/SimulationResult"

@@ -835,7 +835,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		}
 	}
 
-	res := generated.PostSimulationResponse(result)
+	res := generated.SimulationResponse(result)
 
 	// Return msgpack response
 	msgpack, err := encode(protocol.CodecHandle, &res)

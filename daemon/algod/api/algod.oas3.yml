@@ -600,16 +600,6 @@
         },
         "description": "Participation ID of the submission"
       },
-      "PostSimulationResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/SimulationResult"
-            }
-          }
-        },
-        "description": "Simulation results."
-      },
       "PostTransactionsResponse": {
         "content": {
           "application/json": {
@@ -675,6 +665,16 @@
           }
         },
         "description": "Proof of transaction in a block."
+      },
+      "SimulationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SimulationResult"
+            }
+          }
+        },
+        "description": "Simulation results."
       },
       "SupplyResponse": {
         "content": {
@@ -4369,17 +4369,12 @@
               }
             }
           },
-          "description": "The byte encoded signed transaction to broadcast to network",
+          "description": "The byte encoded transaction to broadcast to network",
           "required": true
         },
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimulationResult"
-                }
-              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/SimulationResult"
@@ -4390,11 +4385,6 @@
           },
           "400": {
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -4405,11 +4395,6 @@
           },
           "401": {
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -4420,11 +4405,6 @@
           },
           "500": {
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -4435,11 +4415,6 @@
           },
           "503": {
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"

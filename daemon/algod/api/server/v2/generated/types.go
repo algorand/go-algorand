@@ -719,9 +719,6 @@ type PostParticipationResponse struct {
 	PartId string `json:"partId"`
 }
 
-// PostSimulationResponse defines model for PostSimulationResponse.
-type PostSimulationResponse SimulationResult
-
 // PostTransactionsResponse defines model for PostTransactionsResponse.
 type PostTransactionsResponse struct {
 
@@ -749,6 +746,9 @@ type ProofResponse struct {
 	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// SimulationResponse defines model for SimulationResponse.
+type SimulationResponse SimulationResult
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
