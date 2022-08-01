@@ -613,6 +613,11 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	ml.trackers.trackers = ml.trackers.trackers[:2]
+
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
 	for i := 1; i < initialBlocksCount; i++ {

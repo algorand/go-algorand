@@ -162,7 +162,7 @@ type Local struct {
 	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[24]:"75000"`
+	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
 
 	// number of seconds allowed for syncing transactions
 	TxSyncTimeoutSeconds int64 `version[0]:"30"`
@@ -351,7 +351,7 @@ type Local struct {
 	NetworkMessageTraceServer string `version[13]:""`
 
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
-	VerifiedTranscationsCacheSize int `version[14]:"30000" version[24]:"150000"`
+	VerifiedTranscationsCacheSize int `version[14]:"30000" version[23]:"150000"`
 
 	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
 	// When enabled, the catchup service would use the archive servers before falling back to the relays.
@@ -426,7 +426,7 @@ type Local struct {
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 
 	// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block.
-	ProposalAssemblyTime time.Duration `version[19]:"250000000" version[24]:"500000000"`
+	ProposalAssemblyTime time.Duration `version[19]:"250000000" version[23]:"500000000"`
 
 	// When the number of http connections to the REST layer exceeds the soft limit,
 	// we start returning http code 429 Too Many Requests.

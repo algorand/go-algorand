@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -82,6 +81,8 @@ func (p paymentSender) sendPayment(a *require.Assertions, f *fixtures.RestClient
 	a.NoError(err)
 }
 
+const timeoutUntilNextRound = 3 * time.Minute
+
 func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -129,9 +130,6 @@ func TestStateProofsMultiWallets(t *testing.T) {
 func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture, consensusParams config.ConsensusParams) {
 	r := require.New(fixtures.SynchronizedTest(t))
 
-	restClient, err := fixture.NC.AlgodClient()
-	r.NoError(err)
-
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
@@ -146,7 +144,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 			amount: 1,
 		}.sendPayment(r, fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, 30*time.Second)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -173,7 +171,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -224,9 +222,6 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		accounts[i] = parts[0].Address
 	}
 
-	restClient, err := fixture.NC.AlgodClient()
-	r.NoError(err)
-
 	var participations [5]account.Participation
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
@@ -258,7 +253,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, 30*time.Second)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -281,7 +276,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoalClient, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -308,9 +303,6 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 
 	libgoalClient := fixture.LibGoalClient
 
-	restClient, err := fixture.NC.AlgodClient()
-	r.NoError(err)
-
 	var startRound = uint64(1)
 	var nextStateProofRound = uint64(0)
 	var firstStateProofRound = 2 * consensusParams.StateProofInterval
@@ -322,7 +314,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		_, err := libgoalClient.WaitForRound(rnd)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -331,7 +323,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLastRound(r, libgoalClient, restClient, firstStateProofRound, 1)
+	_, stateProofMessage := getStateProofByLastRound(r, &fixture, firstStateProofRound, 1)
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
@@ -365,8 +357,11 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	return consensusParams
 }
 
-func getStateProofByLastRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
-	curRound, err := libgoal.CurrentRound()
+func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClientFixture, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+	restClient, err := fixture.NC.AlgodClient()
+	r.NoError(err)
+
+	curRound, err := fixture.LibGoalClient.CurrentRound()
 	r.NoError(err)
 
 	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
@@ -393,9 +388,10 @@ func getStateProofByLastRound(r *require.Assertions, libgoal libgoal.Client, res
 	return sp.StateProof{}, stateproofmsg.Message{}
 }
 
-func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, restClient client.RestClient, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLastRound(r, libgoal, restClient, nextStateProofRound, expectedNumberOfStateProofs)
-	nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
+func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClientFixture, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
+	stateProof, stateProofMessage := getStateProofByLastRound(r, fixture, nextStateProofRound, expectedNumberOfStateProofs)
+
+	nextStateProofBlock, err := fixture.LibGoalClient.BookkeepingBlock(nextStateProofRound)
 
 	r.NoError(err)
 
@@ -448,7 +444,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
-	err := fixture.WaitForRound(1, 30*time.Second)
+	err := fixture.WaitForRound(1, timeoutUntilNextRound)
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
@@ -457,9 +453,6 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	//Stop one of the nodes to prevent SP generation due to insufficient signatures.
 	nc.FullStop()
-
-	restClient, err := fixture.NC.AlgodClient()
-	r.NoError(err)
 
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
@@ -482,7 +475,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, 30*time.Second)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -508,7 +501,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -544,7 +537,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
-	err := fixture.WaitForRound(1, 30*time.Second)
+	err := fixture.WaitForRound(1, timeoutUntilNextRound)
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
@@ -570,7 +563,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, 30*time.Second)
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
@@ -659,9 +652,6 @@ func TestAttestorsChangeTest(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
 	defer fixture.Shutdown()
 
-	restClient, err := fixture.NC.AlgodClient()
-	a.NoError(err)
-
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
@@ -690,7 +680,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 			a.True(paymentMaker.to.getBalance(a, &fixture) > paymentMaker.from.getBalance(a, &fixture))
 		}
 
-		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		a.NoError(fixture.WaitForRound(rnd, timeoutUntilNextRound))
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -731,7 +721,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
