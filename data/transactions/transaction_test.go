@@ -22,14 +22,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
@@ -1260,10 +1262,8 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 
 	// edit txn params. wanted
 	return Transaction{
-		_struct: struct{}{},
-		Type:    protocol.StateProofTx,
+		Type: protocol.StateProofTx,
 		Header: Header{
-			_struct:     struct{}{},
 			Sender:      s.sender,
 			Fee:         s.fee,
 			FirstValid:  0,
@@ -1299,4 +1299,55 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 			require.Equal(t, cpyTestCase.expectedError, cpyTestCase.runIsWellFormedForTestCase())
 		})
 	}
+}
+
+func TestStateProofTxnShouldBeZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	curProto.StateProofInterval = 256
+	txn := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:      addr1,
+			Fee:         basics.MicroAlgos{Raw: 100},
+			FirstValid:  0,
+			LastValid:   0,
+			Note:        []byte{0, 1},
+			GenesisID:   "",
+			GenesisHash: crypto.Digest{},
+		},
+		StateProofTxnFields: StateProofTxnFields{},
+	}
+
+	const erroMsg = "type pay has non-zero fields for type stpf"
+	txn.StateProofType = 1
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProofType = 0
+	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.Message = stateproofmsg.Message{}
+	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProof = stateproof.StateProof{}
+	txn.StateProofIntervalLastRound = 512
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProofIntervalLastRound = 0
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.NoError(t, err)
 }

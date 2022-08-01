@@ -162,6 +162,9 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 	return network.OutgoingMessage{Action: fwd}
 }
 
+// handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
+// also responsible for making sure that the signature is valid, and not duplicated.
+// if a signature passes all verification it is written into the database.
 func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
@@ -280,7 +283,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		newLatest := spw.ledger.Latest()
 		for r := latest; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
-			spw.waitForSignedBlock(r)
+			spw.waitForSignature(r)
 
 			spw.broadcastSigs(r, proto)
 		}
@@ -438,7 +441,7 @@ func (spw *Worker) tryBroadcast() {
 	}
 }
 
-func (spw *Worker) signedBlock(r basics.Round) {
+func (spw *Worker) invokeBuilder(r basics.Round) {
 	spw.mu.Lock()
 	spw.signed = r
 	spw.mu.Unlock()
@@ -455,7 +458,7 @@ func (spw *Worker) lastSignedBlock() basics.Round {
 	return spw.signed
 }
 
-func (spw *Worker) waitForSignedBlock(r basics.Round) {
+func (spw *Worker) waitForSignature(r basics.Round) {
 	for {
 		if r <= spw.lastSignedBlock() {
 			return

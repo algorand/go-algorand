@@ -105,7 +105,6 @@ var (
 // New creates secrets needed for the merkle signature scheme.
 // This function generates one key for each round within the participation period [firstValid, lastValid] (inclusive bounds)
 // which holds round % interval == 0.
-// In case firstValid equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
 func New(firstValid, lastValid, keyLifetime uint64) (*Secrets, error) {
 	if firstValid > lastValid {
 		return nil, ErrStartBiggerThanEndRound

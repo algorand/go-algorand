@@ -148,13 +148,22 @@ func TestConcatenatedProofsMissingChild(t *testing.T) {
 	p, err := tree.ProveSingleLeaf(6)
 	a.NoError(err)
 
+	concatenatedProof := p.GetConcatenatedProof()
+	computedPath := recomputePath(concatenatedProof)
+
+	// verify that the concatenated proof can be verified correctly
 	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
-
-	computedPath := recomputePath(p)
-
 	newP.Path = computedPath
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, newP.ToProof())
 	a.NoError(err)
+
+	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), uint64(p.TreeDepth), concatenatedProof)
+	a.NoError(err)
+
+	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, recomputedProof.ToProof())
+	a.NoError(err)
+
 }
 
 func TestConcatenatedProofsFullTree(t *testing.T) {
@@ -172,12 +181,19 @@ func TestConcatenatedProofsFullTree(t *testing.T) {
 	p, err := tree.ProveSingleLeaf(6)
 	a.NoError(err)
 
-	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
+	concatenatedProof := p.GetConcatenatedProof()
+	computedPath := recomputePath(concatenatedProof)
 
-	computedPath := recomputePath(p)
-
-	newP.Path = computedPath
+	// verify that the concatenated proof can be verified correctly
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: computedPath, HashFactory: p.HashFactory}}
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, newP.ToProof())
+	a.NoError(err)
+
+	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), uint64(p.TreeDepth), concatenatedProof)
+	a.NoError(err)
+
+	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, recomputedProof.ToProof())
 	a.NoError(err)
 }
 
@@ -194,12 +210,19 @@ func TestConcatenatedProofsOneLeaf(t *testing.T) {
 	p, err := tree.ProveSingleLeaf(0)
 	a.NoError(err)
 
-	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
+	concatenatedProof := p.GetConcatenatedProof()
+	computedPath := recomputePath(concatenatedProof)
 
-	computedPath := recomputePath(p)
-
-	newP.Path = computedPath
+	// verify that the concatenated proof can be verified correctly
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: computedPath, HashFactory: p.HashFactory}}
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: array[0]}, newP.ToProof())
+	a.NoError(err)
+
+	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), uint64(p.TreeDepth), concatenatedProof)
+	a.NoError(err)
+
+	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: array[0]}, recomputedProof.ToProof())
 	a.NoError(err)
 }
 
@@ -211,14 +234,13 @@ func TestProofDeserializationError(t *testing.T) {
 	a.ErrorIs(err, ErrProofLengthDigestSizeMismatch)
 }
 
-func recomputePath(p *SingleLeafProof) []crypto.GenericDigest {
+func recomputePath(p []byte) []crypto.GenericDigest {
 	var computedPath []crypto.GenericDigest
-	proofconcat := p.GetConcatenatedProof()
-	for len(proofconcat) > 0 {
+	for len(p) > 0 {
 		var d crypto.Digest
-		copy(d[:], proofconcat)
+		copy(d[:], p)
 		computedPath = append(computedPath, d[:])
-		proofconcat = proofconcat[len(d):]
+		p = p[len(d):]
 	}
 	return computedPath
 }

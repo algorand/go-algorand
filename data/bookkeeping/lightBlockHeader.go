@@ -35,6 +35,9 @@ type LightBlockHeader struct {
 		knowing or even controlling the data to be hashed, etc. Starting the hash data with a value that is
 		uncontrollable and unpredictable (to today’s attackers) makes the attacker’s task more like breaking 2nd
 		preimage resistance (2PR/TCR), versus the easier goal of merely breaking collision resistance.
+		In addition, we make sure that the Seed (The unpredictable value) would be the first field that gets
+		hashed (give it the lowest codec value in the LightBlockHeader struct) to mitigate a collision attack
+		on the merkle damgard construction.
 	*/
 	Seed                committee.Seed       `codec:"0"`
 	Round               basics.Round         `codec:"r"`

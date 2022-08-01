@@ -153,7 +153,7 @@ var ErrNoStateProofForRound = errors.New("no state proof can be found for that r
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
 func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round) (transactions.Transaction, error) {
-	for i := round + 1; i < latestRound; i++ {
+	for i := round + 1; i <= latestRound; i++ {
 		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
 		if err != nil {
 			return transactions.Transaction{}, err

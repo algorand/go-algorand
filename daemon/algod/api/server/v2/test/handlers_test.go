@@ -1134,7 +1134,7 @@ func TestStateproofTransactionForRound(t *testing.T) {
 	a := require.New(t)
 
 	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i <= 1000; i++ {
 		var blk bookkeeping.Block
 		blk.BlockHeader = bookkeeping.BlockHeader{
 			Round: basics.Round(i),
