@@ -410,22 +410,6 @@
 						{
 							"Name": "Wallet1",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet101",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet201",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet301",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet401",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -449,22 +433,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet2",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet102",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet202",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet302",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet402",
 							"ParticipationOnly": false
 						}
 					],
@@ -490,22 +458,6 @@
 						{
 							"Name": "Wallet3",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet103",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet203",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet303",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet403",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -529,22 +481,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet4",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet104",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet204",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet304",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet404",
 							"ParticipationOnly": false
 						}
 					],
@@ -570,22 +506,6 @@
 						{
 							"Name": "Wallet5",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet105",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet205",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet305",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet405",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -609,22 +529,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet6",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet106",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet206",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet306",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet406",
 							"ParticipationOnly": false
 						}
 					],
@@ -650,22 +554,6 @@
 						{
 							"Name": "Wallet7",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet107",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet207",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet307",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet407",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -689,22 +577,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet8",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet108",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet208",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet308",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet408",
 							"ParticipationOnly": false
 						}
 					],
@@ -730,22 +602,6 @@
 						{
 							"Name": "Wallet9",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet109",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet209",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet309",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet409",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -769,22 +625,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet10",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet110",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet210",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet310",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet410",
 							"ParticipationOnly": false
 						}
 					],
@@ -810,22 +650,6 @@
 						{
 							"Name": "Wallet11",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet111",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet211",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet311",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet411",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -849,22 +673,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet12",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet112",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet212",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet312",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet412",
 							"ParticipationOnly": false
 						}
 					],
@@ -890,22 +698,6 @@
 						{
 							"Name": "Wallet13",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet113",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet213",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet313",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet413",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -929,22 +721,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet14",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet114",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet214",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet314",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet414",
 							"ParticipationOnly": false
 						}
 					],
@@ -970,22 +746,6 @@
 						{
 							"Name": "Wallet15",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet115",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet215",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet315",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet415",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1009,22 +769,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet16",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet116",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet216",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet316",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet416",
 							"ParticipationOnly": false
 						}
 					],
@@ -1050,22 +794,6 @@
 						{
 							"Name": "Wallet17",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet117",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet217",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet317",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet417",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1089,22 +817,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet18",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet118",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet218",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet318",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet418",
 							"ParticipationOnly": false
 						}
 					],
@@ -1130,22 +842,6 @@
 						{
 							"Name": "Wallet19",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet119",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet219",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet319",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet419",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1169,22 +865,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet20",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet120",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet220",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet320",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet420",
 							"ParticipationOnly": false
 						}
 					],
@@ -1210,22 +890,6 @@
 						{
 							"Name": "Wallet21",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet121",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet221",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet321",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet421",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1249,22 +913,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet22",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet122",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet222",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet322",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet422",
 							"ParticipationOnly": false
 						}
 					],
@@ -1290,22 +938,6 @@
 						{
 							"Name": "Wallet23",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet123",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet223",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet323",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet423",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1329,22 +961,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet24",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet124",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet224",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet324",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet424",
 							"ParticipationOnly": false
 						}
 					],
@@ -1370,22 +986,6 @@
 						{
 							"Name": "Wallet25",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet125",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet225",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet325",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet425",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1409,22 +1009,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet26",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet126",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet226",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet326",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet426",
 							"ParticipationOnly": false
 						}
 					],
@@ -1450,22 +1034,6 @@
 						{
 							"Name": "Wallet27",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet127",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet227",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet327",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet427",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1489,22 +1057,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet28",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet128",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet228",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet328",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet428",
 							"ParticipationOnly": false
 						}
 					],
@@ -1530,22 +1082,6 @@
 						{
 							"Name": "Wallet29",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet129",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet229",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet329",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet429",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1569,22 +1105,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet30",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet130",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet230",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet330",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet430",
 							"ParticipationOnly": false
 						}
 					],
@@ -1610,22 +1130,6 @@
 						{
 							"Name": "Wallet31",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet131",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet231",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet331",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet431",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1649,22 +1153,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet32",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet132",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet232",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet332",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet432",
 							"ParticipationOnly": false
 						}
 					],
@@ -1690,22 +1178,6 @@
 						{
 							"Name": "Wallet33",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet133",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet233",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet333",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet433",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1729,22 +1201,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet34",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet134",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet234",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet334",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet434",
 							"ParticipationOnly": false
 						}
 					],
@@ -1770,22 +1226,6 @@
 						{
 							"Name": "Wallet35",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet135",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet235",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet335",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet435",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1809,22 +1249,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet36",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet136",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet236",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet336",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet436",
 							"ParticipationOnly": false
 						}
 					],
@@ -1850,22 +1274,6 @@
 						{
 							"Name": "Wallet37",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet137",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet237",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet337",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet437",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1889,22 +1297,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet38",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet138",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet238",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet338",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet438",
 							"ParticipationOnly": false
 						}
 					],
@@ -1930,22 +1322,6 @@
 						{
 							"Name": "Wallet39",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet139",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet239",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet339",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet439",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -1969,22 +1345,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet40",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet140",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet240",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet340",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet440",
 							"ParticipationOnly": false
 						}
 					],
@@ -2010,22 +1370,6 @@
 						{
 							"Name": "Wallet41",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet141",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet241",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet341",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet441",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2049,22 +1393,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet42",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet142",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet242",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet342",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet442",
 							"ParticipationOnly": false
 						}
 					],
@@ -2090,22 +1418,6 @@
 						{
 							"Name": "Wallet43",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet143",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet243",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet343",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet443",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2129,22 +1441,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet44",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet144",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet244",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet344",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet444",
 							"ParticipationOnly": false
 						}
 					],
@@ -2170,22 +1466,6 @@
 						{
 							"Name": "Wallet45",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet145",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet245",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet345",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet445",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2209,22 +1489,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet46",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet146",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet246",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet346",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet446",
 							"ParticipationOnly": false
 						}
 					],
@@ -2250,22 +1514,6 @@
 						{
 							"Name": "Wallet47",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet147",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet247",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet347",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet447",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2289,22 +1537,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet48",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet148",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet248",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet348",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet448",
 							"ParticipationOnly": false
 						}
 					],
@@ -2330,22 +1562,6 @@
 						{
 							"Name": "Wallet49",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet149",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet249",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet349",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet449",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2369,22 +1585,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet50",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet150",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet250",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet350",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet450",
 							"ParticipationOnly": false
 						}
 					],
@@ -2410,22 +1610,6 @@
 						{
 							"Name": "Wallet51",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet151",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet251",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet351",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet451",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2449,22 +1633,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet52",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet152",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet252",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet352",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet452",
 							"ParticipationOnly": false
 						}
 					],
@@ -2490,22 +1658,6 @@
 						{
 							"Name": "Wallet53",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet153",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet253",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet353",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet453",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2529,22 +1681,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet54",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet154",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet254",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet354",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet454",
 							"ParticipationOnly": false
 						}
 					],
@@ -2570,22 +1706,6 @@
 						{
 							"Name": "Wallet55",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet155",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet255",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet355",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet455",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2609,22 +1729,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet56",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet156",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet256",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet356",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet456",
 							"ParticipationOnly": false
 						}
 					],
@@ -2650,22 +1754,6 @@
 						{
 							"Name": "Wallet57",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet157",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet257",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet357",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet457",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2689,22 +1777,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet58",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet158",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet258",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet358",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet458",
 							"ParticipationOnly": false
 						}
 					],
@@ -2730,22 +1802,6 @@
 						{
 							"Name": "Wallet59",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet159",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet259",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet359",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet459",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2769,22 +1825,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet60",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet160",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet260",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet360",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet460",
 							"ParticipationOnly": false
 						}
 					],
@@ -2810,22 +1850,6 @@
 						{
 							"Name": "Wallet61",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet161",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet261",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet361",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet461",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2849,22 +1873,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet62",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet162",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet262",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet362",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet462",
 							"ParticipationOnly": false
 						}
 					],
@@ -2890,22 +1898,6 @@
 						{
 							"Name": "Wallet63",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet163",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet263",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet363",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet463",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -2929,22 +1921,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet64",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet164",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet264",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet364",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet464",
 							"ParticipationOnly": false
 						}
 					],
@@ -2970,22 +1946,6 @@
 						{
 							"Name": "Wallet65",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet165",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet265",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet365",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet465",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3009,22 +1969,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet66",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet166",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet266",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet366",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet466",
 							"ParticipationOnly": false
 						}
 					],
@@ -3050,22 +1994,6 @@
 						{
 							"Name": "Wallet67",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet167",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet267",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet367",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet467",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3089,22 +2017,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet68",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet168",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet268",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet368",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet468",
 							"ParticipationOnly": false
 						}
 					],
@@ -3130,22 +2042,6 @@
 						{
 							"Name": "Wallet69",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet169",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet269",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet369",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet469",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3169,22 +2065,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet70",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet170",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet270",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet370",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet470",
 							"ParticipationOnly": false
 						}
 					],
@@ -3210,22 +2090,6 @@
 						{
 							"Name": "Wallet71",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet171",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet271",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet371",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet471",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3249,22 +2113,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet72",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet172",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet272",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet372",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet472",
 							"ParticipationOnly": false
 						}
 					],
@@ -3290,22 +2138,6 @@
 						{
 							"Name": "Wallet73",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet173",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet273",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet373",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet473",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3329,22 +2161,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet74",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet174",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet274",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet374",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet474",
 							"ParticipationOnly": false
 						}
 					],
@@ -3370,22 +2186,6 @@
 						{
 							"Name": "Wallet75",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet175",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet275",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet375",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet475",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3409,22 +2209,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet76",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet176",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet276",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet376",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet476",
 							"ParticipationOnly": false
 						}
 					],
@@ -3450,22 +2234,6 @@
 						{
 							"Name": "Wallet77",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet177",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet277",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet377",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet477",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3489,22 +2257,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet78",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet178",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet278",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet378",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet478",
 							"ParticipationOnly": false
 						}
 					],
@@ -3530,22 +2282,6 @@
 						{
 							"Name": "Wallet79",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet179",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet279",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet379",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet479",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3569,22 +2305,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet80",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet180",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet280",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet380",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet480",
 							"ParticipationOnly": false
 						}
 					],
@@ -3610,22 +2330,6 @@
 						{
 							"Name": "Wallet81",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet181",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet281",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet381",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet481",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3649,22 +2353,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet82",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet182",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet282",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet382",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet482",
 							"ParticipationOnly": false
 						}
 					],
@@ -3690,22 +2378,6 @@
 						{
 							"Name": "Wallet83",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet183",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet283",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet383",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet483",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3729,22 +2401,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet84",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet184",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet284",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet384",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet484",
 							"ParticipationOnly": false
 						}
 					],
@@ -3770,22 +2426,6 @@
 						{
 							"Name": "Wallet85",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet185",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet285",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet385",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet485",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3809,22 +2449,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet86",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet186",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet286",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet386",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet486",
 							"ParticipationOnly": false
 						}
 					],
@@ -3850,22 +2474,6 @@
 						{
 							"Name": "Wallet87",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet187",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet287",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet387",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet487",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3889,22 +2497,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet88",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet188",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet288",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet388",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet488",
 							"ParticipationOnly": false
 						}
 					],
@@ -3930,22 +2522,6 @@
 						{
 							"Name": "Wallet89",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet189",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet289",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet389",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet489",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -3969,22 +2545,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet90",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet190",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet290",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet390",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet490",
 							"ParticipationOnly": false
 						}
 					],
@@ -4010,22 +2570,6 @@
 						{
 							"Name": "Wallet91",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet191",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet291",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet391",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet491",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4049,22 +2593,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet92",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet192",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet292",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet392",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet492",
 							"ParticipationOnly": false
 						}
 					],
@@ -4090,22 +2618,6 @@
 						{
 							"Name": "Wallet93",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet193",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet293",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet393",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet493",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4129,22 +2641,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet94",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet194",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet294",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet394",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet494",
 							"ParticipationOnly": false
 						}
 					],
@@ -4170,22 +2666,6 @@
 						{
 							"Name": "Wallet95",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet195",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet295",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet395",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet495",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4209,22 +2689,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet96",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet196",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet296",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet396",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet496",
 							"ParticipationOnly": false
 						}
 					],
@@ -4250,22 +2714,6 @@
 						{
 							"Name": "Wallet97",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet197",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet297",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet397",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet497",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4289,22 +2737,6 @@
 					"Wallets": [
 						{
 							"Name": "Wallet98",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet198",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet298",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet398",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet498",
 							"ParticipationOnly": false
 						}
 					],
@@ -4330,22 +2762,6 @@
 						{
 							"Name": "Wallet99",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet199",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet299",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet399",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet499",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4370,22 +2786,6 @@
 						{
 							"Name": "Wallet100",
 							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet200",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet300",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet400",
-							"ParticipationOnly": false
-						},
-						{
-							"Name": "Wallet500",
-							"ParticipationOnly": false
 						}
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
@@ -4408,7 +2808,7 @@
 					"Name": "nonParticipatingNode1",
 					"Wallets": [
 						{
-							"Name": "Wallet501",
+							"Name": "Wallet101",
 							"ParticipationOnly": false
 						}
 					],
@@ -4431,7 +2831,7 @@
 					"Name": "nonParticipatingNode2",
 					"Wallets": [
 						{
-							"Name": "Wallet502",
+							"Name": "Wallet102",
 							"ParticipationOnly": false
 						}
 					],
@@ -4454,7 +2854,7 @@
 					"Name": "nonParticipatingNode3",
 					"Wallets": [
 						{
-							"Name": "Wallet503",
+							"Name": "Wallet103",
 							"ParticipationOnly": false
 						}
 					],
@@ -4477,7 +2877,7 @@
 					"Name": "nonParticipatingNode4",
 					"Wallets": [
 						{
-							"Name": "Wallet504",
+							"Name": "Wallet104",
 							"ParticipationOnly": false
 						}
 					],
@@ -4500,7 +2900,7 @@
 					"Name": "nonParticipatingNode5",
 					"Wallets": [
 						{
-							"Name": "Wallet505",
+							"Name": "Wallet105",
 							"ParticipationOnly": false
 						}
 					],
@@ -4523,7 +2923,7 @@
 					"Name": "nonParticipatingNode6",
 					"Wallets": [
 						{
-							"Name": "Wallet506",
+							"Name": "Wallet106",
 							"ParticipationOnly": false
 						}
 					],
@@ -4546,7 +2946,7 @@
 					"Name": "nonParticipatingNode7",
 					"Wallets": [
 						{
-							"Name": "Wallet507",
+							"Name": "Wallet107",
 							"ParticipationOnly": false
 						}
 					],
@@ -4569,7 +2969,7 @@
 					"Name": "nonParticipatingNode8",
 					"Wallets": [
 						{
-							"Name": "Wallet508",
+							"Name": "Wallet108",
 							"ParticipationOnly": false
 						}
 					],
@@ -4592,7 +2992,7 @@
 					"Name": "nonParticipatingNode9",
 					"Wallets": [
 						{
-							"Name": "Wallet509",
+							"Name": "Wallet109",
 							"ParticipationOnly": false
 						}
 					],
@@ -4615,7 +3015,7 @@
 					"Name": "nonParticipatingNode10",
 					"Wallets": [
 						{
-							"Name": "Wallet510",
+							"Name": "Wallet110",
 							"ParticipationOnly": false
 						}
 					],
@@ -4638,7 +3038,7 @@
 					"Name": "nonParticipatingNode11",
 					"Wallets": [
 						{
-							"Name": "Wallet511",
+							"Name": "Wallet111",
 							"ParticipationOnly": false
 						}
 					],
@@ -4661,7 +3061,7 @@
 					"Name": "nonParticipatingNode12",
 					"Wallets": [
 						{
-							"Name": "Wallet512",
+							"Name": "Wallet112",
 							"ParticipationOnly": false
 						}
 					],
@@ -4684,7 +3084,7 @@
 					"Name": "nonParticipatingNode13",
 					"Wallets": [
 						{
-							"Name": "Wallet513",
+							"Name": "Wallet113",
 							"ParticipationOnly": false
 						}
 					],
@@ -4707,7 +3107,7 @@
 					"Name": "nonParticipatingNode14",
 					"Wallets": [
 						{
-							"Name": "Wallet514",
+							"Name": "Wallet114",
 							"ParticipationOnly": false
 						}
 					],
@@ -4730,7 +3130,7 @@
 					"Name": "nonParticipatingNode15",
 					"Wallets": [
 						{
-							"Name": "Wallet515",
+							"Name": "Wallet115",
 							"ParticipationOnly": false
 						}
 					],
