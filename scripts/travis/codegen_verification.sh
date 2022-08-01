@@ -56,7 +56,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+make vet
 
 echo "Running gofmt..."
 runGoFmt
