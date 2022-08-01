@@ -2221,7 +2221,7 @@
       "Args": "BUU",
       "Returns": "B",
       "Size": 1,
-      "Doc": "read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size.",
+      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "Groups": [
         "State Access"
       ]

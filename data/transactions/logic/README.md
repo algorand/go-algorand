@@ -616,7 +616,7 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1 |
-| `box_extract` | read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size. |
+| `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
 | `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |

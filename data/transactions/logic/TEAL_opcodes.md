@@ -1363,7 +1363,7 @@ Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create`
 
 - Opcode: 0xba
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size.
+- read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v7
 - Mode: Application
 

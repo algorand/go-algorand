@@ -192,7 +192,7 @@ var opDocByName = map[string]string{
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 
 	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
-	"box_extract": "read C bytes from box A, starting at offset B. Fail if B does not exist, or the byte range is outside A's size.",
+	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
 	"box_replace": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
 	"box_del":     "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
 	"box_len":     "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
