@@ -20,7 +20,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-//msgp:ignore cachedResourceData
+//msgp:ignore cachedBoxData
 type cachedBoxData struct {
 	persistedBoxData
 
