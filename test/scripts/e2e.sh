@@ -174,7 +174,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
-            if [ -z "$AWS_NET_UPLOAD" ]; then
+        if [ -z "$AWS_NET_UPLOAD" ]; then
             AWS_NET_UPLOAD="net_done.tar.bz2"
         fi
 
@@ -199,11 +199,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     echo "TEMPDIR = $TEMPDIR"
     echo "FORCE_KEEP_TEMPS = $FORCE_KEEP_TEMPS"
     echo "KEEP_TEMPS_CMD_STR = $KEEP_TEMPS_CMD_STR"
-    echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
     echo "AWS_NET_UPLOAD = $AWS_NET_UPLOAD"
-
-    exit 42
-
     
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
         "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh

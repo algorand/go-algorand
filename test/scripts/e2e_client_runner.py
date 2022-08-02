@@ -469,16 +469,16 @@ def main():
 
     # ensure 'network stop' and 'network delete' also make they job
     goal_network_stop(netdir, env, normal_cleanup=True)
-    if not args.keep_temps:
-        goal_network_delete(netdir, normal_cleanup=True)
-    else:
+    if args.keep_temps:
         summary = {
-            "args": args,
+            "args": {k: getattr(args, k) for k in dir(args) if not k.startswith("_")},
             "errors": rs.errors,
             "statuses": rs.statuses,
         }
-        with open(os.path.join(netdir, "summary.json"), "w") as f:
+        with open(os.path.join(netdir, "e2eTestSummary.json"), "w") as f:
             f.write(json.dumps(summary, indent=4, default=str))
+    else:
+        goal_network_delete(netdir, normal_cleanup=True)
 
     return retcode
 
