@@ -68,14 +68,14 @@ const baseResourcesPendingAccountsBufferSize = 100000
 // is being flushed into the main base resources cache.
 const baseResourcesPendingAccountsWarnThreshold = 85000
 
-// baseBoxesPendingAccountsBufferSize defines the size of the base boxes pending buffer size.
+// baseBoxesPendingBufferSize defines the size of the base boxes pending buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base boxes map.
-const baseBoxesPendingAccountsBufferSize = 50000
+const baseBoxesPendingBufferSize = 5000
 
-// baseBoxesPendingAccountsWarnThreshold defines the threshold at which the lruBoxes would generate a warning
+// baseBoxesPendingWarnThreshold defines the threshold at which the lruBoxes would generate a warning
 // after we've surpassed a given pending boxes size. The warning is being generated when the pending box data
 // is being flushed into the main base boxes cache.
-const baseBoxesPendingAccountsWarnThreshold = 42500
+const baseBoxesPendingWarnThreshold = 4250
 
 // initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
 // initializeCaches method before it can process and store the account changes to disk.
@@ -936,7 +936,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
-	au.baseBoxes.init(au.log, baseBoxesPendingAccountsBufferSize, baseBoxesPendingAccountsWarnThreshold)
+	au.baseBoxes.init(au.log, baseBoxesPendingBufferSize, baseBoxesPendingWarnThreshold)
 	return
 }
 
@@ -1016,7 +1016,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.prune(newBaseAccountSize)
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
-	newBaseBoxesSize := (len(au.kvStore) + 1) + baseBoxesPendingAccountsBufferSize
+	newBaseBoxesSize := (len(au.kvStore) + 1) + baseBoxesPendingBufferSize
 	au.baseBoxes.prune(newBaseBoxesSize)
 }
 
