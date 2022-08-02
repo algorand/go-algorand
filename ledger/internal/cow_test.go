@@ -102,6 +102,10 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return hdr, nil
 }
 
+func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return ml.blockHdr(rnd)
+}
+
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {
 	for i := 0; i < delta.Len(); i++ {
 		addr, data := delta.GetByIdx(i)

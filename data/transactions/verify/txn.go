@@ -64,7 +64,7 @@ type GroupContext struct {
 	specAddrs        transactions.SpecialAddresses
 	consensusVersion protocol.ConsensusVersion
 	consensusParams  config.ConsensusParams
-	minTealVersion   uint64
+	minAvmVersion    uint64
 	signedGroupTxns  []transactions.SignedTxn
 }
 
@@ -85,7 +85,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		},
 		consensusVersion: contextHdr.CurrentProtocol,
 		consensusParams:  consensusParams,
-		minTealVersion:   logic.ComputeMinTealVersion(transactions.WrapSignedTxnsWithAD(group)),
+		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
 	}, nil
 }
@@ -94,7 +94,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 func (g *GroupContext) Equal(other *GroupContext) bool {
 	return g.specAddrs == other.specAddrs &&
 		g.consensusVersion == other.consensusVersion &&
-		g.minTealVersion == other.minTealVersion
+		g.minAvmVersion == other.minAvmVersion
 }
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
@@ -291,9 +291,9 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	}
 	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
 	ep := logic.EvalParams{
-		Proto:          &groupCtx.consensusParams,
-		TxnGroup:       txngroup,
-		MinTealVersion: &groupCtx.minTealVersion,
+		Proto:         &groupCtx.consensusParams,
+		TxnGroup:      txngroup,
+		MinAvmVersion: &groupCtx.minAvmVersion,
 	}
 	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
@@ -346,9 +346,9 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return errors.New("Negative groupIndex")
 	}
 	ep := logic.EvalParams{
-		Proto:          &groupCtx.consensusParams,
-		TxnGroup:       transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
-		MinTealVersion: &groupCtx.minTealVersion,
+		Proto:         &groupCtx.consensusParams,
+		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
+		MinAvmVersion: &groupCtx.minAvmVersion,
 	}
 	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {

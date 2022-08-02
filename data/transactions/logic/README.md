@@ -47,9 +47,7 @@ programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
 bytecode, the version is an incrementing integer, currently 6, and
-denoted vX throughout this document. User friendly version numbers
-that correspond to programmer expectations, such as `AVM 1.0` map to
-these integers.  AVM 0.9 is v4. AVM 1.0 is v5. AVM 1.1 is v6.
+denoted vX throughout this document.
 
 ## Execution Modes
 
@@ -276,9 +274,7 @@ return stack matches the name of the input value.
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
-| `bn256_add` | for (curve points A and B) return the curve point A + B |
-| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
-| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -323,12 +319,12 @@ return stack matches the name of the input value.
 | `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
 | `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
-| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails |
+| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates. |
 | `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
-| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A) |
-| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A) |
+| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate. |
+| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates. |
 | `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
 | `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
 
@@ -403,12 +399,12 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `args` | Ath LogicSig argument |
 | `txn f` | field F of current transaction |
 | `gtxn t f` | field F of the Tth transaction in the current group |
-| `txna f i` | Ith value of the array field F of the current transaction |
+| `txna f i` | Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates. |
 | `txnas f` | Ath value of the array field F of the current transaction |
-| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group |
+| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates. |
 | `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
 | `gtxns f` | field F of the Ath transaction in the current group |
-| `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
+| `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates. |
 | `gtxnsas f` | Bth value of the array field F from the Ath transaction in the current group |
 | `global f` | global field F |
 | `load i` | Ith scratch space value. All scratch spaces are 0 at program start. |
@@ -421,14 +417,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gaid t` | ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | ID of the asset or application created in the Ath transaction of the current group |
 
-**Transaction Fields**
-
+#### Transaction Fields
+##### Scalar Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -451,9 +447,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 23 | TxID | []byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
-| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
-| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
@@ -473,9 +467,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
 | 46 | FreezeAssetAccount | []byte | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
 | 47 | FreezeAssetFrozen | uint64 | v2  | The new frozen value, 0 or 1 |
-| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
-| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
 | 52 | GlobalNumUint | uint64 | v3  | Number of global state integers in ApplicationCall |
 | 53 | GlobalNumByteSlice | uint64 | v3  | Number of global state byteslices in ApplicationCall |
@@ -483,16 +475,24 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
 | 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
-| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
-| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
-| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
+
+##### Array Fields
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
+| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
+| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -615,6 +615,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
 
 ### Inner Transactions
 
@@ -680,7 +681,7 @@ The assembler parses line by line. Ops that only take stack arguments
 appear on a line by themselves. Immediate arguments follow the opcode
 on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting AVM v2. By default, the assembler targets AVM v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -746,7 +747,7 @@ This requirement is enforced as follows:
   all the fields and values in this transaction. For example, a
   transaction with a nonzero RekeyTo field will be (at least) v2.
 
-* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
+* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
 In addition, applications must be version 6 or greater to be eligible
 for being called in an inner transaction.

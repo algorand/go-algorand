@@ -56,7 +56,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+make vet
 
 echo "Running gofmt..."
 runGoFmt
@@ -78,6 +78,7 @@ GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
 echo "Updating TEAL Specs"
+touch data/transactions/logic/fields_string.go # ensure rebuild
 make -C data/transactions/logic
 
 echo "Regenerate REST server"
