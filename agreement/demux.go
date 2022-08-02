@@ -249,7 +249,12 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
+
 	speculationDeadlineCh := s.Clock.TimeoutAt(speculationDeadline)
+	// zero timeout means we don't have enough time to speculate on block assembly
+	if speculationDeadline == 0 {
+		speculationDeadlineCh = nil
+	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)

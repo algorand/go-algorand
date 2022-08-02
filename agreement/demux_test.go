@@ -37,7 +37,7 @@ import (
 )
 
 const fastTimeoutChTime = 2
-const speculativeAsmTime = 1
+const speculativeAsmTime = fastTimeoutChTime + 1
 
 type demuxTester struct {
 	*testing.T

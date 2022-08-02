@@ -79,12 +79,13 @@ func (p *player) handle(r routerHandle, e event) []action {
 		if e.T == fastTimeout {
 			return p.handleFastTimeout(r, e)
 		}
-		if e.T == speculationTimeout {
-			return p.handleSpeculationTimeout(r, e)
-		}
 
 		if !p.Napping {
 			r.t.logTimeout(*p)
+		}
+
+		if e.T == speculationTimeout {
+			return p.handleSpeculationTimeout(r, e)
 		}
 
 		switch p.Step {
