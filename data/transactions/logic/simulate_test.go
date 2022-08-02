@@ -536,6 +536,13 @@ func TestSignatureCheck(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
 	require.Empty(t, result.SignatureFailureMessage)
+
+	// should error with invalid signature
+	txgroup[0].Sig[0] = 0x0 // != 0xe
+	result, err = s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, result.FailureMessage)
+	require.Contains(t, *result.SignatureFailureMessage, "one signature didn't pass")
 }
 
 const accountBalanceCheckProgram = `#pragma version 4

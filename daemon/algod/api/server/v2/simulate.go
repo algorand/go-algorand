@@ -164,8 +164,7 @@ func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) error {
 		return ScopedSimulatorError{SimulatorError{fmt.Errorf("please contact us, this shouldn't happen. Current block error: %v", err)}, "current block error"}
 	}
 
-	batchVerifier := crypto.MakeBatchVerifier()
-	_, err = verify.TxnGroupBatchVerify(txgroup, hdr, nil, batchVerifier)
+	_, err = verify.TxnGroup(txgroup, hdr, nil)
 	if err != nil {
 		// invalid signature error
 		if isInvalidSignatureError(err) {
