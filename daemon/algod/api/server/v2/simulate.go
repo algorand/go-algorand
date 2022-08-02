@@ -18,7 +18,6 @@ package v2
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -28,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/pkg/errors"
 )
 
 // ==============================
@@ -127,17 +127,9 @@ type ScopedSimulatorError struct {
 // ==============================
 
 func isInvalidSignatureError(err error) bool {
-	invalidSignatureErrorFragments := []string{
-		"signedtxn has no sig",
-		"signedtxn should only have one of Sig or Msig or LogicSig",
-		"multisig validation failed",
-		"has one mystery sig",
-	}
-
-	for _, fragment := range invalidSignatureErrorFragments {
-		if strings.Contains(err.Error(), fragment) {
-			return true
-		}
+	var signatureError verify.SignatureError
+	if errors.As(err, &signatureError) {
+		return true
 	}
 
 	return false
