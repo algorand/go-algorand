@@ -256,7 +256,7 @@ shorttest: build-race
 
 # TODO: DO NOT MERGE THIS CHANGE:
 integration: build-race
-	E2E_TEST_FILTER=SCRIPTS AWS_NET_UPLOAD=znet_done.tar.bz2 ./test/scripts/run_integration_tests.sh
+	E2E_TEST_FILTER=SCRIPTS FORCE_KEEP_TEMPS=1 AWS_NET_UPLOAD=znet_done.tar.bz2 ./test/scripts/run_integration_tests.sh
 
 testall: fulltest integration
 

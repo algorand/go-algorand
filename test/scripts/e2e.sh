@@ -172,17 +172,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${KEEP_TEMPS_CMD_STR} ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
 
-    echo "CHANNEL = $CHANNEL"
-    echo "BINDIR = $BINDIR"
-    echo "DATADIR = $DATADIR"
-    echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
-    echo "INTERACTIVE = $INTERACTIVE"
-    echo "TEMPDIR = $TEMPDIR"
-    echo "FORCE_KEEP_TEMPS = $FORCE_KEEP_TEMPS"
-    echo "KEEP_TEMPS_CMD_STR = $KEEP_TEMPS_CMD_STR"
-    echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
-    echo "AWS_NET_UPLOAD = $AWS_NET_UPLOAD"
-
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
             if [ -z "$AWS_NET_UPLOAD" ]; then
@@ -199,6 +188,18 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     fi
 
     duration "parallel client runner"
+
+
+    echo "CHANNEL = $CHANNEL"
+    echo "BINDIR = $BINDIR"
+    echo "DATADIR = $DATADIR"
+    echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
+    echo "INTERACTIVE = $INTERACTIVE"
+    echo "TEMPDIR = $TEMPDIR"
+    echo "FORCE_KEEP_TEMPS = $FORCE_KEEP_TEMPS"
+    echo "KEEP_TEMPS_CMD_STR = $KEEP_TEMPS_CMD_STR"
+    echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
+    echo "AWS_NET_UPLOAD = $AWS_NET_UPLOAD"
 
     exit 42
 
