@@ -55,17 +55,17 @@ type Participant struct {
 // be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 
-	weightAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
+	var weightAsBytes [8]byte
+	binary.LittleEndian.PutUint64(weightAsBytes[:], p.Weight)
 
-	keyLifetimeBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(keyLifetimeBytes, p.PK.KeyLifetime)
+	var keyLifetimeBytes [8]byte
+	binary.LittleEndian.PutUint64(keyLifetimeBytes[:], p.PK.KeyLifetime)
 
 	publicKeyBytes := p.PK.Commitment
 
 	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes)+len(keyLifetimeBytes))
-	partCommitment = append(partCommitment, weightAsBytes...)
-	partCommitment = append(partCommitment, keyLifetimeBytes...)
+	partCommitment = append(partCommitment, weightAsBytes[:]...)
+	partCommitment = append(partCommitment, keyLifetimeBytes[:]...)
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
 	return protocol.StateProofPart, partCommitment
