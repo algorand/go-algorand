@@ -39,6 +39,9 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 }
 
 func SpeculativeBlockAsmTime(p period, v protocol.ConsensusVersion) time.Duration {
+	if p != 0 {
+		return time.Duration(0)
+	}
 	hardwait := FilterTimeout(p, v)
 	// TODO(yossi) change from default config to actual config
 	if hardwait > config.GetDefaultLocal().ProposalAssemblyTime+time.Duration(100*time.Millisecond) {

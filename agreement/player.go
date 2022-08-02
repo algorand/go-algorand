@@ -48,9 +48,15 @@ type player struct {
 	// partition recovery.
 	FastRecoveryDeadline time.Duration
 
+	// SpeculativeAssemblyDeadline contains the next timeout expected for
+	// speculative block assembly.
+	SpeculativeAssemblyDeadline time.Duration
+
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
 	Pending proposalTable
+
+	ConcensusVersion protocol.ConsensusVersion
 }
 
 func (p *player) T() stateMachineTag {
@@ -127,14 +133,15 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
+	p.SpeculativeAssemblyDeadline = 0
 	if e.Proto.Err != nil {
 		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
 		return nil
 	}
 
 	// get the best proposal we have
-	re := readLowestEvent{T: readLowestPayload, Round: p.Round}
-	re = r.dispatch(*p, re, proposalMachineRound, p.Round, 0, 0).(readLowestEvent)
+	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
+	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
 
 	// if we have its payload and its been validated already, start speculating
 	// on top of it
@@ -353,6 +360,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
 	p.Deadline = FilterTimeout(target, source.Proto)
+	p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(target, p.ConcensusVersion)
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -397,6 +405,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
+	p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(0, p.ConcensusVersion)
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:

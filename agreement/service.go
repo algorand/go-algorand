@@ -221,15 +221,14 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		s.Clock = clock
 	}
 
-	nextVersion, err := s.Ledger.ConsensusVersion(status.Round)
-	speculativeBlockAsmTime := time.Duration(0)
-	if err == nil {
-		speculativeBlockAsmTime = SpeculativeBlockAsmTime(0, nextVersion)
-	}
-
 	for {
+		status.ConcensusVersion, err = s.Ledger.ConsensusVersion(status.Round)
+		if err != nil {
+			s.Panicf("cannot read latest concensus version, round %d: %v", status.Round, err)
+		}
+
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: speculativeBlockAsmTime, CurrentRound: status.Round}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: status.SpeculativeAssemblyDeadline, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break
