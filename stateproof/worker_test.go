@@ -308,17 +308,18 @@ func TestWorkerAllSigs(t *testing.T) {
 			tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
 			require.NoError(t, err)
 
+			lastAttestedRound := basics.Round(tx.Txn.Message.LastAttestedRound)
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-			if tx.Txn.StateProofIntervalLastRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+			if lastAttestedRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.StateProofIntervalLastRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			require.Equal(t, lastAttestedRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
+			stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
 			require.NoError(t, err)
 
-			votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
+			votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 			require.NoError(t, err)
@@ -327,13 +328,13 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+			voters, err := s.VotersForStateProof(lastAttestedRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
 			verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
-			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
+			err = verif.Verify(uint64(lastAttestedRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 			require.NoError(t, err)
 			break
 		}
@@ -380,13 +381,14 @@ func TestWorkerPartialSigs(t *testing.T) {
 	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
 	require.NoError(t, err)
 
+	lastAttestedRound := basics.Round(tx.Txn.Message.LastAttestedRound)
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
-	require.Equal(t, tx.Txn.StateProofIntervalLastRound, 2*basics.Round(proto.StateProofInterval))
+	require.Equal(t, lastAttestedRound, 2*basics.Round(proto.StateProofInterval))
 
-	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLastRound)
+	stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
 	require.NoError(t, err)
 
-	votersRound := tx.Txn.StateProofIntervalLastRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
 	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 	require.NoError(t, err)
@@ -395,12 +397,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLastRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+	voters, err := s.VotersForStateProof(lastAttestedRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
 	verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
-	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLastRound), msg.Hash(), &tx.Txn.StateProof)
+	err = verif.Verify(uint64(lastAttestedRound), msg.Hash(), &tx.Txn.StateProof)
 	require.NoError(t, err)
 }
 
@@ -1240,12 +1242,6 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	msg := sigFromAddr{}
 	msgBytes := protocol.Encode(&msg)
 	msgBytes[0] = 55 // arbitrary value to fail protocol.Decode
-
-	// since the handler ignores messages for already approved
-	// state proof (and does not disconnect the peer), we need to
-	// have a fixed round number to check for disconnection
-	msg.Round = s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound +
-		basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,

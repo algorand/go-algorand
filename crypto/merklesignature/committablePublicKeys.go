@@ -72,15 +72,15 @@ func (k *committablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error)
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	verifyingRawKey := e.VerifyingKey.GetFixedLengthHashableRepresentation()
 
-	roundAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(roundAsBytes, e.Round)
+	var roundAsBytes [8]byte
+	binary.LittleEndian.PutUint64(roundAsBytes[:], e.Round)
 
-	schemeAsBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(schemeAsBytes, CryptoPrimitivesID)
+	var schemeAsBytes [2]byte
+	binary.LittleEndian.PutUint16(schemeAsBytes[:], CryptoPrimitivesID)
 
 	keyCommitment := make([]byte, 0, len(schemeAsBytes)+len(verifyingRawKey)+len(roundAsBytes))
-	keyCommitment = append(keyCommitment, schemeAsBytes...)
-	keyCommitment = append(keyCommitment, roundAsBytes...)
+	keyCommitment = append(keyCommitment, schemeAsBytes[:]...)
+	keyCommitment = append(keyCommitment, roundAsBytes[:]...)
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 
 	return protocol.KeysInMSS, keyCommitment

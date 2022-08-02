@@ -431,7 +431,6 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
-		stxn.Txn.StateProofTxnFields.StateProofIntervalLastRound = rnd
 		stxn.Txn.StateProofTxnFields.StateProof = *sp
 		stxn.Txn.StateProofTxnFields.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
