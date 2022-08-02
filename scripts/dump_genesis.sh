@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Fail if anything goes wrong
+set -e
+set -o pipefail
+
 if [ "$1" = "" ]; then
   echo "Usage: $0 genesis.json"
   exit 1
@@ -11,9 +15,9 @@ trap "rm -r $D" 0
 GENJSON="$1"
 UNAME=$(uname)
 if [[ "${UNAME}" == *"MINGW"* ]]; then
-	GOPATH1=$HOME/go
+    GOPATH1=$HOME/go
 else
-	GOPATH1=$(go env GOPATH | cut -d: -f1)
+    GOPATH1=$(go env GOPATH | cut -d: -f1)
 fi
 $GOPATH1/bin/algod -d $D -g "$GENJSON" -x >/dev/null
 LEDGERS=$D/*/ledger.*sqlite

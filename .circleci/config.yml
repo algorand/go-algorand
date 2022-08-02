@@ -15,6 +15,9 @@ parameters:
   result_path:
     type: string
     default: "/tmp/build_test_results"
+  valid_nightly_branch:
+    type: string
+    default: /hotfix\/.*/
 
 executors:
   amd64_medium:
@@ -72,7 +75,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -83,7 +86,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /hotfix\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
 
       - test:
@@ -396,6 +399,7 @@ commands:
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
+            export CI_E2E_FILENAME="${CIRCLE_BRANCH/\//-}"
             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
             export GOPATH="<< parameters.build_dir >>/go"
@@ -646,7 +650,10 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      E2E_PLATFORM: << parameters.platform >>
+      CI_PLATFORM: << parameters.platform >>
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
       - prepare_build_dir
       - prepare_go
