@@ -589,10 +589,10 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("ib:"), boxVersion, only(modeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(modeApp)},
 	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
 	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
-	{0xbc, "box_del", opBoxDel, proto("b:"), boxVersion, only(modeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(modeApp)},
 	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(modeApp)},
 	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(modeApp)},
 	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(modeApp)},

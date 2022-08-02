@@ -191,13 +191,13 @@ var opDocByName = map[string]string{
 	"itxn_field":  "set field F of the current inner transaction to A",
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 
-	"box_create":  "make a box",
-	"box_extract": "read from a box",
-	"box_replace": "write to a box",
-	"box_del":     "delete a box",
-	"box_len":     "length of a box",
-	"box_get":     "full contents of a box",
-	"box_put":     "write contents of box",
+	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
+	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+	"box_replace": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+	"box_del":     "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
+	"box_len":     "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
+	"box_get":     "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+	"box_put":     "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist.",
 }
 
 // OpDoc returns a description of the op
@@ -325,6 +325,10 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref":            "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+
+	"box_create": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
+	"box_get":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+	"box_put":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
 }
 
 // OpDocExtra returns extra documentation text about an op
