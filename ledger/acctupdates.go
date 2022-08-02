@@ -836,7 +836,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
-	panic("not implemented")
+	return aul.au.lookupKv(rnd, key, false /* don't sync */)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
