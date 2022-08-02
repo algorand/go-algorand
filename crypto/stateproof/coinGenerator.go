@@ -42,18 +42,18 @@ type coinChoiceSeed struct {
 // msgpack encoding since it may result in a variable length byte slice.
 // Alternatively, we serialize the fields in the structure in a specific format.
 func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
-	signedWtAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(signedWtAsBytes, cc.signedWeight)
+	var signedWtAsBytes [8]byte
+	binary.LittleEndian.PutUint64(signedWtAsBytes[:], cc.signedWeight)
 
-	lnProvenWtAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeight)
+	var lnProvenWtAsBytes [8]byte
+	binary.LittleEndian.PutUint64(lnProvenWtAsBytes[:], cc.lnProvenWeight)
 
 	coinChoiceBytes := make([]byte, 0, 1+len(cc.partCommitment)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(signedWtAsBytes)+len(cc.data))
 	coinChoiceBytes = append(coinChoiceBytes, cc.version)
 	coinChoiceBytes = append(coinChoiceBytes, cc.partCommitment...)
-	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes...)
+	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes[:]...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.sigCommitment...)
-	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
+	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes[:]...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.data[:]...)
 
 	return protocol.StateProofCoin, coinChoiceBytes
