@@ -471,6 +471,14 @@ def main():
     goal_network_stop(netdir, env, normal_cleanup=True)
     if not args.keep_temps:
         goal_network_delete(netdir, normal_cleanup=True)
+    else:
+        summary = {
+            "args": args,
+            "errors": rs.errors,
+            "statuses": rs.statuses,
+        }
+        with open(os.path.join(netdir, "summary.json"), "w") as f:
+            f.write(json.dumps(summary, indent=4, default=str))
 
     return retcode
 
