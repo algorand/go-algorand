@@ -1265,6 +1265,10 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 	return validatedBlock{vb: lvb}, nil
 }
 
+func (node *AlgorandFullNode) OnNewSpeculativeBlock(blk bookkeeping.Block) {
+	node.transactionPool.OnNewSpeculativeBlock(blk)
+}
+
 // getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online
 func getOfflineClosedStatus(acctData basics.OnlineAccountData) int {
 	rval := 0
