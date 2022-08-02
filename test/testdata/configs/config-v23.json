@@ -50,6 +50,7 @@
     "EnableRuntimeMetrics": false,
     "EnableTopAccountsReporting": false,
     "EnableVerbosedTransactionSyncLogging": false,
+    "EnableTransactionSimulator": true,
     "EndpointAddress": "127.0.0.1:0",
     "FallbackDNSResolverAddress": "",
     "ForceFetchTransactions": false,

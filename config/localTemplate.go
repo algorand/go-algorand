@@ -452,6 +452,9 @@ type Local struct {
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
 	MaxAcctLookback uint64 `version[23]:"8"`
+
+	// EnableTransactionSimulator enables the simulation API endpoint.
+	EnableTransactionSimulator bool `version[23]:"true"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

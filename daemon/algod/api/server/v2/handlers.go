@@ -801,8 +801,8 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
-	if !v2.Node.Config().EnableDeveloperAPI {
-		return ctx.String(http.StatusNotFound, "/transactions/simulate was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	if !v2.Node.Config().EnableTransactionSimulator {
+		return ctx.String(http.StatusNotFound, "/transactions/simulate was not enabled in the configuration file by setting EnableTransactionSimulator to true")
 	}
 
 	txgroup, err := v2.checkNodeAndDecodeTxGroup(ctx)

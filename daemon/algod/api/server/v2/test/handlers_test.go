@@ -414,14 +414,14 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableDeveloperAPI bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	mockNode.config.EnableTransactionSimulator = enableTransactionSimulator
 	handler = v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -456,8 +456,8 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableDeveloperAPI bool) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableDeveloperAPI)
+func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
 	defer releasefunc()
 	err := handler.SimulateTransaction(c)
 	require.NoError(t, err)

@@ -70,6 +70,7 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
+	EnableTransactionSimulator:                 true,
 	EnableVerbosedTransactionSyncLogging:       false,
 	EndpointAddress:                            "127.0.0.1:0",
 	FallbackDNSResolverAddress:                 "",
