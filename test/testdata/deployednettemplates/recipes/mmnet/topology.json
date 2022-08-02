@@ -89,35 +89,83 @@
       "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
-      "Name": "N3",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N4",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N5",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N6",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N7",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N8",
-      "Template": "AWS-US-EAST-1-m5d.4xl"
-    },
-    {
       "Name": "NPN1",
       "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
       "Name": "NPN2",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN3",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN4",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN5",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN6",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN7",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN8",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN9",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN10",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN11",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN12",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN13",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN14",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN15",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN16",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN17",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN18",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN19",
+      "Template": "AWS-US-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN20",
       "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
@@ -201,31 +249,91 @@
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "N9",
+      "Name": "N3",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "N10",
+      "Name": "N4",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "N11",
+      "Name": "NPN21",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "N12",
+      "Name": "NPN22",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "N13",
+      "Name": "NPN23",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN3",
+      "Name": "NPN24",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN4",
+      "Name": "NPN25",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN26",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN27",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN28",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN29",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN30",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN31",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN32",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN33",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN34",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN35",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN36",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN37",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN38",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN39",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN40",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -269,31 +377,91 @@
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "N14",
+      "Name": "N5",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "N15",
+      "Name": "N6",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "N16",
+      "Name": "NPN41",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "N17",
+      "Name": "NPN42",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "N18",
+      "Name": "NPN43",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "NPN5",
+      "Name": "NPN44",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "NPN6",
+      "Name": "NPN45",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN46",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN47",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN48",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN49",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN50",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN51",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN52",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN53",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN54",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN55",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN56",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN57",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN58",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN59",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN60",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
@@ -321,15 +489,27 @@
       "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N19",
+      "Name": "N7",
       "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "NPN7",
+      "Name": "NPN61",
       "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "NPN8",
+      "Name": "NPN62",
+      "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN63",
+      "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN64",
+      "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN65",
       "Template": "AWS-CA-CENTRAL-1-m5d.4xl"
     },
     {
@@ -373,91 +553,51 @@
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N20",
+      "Name": "N8",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N21",
+      "Name": "N9",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N22",
+      "Name": "NPN66",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N23",
+      "Name": "NPN67",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N24",
+      "Name": "NPN68",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N25",
+      "Name": "NPN69",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N26",
+      "Name": "NPN70",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N27",
+      "Name": "NPN71",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N28",
+      "Name": "NPN72",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N29",
+      "Name": "NPN73",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N30",
+      "Name": "NPN74",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
-      "Name": "N31",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N32",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N33",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N34",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N35",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N36",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N37",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N38",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "N39",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN9",
-      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN10",
+      "Name": "NPN75",
       "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
     },
     {
@@ -517,15 +657,39 @@
       "Template": "AWS-EU-WEST-1-m5d.4xl"
     },
     {
-      "Name": "N40",
+      "Name": "N10",
       "Template": "AWS-EU-WEST-1-m5d.4xl"
     },
     {
-      "Name": "NPN11",
+      "Name": "NPN76",
       "Template": "AWS-EU-WEST-1-m5d.4xl"
     },
     {
-      "Name": "NPN12",
+      "Name": "NPN77",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN78",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN79",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN80",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN81",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN82",
+      "Template": "AWS-EU-WEST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN83",
       "Template": "AWS-EU-WEST-1-m5d.4xl"
     },
     {
@@ -537,15 +701,31 @@
       "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
-      "Name": "N41",
+      "Name": "N11",
       "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN13",
+      "Name": "NPN84",
       "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN14",
+      "Name": "NPN85",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN86",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN87",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN88",
+      "Template": "AWS-EU-NORTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN89",
       "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
@@ -565,15 +745,23 @@
       "Template": "AWS-EU-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "N42",
+      "Name": "N12",
       "Template": "AWS-EU-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN15",
+      "Name": "NPN90",
       "Template": "AWS-EU-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN16",
+      "Name": "NPN91",
+      "Template": "AWS-EU-SOUTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN92",
+      "Template": "AWS-EU-SOUTH-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN93",
       "Template": "AWS-EU-SOUTH-1-m5d.4xl"
     },
     {
@@ -597,15 +785,51 @@
       "Template": "AWS-AP-EAST-1-m5d.4xl"
     },
     {
-      "Name": "N43",
+      "Name": "N13",
       "Template": "AWS-AP-EAST-1-m5d.4xl"
     },
     {
-      "Name": "NPN17",
+      "Name": "N14",
       "Template": "AWS-AP-EAST-1-m5d.4xl"
     },
     {
-      "Name": "NPN18",
+      "Name": "NPN94",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN95",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN96",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN97",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN98",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN99",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN100",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN101",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN102",
+      "Template": "AWS-AP-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN103",
       "Template": "AWS-AP-EAST-1-m5d.4xl"
     },
     {
@@ -621,15 +845,15 @@
       "Template": "AWS-AP-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "N44",
+      "Name": "N15",
       "Template": "AWS-AP-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN19",
+      "Name": "NPN104",
       "Template": "AWS-AP-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN20",
+      "Name": "NPN105",
       "Template": "AWS-AP-SOUTH-1-m5d.4xl"
     },
     {
@@ -681,27 +905,15 @@
       "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
-      "Name": "N45",
+      "Name": "N16",
       "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
-      "Name": "N46",
+      "Name": "NPN106",
       "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
-      "Name": "N47",
-      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
-    },
-    {
-      "Name": "N48",
-      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN21",
-      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN22",
+      "Name": "NPN107",
       "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
     },
     {
@@ -721,19 +933,23 @@
       "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "N49",
+      "Name": "N17",
       "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "N50",
+      "Name": "NPN108",
       "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN23",
+      "Name": "NPN109",
       "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN24",
+      "Name": "NPN110",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN111",
       "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
     },
     {
@@ -741,15 +957,15 @@
       "Template": "AWS-AP-NORTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "N51",
+      "Name": "N18",
       "Template": "AWS-AP-NORTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN25",
+      "Name": "NPN112",
       "Template": "AWS-AP-NORTHEAST-2-m5d.4xl"
     },
     {
-      "Name": "NPN26",
+      "Name": "NPN113",
       "Template": "AWS-AP-NORTHEAST-2-m5d.4xl"
     },
     {
@@ -813,51 +1029,55 @@
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N52",
+      "Name": "N19",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N53",
+      "Name": "NPN114",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N54",
+      "Name": "NPN115",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N55",
+      "Name": "NPN116",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N56",
+      "Name": "NPN117",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N57",
+      "Name": "NPN118",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N58",
+      "Name": "NPN119",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N59",
+      "Name": "NPN120",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N60",
+      "Name": "NPN121",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "N61",
+      "Name": "NPN122",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "NPN27",
+      "Name": "NPN123",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
-      "Name": "NPN28",
+      "Name": "NPN124",
+      "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
+    },
+    {
+      "Name": "NPN125",
       "Template": "AWS-AP-NORTHEAST-3-m5d.4xl"
     },
     {
@@ -869,15 +1089,15 @@
       "Template": "AWS-ME-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "N62",
+      "Name": "N20",
       "Template": "AWS-ME-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN29",
+      "Name": "NPN126",
       "Template": "AWS-ME-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "NPN30",
+      "Name": "NPN127",
       "Template": "AWS-ME-SOUTH-1-m5d.4xl"
     },
     {
@@ -897,19 +1117,11 @@
       "Template": "AWS-AF-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "N63",
+      "Name": "N21",
       "Template": "AWS-AF-SOUTH-1-m5d.4xl"
     },
     {
-      "Name": "N64",
-      "Template": "AWS-AF-SOUTH-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN31",
-      "Template": "AWS-AF-SOUTH-1-m5d.4xl"
-    },
-    {
-      "Name": "NPN32",
+      "Name": "NPN128",
       "Template": "AWS-AF-SOUTH-1-m5d.4xl"
     },
     {
@@ -929,15 +1141,23 @@
       "Template": "AWS-SA-EAST-1-m5d.4xl"
     },
     {
-      "Name": "N65",
+      "Name": "N22",
       "Template": "AWS-SA-EAST-1-m5d.4xl"
     },
     {
-      "Name": "NPN33",
+      "Name": "NPN129",
       "Template": "AWS-SA-EAST-1-m5d.4xl"
     },
     {
-      "Name": "NPN34",
+      "Name": "NPN130",
+      "Template": "AWS-SA-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN131",
+      "Template": "AWS-SA-EAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN132",
       "Template": "AWS-SA-EAST-1-m5d.4xl"
     }
   ]

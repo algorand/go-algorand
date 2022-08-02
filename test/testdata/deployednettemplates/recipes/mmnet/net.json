@@ -3105,2742 +3105,6 @@
 			]
 		},
 		{
-			"Name": "N17",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node17",
-					"Wallets": [
-						{
-							"Name": "Wallet17",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N18",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node18",
-					"Wallets": [
-						{
-							"Name": "Wallet18",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N19",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node19",
-					"Wallets": [
-						{
-							"Name": "Wallet19",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N20",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node20",
-					"Wallets": [
-						{
-							"Name": "Wallet20",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N21",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node21",
-					"Wallets": [
-						{
-							"Name": "Wallet21",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N22",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node22",
-					"Wallets": [
-						{
-							"Name": "Wallet22",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N23",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node23",
-					"Wallets": [
-						{
-							"Name": "Wallet23",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N24",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node24",
-					"Wallets": [
-						{
-							"Name": "Wallet24",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N25",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node25",
-					"Wallets": [
-						{
-							"Name": "Wallet25",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N26",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node26",
-					"Wallets": [
-						{
-							"Name": "Wallet26",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N27",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node27",
-					"Wallets": [
-						{
-							"Name": "Wallet27",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N28",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node28",
-					"Wallets": [
-						{
-							"Name": "Wallet28",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N29",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node29",
-					"Wallets": [
-						{
-							"Name": "Wallet29",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N30",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node30",
-					"Wallets": [
-						{
-							"Name": "Wallet30",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N31",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node31",
-					"Wallets": [
-						{
-							"Name": "Wallet31",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N32",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node32",
-					"Wallets": [
-						{
-							"Name": "Wallet32",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N33",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node33",
-					"Wallets": [
-						{
-							"Name": "Wallet33",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N34",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node34",
-					"Wallets": [
-						{
-							"Name": "Wallet34",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N35",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node35",
-					"Wallets": [
-						{
-							"Name": "Wallet35",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N36",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node36",
-					"Wallets": [
-						{
-							"Name": "Wallet36",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N37",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node37",
-					"Wallets": [
-						{
-							"Name": "Wallet37",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N38",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node38",
-					"Wallets": [
-						{
-							"Name": "Wallet38",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N39",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node39",
-					"Wallets": [
-						{
-							"Name": "Wallet39",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N40",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node40",
-					"Wallets": [
-						{
-							"Name": "Wallet40",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N41",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node41",
-					"Wallets": [
-						{
-							"Name": "Wallet41",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N42",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node42",
-					"Wallets": [
-						{
-							"Name": "Wallet42",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N43",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node43",
-					"Wallets": [
-						{
-							"Name": "Wallet43",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N44",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node44",
-					"Wallets": [
-						{
-							"Name": "Wallet44",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N45",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node45",
-					"Wallets": [
-						{
-							"Name": "Wallet45",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N46",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node46",
-					"Wallets": [
-						{
-							"Name": "Wallet46",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N47",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node47",
-					"Wallets": [
-						{
-							"Name": "Wallet47",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N48",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node48",
-					"Wallets": [
-						{
-							"Name": "Wallet48",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N49",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node49",
-					"Wallets": [
-						{
-							"Name": "Wallet49",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N50",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node50",
-					"Wallets": [
-						{
-							"Name": "Wallet50",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N51",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node51",
-					"Wallets": [
-						{
-							"Name": "Wallet51",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N52",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node52",
-					"Wallets": [
-						{
-							"Name": "Wallet52",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N53",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node53",
-					"Wallets": [
-						{
-							"Name": "Wallet53",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N54",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node54",
-					"Wallets": [
-						{
-							"Name": "Wallet54",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N55",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node55",
-					"Wallets": [
-						{
-							"Name": "Wallet55",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N56",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node56",
-					"Wallets": [
-						{
-							"Name": "Wallet56",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N57",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node57",
-					"Wallets": [
-						{
-							"Name": "Wallet57",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N58",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node58",
-					"Wallets": [
-						{
-							"Name": "Wallet58",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N59",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node59",
-					"Wallets": [
-						{
-							"Name": "Wallet59",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N60",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node60",
-					"Wallets": [
-						{
-							"Name": "Wallet60",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N61",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node61",
-					"Wallets": [
-						{
-							"Name": "Wallet61",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N62",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node62",
-					"Wallets": [
-						{
-							"Name": "Wallet62",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N63",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node63",
-					"Wallets": [
-						{
-							"Name": "Wallet63",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N64",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node64",
-					"Wallets": [
-						{
-							"Name": "Wallet64",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N65",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node65",
-					"Wallets": [
-						{
-							"Name": "Wallet65",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N66",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node66",
-					"Wallets": [
-						{
-							"Name": "Wallet66",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N67",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node67",
-					"Wallets": [
-						{
-							"Name": "Wallet67",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N68",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node68",
-					"Wallets": [
-						{
-							"Name": "Wallet68",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N69",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node69",
-					"Wallets": [
-						{
-							"Name": "Wallet69",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N70",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node70",
-					"Wallets": [
-						{
-							"Name": "Wallet70",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N71",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node71",
-					"Wallets": [
-						{
-							"Name": "Wallet71",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N72",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node72",
-					"Wallets": [
-						{
-							"Name": "Wallet72",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N73",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node73",
-					"Wallets": [
-						{
-							"Name": "Wallet73",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N74",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node74",
-					"Wallets": [
-						{
-							"Name": "Wallet74",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N75",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node75",
-					"Wallets": [
-						{
-							"Name": "Wallet75",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N76",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node76",
-					"Wallets": [
-						{
-							"Name": "Wallet76",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N77",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node77",
-					"Wallets": [
-						{
-							"Name": "Wallet77",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N78",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node78",
-					"Wallets": [
-						{
-							"Name": "Wallet78",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N79",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node79",
-					"Wallets": [
-						{
-							"Name": "Wallet79",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N80",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node80",
-					"Wallets": [
-						{
-							"Name": "Wallet80",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N81",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node81",
-					"Wallets": [
-						{
-							"Name": "Wallet81",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N82",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node82",
-					"Wallets": [
-						{
-							"Name": "Wallet82",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N83",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node83",
-					"Wallets": [
-						{
-							"Name": "Wallet83",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N84",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node84",
-					"Wallets": [
-						{
-							"Name": "Wallet84",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N85",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node85",
-					"Wallets": [
-						{
-							"Name": "Wallet85",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N86",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node86",
-					"Wallets": [
-						{
-							"Name": "Wallet86",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N87",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node87",
-					"Wallets": [
-						{
-							"Name": "Wallet87",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N88",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node88",
-					"Wallets": [
-						{
-							"Name": "Wallet88",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N89",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node89",
-					"Wallets": [
-						{
-							"Name": "Wallet89",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N90",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node90",
-					"Wallets": [
-						{
-							"Name": "Wallet90",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N91",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node91",
-					"Wallets": [
-						{
-							"Name": "Wallet91",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N92",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node92",
-					"Wallets": [
-						{
-							"Name": "Wallet92",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N93",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node93",
-					"Wallets": [
-						{
-							"Name": "Wallet93",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N94",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node94",
-					"Wallets": [
-						{
-							"Name": "Wallet94",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N95",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node95",
-					"Wallets": [
-						{
-							"Name": "Wallet95",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N96",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node96",
-					"Wallets": [
-						{
-							"Name": "Wallet96",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N97",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node97",
-					"Wallets": [
-						{
-							"Name": "Wallet97",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N98",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node98",
-					"Wallets": [
-						{
-							"Name": "Wallet98",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N99",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node99",
-					"Wallets": [
-						{
-							"Name": "Wallet99",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N100",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node100",
-					"Wallets": [
-						{
-							"Name": "Wallet100",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N101",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node101",
-					"Wallets": [
-						{
-							"Name": "Wallet101",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N102",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node102",
-					"Wallets": [
-						{
-							"Name": "Wallet102",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N103",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node103",
-					"Wallets": [
-						{
-							"Name": "Wallet103",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N104",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node104",
-					"Wallets": [
-						{
-							"Name": "Wallet104",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N105",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node105",
-					"Wallets": [
-						{
-							"Name": "Wallet105",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N106",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node106",
-					"Wallets": [
-						{
-							"Name": "Wallet106",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N107",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node107",
-					"Wallets": [
-						{
-							"Name": "Wallet107",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N108",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node108",
-					"Wallets": [
-						{
-							"Name": "Wallet108",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N109",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node109",
-					"Wallets": [
-						{
-							"Name": "Wallet109",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N110",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node110",
-					"Wallets": [
-						{
-							"Name": "Wallet110",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N111",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node111",
-					"Wallets": [
-						{
-							"Name": "Wallet111",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N112",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node112",
-					"Wallets": [
-						{
-							"Name": "Wallet112",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N113",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node113",
-					"Wallets": [
-						{
-							"Name": "Wallet113",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N114",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node114",
-					"Wallets": [
-						{
-							"Name": "Wallet114",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N115",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node115",
-					"Wallets": [
-						{
-							"Name": "Wallet115",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N116",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node116",
-					"Wallets": [
-						{
-							"Name": "Wallet116",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N117",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node117",
-					"Wallets": [
-						{
-							"Name": "Wallet117",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N118",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node118",
-					"Wallets": [
-						{
-							"Name": "Wallet118",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N119",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node119",
-					"Wallets": [
-						{
-							"Name": "Wallet119",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N120",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node120",
-					"Wallets": [
-						{
-							"Name": "Wallet120",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N121",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node121",
-					"Wallets": [
-						{
-							"Name": "Wallet121",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N122",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node122",
-					"Wallets": [
-						{
-							"Name": "Wallet122",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N123",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node123",
-					"Wallets": [
-						{
-							"Name": "Wallet123",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N124",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node124",
-					"Wallets": [
-						{
-							"Name": "Wallet124",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N125",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node125",
-					"Wallets": [
-						{
-							"Name": "Wallet125",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N126",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node126",
-					"Wallets": [
-						{
-							"Name": "Wallet126",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N127",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node127",
-					"Wallets": [
-						{
-							"Name": "Wallet127",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N128",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node128",
-					"Wallets": [
-						{
-							"Name": "Wallet128",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N129",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node129",
-					"Wallets": [
-						{
-							"Name": "Wallet129",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
-			"Name": "N130",
-			"Group": "",
-			"Nodes": [
-				{
-					"Name": "node130",
-					"Wallets": [
-						{
-							"Name": "Wallet130",
-							"ParticipationOnly": false
-						}
-					],
-					"APIEndpoint": "{{APIEndpoint}}",
-					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
-					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
-					"MetricsURI": "{{MetricsURI}}",
-					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-				}
-			]
-		},
-		{
 			"Name": "NPN1",
 			"Group": "",
 			"Nodes": [
@@ -5848,7 +3112,7 @@
 					"Name": "nonParticipatingNode1",
 					"Wallets": [
 						{
-							"Name": "Wallet131",
+							"Name": "Wallet17",
 							"ParticipationOnly": false
 						}
 					],
@@ -5870,7 +3134,7 @@
 					"Name": "nonParticipatingNode2",
 					"Wallets": [
 						{
-							"Name": "Wallet132",
+							"Name": "Wallet18",
 							"ParticipationOnly": false
 						}
 					],
@@ -5892,7 +3156,7 @@
 					"Name": "nonParticipatingNode3",
 					"Wallets": [
 						{
-							"Name": "Wallet133",
+							"Name": "Wallet19",
 							"ParticipationOnly": false
 						}
 					],
@@ -5914,7 +3178,7 @@
 					"Name": "nonParticipatingNode4",
 					"Wallets": [
 						{
-							"Name": "Wallet134",
+							"Name": "Wallet20",
 							"ParticipationOnly": false
 						}
 					],
@@ -5936,7 +3200,7 @@
 					"Name": "nonParticipatingNode5",
 					"Wallets": [
 						{
-							"Name": "Wallet135",
+							"Name": "Wallet21",
 							"ParticipationOnly": false
 						}
 					],
@@ -5958,7 +3222,7 @@
 					"Name": "nonParticipatingNode6",
 					"Wallets": [
 						{
-							"Name": "Wallet136",
+							"Name": "Wallet22",
 							"ParticipationOnly": false
 						}
 					],
@@ -5980,7 +3244,7 @@
 					"Name": "nonParticipatingNode7",
 					"Wallets": [
 						{
-							"Name": "Wallet137",
+							"Name": "Wallet23",
 							"ParticipationOnly": false
 						}
 					],
@@ -6002,7 +3266,7 @@
 					"Name": "nonParticipatingNode8",
 					"Wallets": [
 						{
-							"Name": "Wallet138",
+							"Name": "Wallet24",
 							"ParticipationOnly": false
 						}
 					],
@@ -6024,7 +3288,7 @@
 					"Name": "nonParticipatingNode9",
 					"Wallets": [
 						{
-							"Name": "Wallet139",
+							"Name": "Wallet25",
 							"ParticipationOnly": false
 						}
 					],
@@ -6046,7 +3310,7 @@
 					"Name": "nonParticipatingNode10",
 					"Wallets": [
 						{
-							"Name": "Wallet140",
+							"Name": "Wallet26",
 							"ParticipationOnly": false
 						}
 					],
@@ -6068,7 +3332,7 @@
 					"Name": "nonParticipatingNode11",
 					"Wallets": [
 						{
-							"Name": "Wallet141",
+							"Name": "Wallet27",
 							"ParticipationOnly": false
 						}
 					],
@@ -6090,7 +3354,7 @@
 					"Name": "nonParticipatingNode12",
 					"Wallets": [
 						{
-							"Name": "Wallet142",
+							"Name": "Wallet28",
 							"ParticipationOnly": false
 						}
 					],
@@ -6112,7 +3376,7 @@
 					"Name": "nonParticipatingNode13",
 					"Wallets": [
 						{
-							"Name": "Wallet143",
+							"Name": "Wallet29",
 							"ParticipationOnly": false
 						}
 					],
@@ -6134,7 +3398,7 @@
 					"Name": "nonParticipatingNode14",
 					"Wallets": [
 						{
-							"Name": "Wallet144",
+							"Name": "Wallet30",
 							"ParticipationOnly": false
 						}
 					],
@@ -6156,7 +3420,2537 @@
 					"Name": "nonParticipatingNode15",
 					"Wallets": [
 						{
+							"Name": "Wallet31",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN16",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode16",
+					"Wallets": [
+						{
+							"Name": "Wallet32",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN17",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode17",
+					"Wallets": [
+						{
+							"Name": "Wallet33",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN18",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode18",
+					"Wallets": [
+						{
+							"Name": "Wallet34",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN19",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode19",
+					"Wallets": [
+						{
+							"Name": "Wallet35",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN20",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode20",
+					"Wallets": [
+						{
+							"Name": "Wallet36",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN21",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode21",
+					"Wallets": [
+						{
+							"Name": "Wallet37",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN22",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode22",
+					"Wallets": [
+						{
+							"Name": "Wallet38",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN23",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode23",
+					"Wallets": [
+						{
+							"Name": "Wallet39",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN24",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode24",
+					"Wallets": [
+						{
+							"Name": "Wallet40",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN25",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode25",
+					"Wallets": [
+						{
+							"Name": "Wallet41",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN26",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode26",
+					"Wallets": [
+						{
+							"Name": "Wallet42",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN27",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode27",
+					"Wallets": [
+						{
+							"Name": "Wallet43",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN28",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode28",
+					"Wallets": [
+						{
+							"Name": "Wallet44",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN29",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode29",
+					"Wallets": [
+						{
+							"Name": "Wallet45",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN30",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode30",
+					"Wallets": [
+						{
+							"Name": "Wallet46",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN31",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode31",
+					"Wallets": [
+						{
+							"Name": "Wallet47",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN32",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode32",
+					"Wallets": [
+						{
+							"Name": "Wallet48",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN33",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode33",
+					"Wallets": [
+						{
+							"Name": "Wallet49",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN34",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode34",
+					"Wallets": [
+						{
+							"Name": "Wallet50",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN35",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode35",
+					"Wallets": [
+						{
+							"Name": "Wallet51",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN36",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode36",
+					"Wallets": [
+						{
+							"Name": "Wallet52",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN37",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode37",
+					"Wallets": [
+						{
+							"Name": "Wallet53",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN38",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode38",
+					"Wallets": [
+						{
+							"Name": "Wallet54",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN39",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode39",
+					"Wallets": [
+						{
+							"Name": "Wallet55",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN40",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode40",
+					"Wallets": [
+						{
+							"Name": "Wallet56",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN41",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode41",
+					"Wallets": [
+						{
+							"Name": "Wallet57",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN42",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode42",
+					"Wallets": [
+						{
+							"Name": "Wallet58",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN43",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode43",
+					"Wallets": [
+						{
+							"Name": "Wallet59",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN44",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode44",
+					"Wallets": [
+						{
+							"Name": "Wallet60",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN45",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode45",
+					"Wallets": [
+						{
+							"Name": "Wallet61",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN46",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode46",
+					"Wallets": [
+						{
+							"Name": "Wallet62",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN47",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode47",
+					"Wallets": [
+						{
+							"Name": "Wallet63",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN48",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode48",
+					"Wallets": [
+						{
+							"Name": "Wallet64",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN49",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode49",
+					"Wallets": [
+						{
+							"Name": "Wallet65",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN50",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode50",
+					"Wallets": [
+						{
+							"Name": "Wallet66",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN51",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode51",
+					"Wallets": [
+						{
+							"Name": "Wallet67",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN52",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode52",
+					"Wallets": [
+						{
+							"Name": "Wallet68",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN53",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode53",
+					"Wallets": [
+						{
+							"Name": "Wallet69",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN54",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode54",
+					"Wallets": [
+						{
+							"Name": "Wallet70",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN55",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode55",
+					"Wallets": [
+						{
+							"Name": "Wallet71",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN56",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode56",
+					"Wallets": [
+						{
+							"Name": "Wallet72",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN57",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode57",
+					"Wallets": [
+						{
+							"Name": "Wallet73",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN58",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode58",
+					"Wallets": [
+						{
+							"Name": "Wallet74",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN59",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode59",
+					"Wallets": [
+						{
+							"Name": "Wallet75",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN60",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode60",
+					"Wallets": [
+						{
+							"Name": "Wallet76",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN61",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode61",
+					"Wallets": [
+						{
+							"Name": "Wallet77",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN62",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode62",
+					"Wallets": [
+						{
+							"Name": "Wallet78",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN63",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode63",
+					"Wallets": [
+						{
+							"Name": "Wallet79",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN64",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode64",
+					"Wallets": [
+						{
+							"Name": "Wallet80",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN65",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode65",
+					"Wallets": [
+						{
+							"Name": "Wallet81",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN66",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode66",
+					"Wallets": [
+						{
+							"Name": "Wallet82",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN67",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode67",
+					"Wallets": [
+						{
+							"Name": "Wallet83",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN68",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode68",
+					"Wallets": [
+						{
+							"Name": "Wallet84",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN69",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode69",
+					"Wallets": [
+						{
+							"Name": "Wallet85",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN70",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode70",
+					"Wallets": [
+						{
+							"Name": "Wallet86",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN71",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode71",
+					"Wallets": [
+						{
+							"Name": "Wallet87",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN72",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode72",
+					"Wallets": [
+						{
+							"Name": "Wallet88",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN73",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode73",
+					"Wallets": [
+						{
+							"Name": "Wallet89",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN74",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode74",
+					"Wallets": [
+						{
+							"Name": "Wallet90",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN75",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode75",
+					"Wallets": [
+						{
+							"Name": "Wallet91",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN76",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode76",
+					"Wallets": [
+						{
+							"Name": "Wallet92",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN77",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode77",
+					"Wallets": [
+						{
+							"Name": "Wallet93",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN78",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode78",
+					"Wallets": [
+						{
+							"Name": "Wallet94",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN79",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode79",
+					"Wallets": [
+						{
+							"Name": "Wallet95",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN80",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode80",
+					"Wallets": [
+						{
+							"Name": "Wallet96",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN81",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode81",
+					"Wallets": [
+						{
+							"Name": "Wallet97",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN82",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode82",
+					"Wallets": [
+						{
+							"Name": "Wallet98",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN83",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode83",
+					"Wallets": [
+						{
+							"Name": "Wallet99",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN84",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode84",
+					"Wallets": [
+						{
+							"Name": "Wallet100",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN85",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode85",
+					"Wallets": [
+						{
+							"Name": "Wallet101",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN86",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode86",
+					"Wallets": [
+						{
+							"Name": "Wallet102",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN87",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode87",
+					"Wallets": [
+						{
+							"Name": "Wallet103",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN88",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode88",
+					"Wallets": [
+						{
+							"Name": "Wallet104",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN89",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode89",
+					"Wallets": [
+						{
+							"Name": "Wallet105",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN90",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode90",
+					"Wallets": [
+						{
+							"Name": "Wallet106",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN91",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode91",
+					"Wallets": [
+						{
+							"Name": "Wallet107",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN92",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode92",
+					"Wallets": [
+						{
+							"Name": "Wallet108",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN93",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode93",
+					"Wallets": [
+						{
+							"Name": "Wallet109",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN94",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode94",
+					"Wallets": [
+						{
+							"Name": "Wallet110",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN95",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode95",
+					"Wallets": [
+						{
+							"Name": "Wallet111",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN96",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode96",
+					"Wallets": [
+						{
+							"Name": "Wallet112",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN97",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode97",
+					"Wallets": [
+						{
+							"Name": "Wallet113",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN98",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode98",
+					"Wallets": [
+						{
+							"Name": "Wallet114",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN99",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode99",
+					"Wallets": [
+						{
+							"Name": "Wallet115",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN100",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode100",
+					"Wallets": [
+						{
+							"Name": "Wallet116",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN101",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode101",
+					"Wallets": [
+						{
+							"Name": "Wallet117",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN102",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode102",
+					"Wallets": [
+						{
+							"Name": "Wallet118",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN103",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode103",
+					"Wallets": [
+						{
+							"Name": "Wallet119",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN104",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode104",
+					"Wallets": [
+						{
+							"Name": "Wallet120",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN105",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode105",
+					"Wallets": [
+						{
+							"Name": "Wallet121",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN106",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode106",
+					"Wallets": [
+						{
+							"Name": "Wallet122",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN107",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode107",
+					"Wallets": [
+						{
+							"Name": "Wallet123",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN108",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode108",
+					"Wallets": [
+						{
+							"Name": "Wallet124",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN109",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode109",
+					"Wallets": [
+						{
+							"Name": "Wallet125",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN110",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode110",
+					"Wallets": [
+						{
+							"Name": "Wallet126",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN111",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode111",
+					"Wallets": [
+						{
+							"Name": "Wallet127",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN112",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode112",
+					"Wallets": [
+						{
+							"Name": "Wallet128",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN113",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode113",
+					"Wallets": [
+						{
+							"Name": "Wallet129",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN114",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode114",
+					"Wallets": [
+						{
+							"Name": "Wallet130",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN115",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode115",
+					"Wallets": [
+						{
+							"Name": "Wallet131",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN116",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode116",
+					"Wallets": [
+						{
+							"Name": "Wallet132",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN117",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode117",
+					"Wallets": [
+						{
+							"Name": "Wallet133",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN118",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode118",
+					"Wallets": [
+						{
+							"Name": "Wallet134",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN119",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode119",
+					"Wallets": [
+						{
+							"Name": "Wallet135",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN120",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode120",
+					"Wallets": [
+						{
+							"Name": "Wallet136",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN121",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode121",
+					"Wallets": [
+						{
+							"Name": "Wallet137",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN122",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode122",
+					"Wallets": [
+						{
+							"Name": "Wallet138",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN123",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode123",
+					"Wallets": [
+						{
+							"Name": "Wallet139",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN124",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode124",
+					"Wallets": [
+						{
+							"Name": "Wallet140",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN125",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode125",
+					"Wallets": [
+						{
+							"Name": "Wallet141",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN126",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode126",
+					"Wallets": [
+						{
+							"Name": "Wallet142",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN127",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode127",
+					"Wallets": [
+						{
+							"Name": "Wallet143",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN128",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode128",
+					"Wallets": [
+						{
+							"Name": "Wallet144",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN129",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode129",
+					"Wallets": [
+						{
 							"Name": "Wallet145",
+							"ParticipationOnly": false
+						}
+					],
+					"APIEndpoint": "{{APIEndpoint}}",
+					"APIToken": "{{APIToken}}",
+					"EnableTelemetry": false,
+					"EnableMetrics": false,
+					"EnableService": false,
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+				}
+			]
+		},
+		{
+			"Name": "NPN130",
+			"Group": "",
+			"Nodes": [
+				{
+					"Name": "nonParticipatingNode130",
+					"Wallets": [
+						{
+							"Name": "Wallet146",
 							"ParticipationOnly": false
 						}
 					],
