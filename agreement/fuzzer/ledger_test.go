@@ -112,6 +112,8 @@ func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBloc
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
+func (f testBlockFactory) OnNewSpeculativeBlock(bookkeeping.Block) {}
+
 type testLedgerSyncFunc func(l *testLedger, r basics.Round, c agreement.Certificate) bool
 
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.

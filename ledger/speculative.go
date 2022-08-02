@@ -86,30 +86,36 @@ type validatedBlockAsLFE struct {
 	vb *ledgercore.ValidatedBlock
 }
 
-// makedBlockAsLFE constructs a new BlockAsLFE from a Block.
-func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, ledgercore.StateDelta, error) {
+// makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a ValidatedBlock.
+func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
 	latestRound := l.Latest()
-	if blk.Round().SubSaturate(1) != latestRound {
-		return nil, ledgercore.StateDelta{}, fmt.Errorf("MakeBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, blk.Round())
+	if vb.Block().Round().SubSaturate(1) != latestRound {
+		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger round %d mismatches next block round %d", latestRound, vb.Block().Round())
 	}
 	hdr, err := l.BlockHdr(latestRound)
 	if err != nil {
-		return nil, ledgercore.StateDelta{}, err
+		return nil, err
 	}
-	if blk.Branch != hdr.Hash() {
-		return nil, ledgercore.StateDelta{}, fmt.Errorf("MakeBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), blk.Branch)
+	if vb.Block().Branch != hdr.Hash() {
+		return nil, fmt.Errorf("MakeBlockAsLFE: Ledger latest block hash %x mismatches block's prev hash %x", hdr.Hash(), vb.Block().Branch)
 	}
 
+	return &validatedBlockAsLFE{
+		l:  l,
+		vb: vb,
+	}, nil
+}
+
+// makeBlockAsLFE constructs a new validatedBlockAsLFE from a Block.
+func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, ledgercore.StateDelta, error) {
 	state, err := internal.Eval(context.Background(), l, blk, false, l.VerifiedTransactionCache(), nil)
 	if err != nil {
 		return nil, ledgercore.StateDelta{}, fmt.Errorf("error computing deltas for block %d round %d: %v", blk.Hash(), blk.Round(), err)
 	}
 
 	vb := ledgercore.MakeValidatedBlock(blk, state)
-	return &validatedBlockAsLFE{
-		l:  l,
-		vb: &vb,
-	}, state, nil
+	lfe, err := MakeValidatedBlockAsLFE(&vb, l)
+	return lfe, vb.Delta(), nil
 }
 
 // Block implements the ledgerForEvaluator interface.

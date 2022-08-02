@@ -312,10 +312,11 @@ type pseudonodeAction struct {
 	// assemble, repropose, attest, speculativeAssembly
 	T actionType
 
-	Round    round
-	Period   period
-	Step     step
-	Proposal proposalValue
+	Round          round
+	Period         period
+	Step           step
+	Proposal       proposalValue
+	ValidatedBlock ValidatedBlock
 }
 
 func (a pseudonodeAction) t() actionType {
@@ -347,13 +348,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case speculativeAssembly:
-		events, err := s.loopback.StartSpeculativeBlockAssembly(ctx, a.Round, a.Period)
-		switch err {
-		case nil:
-			s.demux.prioritize(events)
-		default:
-			s.log.Errorf("pseudonode.StartSpeculativeBlockAssembly call failed %v", err)
-		}
+		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock)
 
 	case repropose:
 		logEvent := logspec.AgreementEvent{

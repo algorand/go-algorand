@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -87,7 +86,7 @@ type BlockFactory interface {
 	// lose liveness.
 	AssembleBlock(basics.Round) (ValidatedBlock, error)
 
-	OnNewSpeculativeBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
+	OnNewSpeculativeBlock(block bookkeeping.Block)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

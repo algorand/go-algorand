@@ -37,6 +37,7 @@ import (
 )
 
 const fastTimeoutChTime = 2
+const speculativeAsmTime = 1
 
 type demuxTester struct {
 	*testing.T
@@ -675,7 +676,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, 300)
+	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, speculativeAsmTime, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false
