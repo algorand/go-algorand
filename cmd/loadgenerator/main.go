@@ -19,7 +19,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
+	"io/ioutil"
+	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -30,19 +34,21 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
-
-const transactionBlockSize = 800
-
-var runOnce = flag.Bool("once", false, "Terminate after first spend loop")
 
 var nroutines = runtime.NumCPU() * 2
 
-func init() {
-	flag.Parse()
+func maybefail(err error, msg string, args ...interface{}) {
+	if err == nil {
+		return
+	}
+	fmt.Fprintf(os.Stderr, msg, args...)
+	os.Exit(1)
 }
 
 func loadMnemonic(mnemonic string) crypto.Seed {
@@ -57,12 +63,62 @@ func loadMnemonic(mnemonic string) crypto.Seed {
 	return seed
 }
 
+// Like shared/pingpong/accounts.go
+func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
+	keylist := make([]*crypto.SignatureSecrets, 0, 5)
+	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, err error) error {
+		var handle db.Accessor
+		handle, err = db.MakeErasableAccessor(path)
+		if err != nil {
+			return nil // don't care, move on
+		}
+		defer handle.Close()
+
+		// Fetch an account.Participation from the database
+		root, err := algodAcct.RestoreRoot(handle)
+		if err != nil {
+			return nil // don't care, move on
+		}
+		keylist = append(keylist, root.Secrets())
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: warning, %v\n", algodDir, err)
+	}
+	return keylist
+}
+
+var runOnce = flag.Bool("once", false, "Terminate after first spend loop")
+
 func main() {
+	var algodDir string
+	flag.StringVar(&algodDir, "d", "", "algorand data dir")
+	var configArg string
+	flag.StringVar(&configArg, "config", "loadgenerator.config", "path to json or json literal")
+
 	var cfg config
 	var err error
-	if cfg, err = loadConfig(); err != nil {
+	flag.Parse()
+	if cfg, err = loadConfig(configArg); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to load config : %v\n", err)
 		os.Exit(1)
+	}
+
+	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
+		if algodDir != "" {
+			path := filepath.Join(algodDir, "algod.net")
+			net, err := ioutil.ReadFile(path)
+			maybefail(err, "%s: %v\n", path, err)
+			path = filepath.Join(algodDir, "algod.token")
+			token, err := ioutil.ReadFile(path)
+			maybefail(err, "%s: %v\n", path, err)
+			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
+			maybefail(err, "bad net url %v\n", err)
+			cfg.APIToken = string(token)
+		} else {
+			fmt.Fprintf(os.Stderr, "need (config.ClientURL and config.APIToken) or (-d ALGORAND_DATA)\n")
+			os.Exit(1)
+		}
 	}
 	fmt.Printf("Configuration file loaded successfully.\n")
 
@@ -79,8 +135,19 @@ func main() {
 		for _, mnemonic := range cfg.AccountMnemonicList {
 			addKey(mnemonic)
 		}
+	} else if len(algodDir) > 0 {
+		// get test cluster local unlocked wallet
+		privateKeys := findRootKeys(algodDir)
+		if len(privateKeys) == 0 {
+			fmt.Fprintf(os.Stderr, "%s: found no root keys\n", algodDir)
+			os.Exit(1)
+		}
+		publicKeys = make([]basics.Address, len(privateKeys))
+		for i, sk := range privateKeys {
+			publicKeys[i] = basics.Address(sk.SignatureVerifier)
+		}
 	} else {
-		fmt.Fprintf(os.Stderr, "no keys specified in config files")
+		fmt.Fprintf(os.Stderr, "no keys specified in config files or -d algod dir")
 	}
 
 	for i, publicKey := range publicKeys {
@@ -110,9 +177,10 @@ func nextSpendRound(cfg config, round uint64) uint64 {
 func spendLoop(cfg config, privateKey []*crypto.SignatureSecrets, publicKey []basics.Address) (err error) {
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
 	for {
-		waitForRound(restClient, cfg, true)
-		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey)
+		nodeStatus := waitForRound(restClient, cfg, true)
+		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey, nodeStatus)
 		if queueFull {
+			// done for this round, wait for a non-send round
 			waitForRound(restClient, cfg, false)
 			if *runOnce {
 				fmt.Fprintf(os.Stdout, "Once flag set, terminating.\n")
@@ -123,8 +191,7 @@ func spendLoop(cfg config, privateKey []*crypto.SignatureSecrets, publicKey []ba
 	return nil
 }
 
-func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) {
-	var nodeStatus generatedV2.NodeStatusResponse
+func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) (nodeStatus generatedV2.NodeStatusResponse) {
 	var err error
 	for {
 		nodeStatus, err = restClient.Status()
@@ -138,7 +205,7 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 			return
 		}
 		if spendingRound {
-			fmt.Printf("Current round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
+			fmt.Printf("Last round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
 		}
 		for {
 			// wait for the next round.
@@ -156,14 +223,11 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 	}
 }
 
-func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address) (queueFull bool) {
-	var nodeStatus generatedV2.NodeStatusResponse
+const transactionBlockSize = 800
+
+func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address, nodeStatus generatedV2.NodeStatusResponse) (queueFull bool) {
+	start := time.Now()
 	var err error
-	nodeStatus, err = restClient.Status()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to check status : %v", err)
-		return false
-	}
 	var vers common.Version
 	vers, err = restClient.Versions()
 	if err != nil {
@@ -172,8 +236,12 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	}
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], vers.GenesisHash)
-	// create transactionBlockSize transaction to send.
-	txns := make([]transactions.SignedTxn, transactionBlockSize, transactionBlockSize)
+	sendSize := cfg.TxnsToSend
+	if cfg.TxnsToSend == 0 {
+		sendSize = transactionBlockSize
+	}
+	// create sendSize transaction to send.
+	txns := make([]transactions.SignedTxn, sendSize, sendSize)
 	for i := range txns {
 		tx := transactions.Transaction{
 			Header: transactions.Header{
@@ -196,13 +264,14 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	}
 
 	// create multiple go-routines to send all these requests.
+	// each thread makes new HTTP connections per API call
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
 	sent := make([]int, nroutines, nroutines)
 	for i := 0; i < nroutines; i++ {
 		go func(base int) {
 			defer sendWaitGroup.Done()
-			for x := base; x < transactionBlockSize; x += nroutines {
+			for x := base; x < sendSize; x += nroutines {
 				_, err2 := restClient.SendRawTransaction(txns[x])
 				if err2 != nil {
 					if strings.Contains(err2.Error(), "txn dead") || strings.Contains(err2.Error(), "below threshold") {
@@ -220,5 +289,11 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	for i := 0; i < nroutines; i++ {
 		totalSent += sent[i]
 	}
-	return totalSent != transactionBlockSize
+	dt := time.Now().Sub(start)
+	fmt.Fprintf(os.Stdout, "sent %d/%d in %s (%.1f/s)\n", totalSent, sendSize, dt.String(), float64(totalSent)/dt.Seconds())
+	if cfg.TxnsToSend != 0 {
+		// We attempted what we were asked. We're done.
+		return true
+	}
+	return totalSent != sendSize
 }
