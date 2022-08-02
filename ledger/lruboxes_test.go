@@ -205,7 +205,7 @@ func benchLruWriteBoxes(b *testing.B, fillerBoxes []cachedBoxData, boxes []cache
 	b.StopTimer()
 	var baseBoxes lruBoxes
 	// setting up the baseBoxes with a predefined cache size
-	baseBoxes.init(logging.TestingLog(b), baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+	baseBoxes.init(logging.TestingLog(b), baseBoxesPendingAccountsBufferSize, baseBoxesPendingAccountsWarnThreshold)
 	for i := 0; i < b.N; i++ {
 		baseBoxes = fillLRUBoxes(baseBoxes, fillerBoxes)
 
