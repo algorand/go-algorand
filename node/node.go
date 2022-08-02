@@ -610,6 +610,12 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		// Keep looking in the ledger.
 	}
 
+	// If we're in dev mode we can safely return immediately
+	// with the found transaction
+	if found && node.devMode {
+		return
+	}
+
 	var maxLife basics.Round
 	latest := node.ledger.Latest()
 	proto, err := node.ledger.ConsensusParams(latest)
