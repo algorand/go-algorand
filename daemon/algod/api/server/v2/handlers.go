@@ -741,17 +741,8 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	return v2.GetStatus(ctx)
 }
 
-func (v2 *Handlers) checkNodeAndDecodeTxGroup(ctx echo.Context) ([]transactions.SignedTxn, error) {
-	stat, err := v2.Node.Status()
-	if err != nil {
-		return nil, internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	}
-	if stat.Catchpoint != "" {
-		// node is currently catching up to the requested catchpoint.
-		return nil, serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
-	}
-	proto := config.Consensus[stat.LastVersion]
-
+// decodeTxGroup attempts to decode a request body containing a transaction group.
+func decodeTxGroup(ctx echo.Context, maxTxGroupSize int) ([]transactions.SignedTxn, error) {
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	for {
@@ -761,19 +752,19 @@ func (v2 *Handlers) checkNodeAndDecodeTxGroup(ctx echo.Context) ([]transactions.
 			break
 		}
 		if err != nil {
-			return nil, badRequest(ctx, err, err.Error(), v2.Log)
+			return nil, err
 		}
 		txgroup = append(txgroup, st)
 
-		if len(txgroup) > proto.MaxTxGroupSize {
-			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
-			return nil, badRequest(ctx, err, err.Error(), v2.Log)
+		if len(txgroup) > maxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", maxTxGroupSize)
+			return nil, err
 		}
 	}
 
 	if len(txgroup) == 0 {
 		err := errors.New("empty txgroup")
-		return nil, badRequest(ctx, err, err.Error(), v2.Log)
+		return nil, err
 	}
 
 	return txgroup, nil
@@ -782,10 +773,19 @@ func (v2 *Handlers) checkNodeAndDecodeTxGroup(ctx echo.Context) ([]transactions.
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
-	txgroup, err := v2.checkNodeAndDecodeTxGroup(ctx)
-	// If txgroup is nil, then a validation check failed and we should stop. Alternatively, if err is not nil, return it.
-	if txgroup == nil || err != nil {
-		return err
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+	proto := config.Consensus[stat.LastVersion]
+
+	txgroup, err := decodeTxGroup(ctx, proto.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
 	err = v2.Node.BroadcastSignedTxGroup(txgroup)
@@ -805,10 +805,19 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		return ctx.String(http.StatusNotFound, "/transactions/simulate was not enabled in the configuration file by setting EnableTransactionSimulator to true")
 	}
 
-	txgroup, err := v2.checkNodeAndDecodeTxGroup(ctx)
-	// If txgroup is nil, then a validation check failed and we should stop. Alternatively, if err is not nil, return it.
-	if txgroup == nil || err != nil {
-		return err
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("SimulateTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+	proto := config.Consensus[stat.LastVersion]
+
+	txgroup, err := decodeTxGroup(ctx, proto.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
 	actualLedger := v2.Node.LedgerForAPI()
