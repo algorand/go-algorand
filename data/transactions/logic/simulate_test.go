@@ -48,10 +48,12 @@ type simulationTestLedger struct {
 	hdr bookkeeping.BlockHeader
 }
 
+// Latest implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) Latest() basics.Round {
 	return sl.hdr.Round
 }
 
+// BlockHdr implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 	if rnd != sl.Latest() {
 		err = fmt.Errorf(
@@ -65,28 +67,34 @@ func (sl *simulationTestLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.Bloc
 }
 
 // override the test ledger's BlockHdrCached method to return the same header
+// BlockHdrCached implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return sl.BlockHdr(rnd)
 }
 
+// CheckDup implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	// Never throw an error during these tests since it's a simulation ledger.
 	// In production, the actual ledger method is used.
 	return nil
 }
 
+// CompactCertVoters implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	panic("CompactCertVoters() should not be called in a simulation ledger")
 }
 
+// GenesisHash implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) GenesisHash() crypto.Digest {
 	return sl.hdr.GenesisHash
 }
 
+// GenesisProto implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) GenesisProto() config.ConsensusParams {
 	return config.Consensus[sl.hdr.CurrentProtocol]
 }
 
+// GetCreatorForRound implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) GetCreatorForRound(round basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	if round != sl.Latest() {
 		err = fmt.Errorf(
@@ -99,6 +107,7 @@ func (sl *simulationTestLedger) GetCreatorForRound(round basics.Round, cidx basi
 	return sl.GetCreator(cidx, ctype)
 }
 
+// LookupAsset implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	assetParams, addr, err := sl.AssetParams(aidx)
 	if err != nil {
@@ -116,6 +125,7 @@ func (sl *simulationTestLedger) LookupAsset(rnd basics.Round, addr basics.Addres
 	}, nil
 }
 
+// LookupWithoutRewards implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (sl *simulationTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	if rnd != sl.Latest() {
 		return ledgercore.AccountData{}, basics.Round(0), fmt.Errorf(

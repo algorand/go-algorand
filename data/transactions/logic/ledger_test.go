@@ -196,17 +196,20 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 }
 
 // Round gives the current Round of the test ledger, which is random but consistent
+// Round implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) Round() basics.Round {
 	return l.round()
 }
 
 // LatestTimestamp gives a uint64, chosen randomly.  It should
 // probably increase monotonically, but no tests care yet.
+// LatestTimestamp implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
 // BlockHdrCached returns the block header for the given round, if it is available
+// BlockHdrCached implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
 	// Return a fake seed that is different for each round
@@ -227,6 +230,7 @@ func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, er
 
 // AccountData returns a version of the account that is good enough for
 // satisfying AVM needs. (balance, calc minbalance, and authaddr)
+// AccountData implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
 	br := l.balances[addr]
 	// br may come back empty if addr doesn't exist.  That's fine for our needs.
@@ -272,6 +276,7 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 // Authorizer returns the address that must authorize txns from a
 // given address.  It's either the address itself, or the value it has
 // been rekeyed to.
+// Authorizer implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -285,6 +290,7 @@ func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 
 // GetGlobal returns the current value of a global in an app, taking
 // into account the mods created by earlier teal execution.
+// GetGlobal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
 	params, ok := l.applications[appIdx]
 	if !ok {
@@ -308,6 +314,7 @@ func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue
 
 // SetGlobal "sets" a global, but only through the mods mechanism, so
 // it can be removed with Reset()
+// SetGlobal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
@@ -332,6 +339,7 @@ func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.Teal
 
 // DelGlobal "deletes" a global, but only through the mods mechanism, so
 // the deletion can be Reset()
+// DelGlobal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
@@ -360,6 +368,7 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 
 // GetLocal returns the current value bound to a local key, taking
 // into account mods caused by earlier executions.
+// GetLocal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -386,6 +395,7 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 
 // SetLocal "sets" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
+// SetLocal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -414,6 +424,7 @@ func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 
 // DelLocal "deletes" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
+// DelLocal implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -446,6 +457,7 @@ func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 // OptedIn returns whether an Address has opted into the app (usually
 // from NewLocals, but potentially from executing AVM inner
 // transactions.
+// OptedIn implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -457,6 +469,7 @@ func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, err
 
 // AssetHolding gives the amount of an ASA held by an account, or
 // error if the account is not opted into the asset.
+// AssetHolding implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
 	if br, ok := l.balances[addr]; ok {
 		if asset, ok := br.holdings[assetID]; ok {
@@ -468,6 +481,7 @@ func (l *Ledger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (b
 }
 
 // AssetParams gives the parameters of an ASA if it exists
+// AssetParams implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	if asset, ok := l.assets[assetID]; ok {
 		return asset.AssetParams, asset.Creator, nil
@@ -476,6 +490,7 @@ func (l *Ledger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, bas
 }
 
 // AppParams gives the parameters of an App if it exists
+// AppParams implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Address, error) {
 	if app, ok := l.applications[appID]; ok {
 		return app.AppParams, app.Creator, nil
@@ -744,6 +759,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 }
 
 // Perform causes txn to "occur" against the ledger.
+// Perform implements interface LedgerForLogic in data/transactions/logic
 func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 	txn := &ep.TxnGroup[gi]
 	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
@@ -796,6 +812,7 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 }
 
 // GetCreator returns the creator of the given creatable, an app or asa.
+// GetCreator implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	if ctype == basics.AssetCreatable {
 		params, found := l.assets[basics.AssetIndex(cidx)]
@@ -809,6 +826,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 }
 
 // SetKey creates a new key-value in {addr, aidx, global} storage
+// SetKey implements interface cowForLogicLedger in ledger/internal
 func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	if global {
 		l.NewGlobal(uint64(aidx), key, value)
@@ -819,6 +837,7 @@ func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 }
 
 // DelKey removes a key from {addr, aidx, global} storage
+// DelKey implements interface cowForLogicLedger in ledger/internal
 func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	if global {
 		l.NoGlobal(uint64(aidx), key)
@@ -836,6 +855,7 @@ func (l *Ledger) round() basics.Round {
 	return l.rnd
 }
 
+// LookupApplication implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	appParams, ok := l.applications[aidx]
 	if !ok {
@@ -867,6 +887,7 @@ func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx b
 	return ledgercore.AppResource{AppLocalState: &basicAppLocalState, AppParams: &basicAppParams}, nil
 }
 
+// GetCreator implements interface LedgerForSimulator in daemon/algod/api/server/v2
 func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	sum := uint64(0)
 	for _, b := range l.balances {
