@@ -115,7 +115,7 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := 2 * 1000 * 1000 // Allow long run times
+	bigBudget := 1000 * 1000 * 1000 // Allow long run times
 	clone.LogicSigMaxCost = uint64(bigBudget)
 	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
@@ -3496,6 +3496,7 @@ int 142791994204213819
 `
 
 func evalLoop(b *testing.B, runs int, program []byte) {
+	b.Helper()
 	b.ResetTimer()
 	for i := 0; i < runs; i++ {
 		var txn transactions.SignedTxn
@@ -3530,6 +3531,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
+	b.Helper()
 	runs := 1 + b.N/2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix

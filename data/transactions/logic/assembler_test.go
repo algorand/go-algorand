@@ -518,20 +518,47 @@ func testMatch(t testing.TB, actual, expected string) bool {
 	}
 }
 
-func assemblyTrace(text string, ver uint64) string {
+func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	ops := newOpStream(ver)
 	ops.Trace = &strings.Builder{}
-	ops.assemble(text)
-	return ops.Trace.String()
+	err := ops.assemble(text)
+	return &ops, err
+}
+
+func lines(s string, num int) (bool, string) {
+	if num < 1 {
+		return true, ""
+	}
+	found := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			found++
+			if found == num {
+				return true, s[0 : i+1]
+			}
+		}
+	}
+	return false, s
+}
+
+func summarize(trace *strings.Builder) string {
+	truncated, msg := lines(trace.String(), 50)
+	if !truncated {
+		return msg
+	}
+	return msg + "(trace truncated)\n"
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpStream {
 	t.Helper()
 	program := strings.ReplaceAll(source, ";", "\n")
-	ops, err := AssembleStringWithVersion(program, ver)
+	ops, err := assembleWithTrace(program, ver)
 	if len(expected) == 0 {
 		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, ver))
+			t.Log(summarize(ops.Trace))
+		}
+		if len(ops.Errors) > 10 {
+			ops.Errors = ops.Errors[:10] // Truncate to reasonable
 		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
@@ -569,7 +596,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 					}
 				}
 				if fail {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			} else {
@@ -586,7 +613,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
 				msg := found.Unwrap().Error()
 				if !testMatch(t, msg, exp.s) {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			}
