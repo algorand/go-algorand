@@ -176,7 +176,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     echo "BINDIR = $BINDIR"
     echo "DATADIR = $DATADIR"
     echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
-    echo "TEMPDIR = $TEMPDIR"
     echo "INTERACTIVE = $INTERACTIVE"
     echo "TEMPDIR = $TEMPDIR"
     echo "FORCE_KEEP_TEMPS = $FORCE_KEEP_TEMPS"
