@@ -84,6 +84,7 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	return l
 }
 
+// MakeLedgerForRound constructs a Ledger with the given balances and a specific round.
 func MakeLedgerForRound(balances map[basics.Address]uint64, rnd uint64) *Ledger {
 	l := MakeLedger(balances)
 	l.rnd = basics.Round(rnd)
