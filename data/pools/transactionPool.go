@@ -780,7 +780,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLastRound
+	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
 	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
 	if err != nil {
 		return stateProofStats

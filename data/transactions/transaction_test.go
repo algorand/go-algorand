@@ -1342,12 +1342,12 @@ func TestStateProofTxnShouldBeZero(t *testing.T) {
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProof = stateproof.StateProof{}
-	txn.StateProofIntervalLastRound = 512
+	txn.Message.LastAttestedRound = 512
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), erroMsg)
 
-	txn.StateProofIntervalLastRound = 0
+	txn.Message.LastAttestedRound = 0
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 }
