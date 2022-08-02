@@ -35,7 +35,9 @@ const (
 	PingReplyTag       Tag = "pj"
 	ProposalPayloadTag Tag = "PP"
 	TopicMsgRespTag    Tag = "TS"
-	TxnTag             Tag = "TX"
+	TxnTag             Tag = "TX" // Txn content
+	TxnAdvertiseTag    Tag = "Ta" // list of Txid
+	TxnRequestTag      Tag = "Tr" // list of Txid
 	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
 	UniEnsBlockReqTag  Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
