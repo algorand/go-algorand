@@ -1243,12 +1243,6 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	msgBytes := protocol.Encode(&msg)
 	msgBytes[0] = 55 // arbitrary value to fail protocol.Decode
 
-	// since the handler ignores messages for already approved
-	// state proof (and does not disconnect the peer), we need to
-	// have a fixed round number to check for disconnection
-	msg.Round = s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound +
-		basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
-
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
