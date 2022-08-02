@@ -239,7 +239,6 @@ func (p *player) issueNextVote(r routerHandle) []action {
 }
 
 func (p *player) startSpeculativeBlockAsm(r routerHandle, ve ValidatedBlock) (actions []action) {
-	// TODO(yossi) extend the action to carry the speculative block payload
 	return append(actions, pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: ve})
 }
 
