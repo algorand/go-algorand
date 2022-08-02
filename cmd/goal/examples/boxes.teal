@@ -1,6 +1,6 @@
 // WARNING: THIS IS NOT A PRODUCTION QUALITY PROGRAM - FOR TEST PURPOSES ONLY
 
-#pragma version 7
+#pragma version 8
     txn ApplicationID
     bz end
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists

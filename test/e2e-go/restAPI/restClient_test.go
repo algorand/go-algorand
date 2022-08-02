@@ -1255,7 +1255,7 @@ func TestBoxNamesByAppID(t *testing.T) {
 	}
 	a.NoError(err)
 
-	prog := `#pragma version 7
+	prog := `#pragma version 8
     txn ApplicationID
     bz end
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists
@@ -1294,7 +1294,7 @@ end:
 `
 	ops, err := logic.AssembleString(prog)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 7\nint 1")
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	clearState := ops.Program
 
 	gl := basics.StateSchema{}
