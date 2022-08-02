@@ -948,12 +948,64 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "3 is larger than max=2")
 }
 
+// TestBigApplCreation focues on testing the new fields that allow constructing big programs.
+func TestBigApplCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, _ := MakeSampleEnv()
+
+	p := "itxn_begin;"
+	s := "; int 1"
+
+	// Recall that in test proto, max possible program size is 2700, because
+	// MaxAppProgramLen:   900
+	// MaxExtraAppProgramPages: 2
+
+	// First, test normal accummulation
+	for _, pgm := range []string{"Approval", "ClearState"} {
+		t.Run(pgm, func(t *testing.T) {
+			basic := "itxn_field " + pgm + "Program"
+			pages := "itxn_field " + pgm + "ProgramPages"
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 700; bzero; `+pages+`
+                 `+s, ep)
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 701; bzero; `+pages+`
+                 `+s, ep, "may not exceed 2700")
+
+			// Test the basic ApprovalProgram field resets
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 701; bzero; `+pages+`
+                 `+s, ep)
+			// Test that the 100 of the Approval program stayed around
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 600; bzero; `+pages+`
+                 `+s, ep)
+			TestApp(t, p+`int 1000; bzero; `+pages+`
+                  int 100; bzero; `+basic+`
+                  int 1000; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 601; bzero; `+pages+`
+                 `+s, ep, "may not exceed 2700")
+		})
+	}
+}
+
 // TestApplSubmission tests for checking of illegal appl transaction in form
 // only.  Things where interactions between two different fields causes the
 // error.  These are not exhaustive, but certainly demonstrate that
 // transactions.WellFormed is getting a crack at the txn.
 func TestApplSubmission(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -1700,7 +1752,7 @@ int 1
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() NO! unified variable is actually shared
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
@@ -2152,7 +2204,7 @@ func TestInnerTxIDCaching(t *testing.T) {
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() NO! unified variable is actually shared
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
@@ -2906,4 +2958,31 @@ itxn_submit
 	// TestApp(t, source, ep, "too many inner transactions 1 with 0 left")
 
 	TestApp(t, source, ep, "appl depth (8) exceeded")
+}
+
+func TestForeignAppAccountAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ep, tx, ledger := MakeSampleEnv()
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(111)}
+
+	ledger.NewApp(tx.Sender, 111, basics.AppParams{
+		ApprovalProgram:   TestProg(t, "int 1", AssemblerMaxVersion).Program,
+		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+	})
+
+	TestApp(t, `
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 100
+itxn_field Amount
+txn Applications 1
+app_params_get AppAddress
+assert
+itxn_field Receiver
+itxn_submit
+int 1
+`, ep)
 }

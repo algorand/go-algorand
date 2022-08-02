@@ -14,22 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package db
+package logic
 
-import (
-	"database/sql"
-)
+const pairingNonsense = `
+ pushbytes 0x012345
+ dup
+ bn256_add
+ dup
+ bn256_scalar_mul
+ dup
+ bn256_pairing
+`
 
-// Queryable is meant to represent the union of a transaction (sql.Tx)
-// and the underlying database (sql.DB), so that code issuing a single
-// read-only query can be run directly on the sql.DB object without
-// creating a short-lived transaction for a single SELECT query.
-//
-// Queryable captures only a subset of Go's SQL API for issuing reads;
-// if new code needs additional methods to query a SQL DB, they should
-// be added here as needed.
-type Queryable interface {
-	Prepare(query string) (*sql.Stmt, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-}
+const pairingCompiled = "80030123454999499a499b"

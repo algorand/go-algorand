@@ -55,6 +55,7 @@ type roundCowParent interface {
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertNext() basics.Round
 	blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
+	blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	// note: getStorageLimits is redundant with the other methods
 	// and is provided to optimize state schema lookups
@@ -227,12 +228,16 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.blockHdr(r)
 }
 
+func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return cb.lookupParent.blockHdrCached(r)
+}
+
 func (cb *roundCowState) incTxnCount() {
 	cb.txnCount++
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
-	cb.mods.Txids[txid] = txn.LastValid
+	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, Intra: uint64(len(cb.mods.Txids))}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
 		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
@@ -262,8 +267,9 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 func (cb *roundCowState) commitToParent() {
 	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
-	for txid, lv := range cb.mods.Txids {
-		cb.commitParent.mods.Txids[txid] = lv
+	commitParentBaseIdx := uint64(len(cb.commitParent.mods.Txids))
+	for txid, incTxn := range cb.mods.Txids {
+		cb.commitParent.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: incTxn.LastValid, Intra: commitParentBaseIdx + incTxn.Intra}
 	}
 	cb.commitParent.txnCount += cb.txnCount
 

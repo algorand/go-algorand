@@ -726,7 +726,7 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 	return basics.OnlineAccountData{}, errors.New("not needed for mockedLedger")
 }
 
-func (m *mockedLedger) IsWritingCatchpointFile() bool {
+func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
 }
 

@@ -364,7 +364,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
@@ -377,7 +377,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
 | 15 | Type | []byte |      | Transaction type as bytes |
-| 16 | TypeEnum | uint64 |      | See table below |
+| 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
 | 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
@@ -387,9 +387,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 23 | TxID | []byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
-| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
-| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
@@ -409,9 +407,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
 | 46 | FreezeAssetAccount | []byte | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
 | 47 | FreezeAssetFrozen | uint64 | v2  | The new frozen value, 0 or 1 |
-| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
-| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
 | 52 | GlobalNumUint | uint64 | v3  | Number of global state integers in ApplicationCall |
 | 53 | GlobalNumByteSlice | uint64 | v3  | Number of global state byteslices in ApplicationCall |
@@ -419,15 +415,14 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
 | 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
-| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+| 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
+| 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
-
-FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
 
@@ -480,14 +475,27 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 - Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F of the current transaction
+- Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
 - Availability: v2
+
+`txna` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):
+
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
+| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
+| 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
+| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
+| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
+
 
 ## gtxna t f i
 
 - Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ... &rarr; ..., any
-- Ith value of the array field F from the Tth transaction in the current group
+- Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
 - Availability: v2
 
 ## gtxns f
@@ -503,7 +511,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 - Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
 - Stack: ..., A: uint64 &rarr; ..., any
-- Ith value of the array field F from the Ath transaction in the current group
+- Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
 - Availability: v3
 
 ## gload t i
@@ -722,7 +730,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x58
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails
+- A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates.
 - Availability: v5
 
 ## extract_uint16
@@ -746,12 +754,26 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
+## replace2 s
+
+- Opcode: 0x5c {uint8 start position}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate.
+- Availability: v7
+
+## replace3
+
+- Opcode: 0x5d
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates.
+- Availability: v7
+
 ## base64_decode e
 
-- Opcode: 0x5c {uint8 encoding index}
+- Opcode: 0x5e {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 1 + 1 per 16 bytes
+- **Cost**: 1 + 1 per 16 bytes of A
 - Availability: v7
 
 `base64` Encodings:
@@ -766,9 +788,10 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 
 ## json_ref r
 
-- Opcode: 0x5d {string return type}
+- Opcode: 0x5f {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
 `json_ref` Types:
@@ -1352,3 +1375,33 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
+
+## vrf_verify s
+
+- Opcode: 0xd0 {uint8 parameters index}
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: uint64
+- Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
+- **Cost**: 5700
+- Availability: v7
+
+`vrf_verify` Standards:
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | VrfAlgorand |  |
+
+
+## block f
+
+- Opcode: 0xd1 {uint8 block field}
+- Stack: ..., A: uint64 &rarr; ..., any
+- field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.
+- Availability: v7
+
+`block` Fields:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | BlkSeed | []byte |  |
+| 1 | BlkTimestamp | uint64 |  |
+

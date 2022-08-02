@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"container/heap"
 	"context"
 	"database/sql"
 	"errors"
@@ -179,9 +178,6 @@ type accountUpdates struct {
 	// accountsReadCond used to synchronize read access to the internal data structures.
 	accountsReadCond *sync.Cond
 
-	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters *votersTracker
-
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseAccounts lruAccounts
 
@@ -196,6 +192,9 @@ type accountUpdates struct {
 
 	// lastMetricsLogTime is the time when the previous metrics logging occurred
 	lastMetricsLogTime time.Time
+
+	// maxAcctLookback sets the minimim deltas size to keep in memory
+	acctLookback uint64
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -260,6 +259,8 @@ func (r resourcesUpdates) getForAddress(addr basics.Address) map[basics.Creatabl
 func (au *accountUpdates) initialize(cfg config.Local) {
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 
+	au.acctLookback = cfg.MaxAcctLookback
+
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
@@ -281,17 +282,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
-	if au.voters != nil {
-		au.voters.close()
+	if au.accountsq != nil {
+		au.accountsq.close()
+		au.accountsq = nil
 	}
-
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
-}
-
-// LookupOnlineAccountData returns the online account data for a given address at a given round.
-func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	return au.lookupOnlineAccountData(rnd, addr)
 }
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
@@ -398,135 +394,6 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	}
 }
 
-// onlineTop returns the top n online accounts, sorted by their normalized
-// balance and address, whose voting keys are valid in voteRnd.  See the
-// normalization description in AccountData.NormalizedOnlineBalance().
-func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
-	proto := au.ledger.GenesisProto()
-	au.accountsMu.RLock()
-	for {
-		currentDbRound := au.cachedDBRound
-		currentDeltaLen := len(au.deltas)
-		offset, err := au.roundOffset(rnd)
-		if err != nil {
-			au.accountsMu.RUnlock()
-			return nil, err
-		}
-
-		// Determine how many accounts have been modified in-memory,
-		// so that we obtain enough top accounts from disk (accountdb).
-		// If the *onlineAccount is nil, that means the account is offline
-		// as of the most recent change to that account, or its vote key
-		// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
-		// representation of the most recent state of the account, and it
-		// is online and can vote in voteRnd.
-		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
-		for o := uint64(0); o < offset; o++ {
-			for i := 0; i < au.deltas[o].Len(); i++ {
-				addr, d := au.deltas[o].GetByIdx(i)
-				if d.Status != basics.Online {
-					modifiedAccounts[addr] = nil
-					continue
-				}
-
-				if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
-					modifiedAccounts[addr] = nil
-					continue
-				}
-
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, proto)
-			}
-		}
-
-		au.accountsMu.RUnlock()
-
-		// Build up a set of candidate accounts.  Start by loading the
-		// top N + len(modifiedAccounts) accounts from disk (accountdb).
-		// This ensures that, even if the worst case if all in-memory
-		// changes are deleting the top accounts in accountdb, we still
-		// will have top N left.
-		//
-		// Keep asking for more accounts until we get the desired number,
-		// or there are no more accounts left.
-		candidates := make(map[basics.Address]*ledgercore.OnlineAccount)
-		batchOffset := uint64(0)
-		batchSize := uint64(1024)
-		var dbRound basics.Round
-		for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
-			var accts map[basics.Address]*ledgercore.OnlineAccount
-			start := time.Now()
-			ledgerAccountsonlinetopCount.Inc(nil)
-			err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
-				if err != nil {
-					return
-				}
-				dbRound, err = accountsRound(tx)
-				return
-			})
-			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			if dbRound != currentDbRound {
-				break
-			}
-
-			for addr, data := range accts {
-				if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
-					continue
-				}
-				candidates[addr] = data
-			}
-
-			// If we got fewer than batchSize accounts, there are no
-			// more accounts to look at.
-			if uint64(len(accts)) < batchSize {
-				break
-			}
-
-			batchOffset += batchSize
-		}
-		if dbRound != currentDbRound && dbRound != basics.Round(0) {
-			// database round doesn't match the last au.dbRound we sampled.
-			au.accountsMu.RLock()
-			for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
-				au.accountsReadCond.Wait()
-			}
-			continue
-		}
-
-		// Now update the candidates based on the in-memory deltas.
-		for addr, oa := range modifiedAccounts {
-			if oa == nil {
-				delete(candidates, addr)
-			} else {
-				candidates[addr] = oa
-			}
-		}
-
-		// Get the top N accounts from the candidate set, by inserting all of
-		// the accounts into a heap and then pulling out N elements from the
-		// heap.
-		topHeap := &onlineTopHeap{
-			accts: nil,
-		}
-
-		for _, data := range candidates {
-			heap.Push(topHeap, data)
-		}
-
-		var res []*ledgercore.OnlineAccount
-		for topHeap.Len() > 0 && uint64(len(res)) < n {
-			acct := heap.Pop(topHeap).(*ledgercore.OnlineAccount)
-			res = append(res, acct)
-		}
-
-		return res, nil
-	}
-}
-
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return au.getCreatorForRound(rnd, cidx, ctype, true /* take the lock */)
@@ -542,7 +409,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 	defer au.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
+	lookback = basics.Round(au.acctLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -576,16 +443,18 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
 
-	if au.voters != nil {
-		newBase = au.voters.lowestRound(newBase)
-	}
-
 	offset = uint64(newBase - dbRound)
 
 	offset = au.consecutiveVersion(offset)
 
 	// calculate the number of pending deltas
 	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
+
+	proto := config.Consensus[au.versions[offset]]
+	dcr.catchpointLookback = proto.CatchpointLookback
+	if dcr.catchpointLookback == 0 {
+		dcr.catchpointLookback = proto.MaxBalLookback
+	}
 
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
@@ -618,13 +487,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	au.newBlockImpl(blk, delta)
 	au.accountsMu.Unlock()
 	au.accountsReadCond.Broadcast()
-}
-
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.onlineTotalsImpl(rnd)
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
@@ -667,6 +529,10 @@ type accountUpdatesLedgerEvaluator struct {
 	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
 	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
 	au *accountUpdates
+	// ao is onlineAccounts for voters access
+	ao *onlineAccounts
+	// txtail allows implementation of BlockHdrCached
+	tail *txTail
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
@@ -684,7 +550,7 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 
 // CompactCertVoters returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
-	return aul.au.voters.getVoters(rnd)
+	return aul.ao.voters.getVoters(rnd)
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
@@ -694,6 +560,16 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 		return aul.prevHeader, nil
 	}
 	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
+}
+
+// BlockHdrCached returns the header of the given round. We use the txTail
+// tracker directly to avoid the tracker registry lock.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr, ok := aul.tail.blockHeader(r)
+	if !ok {
+		return bookkeeping.BlockHeader{}, fmt.Errorf("no cached header data for round %d", r)
+	}
+	return hdr, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
@@ -710,6 +586,10 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	if err != nil {
+		return ledgercore.AccountData{}, 0, err
+	}
+
 	return data, validThrough, err
 }
 
@@ -728,8 +608,11 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
-// onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
@@ -756,7 +639,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		totals, err0 := accountsTotals(tx, false)
+		totals, err0 := accountsTotals(ctx, tx, false)
 		if err0 != nil {
 			return err0
 		}
@@ -770,7 +653,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
+	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle)
 	if err != nil {
 		return
 	}
@@ -860,10 +743,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.prune(newBaseAccountSize)
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
-
-	if au.voters != nil {
-		au.voters.newBlock(blk.BlockHeader)
-	}
 }
 
 // lookupLatest returns the account data for a given address for the latest round.
@@ -1086,92 +965,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		}
 
 	tryAgain:
-		au.accountsMu.RLock()
-		needUnlock = true
-		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
-			au.accountsReadCond.Wait()
-		}
-	}
-}
-
-// lookupWithRewards returns the online account data for a given address at a given round.
-func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	au.accountsMu.RLock()
-	needUnlock := true
-	defer func() {
-		if needUnlock {
-			au.accountsMu.RUnlock()
-		}
-	}()
-	var offset uint64
-	var rewardsProto config.ConsensusParams
-	var rewardsLevel uint64
-	var persistedData persistedAccountData
-	for {
-		currentDbRound := au.cachedDBRound
-		currentDeltaLen := len(au.deltas)
-		offset, err = au.roundOffset(rnd)
-		if err != nil {
-			return
-		}
-
-		rewardsProto = config.Consensus[au.versions[offset]]
-		rewardsLevel = au.roundTotals[offset].RewardsLevel
-
-		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.accounts[addr]
-		if indeltas {
-			// Check if this is the most recent round, in which case, we can
-			// use a cache of the most recent account state.
-			if offset == uint64(len(au.deltas)) {
-				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
-			}
-			// the account appears in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check :
-			// Traverse the deltas backwards to ensure that later updates take
-			// priority if present.
-			for offset > 0 {
-				offset--
-				d, ok := au.deltas[offset].GetData(addr)
-				if ok {
-					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
-				}
-			}
-		}
-
-		// check the baseAccounts -
-		if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
-			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
-			// would ensure that we promote this field.
-			au.baseAccounts.writePending(macct)
-			u := macct.accountData.GetLedgerCoreAccountData()
-			return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
-		}
-
-		au.accountsMu.RUnlock()
-		needUnlock = false
-
-		// No updates of this account in the in-memory deltas; use on-disk DB.
-		// The check in roundOffset() made sure the round is exactly the one
-		// present in the on-disk DB.  As an optimization, we avoid creating
-		// a separate transaction here, and directly use a prepared SQL query
-		// against the database.
-		persistedData, err = au.accountsq.lookup(addr)
-		if persistedData.round == currentDbRound {
-			var u ledgercore.AccountData
-			if persistedData.rowid != 0 {
-				// if we read actual data return it
-				au.baseAccounts.writePending(persistedData)
-				u = persistedData.accountData.GetLedgerCoreAccountData()
-			}
-			// otherwise return empty
-			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
-		}
-
-		if persistedData.round < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupOnlineAccountData: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-			return basics.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
-		}
 		au.accountsMu.RLock()
 		needUnlock = true
 		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
@@ -1483,12 +1276,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	au.accountsMu.RLock()
 
-	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
-	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
+	// create a copy of the round totals and protos for the range we're going to flush.
 	dcc.roundTotals = au.roundTotals[offset]
-	copy(dcc.deltas, au.deltas[:offset])
-	copy(creatableDeltas, au.creatableDeltas[:offset])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
@@ -1498,8 +1287,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
 		// The same is repeated in commitRound on errors.
-		if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointWriting, 0)
+		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
+			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
@@ -1510,9 +1299,9 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
-	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
+	dcc.compactCreatableDeltas = compactCreatableDeltas(au.creatableDeltas[:offset])
 
 	au.accountsMu.RUnlock()
 
@@ -1533,8 +1322,8 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	defer func() {
 		if err != nil {
-			if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(dcc.catchpointWriting, 0)
+			if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
+				atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 			}
 		}
 	}()
@@ -1673,6 +1462,19 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
+	// clear the backing array to let GC collect data.
+	// this is catchpoint-related optimization if for whatever reason catchpoint generation
+	// takes longer than 500 rounds.
+	// the number chosen out of the following calculation:
+	// 300 bytes per acct in delta * 50,000 accts (full block)  * 500 rounds = 7.5 GB
+	const deltasClearThreshold = 500
+	if offset > deltasClearThreshold {
+		for i := uint64(0); i < offset; i++ {
+			au.deltas[i] = ledgercore.AccountDeltas{}
+			au.creatableDeltas[i] = nil
+		}
+	}
+
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.versions = au.versions[offset:]
@@ -1796,8 +1598,6 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	return
 }
 
-var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
-var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
 var ledgerGetcatchpointCount = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
 var ledgerGetcatchpointMicros = metrics.NewCounter("ledger_getcatchpoint_micros", "µs spent")
 var ledgerAccountsinitCount = metrics.NewCounter("ledger_accountsinit_count", "calls")

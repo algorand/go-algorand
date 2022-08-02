@@ -32,7 +32,7 @@ const LogicVersion = 7
 const rekeyingEnabledVersion = 2
 
 // appsEnabledVersion is the version of TEAL where ApplicationCall
-// functionality was enabled. We use this to disallow v0 and v1 TEAL programs
+// functionality was enabled. We use this to disallow v0 and v1 programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
@@ -57,41 +57,55 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
-// experimental-
-const fidoVersion = 7 // base64, json, secp256r1
+// appAddressAvailableVersion is the first version that allows access to the
+// accounts of applications that were provided in the foreign apps transaction
+// field.
+const appAddressAvailableVersion = 7
+
+const fidoVersion = 7       // base64, json, secp256r1
+const randomnessVersion = 7 // vrf_verify, block
+
+// EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
+// moved from vFuture to a new consensus version. If they remain unready, bump
+// their version, and fixup TestAssemble() in assembler_test.go.
+const pairingVersion = 8 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 
 type linearCost struct {
 	baseCost  int
 	chunkCost int
 	chunkSize int
+	depth     int
 }
 
-// divideCeilUnsafely provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
+// divCeil provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
 // The method does _not_ check for divide-by-zero.
-func divideCeilUnsafely(numerator int, denominator int) int {
+func divCeil(numerator int, denominator int) int {
 	return (numerator + denominator - 1) / denominator
 }
 
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
-		// Uses divideCeilUnsafely rather than (len/size) to match how Ethereum discretizes hashing costs.
-		cost += divideCeilUnsafely(lc.chunkCost*len(stack[len(stack)-1].Bytes), lc.chunkSize)
+		// Uses divCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
+		count := len(stack[len(stack)-1-lc.depth].Bytes)
+		cost += lc.chunkCost * divCeil(count, lc.chunkSize)
 	}
 	return cost
 }
 
-func (lc *linearCost) docCost() string {
+func (lc *linearCost) docCost(argLen int) string {
 	if *lc == (linearCost{}) {
 		return ""
 	}
 	if lc.chunkCost == 0 {
 		return strconv.Itoa(lc.baseCost)
 	}
+	idxFromStart := argLen - lc.depth - 1
+	stackArg := rune(int('A') + idxFromStart)
 	if lc.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte", lc.baseCost, lc.chunkCost)
+		return fmt.Sprintf("%d + %d per byte of %c", lc.baseCost, lc.chunkCost, stackArg)
 	}
-	return fmt.Sprintf("%d + %d per %d bytes", lc.baseCost, lc.chunkCost, lc.chunkSize)
+	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -110,8 +124,8 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 }
 
-func (d *OpDetails) docCost() string {
-	cost := d.FullCost.docCost()
+func (d *OpDetails) docCost(argLen int) string {
+	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
 	}
@@ -139,7 +153,7 @@ func (d *OpDetails) docCost() string {
 // both static (the program, which can be used to find the immediate values
 // supplied), and dynamic (the stack, which can be used to find the run-time
 // arguments supplied). Cost is used at run-time. docCost returns similar
-// information in human-reable form.
+// information in human-readable form.
 func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	cost := d.FullCost.compute(stack)
 	if cost != 0 {
@@ -206,9 +220,9 @@ func (d OpDetails) only(m runMode) OpDetails {
 	return clone
 }
 
-func (d OpDetails) costByLength(initial, perChunk, chunkSize int) OpDetails {
+func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	clone := d
-	clone.FullCost = costByLength(initial, perChunk, chunkSize).FullCost
+	clone.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
 	return clone
 }
 
@@ -255,12 +269,12 @@ func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 	return opd
 }
 
-func costByLength(initial int, perChunk int, chunkSize int) OpDetails {
+func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
 		panic("bad cost configuration")
 	}
 	d := opDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize}
+	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
 	return d
 }
 
@@ -330,7 +344,7 @@ type OpSpec struct {
 	Name   string
 	op     evalFunc // evaluate the op
 	Proto
-	Version   uint64 // TEAL version opcode introduced
+	Version   uint64 // AVM version opcode introduced
 	OpDetails        // Special cost or bytecode layout considerations
 }
 
@@ -360,9 +374,9 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
 
-	// Cost of these opcodes increases in TEAL version 2 based on measured
+	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
-	// and achieve reasonable TPS. Same opcode for different TEAL versions
+	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
 	{0x01, "sha256", opSHA256, proto("b:b"), 2, costly(35)},
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 2, costly(130)},
@@ -427,20 +441,17 @@ var OpSpecs = []OpSpec{
 	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(modeSig)},
 	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
 	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
+	// txn, gtxn, and gtxns are also implemented as pseudoOps to choose
+	// between scalar and array version based on number of immediates.
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
-	// It is ok to have the same opcode for different TEAL versions.
-	// This 'txn' asm command supports additional argument in version 2 and
-	// generates 'txna' opcode in that particular case
-	{0x31, "txn", opTxn, proto(":a"), 2, field("f", &TxnFields).assembler(asmTxn2)},
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
-	{0x33, "gtxn", opGtxn, proto(":a"), 2, immediates("t", "f").field("f", &TxnFields).assembler(asmGtxn2)},
-	{0x34, "load", opLoad, proto(":a"), 1, immediates("i")},
-	{0x35, "store", opStore, proto("a:"), 1, immediates("i")},
+	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},
+	{0x35, "store", opStore, proto("a:"), 1, stacky(typeStore, "i")},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
 	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnFields).assembler(asmGtxns)},
+	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnScalarFields)},
 	{0x39, "gtxnsa", opGtxnsa, proto("i:a"), 3, immediates("f", "i").field("f", &TxnArrayFields)},
 	// Group scratch space access
 	{0x3a, "gload", opGload, proto(":a"), 4, immediates("t", "i").only(modeApp)},
@@ -450,8 +461,8 @@ var OpSpecs = []OpSpec{
 	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(modeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
-	{0x3e, "loads", opLoads, proto("i:a"), 5, opDefault()},
-	{0x3f, "stores", opStores, proto("ia:"), 5, opDefault()},
+	{0x3e, "loads", opLoads, proto("i:a"), 5, stacky(typeLoads)},
+	{0x3f, "stores", opStores, proto("ia:"), 5, stacky(typeStores)},
 
 	{0x40, "bnz", opBnz, proto("i:"), 1, opBranch()},
 	{0x41, "bz", opBz, proto("i:"), 2, opBranch()},
@@ -482,8 +493,11 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
-	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes)},
+	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
+	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, opDefault()},
+
+	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
+	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
@@ -532,10 +546,14 @@ var OpSpecs = []OpSpec{
 	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), 6, costly(40)},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, opDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), 7, costly(130)},
-
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
+
+	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
+	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
+	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
+	// leave room here for eip-2537 style opcodes
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("bb:b"), 4, costly(10)},
@@ -574,6 +592,10 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(modeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
+
+	// randomness support
+	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 
 type sortByOpcode []OpSpec
@@ -634,15 +656,15 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
-// Migration from TEAL v1 to TEAL v2.
-// TEAL v1 allowed execution of program with version 0.
-// With TEAL v2 opcode versions are introduced and they are bound to every opcode.
-// There is no opcodes with version 0 so that TEAL v2 evaluator rejects any program with version 0.
-// To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
+// Migration from v1 to v2.
+// v1 allowed execution of program with version 0.
+// With v2 opcode versions are introduced and they are bound to every opcode.
+// There is no opcodes with version 0 so that v2 evaluator rejects any program with version 0.
+// To preserve backward compatibility version 0 array is populated with v1 opcodes
 // with the version overwritten to 0.
 func init() {
 	// First, initialize baseline v1 opcodes.
-	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
+	// Zero (empty) version is an alias for v1 opcodes and needed for compatibility with v1 code.
 	OpsByName[0] = make(map[string]OpSpec, 256)
 	OpsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {
@@ -656,7 +678,7 @@ func init() {
 			OpsByName[1][oi.Name] = oi
 		}
 	}
-	// Start from v2 TEAL and higher,
+	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
 	for v := uint64(2); v <= evalMaxVersion; v++ {
 		OpsByName[v] = make(map[string]OpSpec, 256)

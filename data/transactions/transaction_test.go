@@ -552,6 +552,24 @@ func TestWellFormedErrors(t *testing.T) {
 	}
 }
 
+// TestTransactionHash checks that Transaction.ID() is equivalent to the old simpler crypto.HashObj() implementation.
+func TestTransactionHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var txn Transaction
+	txn.Sender[1] = 3
+	txn.Fee.Raw = 1234
+	txid := txn.ID()
+	txid2 := Txid(crypto.HashObj(txn))
+	require.Equal(t, txid, txid2)
+
+	txn.LastValid = 4321
+	txid3 := txn.ID()
+	txid2 = Txid(crypto.HashObj(txn))
+	require.NotEqual(t, txid, txid3)
+	require.Equal(t, txid3, txid2)
+}
+
 var generateFlag = flag.Bool("generate", false, "")
 
 // running test with -generate would generate the matrix used in the test ( without the "correct" errors )

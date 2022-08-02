@@ -418,9 +418,6 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
-	//EnableBatchVerification enable the use of the batch verification algorithm.
-	EnableBatchVerification bool
-
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 
@@ -435,6 +432,31 @@ type ConsensusParams struct {
 
 	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
 	UnifyInnerTxIDs bool
+
+	// EnableSHA256TxnCommitmentHeader enables the creation of a transaction vector commitment tree using SHA256 hash function. (vector commitment extends Merkle tree by having a position binding property).
+	// This new header is in addition to the existing SHA512_256 merkle root.
+	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
+	EnableSHA256TxnCommitmentHeader bool
+
+	// CatchpointLookback specifies a round lookback to take catchpoints at.
+	// Accounts snapshot for round X will be taken at X-CatchpointLookback
+	CatchpointLookback uint64
+
+	// DeeperBlockHeaderHistory defines number of rounds in addition to MaxTxnLife
+	// available for lookup for smart contracts and smart signatures.
+	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
+	DeeperBlockHeaderHistory uint64
+
+	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
+	EnableOnlineAccountCatchpoints bool
+
+	// UnfundedSenders ensures that accounts with no balance (so they don't even
+	// "exist") can still be a transaction sender by avoiding updates to rewards
+	// state for accounts with no algos. The actual change implemented to allow
+	// this is to avoid updating an account if the only change would have been
+	// the rewardsLevel, but the rewardsLevel has no meaning because the account
+	// has fewer than RewardUnit algos.
+	UnfundedSenders bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -450,7 +472,7 @@ const (
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
 
-	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	// PaysetCommitMerkle uses merkle array to commit to the payset.
 	PaysetCommitMerkle
 )
 
@@ -591,7 +613,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	return staticConsensus
 }
 
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// Merge merges a configurable consensus on top of the existing consensus protocol and return
 // a new consensus protocol without modify any of the incoming structures.
 func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
 	staticConsensus := cp.DeepCopy()
@@ -905,6 +927,9 @@ func initConsensusProtocols() {
 	// Enable application support
 	v24.Application = true
 
+	// Although Inners were not allowed yet, this gates downgrade checks, which must be allowed
+	v24.MinInnerApplVersion = 6
+
 	// Enable rekeying
 	v24.SupportRekeying = true
 
@@ -1077,7 +1102,6 @@ func initConsensusProtocols() {
 
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v31.EnableBatchVerification = true
 	v31.RewardsCalculationFix = true
 	v31.MaxProposedExpiredOnlineAccounts = 32
 
@@ -1085,7 +1109,6 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
-	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1129,8 +1152,11 @@ func initConsensusProtocols() {
 	vFuture := v32
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
-	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	vFuture.CatchpointLookback = 320
+
+	// Require MaxTxnLife + X blocks and headers preserved by a node
+	vFuture.DeeperBlockHeaderHistory = 1
 
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 256
@@ -1139,10 +1165,18 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	vFuture.LogicSigVersion = 7
+	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4
 
 	vFuture.UnifyInnerTxIDs = true
+
+	vFuture.EnableSHA256TxnCommitmentHeader = true
+	vFuture.EnableOnlineAccountCatchpoints = true
+
+	vFuture.UnfundedSenders = true
+
+	vFuture.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
+	vFuture.MaxTxnBytesPerBlock = 5 * 1024 * 1024
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
@@ -1169,4 +1203,5 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
+
 }

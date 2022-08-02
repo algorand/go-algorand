@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -65,13 +66,15 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	au := &accountUpdates{}
 	ct := &catchpointTracker{}
+	ao := &onlineAccounts{}
 	au.initialize(conf)
 	ct.initialize(conf, ".")
+	ao.initialize(conf)
 
 	_, err := trackerDBInitialize(ml, false, ".")
 	a.NoError(err)
 
-	ml.trackers.initialize(ml, []ledgerTracker{au, ct}, conf)
+	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao, &txTail{}}, conf)
 	defer ml.trackers.close()
 	err = ml.trackers.loadFromDisk(ml)
 	a.NoError(err)
@@ -81,13 +84,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	<-ml.trackers.commitSyncerClosed
 	ml.trackers.commitSyncerClosed = nil
 
-	// simulate situation when au returns smaller offset b/c of consecutive versions
-	// and ct increses it
-	// base = 1, offset = 100, lookback = 16
-	// lastest = 1000
-	// would give a large mostRecentCatchpointRound value => large newBase => larger offset
-
-	expectedOffset := uint64(100)
+	expectedOffset := uint64(99)
 	blockqRound := basics.Round(1000)
 	lookback := basics.Round(16)
 	dbRound := basics.Round(1)
@@ -97,11 +94,15 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	au.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
 	au.deltasAccum = make([]int, int(blockqRound))
 	au.versions = make([]protocol.ConsensusVersion, int(blockqRound))
+	ao.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, int(blockqRound))
 	for i := 0; i <= int(expectedOffset); i++ {
 		au.versions[i] = protocol.ConsensusCurrentVersion
+		ao.onlineRoundParamsData[i] = ledgercore.OnlineRoundParamsData{CurrentProtocol: protocol.ConsensusCurrentVersion}
 	}
 	for i := int(expectedOffset) + 1; i < len(au.versions); i++ {
 		au.versions[i] = protocol.ConsensusFuture
+		ao.onlineRoundParamsData[i] = ledgercore.OnlineRoundParamsData{CurrentProtocol: protocol.ConsensusFuture}
 	}
 	au.accountsMu.Unlock()
 
@@ -117,6 +118,10 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.NotNil(cdr)
 	a.Equal(expectedOffset, cdr.offset)
 
+	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
+	a.NotNil(cdr)
+	a.Equal(expectedOffset, cdr.offset)
+
 	cdr = ct.produceCommittingTask(blockqRound, dbRound, cdr)
 	a.NotNil(cdr)
 	// before the fix
@@ -126,6 +131,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	// schedule the commit. au is expected to return offset 100 and
 	ml.trackers.mu.Lock()
 	ml.trackers.dbRound = dbRound
+	ml.trackers.lastFlushTime = time.Time{}
 	ml.trackers.mu.Unlock()
 	ml.trackers.scheduleCommit(blockqRound, lookback)
 

@@ -326,7 +326,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Returns = typeString(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
-		records[i].Doc = logic.OpDoc(spec.Name)
+		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]

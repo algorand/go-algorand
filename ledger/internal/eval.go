@@ -41,6 +41,7 @@ import (
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -332,6 +333,10 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
+func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return x.l.BlockHdrCached(r)
+}
+
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// For global, check if app params exist
 	if global {
@@ -517,14 +522,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*fromRewards = newFromRewards
 	}
 
-	var overflowed bool
-	fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
-	}
-	err = cs.putAccount(from, fromBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
+		}
+		err = cs.putAccount(from, fromBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	toBal, err := cs.lookup(to)
@@ -542,13 +550,17 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		*toRewards = newToRewards
 	}
 
-	toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
-	if overflowed {
-		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
-	}
-	err = cs.putAccount(to, toBalNew)
-	if err != nil {
-		return err
+	// Only write the change if it's meaningful (or required by old code).
+	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+		var overflowed bool
+		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
+		if overflowed {
+			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
+		}
+		err = cs.putAccount(to, toBalNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -871,7 +883,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -981,7 +993,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -1230,7 +1242,7 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
 		var err error
-		eval.block.TxnRoot, err = eval.block.PaysetCommit()
+		eval.block.TxnCommitments, err = eval.block.PaysetCommit()
 		if err != nil {
 			return err
 		}
@@ -1267,16 +1279,14 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		return err
 	}
 
-	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
-
 	if eval.validate {
 		// check commitments
 		txnRoot, err := eval.block.PaysetCommit()
 		if err != nil {
 			return err
 		}
-		if txnRoot != eval.block.TxnRoot {
-			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		if txnRoot != eval.block.TxnCommitments {
+			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnCommitments)
 		}
 
 		var expectedTxnCount uint64
