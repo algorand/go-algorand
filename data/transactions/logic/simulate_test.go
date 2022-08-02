@@ -440,6 +440,8 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 const trivialAVMProgram = `#pragma version 2
 int 1`
+const rejectAVMProgram = `#pragma version 2
+int 0`
 
 func TestSimpleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -495,6 +497,62 @@ func TestSimpleAppCall(t *testing.T) {
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
+}
+
+func TestRejectAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := makeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := makeTestAccounts()
+	sender := accounts[0].Address
+
+	// Compile AVM program
+	ops, err := AssembleString(rejectAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	prog := ops.Program
+
+	// Create program and call it
+	futureAppID := 1
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   prog,
+					ClearStateProgram: prog,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeBasicTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     basics.AppIndex(futureAppID),
+					ApprovalProgram:   prog,
+					ClearStateProgram: prog,
+				},
+			},
+		},
+	}
+
+	attachGroupID(txgroup)
+	result, err := s.SimulateSignedTxGroup(txgroup)
+	require.NoError(t, err)
+	require.Contains(t, *result.FailureMessage, "transaction rejected by ApprovalProgram")
 }
 
 func TestSignatureCheck(t *testing.T) {
