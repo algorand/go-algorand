@@ -418,10 +418,11 @@ commands:
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
             export PARALLEL_FLAG="-p 1"
-            # TODO: the next 3 are temporary
-            export FORCE_KEEP_TEMPS=1
-            export E2E_TEST_FILTER=SCRIPTS 
-            export AWS_NET_UPLOAD=znet_done.tar.bz2
+            # TODO: this black through *.sh is temporary. DO NOT MERGE!!!
+            # export FORCE_KEEP_TEMPS=1 # merge got rid of this usage
+            # CI_KEEP_TEMP_PLATFORM=????
+            # export E2E_TEST_FILTER=SCRIPTS
+            # export CI_E2E_FILENAME=znet_done
             test/scripts/run_integration_tests.sh
 
       - store_artifacts:

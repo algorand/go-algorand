@@ -257,9 +257,8 @@ fulltest: build-race
 shorttest: build-race
 	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
-# TODO: DO NOT MERGE THIS CHANGE:
 integration: build-race
-	E2E_TEST_FILTER=SCRIPTS FORCE_KEEP_TEMPS=1 AWS_NET_UPLOAD=znet_done.tar.bz2 ./test/scripts/run_integration_tests.sh
+	./test/scripts/run_integration_tests.sh
 
 testall: fulltest integration
 
