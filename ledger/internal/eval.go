@@ -1178,7 +1178,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 }
 
 // stateProofVotersAndTotal returns the expected values of StateProofVotersCommitment
-// and StateProofVotersTotalWeight for a block.
+// and StateProofOnlineTotalWeight for a block.
 func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
 	if eval.proto.StateProofInterval == 0 {
 		return
@@ -1221,7 +1221,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
-			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
+			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofOnlineTotalWeight, err = eval.stateProofVotersAndTotal()
 			if err != nil {
 				return err
 			}
@@ -1268,8 +1268,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
-			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+			return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
 			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.GetStateProofNextRound())

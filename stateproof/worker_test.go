@@ -91,10 +91,10 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
-		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofOnlineTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
-	stateProofBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
+	stateProofBasic.StateProofOnlineTotalWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes

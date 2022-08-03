@@ -504,8 +504,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// OnlineTotals return the total online balance for the given round.
-func (ao *onlineAccounts) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// onlineTotals return the total online balance for the given round.
+func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
 	return ao.onlineTotalsImpl(rnd)
@@ -718,9 +718,12 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 }
 
 // TopOnlineAccounts returns the top n online accounts, sorted by their normalized
-// balance and address, whose voting keys are valid in voteRnd.  See the
-// normalization description in AccountData.NormalizedOnlineBalance().
-func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+// balance and address, whose voting keys are valid in voteRnd.
+// The second return value represents the total stake that is online for round == rnd, but will
+// not participate in round == voteRnd.
+// See the normalization description in AccountData.NormalizedOnlineBalance().
+// The return value of totalOnlineStake represents the total stake that is online for voteRnd: it is an approximation since voteRnd did not yet occur.
+func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) (topOnlineAccounts []*ledgercore.OnlineAccount, totalOnlineStake basics.MicroAlgos, err error) {
 	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {
@@ -732,7 +735,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
 				ao.accountsMu.RUnlock()
-				return nil, err
+				return nil, basics.MicroAlgos{}, err
 			}
 			// the round number cannot be found in deltas, it is in history
 			inMemory = false
@@ -740,6 +743,9 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 		}
 
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
+		// Online accounts that will not be valid in voteRnd. Used to calculate their total stake,
+		// to be removed from the total online stake if required (lower the upper bound of total online stake in voteRnd).
+		invalidOnlineAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 		if inMemory {
 			// Determine how many accounts have been modified in-memory,
 			// so that we obtain enough top accounts from disk (accountdb).
@@ -758,6 +764,8 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 					if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
 						modifiedAccounts[addr] = nil
+						fmt.Println("Account not valid in voteRnd:", addr, "with MicroAlgos:", d.MicroAlgos.Raw)
+						invalidOnlineAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
 						continue
 					}
 
@@ -794,7 +802,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
 			if err != nil {
-				return nil, err
+				return nil, basics.MicroAlgos{}, err
 			}
 
 			if dbRound != currentDbRound {
@@ -803,6 +811,10 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 			for addr, data := range accts {
 				if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+					// If already exists it originated from the deltas, meaning its data is more recent
+					if _, ok := invalidOnlineAccounts[addr]; !ok {
+						invalidOnlineAccounts[addr] = data
+					}
 					continue
 				}
 				candidates[addr] = data
@@ -830,7 +842,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 		}
 		if dbRound < currentDbRound && dbRound != basics.Round(0) {
 			ao.log.Errorf("onlineAccounts.onlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return nil, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			return nil, basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 
 		// Now update the candidates based on the in-memory deltas.
@@ -853,13 +865,24 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			heap.Push(topHeap, data)
 		}
 
-		var res []*ledgercore.OnlineAccount
-		for topHeap.Len() > 0 && uint64(len(res)) < n {
+		for topHeap.Len() > 0 && uint64(len(topOnlineAccounts)) < n {
 			acct := heap.Pop(topHeap).(*ledgercore.OnlineAccount)
-			res = append(res, acct)
+			topOnlineAccounts = append(topOnlineAccounts, acct)
 		}
 
-		return res, nil
+		totalOnlineStake, err = ao.onlineTotals(rnd)
+		if err != nil {
+			return nil, basics.MicroAlgos{}, err
+		}
+		ot := basics.OverflowTracker{}
+		for _, oa := range invalidOnlineAccounts {
+			totalOnlineStake = ot.SubA(totalOnlineStake, oa.MicroAlgos)
+			if ot.Overflowed {
+				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
+			}
+		}
+
+		return topOnlineAccounts, totalOnlineStake, nil
 	}
 }
 

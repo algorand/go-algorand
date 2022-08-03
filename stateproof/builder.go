@@ -418,6 +418,7 @@ func (spw *Worker) tryBroadcast() {
 		sp, err := b.Build()
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
+			fmt.Println("spw.tryBuilding: building state proof for: ", rnd, err)
 			continue
 		}
 

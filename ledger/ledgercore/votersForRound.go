@@ -36,7 +36,7 @@ type OnlineAccountsFetcher interface {
 	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 	// balance and address, whose voting keys are valid in voteRnd.  See the
 	// normalization description in AccountData.NormalizedOnlineBalance().
-	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*OnlineAccount, error)
+	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
@@ -105,7 +105,7 @@ func createStateProofParticipant(stateProofID *merklesignature.Commitment, money
 	return retPart
 }
 
-// LoadTree loads the participation tree and other required fields, using the provided TopOnlineAccounts function.
+// LoadTree loads the participation tree and other required fields, using the provided OnlineAccountsFetcher.
 func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
@@ -113,14 +113,14 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	// using the balances from round r.
 	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters)
+	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters)
 	if err != nil {
 		return err
 	}
+	fmt.Println("LoadTree:", "round:", hdr.Round, "stateProofRound:", stateProofRound, "totalWeight:", totalOnlineWeight)
 
 	participants := make(basics.ParticipantsArray, len(top))
 	addrToPos := make(map[basics.Address]uint64)
-	var totalWeight basics.MicroAlgos
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
@@ -128,11 +128,6 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 		money := ot.AddA(acct.MicroAlgos, rewards)
 		if ot.Overflowed {
 			return fmt.Errorf("votersTracker.LoadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)
-		}
-
-		totalWeight = ot.AddA(totalWeight, money)
-		if ot.Overflowed {
-			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
 		participants[i] = createStateProofParticipant(&acct.StateProofID, money)
@@ -147,7 +142,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	tr.mu.Lock()
 	tr.AddrToPos = addrToPos
 	tr.Participants = participants
-	tr.TotalWeight = totalWeight
+	tr.TotalWeight = totalOnlineWeight
 	tr.Tree = tree
 	tr.cond.Broadcast()
 	tr.mu.Unlock()

@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -778,7 +779,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		accts = append(accts, newAccts)
 
 		if i > basics.Round(maxBalLookback) && i%10 == 0 {
-			onlineTotal, err := ao.OnlineTotals(i - basics.Round(maxBalLookback))
+			onlineTotal, err := ao.onlineTotals(i - basics.Round(maxBalLookback))
 			require.NoError(t, err)
 			require.Equal(t, allTotals[i-basics.Round(maxBalLookback)].Online.Money, onlineTotal)
 			expectedConsensusVersion := testProtocolVersion1
@@ -814,7 +815,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(maxBalLookback)], dbOnlineRoundParams)
 
 	for i := ml.Latest() - basics.Round(maxBalLookback); i < ml.Latest(); i++ {
-		onlineTotal, err := ao.OnlineTotals(i)
+		onlineTotal, err := ao.onlineTotals(i)
 		require.NoError(t, err)
 		require.Equal(t, allTotals[i].Online.Money, onlineTotal)
 	}
@@ -1308,9 +1309,10 @@ func TestAcctOnlineTop(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	au, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
-
-	top, err := oa.TopOnlineAccounts(0, 0, 5)
+	initialOnlineTotals, err := oa.onlineTotals(0)
 	a.NoError(err)
+	fmt.Println("initialOnlineTotals:", initialOnlineTotals)
+	top := compareOnlineTotals(a, oa, 0, 0, 5, initialOnlineTotals, initialOnlineTotals)
 	compareTopAccounts(a, top, allAccts)
 
 	_, totals, err := au.LatestTotals()
@@ -1318,36 +1320,39 @@ func TestAcctOnlineTop(t *testing.T) {
 
 	// mark one of the top N accounts as offline - we expect that it will be removed form the top N
 	var updates ledgercore.AccountDeltas
-	updates.Upsert(allAccts[numAccts-3].Addr, ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+	ac := allAccts[numAccts-3]
+	updates.Upsert(ac.Addr, ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: ac.MicroAlgos}, VotingData: ledgercore.VotingData{}})
 	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 1, oa)
-
-	accountToBeUpdated := allAccts[numAccts-3]
+	accountToBeUpdated := ac
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-3] = accountToBeUpdated
 
-	top, err = oa.TopOnlineAccounts(1, 1, 5)
-	a.NoError(err)
+	var ot basics.OverflowTracker
+	updatedOnlineStake := ot.SubA(initialOnlineTotals, ac.MicroAlgos)
+	top = compareOnlineTotals(a, oa, 1, 1, 5, updatedOnlineStake, updatedOnlineStake)
 	compareTopAccounts(a, top, allAccts)
 
 	// update an account to have expired keys
 	updates = ledgercore.AccountDeltas{}
 	updates.Upsert(allAccts[numAccts-2].Addr, ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online},
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[numAccts-2].MicroAlgos},
 		VotingData: ledgercore.VotingData{
 			VoteFirstValid: 0,
 			VoteLastValid:  1,
 		}})
 	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 2, oa)
-
+	fmt.Println("Updated account:", allAccts[numAccts-2].Addr)
 	// we expect the previous account to be removed from the top N accounts since its keys are expired.
 	// remove it from the expected allAccts slice by marking it as offline
 	accountToBeUpdated = allAccts[numAccts-2]
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-2] = accountToBeUpdated
 
-	top, err = oa.TopOnlineAccounts(2, 2, 5)
-	a.NoError(err)
+	notValidAccountStake := accountToBeUpdated.MicroAlgos
+	voteRndExpectedOnlineStake := ot.SubA(initialOnlineTotals, notValidAccountStake)
+	a.False(ot.Overflowed)
+	top = compareOnlineTotals(a, oa, 2, 2, 5, updatedOnlineStake, voteRndExpectedOnlineStake)
 	compareTopAccounts(a, top, allAccts)
 
 	// mark an account with high stake as online - it should be pushed to the top of the list
@@ -1355,19 +1360,16 @@ func TestAcctOnlineTop(t *testing.T) {
 		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[numAccts-1].MicroAlgos},
 		VotingData:      ledgercore.VotingData{VoteLastValid: basics.Round(1000)}})
 	newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 3, oa)
-
 	accountToBeUpdated = allAccts[numAccts-1]
 	accountToBeUpdated.Status = basics.Online
 	accountToBeUpdated.MicroAlgos = allAccts[numAccts-1].MicroAlgos
 	accountToBeUpdated.VoteLastValid = basics.Round(1000)
 	allAccts[numAccts-1] = accountToBeUpdated
 
-	top, err = oa.TopOnlineAccounts(3, 3, 5)
-	a.NoError(err)
+	top = compareOnlineTotals(a, oa, 3, 3, 5, updatedOnlineStake, voteRndExpectedOnlineStake)
 	compareTopAccounts(a, top, allAccts)
 
 	a.Equal(top[0].Address, allAccts[numAccts-1].Addr)
-
 }
 
 func TestAcctOnlineTopInBatches(t *testing.T) {
@@ -1400,7 +1402,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	_, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
-	top, err := oa.TopOnlineAccounts(0, 0, 2048)
+	top, _, err := oa.TopOnlineAccounts(0, 0, 2048)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 }
@@ -1445,7 +1447,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.TopOnlineAccounts(0, 0, 5)
+	top, _, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1483,7 +1485,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 			time.Sleep(2 * time.Second)
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		top, err = oa.TopOnlineAccounts(2, 2, 5)
+		top, _, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.NoError(err)
 
 		accountToBeUpdated := allAccts[numAccts-1]
@@ -1536,7 +1538,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.TopOnlineAccounts(0, 0, 5)
+	top, _, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1579,11 +1581,81 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			})
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		_, err = oa.TopOnlineAccounts(2, 2, 5)
+		_, _, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.Error(err)
 		a.Contains(err.Error(), "is behind in-memory round")
 
 	case <-time.After(1 * time.Minute):
 		a.FailNow("timedout while waiting for post commit")
 	}
+}
+
+func TestAcctOnlineTop2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	for i := 0; i < numAccts-1; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+
+	allAccts[numAccts-1] = basics.BalanceRecord{
+		Addr: ledgertesting.RandomAddress(),
+		AccountData: basics.AccountData{
+			MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
+			Status:         basics.Online,
+			VoteLastValid:  1,
+			VoteFirstValid: 0,
+			RewardsBase:    0},
+	}
+	genesisAccts[0][allAccts[numAccts-1].Addr] = allAccts[numAccts-1].AccountData
+
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	for i := 1; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	startingTotalOnlineStake, err := oa.onlineTotals(0)
+	a.NoError(err)
+	top := compareOnlineTotals(a, oa, 0, 2, 2048, startingTotalOnlineStake, startingTotalOnlineStake)
+	compareTopAccounts(a, top, allAccts)
+}
+
+func compareOnlineTotals(a *require.Assertions, oa *onlineAccounts, rnd, voteRnd basics.Round, n uint64, expectedForRnd, expectedForVoteRnd basics.MicroAlgos) []*ledgercore.OnlineAccount {
+	top, onlineTotalVoteRnd, err := oa.TopOnlineAccounts(rnd, voteRnd, n)
+	a.NoError(err)
+	fmt.Println("Total online stake voteRnd:", onlineTotalVoteRnd)
+	a.Equal(expectedForVoteRnd, onlineTotalVoteRnd)
+	onlineTotalsRnd, err := oa.onlineTotals(rnd)
+	a.NoError(err)
+	a.Equal(expectedForRnd, onlineTotalsRnd)
+	fmt.Println("Total online stake rnd:", onlineTotalsRnd)
+	return top
 }
