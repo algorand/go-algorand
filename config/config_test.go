@@ -301,7 +301,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		modified, err := migrate(c)
 		a.NoError(err)
-		a.Equal(defaultLocal, modified)
+		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
