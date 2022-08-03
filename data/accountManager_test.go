@@ -25,10 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -173,4 +175,76 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 	t.Logf("testDuration %v keysTotalDuration %v\n", testDuration, keysTotalDuration)
 	require.Lessf(t, keysTotalDuration, testDuration/100, fmt.Sprintf("the time to aquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
 	t.Logf("Calling AccountManager.Keys() while AccountManager.DeleteOldKeys() was busy, 10 times in a row, resulted in accumulated delay of %v\n", keysTotalDuration)
+}
+
+func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+
+	registry, dbName := getRegistryImpl(t, false, true)
+	defer registryCloseTest(t, registry, dbName)
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Error)
+
+	acctManager := MakeAccountManager(log, registry)
+
+	databaseFiles := make([]string, 0)
+	defer func() {
+		for _, fileName := range databaseFiles {
+			os.Remove(fileName)
+			os.Remove(fileName + "-shm")
+			os.Remove(fileName + "-wal")
+			os.Remove(fileName + "-journal")
+		}
+	}()
+
+	// Generate 2 participations under the same account
+	store, err := db.MakeAccessor("stateprooftest", false, true)
+	a.NoError(err)
+	root, err := account.GenerateRoot(store)
+	a.NoError(err)
+	part1, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, basics.Round(merklesignature.KeyLifetimeDefault*2), 3)
+	a.NoError(err)
+	store.Close()
+
+	store, err = db.MakeAccessor("stateprooftest", false, true)
+	a.NoError(err)
+	part2, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(merklesignature.KeyLifetimeDefault), basics.Round(merklesignature.KeyLifetimeDefault*3), 3)
+	a.NoError(err)
+	store.Close()
+
+	keys1 := part1.StateProofSecrets.GetAllKeys()
+	keys2 := part2.StateProofSecrets.GetAllKeys()
+
+	// Add participations to the registry and append StateProof keys as well
+	part1ID, err := acctManager.registry.Insert(part1.Participation)
+	a.NoError(err)
+	err = registry.AppendKeys(part1ID, keys1)
+	a.NoError(err)
+
+	err = acctManager.registry.Flush(10 * time.Second)
+	a.NoError(err)
+
+	res := acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault))
+	a.Equal(1, len(res))
+	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault * 2))
+	a.Equal(1, len(res))
+
+	part2ID, err := acctManager.registry.Insert(part2.Participation)
+	a.NoError(err)
+	err = registry.AppendKeys(part2ID, keys2)
+	a.NoError(err)
+
+	err = acctManager.registry.Flush(10 * time.Second)
+	a.NoError(err)
+
+	res = acctManager.StateProofKeys(0)
+	a.Equal(1, len(res))
+	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault))
+	a.Equal(2, len(res))
+	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault * 2))
+	a.Equal(2, len(res))
+	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault * 3))
+	a.Equal(1, len(res))
 }

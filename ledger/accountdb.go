@@ -1360,7 +1360,7 @@ type baseVotingData struct {
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
-	StateProofID    merklesignature.Verifier        `codec:"F"`
+	StateProofID    merklesignature.Commitment      `codec:"F"`
 }
 
 type baseOnlineAccountData struct {
@@ -2302,7 +2302,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
 			// store old data for account hash update
 			state := acctState{old: ba, oldEnc: encodedAcctData}
-			ba.StateProofID = merklesignature.Verifier{}
+			ba.StateProofID = merklesignature.Commitment{}
 			encodedOnlineAcctData := protocol.Encode(&ba)
 			copy(addr[:], addrbuf)
 			state.new = ba
@@ -3657,7 +3657,7 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
-			var chunkSize int = sqliteMaxVariableNumber
+			chunkSize := sqliteMaxVariableNumber
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}

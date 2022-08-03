@@ -46,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -74,6 +75,7 @@ type LedgerForAPI interface {
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -116,7 +118,7 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	}
 
 	if record.StateProof != nil {
-		tmp := record.StateProof[:]
+		tmp := record.StateProof.Commitment[:]
 		participationKey.Key.StateProofKey = &tmp
 	}
 
@@ -143,6 +145,31 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	participationKey.LastStateProof = roundToPtrOrNil(record.LastStateProof)
 
 	return participationKey
+}
+
+// ErrNoStateProofForRound returned when a state proof transaction could not be found
+var ErrNoStateProofForRound = errors.New("no state proof can be found for that round")
+
+// GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
+// attestation period). the latestRound should be provided as an upper bound for the search
+func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round) (transactions.Transaction, error) {
+	for i := round + 1; i <= latestRound; i++ {
+		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
+		if err != nil {
+			return transactions.Transaction{}, err
+		}
+		for _, txn := range txns {
+			if txn.Txn.Type != protocol.StateProofTx {
+				continue
+			}
+
+			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
+				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
+				return txn.Txn, nil
+			}
+		}
+	}
+	return transactions.Transaction{}, ErrNoStateProofForRound
 }
 
 // GetParticipationKeys Return a list of participation keys
@@ -1207,6 +1234,68 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 			Result: base64.StdEncoding.EncodeToString(ops.Program),
 		},
 		sourcemap,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetStateProof returns the state proof for a given round.
+// (GET /v2/stateproofs/{round})
+func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
+	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	if err != nil {
+		if errors.Is(err, ErrNoStateProofForRound) {
+			return notFound(ctx, err, err.Error(), v2.Log)
+		}
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.StateProofResponse{
+		Message:    protocol.Encode(&tx.Message),
+		StateProof: protocol.Encode(&tx.StateProof),
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetProofForLightBlockHeader Gets a proof of a light block header for a given round
+// (GET /v2/blocks/{round}/lightheader/proof)
+func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
+
+	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	if err != nil {
+		if errors.Is(err, ErrNoStateProofForRound) {
+			return notFound(ctx, err, err.Error(), v2.Log)
+		}
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	lastAttestedRound := stateProof.Message.LastAttestedRound
+	firstAttestedRound := stateProof.Message.FirstAttestedRound
+	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
+
+	lightHeaders, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
+	if err != nil {
+		return notFound(ctx, err, err.Error(), v2.Log)
+	}
+
+	blockIndex := round - firstAttestedRound
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, lightHeaders, blockIndex)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.LightBlockHeaderProofResponse{
+		Index:     blockIndex,
+		Proof:     leafproof.GetConcatenatedProof(),
+		Treedepth: uint64(leafproof.TreeDepth),
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

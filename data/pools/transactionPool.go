@@ -329,12 +329,12 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// Special case: the compact cert transaction, if issued from the
-	// special compact-cert-sender address, in a singleton group, pays
+	// Special case: the state proof transaction, if issued from the
+	// special state-proof-sender address, in a singleton group, pays
 	// no fee.
 	if len(txgroup) == 1 {
 		t := txgroup[0].Txn
-		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+		if t.Type == protocol.StateProofTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
 			return nil
 		}
 	}
@@ -771,6 +771,34 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	return
 }
 
+func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
+	stateProofStats := telemetryspec.StateProofStats{
+		ProvenWeight:   0,
+		SignedWeight:   txib.Txn.StateProofTxnFields.StateProof.SignedWeight,
+		NumReveals:     len(txib.Txn.StateProofTxnFields.StateProof.Reveals),
+		NumPosToReveal: len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal),
+		TxnSize:        encodedLen,
+	}
+
+	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	if err != nil {
+		return stateProofStats
+	}
+
+	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
+	votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
+	if err != nil {
+		return stateProofStats
+	}
+
+	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
+	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
+
+	return stateProofStats
+}
+
 // AssembleBlock assembles a block for a given round, trying not to
 // take longer than deadline to finish.
 func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (assembled *ledgercore.ValidatedBlock, err error) {
@@ -816,6 +844,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 						}
 					}
 					stats.TotalLength += uint64(encodedLen)
+					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+					if txib.Txn.Type == protocol.StateProofTx {
+						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
+					}
 				}
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)

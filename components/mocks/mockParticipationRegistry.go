@@ -44,6 +44,11 @@ func (m *MockParticipationRegistry) Delete(id account.ParticipationID) error {
 	return nil
 }
 
+// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+func (m *MockParticipationRegistry) DeleteStateProofKeys(id account.ParticipationID, round basics.Round) error {
+	return nil
+}
+
 // DeleteExpired removes all records from storage which are expired on the given round.
 func (m *MockParticipationRegistry) DeleteExpired(latestRound basics.Round, agreementProto config.ConsensusParams) error {
 	return nil

@@ -1117,9 +1117,8 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	const seedLookback = 3
 	const seedInteval = 4
 	const maxBalLookback = 2 * seedLookback * seedInteval
-	const compactCertRounds = maxBalLookback / 2 // have it less than maxBalLookback but greater than default deltas size (8)
-	const compactCertVotersLookback = 2
-	const compactCertSecKQ = compactCertRounds / 2
+	const stateProofRounds = maxBalLookback / 2 // have it less than maxBalLookback but greater than default deltas size (8)
+	const stateProofVotersLookback = 2
 
 	const numAccts = maxBalLookback * 5
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
@@ -1140,9 +1139,8 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	protoParams.MaxBalLookback = maxBalLookback
 	protoParams.SeedLookback = seedLookback
 	protoParams.SeedRefreshInterval = seedInteval
-	protoParams.CompactCertRounds = compactCertRounds
-	protoParams.CompactCertVotersLookback = compactCertVotersLookback
-	protoParams.CompactCertSecKQ = compactCertSecKQ
+	protoParams.StateProofInterval = stateProofRounds
+	protoParams.StateProofVotersLookback = stateProofVotersLookback
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1172,8 +1170,8 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.Equal(t, basics.Round(maxBlocks-int(conf.MaxAcctLookback)), oa.cachedDBRoundOnline)
 	// voters stalls after the first interval
 	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
-	require.Equal(t, basics.Round(compactCertRounds-compactCertVotersLookback), lowest)
-	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.round))
+	require.Equal(t, basics.Round(stateProofRounds-stateProofVotersLookback), lowest)
+	require.Equal(t, maxBlocks/stateProofRounds, len(oa.voters.votersForRoundCache))
 	retain, lookback := oa.committedUpTo(oa.latest())
 	require.Equal(t, lowest, retain)
 	require.Equal(t, conf.MaxAcctLookback, uint64(lookback))
@@ -1295,7 +1293,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	au, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1312,7 +1310,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-3] = accountToBeUpdated
 
-	top, err = oa.onlineTop(1, 1, 5)
+	top, err = oa.TopOnlineAccounts(1, 1, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1332,7 +1330,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.Status = basics.Offline
 	allAccts[numAccts-2] = accountToBeUpdated
 
-	top, err = oa.onlineTop(2, 2, 5)
+	top, err = oa.TopOnlineAccounts(2, 2, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1348,7 +1346,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	accountToBeUpdated.VoteLastValid = basics.Round(1000)
 	allAccts[numAccts-1] = accountToBeUpdated
 
-	top, err = oa.onlineTop(3, 3, 5)
+	top, err = oa.TopOnlineAccounts(3, 3, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1386,7 +1384,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	_, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
-	top, err := oa.onlineTop(0, 0, 2048)
+	top, err := oa.TopOnlineAccounts(0, 0, 2048)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 }
@@ -1431,7 +1429,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1469,7 +1467,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 			time.Sleep(2 * time.Second)
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		top, err = oa.onlineTop(2, 2, 5)
+		top, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.NoError(err)
 
 		accountToBeUpdated := allAccts[numAccts-1]
@@ -1522,7 +1520,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, err := oa.onlineTop(0, 0, 5)
+	top, err := oa.TopOnlineAccounts(0, 0, 5)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1565,7 +1563,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			})
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		_, err = oa.onlineTop(2, 2, 5)
+		_, err = oa.TopOnlineAccounts(2, 2, 5)
 		a.Error(err)
 		a.Contains(err.Error(), "is behind in-memory round")
 

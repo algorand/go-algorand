@@ -1210,11 +1210,20 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 	return
 }
 
-// TxnProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TxnProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
+// TransactionProof returns a Merkle proof for a transaction in a block.
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		return algod.Proof(txid, round, hashType)
+		return algod.TransactionProof(txid, round, hashType)
+	}
+	return
+}
+
+// LightBlockHeaderProof returns a Merkle proof for a block.
+func (c *Client) LightBlockHeaderProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.LightBlockHeaderProof(round)
 	}
 	return
 }

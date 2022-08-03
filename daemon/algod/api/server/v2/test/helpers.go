@@ -80,6 +80,7 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
+// but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	ledger    v2.LedgerForAPI
@@ -88,6 +89,7 @@ type mockNode struct {
 	err       error
 	id        account.ParticipationID
 	keys      account.StateProofKeys
+	usertxns  map[basics.Address][]node.TxnWithStatus
 }
 
 func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -117,7 +119,9 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mo
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),
-		err:       nodeError}
+		err:       nodeError,
+		usertxns:  map[basics.Address][]node.TxnWithStatus{},
+	}
 }
 
 func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
@@ -167,7 +171,12 @@ func (m mockNode) ListeningAddress() (string, bool) {
 func (m mockNode) Stop() {}
 
 func (m mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
-	return nil, fmt.Errorf("listtxns not implemented")
+	txns, ok := m.usertxns[addr]
+	if !ok {
+		return nil, fmt.Errorf("no txns for %s", addr)
+	}
+
+	return txns, nil
 }
 
 func (m mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {

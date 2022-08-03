@@ -45,6 +45,11 @@ type AccountManager struct {
 	log      logging.Logger
 }
 
+// DeleteStateProofKey deletes all keys connected to ParticipationID that came before (including) the given round.
+func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	return manager.registry.DeleteStateProofKeys(id, round)
+}
+
 // MakeAccountManager creates a new AccountManager with a custom logger
 func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}
@@ -77,7 +82,7 @@ func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.S
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				manager.log.Errorf("error while loading round secrets from participation registry: %w", err)
 				continue
 			}
 			out = append(out, partRndSecrets)

@@ -14,6 +14,66 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func TestMarshalUnmarshalCommitment(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Commitment{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingCommitment(t *testing.T) {
+	protocol.RunEncodingTest(t, &Commitment{})
+}
+
+func BenchmarkMarshalMsgCommitment(b *testing.B) {
+	v := Commitment{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgCommitment(b *testing.B) {
+	v := Commitment{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalCommitment(b *testing.B) {
+	v := Commitment{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalKeyRoundPair(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := KeyRoundPair{}
