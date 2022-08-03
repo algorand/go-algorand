@@ -19,7 +19,6 @@ package catchup
 import (
 	"context"
 	"fmt"
-
 	"sync"
 	"time"
 
@@ -475,16 +474,16 @@ func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	}
 	//calculate the lowest round needed for verify the upcoming state proof txn.
 	expectedStateProofRound := topBlock.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	roundForStateproofVerification := expectedStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	stateproofVerificationRound := expectedStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
-	lowestRoundForRecovery := topBlock.Round().SubSaturate(topBlock.Round() % basics.Round(proto.StateProofInterval))
-	lowestRoundForRecovery = lowestRoundForRecovery.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)))
+	lowestRecoveryRound := topBlock.Round().SubSaturate(topBlock.Round() % basics.Round(proto.StateProofInterval))
+	lowestRecoveryRound = lowestRecoveryRound.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)))
 
-	if lowestRoundForRecovery > roundForStateproofVerification {
-		return uint64(topBlock.Round().SubSaturate(lowestRoundForRecovery))
+	if lowestRecoveryRound > stateproofVerificationRound {
+		return uint64(topBlock.Round().SubSaturate(lowestRecoveryRound))
 	}
 
-	return uint64(topBlock.Round().SubSaturate(roundForStateproofVerification))
+	return uint64(topBlock.Round().SubSaturate(stateproofVerificationRound))
 }
 
 // processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
