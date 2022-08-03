@@ -1208,6 +1208,23 @@ func initConsensusProtocols() {
 
 	// vAlpha2 can be upgraded to vAlpha3, with a short update delay of a few hours
 	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
+
+	vAlpha4 := vAlpha3
+
+	// Enable state proofs.
+	vAlpha4.StateProofInterval = 256
+	vAlpha4.StateProofTopVoters = 1024
+	vAlpha4.StateProofVotersLookback = 16
+	vAlpha4.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	vAlpha4.StateProofStrengthTarget = 256
+	vAlpha4.StateProofMaxRecoveryIntervals = 10
+
+	vAlpha4.EnableSHA256TxnCommitmentHeader = true
+
+	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
+
+	// vAlpha3 can be upgraded to vAlpha4, with a short update delay of a few hours
+	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

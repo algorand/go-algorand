@@ -188,16 +188,21 @@ const ConsensusVAlpha1 = ConsensusVersion(
 	"alpha1",
 )
 
-// ConsensusVAlpha2 is the second consensus protocol for AlphaNet, which increases the
+// ConsensusVAlpha2 is the second consensus protocol for AlphaNet, which decreases the
 // filter timeout to 3.5 seconds and uses 5MiB blocks.
 const ConsensusVAlpha2 = ConsensusVersion(
 	"alpha2",
 )
 
-// ConsensusVAlpha3 is the second consensus protocol for AlphaNet, which increases the
+// ConsensusVAlpha3 is the third consensus protocol for AlphaNet, which decreases the
 // filter timeout to 3.4 seconds.
 const ConsensusVAlpha3 = ConsensusVersion(
 	"alpha3",
+)
+
+// ConsensusVAlpha3 is the second consensus protocol for AlphaNet, which enables state proofs.
+const ConsensusVAlpha4 = ConsensusVersion(
+	"alpha4",
 )
 
 // !!! ********************* !!!
