@@ -25,88 +25,88 @@ REGION_DEFAULTS = {
 REGIONS = {
     "AWS-US-EAST-1": {      # Virginia, USA
         "R": 20,
-        "N": 2,
-        "NPN": 20
+        "NPN": 2,
+        "N": 20
     },
     "AWS-US-EAST-2": {      # Ohio, USA
         "R": 20,
-        "N": 2,
-        "NPN": 20
+        "NPN": 2,
+        "N": 20
     },
     "AWS-US-WEST-2": {      # Oregon, USA
         "R": 10,
-        "N": 2,
-        "NPN": 20
+        "NPN": 2,
+        "N": 20
     },
     "AWS-CA-CENTRAL-1": {   # Canada
         "R": 6,
-        "N": 1,
-        "NPN": 5
+        "NPN": 1,
+        "N": 5
     },
     "AWS-EU-CENTRAL-1": {   # Frankfurt, Germany
         "R": 10,
-        "N": 2,
-        "NPN": 10
+        "NPN": 2,
+        "N": 10
     },
     "AWS-EU-WEST-1": {      # Ireland
         "R": 14,
-        "N": 1,
-        "NPN": 8
+        "NPN": 1,
+        "N": 8
     },
     "AWS-EU-NORTH-1": {     # Stockholm, Sweden
         "R": 2,
-        "N": 1,
-        "NPN": 6
+        "NPN": 1,
+        "N": 6
     },
     "AWS-EU-SOUTH-1": {     # Milan, Italy
         "R": 4,
-        "N": 1,
-        "NPN": 4
+        "NPN": 1,
+        "N": 4
     },
     "AWS-AP-EAST-1": {      # Hong Kong, China
         "R": 5,
-        "N": 2,
-        "NPN": 10
+        "NPN": 2,
+        "N": 10
     },
     "AWS-AP-SOUTH-1": {     # Mumbai, India
         "R": 3,
-        "N": 1,
-        "NPN": 2
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-SOUTHEAST-1": { # Singapore
         "R": 12,
-        "N": 1,
-        "NPN": 2
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-SOUTHEAST-2": { # Sydney, Australia
         "R": 4,
-        "N": 1,
-        "NPN": 4
+        "NPN": 1,
+        "N": 4
     },
     "AWS-AP-NORTHEAST-2": { # Seoul, South Korea
         "R": 1,
-        "N": 1,
-        "NPN": 2
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-NORTHEAST-3": { # Osaka, Japan
         "R": 15,
-        "N": 1,
-        "NPN": 12
+        "NPN": 1,
+        "N": 12
     },
     "AWS-ME-SOUTH-1": {     # Middle East
         "R": 2,
-        "N": 1,
-        "NPN": 2
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AF-SOUTH-1": {     # Cape Town, South Africa
         "R": 4,
-        "N": 1,
-        "NPN": 1
+        "NPN": 1,
+        "N": 1
     },
     "AWS-SA-EAST-1": {      # Sao Paulo, Brazil
         "R": 4,
-        "N": 1,
-        "NPN": 4
+        "NPN": 1,
+        "N": 4
     }
 }
 
