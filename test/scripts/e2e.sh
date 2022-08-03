@@ -122,11 +122,11 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
-    
+
     # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
     # Please update as necessary.
     "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
-    
+
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
     duration "e2e client setup"
@@ -158,32 +158,34 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
-    echo "Current platform: ${E2E_PLATFORM}"
-
     KEEP_TEMPS_CMD_STR=""
 
     # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
     # so that we can keep the temporary test artifact for use in the indexer e2e tests.
-    # The file is located at ${TEMPDIR}/${AWS_NET_UPLOAD}
-    # TODO: Do I still need FORCE_KEEP_TEMPS ?
-    if [ "$E2E_PLATFORM" == "arm64" ] || [ -n "$FORCE_KEEP_TEMPS" ]; then
+    # The file is located at ${TEMPDIR}/net_done.tar.bz2
+    if [ -n "$CI_KEEP_TEMP_PLATFORM" ] && [ "$CI_KEEP_TEMP_PLATFORM" == "$CI_PLATFORM" ]; then
+      echo "Setting --keep-temps so that an e2e artifact can be saved."
       KEEP_TEMPS_CMD_STR="--keep-temps"
     fi
 
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${KEEP_TEMPS_CMD_STR} ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+
+    clientrunner="${TEMPDIR}/ve/bin/python3 e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
+
+    $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
-        if [ -z "$AWS_NET_UPLOAD" ]; then
-            AWS_NET_UPLOAD="net_done.tar.bz2"
+        # This should be set by CI, but if it isn't set a default.
+        if [ -z "$CI_E2E_FILENAME" ]; then
+          CI_E2E_FILENAME="net_done"
         fi
 
         pushd "${TEMPDIR}" || exit 1
-        tar -j -c -f ${AWS_NET_UPLOAD} --exclude node.log --exclude agreement.cdv net
+        tar -j -c -f "${CI_E2E_FILENAME}.tar.bz2" --exclude node.log --exclude agreement.cdv net
         rm -rf "${TEMPDIR}/net"
         RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${AWS_NET_UPLOAD}" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/${AWS_NET_UPLOAD}
-        aws s3 cp --acl public-read "${TEMPDIR}/${AWS_NET_UPLOAD}" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/${AWS_NET_UPLOAD}
+        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         popd
     fi
 
@@ -194,20 +196,19 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     echo "BINDIR = $BINDIR"
     echo "DATADIR = $DATADIR"
     echo "E2E_TEST_FILTER = $E2E_TEST_FILTER"
-    echo "E2E_PLATFORM = $E2E_PLATFORM"
+    echo "CI_KEEP_TEMP_PLATFORM = $CI_KEEP_TEMP_PLATFORM"
     echo "INTERACTIVE = $INTERACTIVE"
     echo "TEMPDIR = $TEMPDIR"
-    echo "FORCE_KEEP_TEMPS = $FORCE_KEEP_TEMPS"
     echo "KEEP_TEMPS_CMD_STR = $KEEP_TEMPS_CMD_STR"
-    echo "AWS_NET_UPLOAD = $AWS_NET_UPLOAD"
+    echo "CI_E2E_FILENAME.tar.bz2 = $CI_E2E_FILENAME.tar.bz2"
     
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+        $clientrunner --version "$(basename "$vdir")" "$vdir"/*.sh
     done
     duration "vdir client runners"
 
     for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+        $clientrunner "$script"
     done
 
     deactivate

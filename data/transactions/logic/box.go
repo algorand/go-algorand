@@ -50,40 +50,44 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	return nil
 }
 
-func createBox(cx *EvalContext, name string, value string, appAddr basics.Address) error {
+func createBox(cx *EvalContext, name string, value string, appAddr basics.Address) (bool, error) {
 	// Enforce length rules. Currently these are the same as enforced by
 	// ledger. If these were ever to change in proto, we would need to isolate
 	// changes to different program versions. (so a v7 app could not see a
 	// bigger box than expected, for example)
 	if len(name) == 0 {
-		return fmt.Errorf("box names may not be zero length")
+		return false, fmt.Errorf("box names may not be zero length")
 	}
 	if len(name) > cx.Proto.MaxAppKeyLen {
-		return fmt.Errorf("name too long: length was %d, maximum is %d", len(name), cx.Proto.MaxAppKeyLen)
+		return false, fmt.Errorf("name too long: length was %d, maximum is %d", len(name), cx.Proto.MaxAppKeyLen)
 	}
 	size := uint64(len(value))
 	if size > cx.Proto.MaxBoxSize {
-		return fmt.Errorf("box size too large: %d, maximum is %d", size, cx.Proto.MaxBoxSize)
+		return false, fmt.Errorf("box size too large: %d, maximum is %d", size, cx.Proto.MaxBoxSize)
 	}
 
 	err := cx.availableBox(name, boxCreate, size) // annotate size for write budget check
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
 }
 
 func opBoxCreate(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // name
-	prev := last - 1          // size
+	last := len(cx.stack) - 1 // size
+	prev := last - 1          // name
 
-	name := string(cx.stack[last].Bytes)
-	size := cx.stack[prev].Uint
+	name := string(cx.stack[prev].Bytes)
+	size := cx.stack[last].Uint
 	appAddr := cx.getApplicationAddress(cx.appID)
 
-	cx.stack = cx.stack[:prev]
-	return createBox(cx, name, string(make([]byte, size)), appAddr)
+	cx.stack = cx.stack[:last]
+	created, err := createBox(cx, name, string(make([]byte, size)), appAddr)
+	cx.stack[prev].Bytes = nil
+	cx.stack[prev].Uint = boolToUint(created)
+	return err
+
 }
 
 func opBoxExtract(cx *EvalContext) error {
@@ -151,9 +155,14 @@ func opBoxDel(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack = cx.stack[:last]
 	appAddr := cx.getApplicationAddress(cx.appID)
-	return cx.Ledger.DelBox(cx.appID, name, appAddr)
+	existed, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
+	if err != nil {
+		return err
+	}
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = boolToUint(existed)
+	return nil
 }
 
 func opBoxLen(cx *EvalContext) error {
@@ -222,8 +231,8 @@ func opBoxPut(cx *EvalContext) error {
 	/* The box did not exist, so create it. */
 	appAddr := cx.getApplicationAddress(cx.appID)
 
-	return createBox(cx, name, value, appAddr)
-
+	_, err = createBox(cx, name, value, appAddr)
+	return err
 }
 
 const boxPrefix = "bx:"

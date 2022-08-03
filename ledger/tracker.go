@@ -152,6 +152,7 @@ type trackerRegistry struct {
 	// these trackers have some exceptional usages in the tracker registry.
 	accts       *accountUpdates
 	acctsOnline *onlineAccounts
+	tail        *txTail
 
 	// ctx is the context for the committing go-routine.
 	ctx context.Context
@@ -302,6 +303,8 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 			tr.accts = t
 		case *onlineAccounts:
 			tr.acctsOnline = t
+		case *txTail:
+			tr.tail = t
 		}
 	}
 
@@ -435,7 +438,10 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			if !ok {
 				return
 			}
-			tr.commitRound(commit)
+			err := tr.commitRound(commit)
+			if err != nil {
+				tr.log.Warnf("Could not commit round: %w", err)
+			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
 			drained := false
@@ -543,7 +549,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	var blk bookkeeping.Block
 	var delta ledgercore.StateDelta
 
-	if tr.accts == nil || tr.acctsOnline == nil {
+	if tr.accts == nil || tr.acctsOnline == nil || tr.tail == nil {
 		return errMissingAccountUpdateTracker
 	}
 

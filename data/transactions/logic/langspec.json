@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 7,
+  "EvalMaxVersion": 8,
   "LogicSigVersion": 6,
   "Ops": [
     {
@@ -616,7 +616,6 @@
       ],
       "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
       "Doc": "field F of current transaction",
-      "DocExtra": "FirstValidTime causes the program to fail. The field is reserved for future use.",
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
@@ -771,7 +770,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F of the current transaction",
+      "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -792,7 +791,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -898,7 +897,7 @@
         "ClearStateProgramPages"
       ],
       "ArgEnumTypes": "BBUUBBB",
-      "Doc": "Ith value of the array field F from the Ath transaction in the current group",
+      "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
@@ -1218,7 +1217,7 @@
       "Args": "BUU",
       "Returns": "B",
       "Size": 1,
-      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
+      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -1262,7 +1261,7 @@
       "Args": "BB",
       "Returns": "B",
       "Size": 2,
-      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)\n`replace2` can be called using `replace` with 1 immediate.",
       "ImmediateNote": "{uint8 start position}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1274,7 +1273,7 @@
       "Args": "BUB",
       "Returns": "B",
       "Size": 1,
-      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)\n`replace3` can be called using `replace` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -2206,9 +2205,11 @@
     {
       "Opcode": 185,
       "Name": "box_create",
-      "Args": "UB",
+      "Args": "BU",
+      "Returns": "U",
       "Size": 1,
-      "Doc": "make a box",
+      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
       "Groups": [
         "State Access"
       ]
@@ -2219,7 +2220,7 @@
       "Args": "BUU",
       "Returns": "B",
       "Size": 1,
-      "Doc": "read from a box",
+      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "Groups": [
         "State Access"
       ]
@@ -2229,7 +2230,7 @@
       "Name": "box_replace",
       "Args": "BUB",
       "Size": 1,
-      "Doc": "write to a box",
+      "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "Groups": [
         "State Access"
       ]
@@ -2238,8 +2239,9 @@
       "Opcode": 188,
       "Name": "box_del",
       "Args": "B",
+      "Returns": "U",
       "Size": 1,
-      "Doc": "delete a box",
+      "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
       "Groups": [
         "State Access"
       ]
@@ -2250,7 +2252,7 @@
       "Args": "B",
       "Returns": "UU",
       "Size": 1,
-      "Doc": "length of a box",
+      "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
       "Groups": [
         "State Access"
       ]
@@ -2261,7 +2263,8 @@
       "Args": "B",
       "Returns": "BU",
       "Size": 1,
-      "Doc": "full contents of a box",
+      "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
       "Groups": [
         "State Access"
       ]
@@ -2271,7 +2274,8 @@
       "Name": "box_put",
       "Args": "BB",
       "Size": 1,
-      "Doc": "write contents of box",
+      "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
       "Groups": [
         "State Access"
       ]
@@ -2386,6 +2390,30 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
         "Inner Transactions"
+      ]
+    },
+    {
+      "Opcode": 208,
+      "Name": "vrf_verify",
+      "Args": "BBB",
+      "Returns": "BU",
+      "Size": 2,
+      "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+      "ImmediateNote": "{uint8 parameters index}",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
+      "Opcode": 209,
+      "Name": "block",
+      "Args": "U",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "ImmediateNote": "{uint8 block field}",
+      "Groups": [
+        "State Access"
       ]
     }
   ]

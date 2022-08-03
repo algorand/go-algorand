@@ -94,6 +94,11 @@ func (l *prefetcherAlignmentTestLedger) BlockHdr(round basics.Round) (bookkeepin
 	return bookkeeping.BlockHeader{},
 		fmt.Errorf("BlockHdr() round %d not supported", round)
 }
+
+func (l *prefetcherAlignmentTestLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.BlockHdr(round)
+}
+
 func (l *prefetcherAlignmentTestLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }

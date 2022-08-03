@@ -47,9 +47,7 @@ programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
 bytecode, the version is an incrementing integer, currently 6, and
-denoted vX throughout this document. User friendly version numbers
-that correspond to programmer expectations, such as `AVM 1.0` map to
-these integers.  AVM 0.9 is v4. AVM 1.0 is v5. AVM 1.1 is v6.
+denoted vX throughout this document.
 
 ## Execution Modes
 
@@ -277,9 +275,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 
 @@ Loading_Values.md @@
 
-**Transaction Fields**
-
+#### Transaction Fields
+##### Scalar Fields
 @@ txn_fields.md @@
+##### Array Fields
+@@ txna_fields.md @@
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
@@ -370,7 +370,7 @@ The assembler parses line by line. Ops that only take stack arguments
 appear on a line by themselves. Immediate arguments follow the opcode
 on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting AVM v2. By default, the assembler targets AVM v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -436,7 +436,7 @@ This requirement is enforced as follows:
   all the fields and values in this transaction. For example, a
   transaction with a nonzero RekeyTo field will be (at least) v2.
 
-* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
+* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
 In addition, applications must be version 6 or greater to be eligible
 for being called in an inner transaction.

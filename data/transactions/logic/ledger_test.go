@@ -33,9 +33,12 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -212,6 +215,25 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
+// BlockHdrCached returns the block header for the given round, if it is available
+func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr := bookkeeping.BlockHeader{}
+	// Return a fake seed that is different for each round
+	seed := committee.Seed{}
+	seed[0] = byte(round)
+	seed[1] = byte(round >> 8)
+	seed[2] = byte(round >> 16)
+	seed[3] = byte(round >> 24)
+	seed[4] = byte(round >> 32)
+	seed[5] = byte(round >> 40)
+	seed[6] = byte(round >> 48)
+	seed[7] = byte(round >> 56)
+	hdr.Seed = seed
+	hdr.TimeStamp = 100 + (9 * int64(round) / 2)
+	return hdr, nil
+	// perhaps should add an error when requesting old round for better testing
+}
+
 // AccountData returns a version of the account that is good enough for
 // satisfying AVM needs. (balance, calc minbalance, and authaddr)
 func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
@@ -345,28 +367,35 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return nil
 }
 
+func errOnMismatch(x string, y string) error {
+	if len(x) != len(y) {
+		return fmt.Errorf("new box size mismatch %d %d", len(x), len(y))
+	}
+	return nil
+}
+
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) (bool, error) {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
+		return false, fmt.Errorf("no such app %d", appIdx)
 	}
 	if params.boxMods == nil {
 		params.boxMods = make(map[string]*string)
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
-			return fmt.Errorf("box already exists 1 %#v %d", key, len(*current))
+			return false, errOnMismatch(value, *current)
 		}
 	} else if current, ok := params.boxes[key]; ok {
-		return fmt.Errorf("box already exists 2 %#v %d", key, len(current))
+		return false, errOnMismatch(value, current)
 	}
 	params.boxMods[key] = &value
 	l.applications[appIdx] = params
-	return nil
+	return true, nil
 }
 
 func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
@@ -410,23 +439,23 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error 
 }
 
 // DelBox deletes a value through moxMods mechanism
-func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
+func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
 	_, ok, err := l.GetBox(appIdx, key)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return fmt.Errorf("no such box %d", appIdx)
+		return false, nil
 	}
 	params := l.applications[appIdx] // assured, based on above
 	if params.boxMods == nil {
 		params.boxMods = make(map[string]*string)
 	}
 	params.boxMods[key] = nil
-	return nil
+	return true, nil
 }
 
 // GetLocal returns the current value bound to a local key, taking
@@ -901,7 +930,8 @@ func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 
 func (l *Ledger) Round() basics.Round {
 	if l.rnd == basics.Round(0) {
-		l.rnd = basics.Round(rand.Uint32() + 1)
+		// Something big enough to shake out bugs from width
+		l.rnd = basics.Round(uint64(math.MaxUint32) + 5)
 	}
 	return l.rnd
 }

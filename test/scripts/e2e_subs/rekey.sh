@@ -14,7 +14,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 
-# Rekeying should fail if in a txn group with a < v2 TEAL program
+# Rekeying should fail if in a txn group with a < v2 program
 
 # Make v1 program
 printf 'int 1' > "${TEMPDIR}/simplev1.teal"
@@ -48,7 +48,7 @@ cat "${TEMPDIR}/group0_split-0.stxn" "${TEMPDIR}/group0_split-1.txn" > "${TEMPDI
 RES=$(${gcmd} clerk rawsend -f "${TEMPDIR}/group0_signed.stxn" 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL txn group with rekey transaction should require teal version >= 2 %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL txn group with rekey transaction should require version >= 2 %Y%m%d_%H%M%S"
     false
 fi
 

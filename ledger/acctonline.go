@@ -523,6 +523,7 @@ func (ao *onlineAccounts) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, err
 func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := ao.roundParamsOffset(rnd)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online totals for rnd: %d", rnd)
 		return basics.MicroAlgos{}, err
 	}
 
@@ -534,6 +535,7 @@ func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	oad, err := ao.lookupOnlineAccountData(rnd, addr)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online account data for rnd: %d, addr: %v", rnd, addr)
 		return
 	}
 
@@ -697,7 +699,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 			// not advanced or postCommit not called yet, write to the cache and return the value
 			ao.onlineAccountsCache.clear(addr)
-			if !ao.onlineAccountsCache.full() {
+			if ao.onlineAccountsCache.full() {
+				ao.log.Info("onlineAccountsCache full, cannot insert")
+			} else {
 				for _, data := range persistedDataHistory {
 					written := ao.onlineAccountsCache.writeFront(
 						data.addr,
@@ -711,6 +715,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 						return ledgercore.OnlineAccountData{}, err
 					}
 				}
+				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
 			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
