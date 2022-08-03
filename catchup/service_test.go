@@ -975,6 +975,7 @@ func TestSynchronizingTime(t *testing.T) {
 }
 
 func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// make sure we download enough blocks to verify state proof 512
 	topBlk := bookkeeping.Block{}
 	topBlk.BlockHeader.Round = 1500
