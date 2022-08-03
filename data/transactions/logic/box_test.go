@@ -137,13 +137,13 @@ func TestBoxAcrossTxns(t *testing.T) {
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "self"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, nil, 7, ledger)
+	}, nil, 8, ledger)
 	// after creation, modification, the third can read it
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "self"; int 2; byte "hi"; box_replace; int 1`,
 		`byte "self"; int 1; int 4; box_extract; byte 0x00686900; ==`, // "\0hi\0"
-	}, nil, 7, ledger)
+	}, nil, 8, ledger)
 }
 
 func TestBoxAvailability(t *testing.T) {
@@ -157,7 +157,7 @@ func TestBoxAvailability(t *testing.T) {
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, nil, 7, ledger, logic.NewExpect(1, "invalid Box reference B"))
+	}, nil, 8, ledger, logic.NewExpect(1, "invalid Box reference B"))
 
 	// B is available if indexed by 0 in tx[1].Boxes
 	group := logic.MakeSampleTxnGroup(logic.MakeSampleTxn(), txntest.Txn{
@@ -169,7 +169,7 @@ func TestBoxAvailability(t *testing.T) {
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 7, ledger, logic.NewExpect(1, "no such box"))
+	}, group, 8, ledger, logic.NewExpect(1, "no such box"))
 
 	// B is available if listed by appId in tx[1].Boxes
 	group = logic.MakeSampleTxnGroup(logic.MakeSampleTxn(), txntest.Txn{
@@ -182,8 +182,7 @@ func TestBoxAvailability(t *testing.T) {
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 7, ledger, logic.NewExpect(1, "no such box"))
-
+	}, group, 8, ledger, logic.NewExpect(1, "no such box"))
 }
 
 func TestBoxReadBudget(t *testing.T) {

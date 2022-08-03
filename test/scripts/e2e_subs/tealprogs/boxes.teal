@@ -1,6 +1,6 @@
 // Copied directly from cmd/goal/examples/boxes.teal
 
-#pragma version 7
+#pragma version 8
     txn ApplicationID
     bz end
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists

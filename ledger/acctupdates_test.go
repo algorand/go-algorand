@@ -271,7 +271,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(l, []ledgerTracker{au, ao}, conf)
+	l.trackers.initialize(l, []ledgerTracker{au, ao, &txTail{}}, conf)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 
@@ -609,6 +609,11 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	ml.trackers.trackers = ml.trackers.trackers[:2]
+
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
 	for i := 1; i < initialBlocksCount; i++ {
@@ -654,6 +659,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 			ml.trackers.committedUpTo(round)
 		}(i)
 	}
+	ml.trackers.waitAccountsWriting()
 	wg.Wait()
 }
 
@@ -787,6 +793,7 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
@@ -1230,21 +1237,14 @@ func TestListCreatables(t *testing.T) {
 
 func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	initialBlocksCount := 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 8
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
 
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
 		[]map[basics.Address]basics.AccountData{accts},
 	)
 	defer ml.Close()
@@ -1254,7 +1254,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
 
 	testingBoxNames := []string{
 		` `,
@@ -1321,8 +1321,8 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		if uint64(currentRound) > protoParams.MaxBalLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}

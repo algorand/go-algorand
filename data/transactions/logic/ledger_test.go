@@ -33,9 +33,12 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -210,6 +213,25 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 // probably increase monotonically, but no tests care yet.
 func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
+}
+
+// BlockHdrCached returns the block header for the given round, if it is available
+func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr := bookkeeping.BlockHeader{}
+	// Return a fake seed that is different for each round
+	seed := committee.Seed{}
+	seed[0] = byte(round)
+	seed[1] = byte(round >> 8)
+	seed[2] = byte(round >> 16)
+	seed[3] = byte(round >> 24)
+	seed[4] = byte(round >> 32)
+	seed[5] = byte(round >> 40)
+	seed[6] = byte(round >> 48)
+	seed[7] = byte(round >> 56)
+	hdr.Seed = seed
+	hdr.TimeStamp = 100 + (9 * int64(round) / 2)
+	return hdr, nil
+	// perhaps should add an error when requesting old round for better testing
 }
 
 // AccountData returns a version of the account that is good enough for
@@ -908,7 +930,8 @@ func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 
 func (l *Ledger) Round() basics.Round {
 	if l.rnd == basics.Round(0) {
-		l.rnd = basics.Round(rand.Uint32() + 1)
+		// Something big enough to shake out bugs from width
+		l.rnd = basics.Round(uint64(math.MaxUint32) + 5)
 	}
 	return l.rnd
 }

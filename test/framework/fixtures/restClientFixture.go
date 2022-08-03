@@ -92,7 +92,7 @@ func (f *RestClientFixture) ClientWaitForRound(client client.RestClient, round u
 		}
 		select {
 		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for round %v", round)
+			return fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
