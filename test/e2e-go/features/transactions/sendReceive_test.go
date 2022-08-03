@@ -93,7 +93,9 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	}
 
 	pingBalance, err := c.GetBalance(pingAccount)
+	a.NoError(err)
 	pongBalance, err := c.GetBalance(pongAccount)
+	a.NoError(err)
 
 	a.Equal(pingBalance, pongBalance, "both accounts should start with same balance")
 	a.NotEqual(pingAccount, pongAccount, "accounts under study should be different")

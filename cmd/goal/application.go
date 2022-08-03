@@ -461,7 +461,7 @@ var createAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -536,7 +536,7 @@ var updateAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -606,7 +606,7 @@ var optInAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -676,7 +676,7 @@ var closeOutAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -746,7 +746,7 @@ var clearAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -816,7 +816,7 @@ var callAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -886,7 +886,7 @@ var deleteAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -1307,7 +1307,7 @@ var methodAppCmd = &cobra.Command{
 		appCallTxn.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
