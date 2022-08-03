@@ -1237,21 +1237,14 @@ func TestListCreatables(t *testing.T) {
 
 func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	initialBlocksCount := 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 8
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
 
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
 		[]map[basics.Address]basics.AccountData{accts},
 	)
 	defer ml.Close()
@@ -1261,7 +1254,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
 
 	testingBoxNames := []string{
 		` `,
@@ -1328,8 +1321,8 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		if uint64(currentRound) > protoParams.MaxBalLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
