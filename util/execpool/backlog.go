@@ -18,6 +18,7 @@ package execpool
 
 import (
 	"context"
+	"runtime/pprof"
 	"sync"
 )
 
@@ -46,7 +47,7 @@ type BacklogPool interface {
 }
 
 // MakeBacklog creates a backlog
-func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner interface{}) BacklogPool {
+func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner interface{}, profLabels ...string) BacklogPool {
 	if backlogSize < 0 {
 		return nil
 	}
@@ -58,7 +59,7 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 	bl.ctx, bl.ctxCancel = context.WithCancel(context.Background())
 	if bl.pool == nil {
 		// create one internally.
-		bl.pool = MakePool(bl)
+		bl.pool = MakePool(bl, append(profLabels, "execpool", "internal")...)
 	}
 	if backlogSize == 0 {
 		// use the number of cpus in the system.
@@ -67,7 +68,9 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 	bl.buffer = make(chan backlogItemTask, backlogSize)
 
 	bl.wg.Add(1)
-	go bl.worker()
+	pprof.Do(context.Background(), pprof.Labels(profLabels...), func(_ context.Context) {
+		go bl.worker()
+	})
 	return bl
 }
 

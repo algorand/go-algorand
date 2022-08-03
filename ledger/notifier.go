@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"runtime/pprof"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -92,7 +93,9 @@ func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error 
 	bn.running = true
 	bn.pendingBlocks = nil
 	bn.closing.Add(1)
-	go bn.worker()
+	pprof.Do(context.Background(), pprof.Labels("worker", "blockNotifier"), func(_ context.Context) {
+		go bn.worker()
+	})
 	return nil
 }
 

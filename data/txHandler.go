@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime/pprof"
 	"sync"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -100,7 +101,9 @@ func (handler *TxHandler) Start() {
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 	handler.backlogWg.Add(1)
-	go handler.backlogWorker()
+	pprof.Do(context.Background(), pprof.Labels("worker", "TxHandler.backlogWorker"), func(_ context.Context) {
+		go handler.backlogWorker()
+	})
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler

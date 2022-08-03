@@ -30,6 +30,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -811,7 +812,9 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	if wn.listener != nil {
 		wn.wg.Add(1)
-		go wn.httpdThread()
+		pprof.Do(context.Background(), pprof.Labels("worker", "httpdThread"), func(ctx context.Context) {
+			go wn.httpdThread()
+		})
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
@@ -821,11 +824,13 @@ func (wn *WebsocketNetwork) Start() {
 		wn.peersConnectivityCheckTicker.Stop()
 	}
 	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
-	for i := 0; i < incomingThreads; i++ {
-		wn.wg.Add(1)
-		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
-		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
-	}
+	pprof.Do(context.Background(), pprof.Labels("worker", "messageHandlerThread"), func(_ context.Context) {
+		for i := 0; i < incomingThreads; i++ {
+			wn.wg.Add(1)
+			// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
+			go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
+		}
+	})
 	wn.wg.Add(1)
 	go wn.broadcastThread()
 	if wn.prioScheme != nil {

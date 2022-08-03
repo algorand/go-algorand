@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -208,9 +209,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(),
+		execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(),
+		execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
 	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
@@ -378,8 +381,9 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(2)
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
-	go node.oldKeyDeletionThread(node.ctx.Done())
-
+	pprof.Do(context.Background(), pprof.Labels("worker", "oldKeyDeletionThread"), func(_ context.Context) {
+		go node.oldKeyDeletionThread(node.ctx.Done())
+	})
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
 }

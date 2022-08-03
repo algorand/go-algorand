@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"runtime/pprof"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -143,8 +144,12 @@ func (s *Service) Start() {
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
-	go s.demuxLoop(ctx, input, output, ready)
-	go s.mainLoop(input, output, ready)
+	pprof.Do(context.Background(), pprof.Labels("worker", "agreement.demux"), func(_ context.Context) {
+		go s.demuxLoop(ctx, input, output, ready)
+	})
+	pprof.Do(context.Background(), pprof.Labels("worker", "agreement.main"), func(_ context.Context) {
+		go s.mainLoop(input, output, ready)
+	})
 }
 
 // Shutdown the execution of the protocol.

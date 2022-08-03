@@ -19,6 +19,7 @@ package execpool
 import (
 	"context"
 	"runtime"
+	"runtime/pprof"
 	"sync"
 )
 
@@ -68,7 +69,7 @@ type enqueuedTask struct {
 }
 
 // MakePool creates a pool.
-func MakePool(owner interface{}) ExecutionPool {
+func MakePool(owner interface{}, profLabels ...string) ExecutionPool {
 	p := &pool{
 		inputs:  make([]chan enqueuedTask, numPrios),
 		numCPUs: runtime.NumCPU(),
@@ -81,10 +82,11 @@ func MakePool(owner interface{}) ExecutionPool {
 	}
 
 	p.wg.Add(p.numCPUs)
-	for i := 0; i < p.numCPUs; i++ {
-		go p.worker()
-	}
-
+	pprof.Do(context.Background(), pprof.Labels(profLabels...), func(_ context.Context) {
+		for i := 0; i < p.numCPUs; i++ {
+			go p.worker()
+		}
+	})
 	return p
 }
 
