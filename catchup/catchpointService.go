@@ -19,6 +19,7 @@ package catchup
 import (
 	"context"
 	"fmt"
+
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 const (
@@ -464,6 +466,27 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
+// lookbackForStateproofSupport calculates the lookback (from topblock round) needed to be downloaded
+// in order to support state proofs verification.
+func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	if proto.StateProofInterval == 0 {
+		return 0
+	}
+	//calculate the lowest round needed for verify the upcoming state proof txn.
+	expectedStateProofRound := topBlock.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	roundForStateproofVerification := expectedStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+
+	lowestRoundForRecovery := topBlock.Round().SubSaturate(topBlock.Round() % basics.Round(proto.StateProofInterval))
+	lowestRoundForRecovery = lowestRoundForRecovery.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)))
+
+	if lowestRoundForRecovery > roundForStateproofVerification {
+		return uint64(topBlock.Round().SubSaturate(lowestRoundForRecovery))
+	}
+
+	return uint64(topBlock.Round().SubSaturate(roundForStateproofVerification))
+}
+
 // processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
@@ -477,6 +500,11 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 	if lookback < proto.MaxBalLookback {
 		lookback = proto.MaxBalLookback
+	}
+
+	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
+	if lookback < lookbackForStateProofSupport {
+		lookback = lookbackForStateProofSupport
 	}
 	// in case the effective lookback is going before our rounds count, trim it there.
 	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
