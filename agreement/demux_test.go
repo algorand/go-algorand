@@ -37,6 +37,7 @@ import (
 )
 
 const fastTimeoutChTime = 2
+const speculativeBlockAsmTime = time.Duration(5 * time.Microsecond)
 
 type demuxTester struct {
 	*testing.T
@@ -65,8 +66,9 @@ type demuxTestUsecase struct {
 	verifiedProposal    testChanState
 	verifiedBundle      testChanState
 	// expected output
-	e  event
-	ok bool
+	e                  event
+	ok                 bool
+	speculativeAsmTime time.Duration
 }
 
 var demuxTestUsecases = []demuxTestUsecase{
@@ -412,6 +414,25 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
 	},
+	{
+		queue:               []testChanState{{eventCount: 0, closed: false}},
+		rawVotes:            testChanState{eventCount: 0, closed: false},
+		rawProposals:        testChanState{eventCount: 0, closed: false},
+		rawBundles:          testChanState{eventCount: 0, closed: false},
+		compoundProposals:   false,
+		quit:                false,
+		voteChannelFull:     false,
+		proposalChannelFull: false,
+		bundleChannelFull:   false,
+		ledgerRoundReached:  false,
+		deadlineReached:     false,
+		verifiedVote:        testChanState{eventCount: 0, closed: false},
+		verifiedProposal:    testChanState{eventCount: 0, closed: false},
+		verifiedBundle:      testChanState{eventCount: 0, closed: false},
+		e:                   timeoutEvent{T: speculationTimeout},
+		ok:                  true,
+		speculativeAsmTime:  speculativeBlockAsmTime,
+	},
 }
 
 func TestDemuxNext(t *testing.T) {
@@ -431,6 +452,9 @@ func (t *demuxTester) Zero() timers.Clock {
 func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
 	if delta == fastTimeoutChTime {
 		return nil
+	}
+	if delta == speculativeBlockAsmTime {
+		return time.After(delta)
 	}
 
 	c := make(chan time.Time, 2)
@@ -674,8 +698,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	if testcase.quit {
 		close(s.quit)
 	}
-
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, 0, 300)
+	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, testcase.speculativeAsmTime, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false
