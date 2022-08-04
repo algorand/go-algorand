@@ -121,13 +121,13 @@ func TestNumRevealsApproxBound(t *testing.T) {
 	for j := 0; j < 10; j++ {
 		sigWt := uint64(1<<(40-j) - 1)
 		// we check the ratios = signedWt/provenWt {3, 2.9, 2.8...1}
-		// ratio 1.1 (i==19) will exceed the max number of reveals (signed and proven wt are too close) -
+		// ratio 1.41 (i==17) will exceed the max number of reveals (signed and proven wt are too close) -
 		// so we lower the Strength param for testing
-		for i := 0; i < 19; i++ {
+		for i := 0; i < 17; i++ {
 			checkRatio(i, sigWt, stateProofStrengthTargetForTests, a)
 		}
 
-		checkRatio(19, sigWt, stateProofStrengthTargetForTests/2, a)
+		checkRatio(17, sigWt, stateProofStrengthTargetForTests/2, a)
 
 	}
 }

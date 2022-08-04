@@ -208,6 +208,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, err
 		}
 		spw.builders[sfa.Round] = builderForRound
+		spw.log.Infof("spw.handleSig: starts gathering signatures for round %d", sfa.Round)
 	}
 
 	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
@@ -420,10 +421,11 @@ func (spw *Worker) tryBroadcast() {
 
 		sp, err := b.Build()
 		if err != nil {
-			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
+			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %w", rnd, err)
 			continue
 		}
 
+		spw.log.Infof("spw.tryBroadcast: building state proof transaction for round %d", rnd)
 		var stxn transactions.SignedTxn
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
@@ -435,7 +437,7 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.StateProofTxnFields.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
-			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
+			spw.log.Warnf("spw.tryBroadcast: broadcasting state proof txn for %d: %v", rnd, err)
 		}
 	}
 }
