@@ -147,6 +147,7 @@ class summary:
         self.blockTimeSum = 0
         self.sumsCount = 0
         self.nodes = {}
+        self.biByTime = {}
 
     def __call__(self, ttr, nick):
         if not ttr:
@@ -160,6 +161,11 @@ class summary:
         self.tpsSum += ttr.tps
         self.blockTimeSum += ttr.blockTime
         self.sumsCount += 1
+        if ttr.biByTime:
+            self.biByTime.update(ttr.biByTime)
+
+    def blockinfo(self, curtime):
+        return self.biByTime.get(curtime)
 
     def byMsg(self):
         txPSums = {}
@@ -279,12 +285,12 @@ def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
         dapp(filesByNick, nick, path)
     return tf_inventory_path, filesByNick, nonick
 
-def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args):
+def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum):
     nretup = (nre,)
     for rnick, paths in filesByNick.items():
         nick = nick_to_tfname.get(rnick, rnick)
         if anynickre(nretup, (rnick,nick)):
-            rsum(process_files(args, nick, paths), nick)
+            rsum(process_files(args, nick, paths, grsum), nick)
 
 def main():
     os.environ['TZ'] = 'UTC'
@@ -351,11 +357,23 @@ def main():
         #logger.debug('nick_to_tfname %r', nick_to_tfname)
     logger.debug('nicks: %s', ' '.join(map(lambda x: nick_to_tfname.get(x,x), filesByNick.keys())))
 
+    # global stats across all nodes
+    grsum = summary()
+    if nonick:
+        grsum(process_files(args, None, nonick), 'no nick')
+    for rnick, paths in filesByNick.items():
+        nick = nick_to_tfname.get(rnick, rnick)
+        logger.debug('%s: %d files', nick, len(paths))
+        grsum(process_files(args, nick, paths), nick)
+    if args.pool_plot_root:
+        grsum.plot_pool(args.pool_plot_root)
+
+    # maybe subprocess for stats across named groups
     if args.nick_re:
         # use each --nick-re=foo as a group
         for nre in args.nick_re:
             rsum = summary()
-            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
         return 0
@@ -363,23 +381,13 @@ def main():
         for lnre in args.nick_lre:
             label, nre = lnre.split(':', maxsplit=1)
             rsum = summary(label)
-            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
         return 0
 
-
-    # no filters, glob it all up
-    rsum = summary()
-    if nonick:
-        rsum(process_files(args, None, nonick), 'no nick')
-    for rnick, paths in filesByNick.items():
-        nick = nick_to_tfname.get(rnick, rnick)
-        logger.debug('%s: %d files', nick, len(paths))
-        rsum(process_files(args, nick, paths), nick)
-    if args.pool_plot_root:
-        rsum.plot_pool(args.pool_plot_root)
-    print(rsum)
+    # no filters, print global result
+    print(grsum)
     return 0
 
 def perProtocol(prefix, lists, sums, deltas, dt):
@@ -390,9 +398,9 @@ def perProtocol(prefix, lists, sums, deltas, dt):
             dapp(lists, sub, v/dt)
             sums[sub] = sums.get(sub,0) + v
 
-def process_files(args, nick, paths):
+def process_files(args, nick, paths, grsum=None):
     "returns a nodestats object"
-    return nodestats().process_files(args, nick, paths)
+    return nodestats().process_files(args, nick, paths, grsum and grsum.biByTime)
 
 path_time_re = re.compile(r'(\d\d\d\d)(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d\.+\d+)')
 
@@ -431,9 +439,12 @@ class nodestats:
         # total across all measurements
         self.tps = 0
         self.blockTime = 0
+        self.biByTime = {}
 
-    def process_files(self, args, nick=None, metrics_files=None):
+    def process_files(self, args, nick=None, metrics_files=None, bisource=None):
         "returns self, a nodestats object"
+        if bisource is None:
+            bisource = {}
         self.args = args
         self.nick = nick
         if metrics_files is None:
@@ -461,15 +472,19 @@ class nodestats:
         firstBi = None
 
         for path in sorted(metrics_files):
+            curtime = parse_path_time(path) or os.path.getmtime(path)
+            self.times.append(curtime)
             with open(path, 'rt', encoding="utf-8") as fin:
                 cur = parse_metrics(fin)
+            # TODO: use _any_ node's blockinfo json
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
             bi = None
             if os.path.exists(bijsonpath):
                 with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
-            curtime = parse_path_time(path) or os.path.getmtime(path)
-            self.times.append(curtime)
+                    self.biByTime[curtime] = bi
+            if bi is None:
+                bi = bisource.get(curtime)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
             #logger.debug('%s: %r', path, cur)
             if prev is not None:
