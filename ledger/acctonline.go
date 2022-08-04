@@ -592,8 +592,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
 func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
-	ao.accountsMu.RLock()
-	needUnlock := true
+	needUnlock := false
 	defer func() {
 		if needUnlock {
 			ao.accountsMu.RUnlock()
@@ -611,6 +610,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	// the function was analyzing deltas or caches.
 	// a similar approach is used in other lookup- methods in acctupdates as well.
 	for {
+		ao.accountsMu.RLock()
+		needUnlock = true
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		inHistory := false
