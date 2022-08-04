@@ -224,7 +224,7 @@ func TestCowStateProof(t *testing.T) {
 		Message:        msg,
 	}
 	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), "not supported")
 
 	// no spRnd block
 	stateProofTx.StateProofType = protocol.StateProofBasic
@@ -232,7 +232,7 @@ func TestCowStateProof(t *testing.T) {
 	blockErr[3] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 3
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), "no block")
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
@@ -250,13 +250,13 @@ func TestCowStateProof(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
 	blockErr[13] = noBlockErr
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), "no block")
 
 	// validate fail
 	spHdr.Round = 1
 	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), "state proof is not in a valid round multiple")
 
 	// fall through to no err
 	validate = false
