@@ -742,9 +742,9 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 }
 
 // decodeTxGroup attempts to decode a request body containing a transaction group.
-func decodeTxGroup(ctx echo.Context, maxTxGroupSize int) ([]transactions.SignedTxn, error) {
+func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn, error) {
 	var txgroup []transactions.SignedTxn
-	dec := protocol.NewDecoder(ctx.Request().Body)
+	dec := protocol.NewDecoder(body)
 	for {
 		var st transactions.SignedTxn
 		err := dec.Decode(&st)
@@ -763,8 +763,7 @@ func decodeTxGroup(ctx echo.Context, maxTxGroupSize int) ([]transactions.SignedT
 	}
 
 	if len(txgroup) == 0 {
-		err := errors.New("empty txgroup")
-		return nil, err
+		return nil, errors.New("empty txgroup")
 	}
 
 	return txgroup, nil
@@ -783,7 +782,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx, proto.MaxTxGroupSize)
+	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -815,7 +814,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx, proto.MaxTxGroupSize)
+	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
