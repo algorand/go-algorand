@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
 )
@@ -78,12 +79,6 @@ type PeerSelectorPeer struct {
 type peerClass struct {
 	initialRank int
 	peerClass   network.PeerOption
-}
-
-// PeerClassExported exports peerClass struct
-type PeerClassExported struct {
-	InitialRank int
-	PeerClass   network.PeerOption
 }
 
 // the peersRetriever is a subset of the network.GossipNode used to ensure that we can create an instance of the PeerSelector
@@ -274,17 +269,9 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	return bounded
 }
 
-// MakePeerSelectorExported exports makePeerSelector function
-func MakePeerSelectorExported(net peersRetriever, initialPeersClasses []PeerClassExported) *PeerSelector {
-	var peerClasses []peerClass
-	for _, v := range initialPeersClasses {
-		peerClasses = append(peerClasses, peerClass{initialRank: v.InitialRank, peerClass: v.PeerClass})
-	}
-	selector := &PeerSelector{
-		net:         net,
-		peerClasses: peerClasses,
-	}
-	return selector
+// NewPeerSelector exports makePeerSelector function using createPeerSelector
+func NewPeerSelector(net peersRetriever, cfg config.Local, pipelineFetch bool) *PeerSelector {
+	return createPeerSelector(net, cfg, pipelineFetch)
 }
 
 // makePeerSelector creates a PeerSelector, given a peersRetriever and peerClass array.
