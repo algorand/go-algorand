@@ -250,6 +250,8 @@ type OpStream struct {
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
+
+	macros map[string][]string
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -260,6 +262,7 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
+		macros:       make(map[string][]string),
 	}
 
 	for i := range o.known.scratchSpace {
@@ -1531,6 +1534,38 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+func processFields(ops *OpStream, fields []string) (current, next []string) {
+	for i := 0; i < len(fields); i++ {
+		field := fields[i]
+		replacement, ok := ops.macros[field]
+		if ok {
+			fields = append(fields[0:i], append(replacement, fields[i+1:]...)...)
+			i--
+			continue
+		}
+		if string(field[len(field)-1]) == ";" {
+			field = field[0 : len(field)-1]
+			replacement, ok = ops.macros[field]
+			if ok {
+				last := replacement[len(replacement)-1]
+				fields = append(fields[0:i], append(replacement, fields[i+1:]...)...)
+				fields[i+len(replacement)-1] = last + ";"
+				i--
+				continue
+			}
+			current = fields[:i]
+			if len(field) > 0 {
+				current = append(current, field)
+			}
+			if i+1 == len(fields) {
+				return current, nil
+			}
+			return current, fields[i+1:]
+		}
+	}
+	return fields, nil
+}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	fin := strings.NewReader(text)
@@ -1567,41 +1602,71 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.versionedPseudoOps == nil {
 			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 		}
-		opstring := fields[0]
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			fields = fields[1:]
-			if len(fields) == 0 {
-				ops.trace("%3d: label only\n", ops.sourceLine)
+		if fields[0] == "#define" {
+			if len(fields) < 3 {
+				ops.error("Not enough arguments to define directive")
+			} else {
+				if fields[1][len(fields[1])-1] == ';' {
+					ops.error("Macro name not allowed to terminate with semicolon: " + fields[1])
+				}
+				ops.macros[fields[1]] = make([]string, len(fields[2:]))
+				copy(ops.macros[fields[1]], fields[2:])
+			}
+			continue
+		}
+		var current []string
+		var next []string
+		next = fields
+		for current, next = processFields(ops, next); len(current) > 0; current, next = processFields(ops, next) {
+			opstring := current[0]
+			if len(opstring) == 0 {
 				continue
 			}
-			opstring = fields[0]
-		}
-		spec, expandedName, ok := getSpec(ops, opstring, fields[1:])
-		if ok {
-			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-			ops.recordSourceLine()
-			if spec.Modes == modeApp {
-				ops.HasStatefulOps = true
+			if strings.HasPrefix(opstring, "//") {
+				// semicolon inside comment is not counted as newline
+				break
 			}
-			args, returns := spec.Arg.Types, spec.Return.Types
-			if spec.refine != nil {
-				nargs, nreturns := spec.refine(&ops.known, fields[1:])
-				if nargs != nil {
-					args = nargs
+			currentLine := strings.Join(current, " ")
+			if strings.HasPrefix(currentLine, "#pragma") {
+				ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				ops.pragma(currentLine)
+				continue
+			}
+			if opstring[len(opstring)-1] == ':' {
+				ops.createLabel(opstring[:len(opstring)-1])
+				current = current[1:]
+				if len(current) == 0 {
+					ops.trace("%3d: label only\n", ops.sourceLine)
+					continue
 				}
-				if nreturns != nil {
-					returns = nreturns
+				opstring = current[0]
+			}
+			spec, expandedName, ok := getSpec(ops, opstring, current[1:])
+			if ok {
+				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+				ops.recordSourceLine()
+				if spec.Modes == modeApp {
+					ops.HasStatefulOps = true
 				}
-			}
-			ops.trackStack(args, returns, append([]string{expandedName}, fields[1:]...))
-			spec.asm(ops, &spec, fields[1:])
-			if spec.deadens() { // An unconditional branch deadens the following code
-				ops.known.deaden()
-			}
-			if spec.Name == "callsub" {
-				// since retsub comes back to the callsub, it is an entry point like a label
-				ops.known.label()
+				args, returns := spec.Arg.Types, spec.Return.Types
+				if spec.refine != nil {
+					nargs, nreturns := spec.refine(&ops.known, current[1:])
+					if nargs != nil {
+						args = nargs
+					}
+					if nreturns != nil {
+						returns = nreturns
+					}
+				}
+				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
+				spec.asm(ops, &spec, current[1:])
+				if spec.deadens() { // An unconditional branch deadens the following code
+					ops.known.deaden()
+				}
+				if spec.Name == "callsub" {
+					// since retsub comes back to the callsub, it is an entry point like a label
+					ops.known.label()
+				}
 			}
 			ops.trace("\n")
 			continue

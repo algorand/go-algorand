@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -434,6 +435,29 @@ func pseudoOp(opcode string) bool {
 		strings.HasPrefix(opcode, "arg")
 }
 
+func addSemis(s string) (ret string) {
+	scanner := bufio.NewScanner(strings.NewReader(s))
+scanLoop:
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		fields := fieldsFromLine(line)
+		for i, field := range fields {
+			if i == 0 && strings.HasPrefix(field, "#") {
+				ret += "\n" + line + "\n"
+				continue scanLoop
+			}
+			if strings.HasPrefix(field, "//") {
+				ret += line + "\n"
+				continue scanLoop
+			}
+		}
+		if len(fields) > 0 {
+			ret += strings.Join(fields, " ") + "; "
+		}
+	}
+	return
+}
+
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -529,28 +553,37 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 	t.Helper()
 	program := strings.ReplaceAll(source, ";", "\n")
 	ops, err := AssembleStringWithVersion(program, ver)
+	semiOps, semiErr := AssembleStringWithVersion(addSemis(program), ver)
+	opstreams := [2]*OpStream{ops, semiOps}
+	errors := [2]error{err, semiErr}
 	if len(expected) == 0 {
-		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, ver))
+		for i := range opstreams {
+			ops = opstreams[i]
+			err = errors[i]
+			if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
+				t.Log(assemblyTrace(program, ver))
+			}
+			require.Empty(t, ops.Errors)
+			require.NoError(t, err)
+			require.NotNil(t, ops)
+			require.NotNil(t, ops.Program)
+			// It should always be possible to Disassemble
+			dis, err := Disassemble(ops.Program)
+			require.NoError(t, err, program)
+			// And, while the disassembly may not match input
+			// exactly, the assembly of the disassembly should
+			// give the same bytecode
+			ops2, err := AssembleStringWithVersion(notrack(dis), ver)
+			if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
+				t.Log(program)
+				t.Log(dis)
+			}
+			require.Empty(t, ops2.Errors)
+			require.NoError(t, err)
+			require.Equal(t, ops.Program, ops2.Program)
 		}
-		require.Empty(t, ops.Errors)
-		require.NoError(t, err)
-		require.NotNil(t, ops)
-		require.NotNil(t, ops.Program)
-		// It should always be possible to Disassemble
-		dis, err := Disassemble(ops.Program)
-		require.NoError(t, err, program)
-		// And, while the disassembly may not match input
-		// exactly, the assembly of the disassembly should
-		// give the same bytecode
-		ops2, err := AssembleStringWithVersion(notrack(dis), ver)
-		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
-			t.Log(program)
-			t.Log(dis)
-		}
-		require.Empty(t, ops2.Errors)
-		require.NoError(t, err)
-		require.Equal(t, ops.Program, ops2.Program)
+		ops = opstreams[0]
+		err = errors[0]
 	} else {
 		if err == nil {
 			t.Log(program)
@@ -2686,4 +2719,29 @@ func TestReplacePseudo(t *testing.T) {
 		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace without immediates expects 3 stack arguments but stack height is 2"})
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
 	}
+}
+
+func TestSemiColon(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Space for weird semicolon cases that might not be checked by rest of tests
+	checkSame(t, "pushint 0 ; pushint 1 ; +; int 3 ; *", "pushint 0\npushint 1\n+\nint 3\n*")
+}
+
+func checkSame(t *testing.T, weird string, normal string) {
+	ops, _ := AssembleStringWithVersion(weird, 7)
+	otherOps, _ := AssembleStringWithVersion(normal, 7)
+	require.Equal(t, otherOps.Program, ops.Program)
+}
+
+func TestMacros(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ops, _ := AssembleStringWithVersion("#define none 0\n#define one 1\npushint none; pushint one; +", 7)
+	otherOps, _ := AssembleStringWithVersion("pushint 0\npushint 1\n+", 7)
+	require.Equal(t, otherOps.Program, ops.Program)
+
+	checkSame(t, "#define ==? ==; bnz\n #define one 1\n #define two 2\npushint one; pushint two; ==? label1; err; label1:; pushint one", "pushint 1\npushint 2\n==\nbnz label1\nerr\nlabel1:\npushint 1")
+	checkSame(t, "#define rowSize 3\n#define columnSize 5\n#define tableDimensions rowSize columnSize\npushbytes 0x100000000000; substring tableDimensions\n#define rowSize 0\n#define columnSize 1\nsubstring tableDimensions", "pushbytes 0x100000000000; substring 3 5; substring 0 1")
+	checkSame(t, "#define &x 0\n#define x load &x;\n#define &y 1\n#define y load &y;\n#define -> ; store\nint 3 -> &x; int 4 -> &y\nx y <", "int 3\nstore 0\nint 4\nstore 1\nload 0\nload 1\n<")
 }
