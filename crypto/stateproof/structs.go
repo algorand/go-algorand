@@ -82,7 +82,7 @@ type StateProof struct {
 	PositionsToReveal []uint64          `codec:"pr,allocbound=MaxReveals"`
 }
 
-func (s StateProof) StringBuild() (b strings.Builder) {
+func (s StateProof) stringBuild() (b strings.Builder) {
 	b.WriteString("StateProof: {")
 	defer b.WriteRune('}')
 
@@ -100,7 +100,7 @@ func (s StateProof) StringBuild() (b strings.Builder) {
 }
 
 func (s StateProof) String() string {
-	b := s.StringBuild()
+	b := s.stringBuild()
 	return b.String()
 }
 
