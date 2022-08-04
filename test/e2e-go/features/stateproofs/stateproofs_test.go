@@ -183,9 +183,9 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 func TestStateProofOverlappingKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
