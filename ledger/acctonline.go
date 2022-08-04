@@ -758,11 +758,13 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 				for i := 0; i < ao.deltas[o].Len(); i++ {
 					addr, d := ao.deltas[o].GetByIdx(i)
 					if d.Status != basics.Online {
+						fmt.Println("IN MEMORY: offline")
 						modifiedAccounts[addr] = nil
 						continue
 					}
 
 					if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
+						fmt.Println("IN MEMORY: invalid vote key")
 						modifiedAccounts[addr] = nil
 						fmt.Println("Account not valid in voteRnd:", addr, "with MicroAlgos:", d.MicroAlgos.Raw)
 						invalidOnlineAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
@@ -811,6 +813,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 			for addr, data := range accts {
 				if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+					fmt.Println("FROM DB: invalid vote key")
 					// If already exists it originated from the deltas, meaning its data is more recent
 					if _, ok := invalidOnlineAccounts[addr]; !ok {
 						invalidOnlineAccounts[addr] = data
