@@ -117,7 +117,6 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	if err != nil {
 		return err
 	}
-	fmt.Println("LoadTree:", "round:", hdr.Round, "stateProofRound:", stateProofRound, "totalWeight:", totalOnlineWeight)
 
 	participants := make(basics.ParticipantsArray, len(top))
 	addrToPos := make(map[basics.Address]uint64)

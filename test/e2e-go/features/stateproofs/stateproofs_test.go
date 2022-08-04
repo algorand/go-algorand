@@ -75,9 +75,8 @@ func (a accountFetcher) goOffline(r *require.Assertions, f *fixtures.RestClientF
 	r.NoError(err)
 	wallet0, err := client0.GetUnencryptedWalletHandle()
 	r.NoError(err)
-	txid, err := client0.SignAndBroadcastTransaction(wallet0, nil, txn)
+	_, err = client0.SignAndBroadcastTransaction(wallet0, nil, txn)
 	r.NoError(err)
-	fmt.Println("go offline txid:", txid)
 }
 
 type paymentSender struct {
@@ -796,8 +795,6 @@ func TestTotalWeightChanges(t *testing.T) {
 		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		fmt.Println("Round:", rnd, "|", "StateProofOnlineTotalWeight:", blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
