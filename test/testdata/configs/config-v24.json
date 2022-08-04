@@ -1,5 +1,5 @@
 {
-    "Version": 24,
+    "Version": 23,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 7,
@@ -63,8 +63,8 @@
     "LogArchiveMaxAge": "",
     "LogArchiveName": "node.archive.log",
     "LogSizeLimit": 1073741824,
-    "MaxAPIResourcesPerAccount": 100000,
     "MaxAcctLookback": 4,
+    "MaxAPIResourcesPerAccount": 100000,
     "MaxCatchpointDownloadDuration": 7200000000000,
     "MaxConnectionsPerIP": 30,
     "MinCatchpointFileDownloadBytesPerSecond": 20480,
@@ -89,7 +89,6 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
-    "SpeculativeBlockAssemblyGraceTime": 50000000,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TLSCertFile": "",
@@ -103,5 +102,6 @@
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
     "UseXForwardedForAddressField": "",
-    "VerifiedTranscationsCacheSize": 150000
+    "VerifiedTranscationsCacheSize": 150000,
+    "SpeculativeBlockAssemblyGraceTime": 50000000
 }

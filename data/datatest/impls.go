@@ -64,7 +64,7 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.Validated
 	return validatedBlock{blk: &b}, nil
 }
 
-func (i entryFactoryImpl) OnNewSpeculativeBlock(bookkeeping.Block) {}
+func (i entryFactoryImpl) OnNewSpeculativeBlock(context.Context, agreement.ValidatedBlock) {}
 
 // WithSeed implements the agreement.ValidatedBlock interface.
 func (ve validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {

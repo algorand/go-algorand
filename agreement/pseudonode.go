@@ -60,7 +60,7 @@ type pseudonode interface {
 	// It returns an error if the pseudonode is unable to perform this.
 	MakeProposals(ctx context.Context, r round, p period) (<-chan externalEvent, error)
 
-	// TODO(yossi) pass in context all the way to the pool, so we can cancel spec asm if needed
+	// StartSpeculativeBlockAssembly calls the BlockFactory's StartSpeculativeBlockAssembly on a new go routine.
 	StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock)
 
 	// MakeVotes returns a vote for a given proposal in some round, period, and step.
@@ -189,8 +189,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 }
 
 func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock) {
-	// TODO(yossi) change to use ve directly, to avoid recomputing statedeltas
-	go n.factory.OnNewSpeculativeBlock(ve.Block())
+	go n.factory.OnNewSpeculativeBlock(ctx, ve)
 }
 
 func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) (chan externalEvent, error) {

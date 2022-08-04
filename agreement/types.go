@@ -38,15 +38,10 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 	return config.Consensus[v].AgreementFilterTimeout
 }
 
-func SpeculativeBlockAsmTime(p period, v protocol.ConsensusVersion) time.Duration {
-	if p != 0 {
-		return time.Duration(0)
-	}
+func SpeculativeBlockAsmTime(p period, v protocol.ConsensusVersion, speculativeAsmTimeDuration time.Duration) time.Duration {
 	hardwait := FilterTimeout(p, v)
-	// TODO(yossi) change from default config to actual config
-	if hardwait > config.GetDefaultLocal().ProposalAssemblyTime+time.Duration(100*time.Millisecond) {
-		// TODO(yossi) consider another check that makes sure we waited at least for a bit, so we don't start spec asm for nothing
-		return hardwait - (config.GetDefaultLocal().ProposalAssemblyTime + time.Duration(100*time.Millisecond))
+	if hardwait > speculativeAsmTimeDuration {
+		return hardwait - speculativeAsmTimeDuration
 	}
 	return time.Duration(0)
 }

@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -57,24 +56,13 @@ type LedgerForEvaluator interface {
 // on top, which in turn allows speculatively constructing a subsequent
 // block, before the ValidatedBlock is committed to the ledger.
 //
-// This is what the state looks like:
-//
-// previousLFE <--------- roundCowBase
-//      ^           l         ^
-//      |                     | lookupParent
-//      |                     |
-//      |               roundCowState
-//      |                     ^
-//      |                     | state
-//      |                     |
-//	|		ValidatedBlock -------> Block
+//	ledger	ValidatedBlock -------> Block
 //      |                     ^          blk
 //      |                     | vb
 //      |     l               |
 //      \---------- validatedBlockAsLFE
 //
-// where previousLFE might be the full ledger, or might be another
-// validatedBlockAsLFE.
+// where ledger is the full ledger.
 type validatedBlockAsLFE struct {
 	// l points to the underlying ledger; it might be another instance
 	// of validatedBlockAsLFE if we are speculating on a chain of many
@@ -86,7 +74,7 @@ type validatedBlockAsLFE struct {
 	vb *ledgercore.ValidatedBlock
 }
 
-// makeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a ValidatedBlock.
+// MakeValidatedBlockAsLFE constructs a new validatedBlockAsLFE from a ValidatedBlock.
 func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator) (*validatedBlockAsLFE, error) {
 	latestRound := l.Latest()
 	if vb.Block().Round().SubSaturate(1) != latestRound {
@@ -104,18 +92,6 @@ func MakeValidatedBlockAsLFE(vb *ledgercore.ValidatedBlock, l LedgerForEvaluator
 		l:  l,
 		vb: vb,
 	}, nil
-}
-
-// makeBlockAsLFE constructs a new validatedBlockAsLFE from a Block.
-func MakeBlockAsLFE(blk bookkeeping.Block, l LedgerForEvaluator) (*validatedBlockAsLFE, ledgercore.StateDelta, error) {
-	state, err := internal.Eval(context.Background(), l, blk, false, l.VerifiedTransactionCache(), nil)
-	if err != nil {
-		return nil, ledgercore.StateDelta{}, fmt.Errorf("error computing deltas for block %d round %d: %v", blk.Hash(), blk.Round(), err)
-	}
-
-	vb := ledgercore.MakeValidatedBlock(blk, state)
-	lfe, err := MakeValidatedBlockAsLFE(&vb, l)
-	return lfe, vb.Delta(), nil
 }
 
 // Block implements the ledgerForEvaluator interface.
@@ -243,7 +219,6 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(rnd basics.Round, a basics.Ad
 }
 
 // VerifiedTransactionCache implements the ledgerForEvaluator interface.
-// TODO(yossi) should we forward this cache?
 func (v *validatedBlockAsLFE) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return v.l.VerifiedTransactionCache()
 }

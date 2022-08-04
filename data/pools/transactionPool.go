@@ -95,9 +95,14 @@ type TransactionPool struct {
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
 
-	ctx         context.Context
-	cancelSpec  context.CancelFunc
-	specBlock   chan *ledgercore.ValidatedBlock
+	ctx        context.Context
+	cancelSpec context.CancelFunc
+
+	// specBlockCh has an assembled speculative block
+	specBlockCh chan *ledgercore.ValidatedBlock
+	// specBlockMu protects setting/getting specBlockCh only
+	specBlockMu deadlock.Mutex
+	// specAsmDone channel is closed when there is no speculative assembly
 	specAsmDone <-chan struct{}
 
 	cfg config.Local
@@ -119,6 +124,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
+
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
@@ -140,13 +146,13 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping.Block) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, ledgercore.StateDelta, error) {
-	specLedger, statedelta, err := ledger.MakeBlockAsLFE(block, pool.ledger)
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
+	specLedger, err := ledger.MakeValidatedBlockAsLFE(vb, pool.ledger)
 	if err != nil {
-		return nil, nil, make(chan struct{}), ledgercore.StateDelta{}, err
+		return nil, nil, make(chan struct{}), err
 	}
 
-	ctx, cancel := context.WithCancel(pool.ctx)
+	copyPoolctx, cancel := context.WithCancel(ctx)
 
 	copy := TransactionPool{
 		pendingTxids:         pool.pendingTxids, // it is safe to shallow copy pendingTxids since this map is only (atomically) swapped and never directly changed
@@ -159,9 +165,9 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping
 		expFeeFactor:         pool.cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        pool.cfg.TxPoolSize,
 		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
-		log:                  pool.log, //TODO(yossi) change the logger's copy to add a prefix indicating this is the pool's copy/speculation. So failures will be indicative
+		log:                  pool.log,
 		cfg:                  pool.cfg,
-		ctx:                  ctx,
+		ctx:                  copyPoolctx,
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
@@ -169,9 +175,13 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(block bookkeeping
 	pool.cancelSpec = cancel
 	specDoneCh := make(chan struct{})
 	pool.specAsmDone = specDoneCh
-	pool.specBlock = make(chan *ledgercore.ValidatedBlock, 1)
 
-	return &copy, pool.specBlock, specDoneCh, statedelta, nil
+	specBlockCh := make(chan *ledgercore.ValidatedBlock, 1)
+	pool.specBlockMu.Lock()
+	pool.specBlockCh = specBlockCh
+	pool.specBlockMu.Unlock()
+
+	return &copy, specBlockCh, specDoneCh, nil
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process.
@@ -529,7 +539,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block) {
+func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
 
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
@@ -542,7 +552,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block) {
 	pool.rememberCommit(false)
 
 	// create shallow pool copy
-	speculativePool, outchan, specAsmDoneCh, delta, err := pool.copyTransactionPoolOverSpecLedger(block)
+	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
 	defer close(specAsmDoneCh)
 	pool.mu.Unlock()
 
@@ -552,7 +562,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block) {
 	}
 
 	// process txns only until one block is full
-	speculativePool.onNewBlock(block, delta, true)
+	speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
 
 	if speculativePool.assemblyResults.err != nil {
 		return
@@ -566,12 +576,11 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(block bookkeeping.Block) {
 }
 
 func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
-	// TODO(yossi) is taking the lock here necessary? is it safe (check lock taking order)?
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.specBlockMu.Lock()
+	defer pool.specBlockMu.Unlock()
 
 	select {
-	case vb := <-pool.specBlock:
+	case vb := <-pool.specBlockCh:
 		if vb == nil {
 			return nil, fmt.Errorf("speculation block is nil")
 		}

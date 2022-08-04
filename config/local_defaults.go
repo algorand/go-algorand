@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    23,
+	Version:                                    24,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        7,
@@ -110,6 +110,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	SpeculativeBlockAssemblyGraceTime:          50000000,
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
 	TLSCertFile:                                "",

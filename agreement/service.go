@@ -221,6 +221,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		s.Clock = clock
 	}
 
+	// set speculative block assembly based on the current local configuration
+	status.SpeculativeAsmTimeDuration = s.parameters.Local.ProposalAssemblyTime + s.parameters.Local.SpeculativeBlockAssemblyGraceTime
 	for {
 		status.ConcensusVersion, err = s.Ledger.ConsensusVersion(status.Round)
 		if err != nil {
