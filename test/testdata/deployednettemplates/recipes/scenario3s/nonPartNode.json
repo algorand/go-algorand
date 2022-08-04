@@ -3,5 +3,5 @@
     "APIToken": "{{APIToken}}",
     "MetricsURI": "{{MetricsURI}}",
     "EnableMetrics": true,
-    "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 3, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+    "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
 }
