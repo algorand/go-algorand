@@ -259,7 +259,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset config transaction for a non-existing asset",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -296,7 +295,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset config transaction for an existing asset",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -333,7 +331,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset transfer transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
@@ -385,7 +382,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset freeze transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetFreezeTx,
@@ -435,7 +431,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "application transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
@@ -487,25 +482,25 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				*/
 			},
 			resources: []prefetcher.LoadedResourcesEntry{
-				/*
-					{
-						Address:        makeAddressPtr(2),
-						CreatableIndex: 1001,
-						CreatableType:  basics.AssetCreatable,
-						Resource:       &ledgercore.AccountResource{},
-					},
-					{
-						Address:        makeAddressPtr(15),
-						CreatableIndex: 2001,
-						CreatableType:  basics.AppCreatable,
-						Resource:       &ledgercore.AccountResource{},
-					},
-					{
-						Address:        nil,
-						CreatableIndex: 2002,
-						CreatableType:  basics.AppCreatable,
-						Resource:       nil,
-					},
+				/* - if we'll decide that we want to perfetch the foreign apps/assets, then this should be enabled
+				{
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        makeAddressPtr(15),
+					CreatableIndex: 2001,
+					CreatableType:  basics.AppCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        nil,
+					CreatableIndex: 2002,
+					CreatableType:  basics.AppCreatable,
+					Resource:       nil,
+				},
 				*/
 				/* - if we'll decide that we want to perfetch the account local state, then this should be enabled.
 				{
