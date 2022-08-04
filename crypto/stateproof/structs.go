@@ -17,6 +17,10 @@
 package stateproof
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -76,6 +80,28 @@ type StateProof struct {
 	// arrays.
 	Reveals           map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
 	PositionsToReveal []uint64          `codec:"pr,allocbound=MaxReveals"`
+}
+
+func (s StateProof) StringBuild() (b strings.Builder) {
+	b.WriteString("StateProof: {")
+	defer b.WriteRune('}')
+
+	if s.MsgIsZero() {
+		return
+	}
+
+	b.WriteString(fmt.Sprintf("%v", s.SigCommit))
+	b.WriteString(", ")
+	b.WriteString(strconv.FormatUint(s.SignedWeight, 10))
+	b.WriteString(", ")
+	b.WriteString(strconv.Itoa(len(s.PositionsToReveal)))
+
+	return
+}
+
+func (s StateProof) String() string {
+	b := s.StringBuild()
+	return b.String()
 }
 
 // SortUint64 implements sorting by uint64 keys for
