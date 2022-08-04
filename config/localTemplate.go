@@ -454,7 +454,7 @@ type Local struct {
 	MaxAcctLookback uint64 `version[23]:"8"`
 
 	// EnableTransactionSimulator enables the simulation API endpoint.
-	EnableTransactionSimulator bool `version[23]:"true"`
+	EnableTransactionSimulator bool `version[23]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
