@@ -438,7 +438,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 			delete(completed, next)
 
-			// if we had no error, write the result to the output channel.
+			// write the result to the output channel.
 			// this write will not block since we preallocated enough space on the channel.
 			p.outChan <- LoadedTransactionGroup{
 				Err:       groupsReady[next].err,
