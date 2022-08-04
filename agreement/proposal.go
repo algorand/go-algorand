@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -60,6 +61,9 @@ type unauthenticatedProposal struct {
 	OriginalProposer basics.Address `codec:"oprop"`
 }
 
+// TransmittedPayload exported for dumping textual versions of messages
+type TransmittedPayload = transmittedPayload
+
 // ToBeHashed implements the Hashable interface.
 func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Payload, protocol.Encode(&p)
@@ -85,6 +89,11 @@ type proposal struct {
 	// to disk, so after a crash, we will fall back to applying the
 	// raw Block to the ledger (and re-computing the state delta).
 	ve ValidatedBlock
+
+	// validatedAt indicates the time at which this proposal was
+	// validated (and thus was ready to be delivered to the state
+	// machine), relative to the zero of that round.
+	validatedAt time.Duration
 }
 
 func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {

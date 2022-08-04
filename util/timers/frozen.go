@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,4 +54,9 @@ func (m *Frozen) Decode([]byte) (Clock, error) {
 
 func (m *Frozen) String() string {
 	return ""
+}
+
+// Since implements the Clock interface.
+func (m *Frozen) Since() time.Duration {
+	return 0
 }

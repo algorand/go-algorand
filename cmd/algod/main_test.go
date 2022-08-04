@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,9 +29,7 @@ import (
 )
 
 func BenchmarkAlgodStartup(b *testing.B) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkAlgodStartup")
-	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := b.TempDir()
 	genesisFile, err := ioutil.ReadFile("../../installer/genesis/devnet/genesis.json")
 	require.NoError(b, err)
 

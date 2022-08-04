@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -41,11 +42,14 @@ import (
 // For correctness, all Roots should have no more than one Participation
 // globally active at any time. If this condition is violated, the Root may
 // equivocate. (Algorand tolerates a limited fraction of misbehaving accounts.)
+//msgp:ignore Participation
 type Participation struct {
 	Parent basics.Address
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
+	// StateProofSecrets is used to sign compact certificates.
+	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -56,9 +60,50 @@ type Participation struct {
 	KeyDilution uint64
 }
 
+// ParticipationKeyIdentity is for msgpack encoding the participation data.
+type ParticipationKeyIdentity struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Parent      basics.Address                  `codec:"addr"`
+	VRFSK       crypto.VrfPrivkey               `codec:"vrfsk"`
+	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote-id"`
+	FirstValid  basics.Round                    `codec:"fv"`
+	LastValid   basics.Round                    `codec:"lv"`
+	KeyDilution uint64                          `codec:"kd"`
+}
+
+// ToBeHashed implements the Hashable interface.
+func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.ParticipationKeys, protocol.Encode(id)
+}
+
+// ID creates a ParticipationID hash from the identity file.
+func (id ParticipationKeyIdentity) ID() ParticipationID {
+	return ParticipationID(crypto.HashObj(&id))
+}
+
+// ID computes a ParticipationID.
+func (part Participation) ID() ParticipationID {
+	idData := ParticipationKeyIdentity{
+		Parent:      part.Parent,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
+		KeyDilution: part.KeyDilution,
+	}
+	if part.VRF != nil {
+		copy(idData.VRFSK[:], part.VRF.SK[:])
+	}
+	if part.Voting != nil {
+		copy(idData.VoteID[:], part.Voting.OneTimeSignatureVerifier[:])
+	}
+
+	return idData.ID()
+}
+
 // PersistedParticipation encapsulates the static state of the participation
 // for a single address at any given moment, while providing the ability
 // to handle persistence and deletion of secrets.
+//msgp:ignore PersistedParticipation
 type PersistedParticipation struct {
 	Participation
 
@@ -96,17 +141,19 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
-// VotingSigner returns the voting secrets associated with this Participation account,
-// together with the KeyDilution value.
-func (part Participation) VotingSigner() crypto.OneTimeSigner {
-	return crypto.OneTimeSigner{
-		OneTimeSignatureSecrets: part.Voting,
-		OptionalKeyDilution:     part.KeyDilution,
-	}
+// StateProofSigner returns the key used to sign on Compact Certificates.
+// might return nil!
+func (part Participation) StateProofSigner() *merklesignature.Secrets {
+	return part.StateProofSecrets
+}
+
+// StateProofVerifier returns the verifier for the StateProof keys.
+func (part Participation) StateProofVerifier() *merklesignature.Verifier {
+	return part.StateProofSecrets.GetVerifier()
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, includeStateProofKeys bool) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -120,6 +167,11 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			VotePK:      part.Voting.OneTimeSignatureVerifier,
 			SelectionPK: part.VRF.PK,
 		},
+	}
+	if cert := part.StateProofSigner(); cert != nil {
+		if includeStateProofKeys { // TODO: remove this check and parameter after the network had enough time to upgrade
+			t.KeyregTxnFields.StateProofPK = *(cert.GetVerifier())
+		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
 	t.KeyregTxnFields.VoteLast = part.LastValid
@@ -164,8 +216,16 @@ func (part PersistedParticipation) PersistNewParent() error {
 // FillDBWithParticipationKeys initializes the passed database with participation keys
 func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part PersistedParticipation, err error) {
 	if lastValid < firstValid {
-		err = fmt.Errorf("FillDBWithParticipationKeys: lastValid %d is after firstValid %d", lastValid, firstValid)
+		err = fmt.Errorf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", firstValid, lastValid)
 		return
+	}
+
+	// TODO: change to ConsensusCurrentVersion when updated
+	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+
+	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
+		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
 	}
 
 	// Compute how many distinct participation keys we should generate
@@ -176,24 +236,40 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate them
 	v := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
 
-	// Also generate a new VRF key, which lives in the participation keys db
+	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
+
+	// Generate a new key which signs the compact certificates
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval)
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
 		Participation: Participation{
-			Parent:      address,
-			VRF:         vrf,
-			Voting:      v,
-			FirstValid:  firstValid,
-			LastValid:   lastValid,
-			KeyDilution: keyDilution,
+			Parent:            address,
+			VRF:               vrf,
+			Voting:            v,
+			StateProofSecrets: stateProofSecrets,
+			FirstValid:        firstValid,
+			LastValid:         lastValid,
+			KeyDilution:       keyDilution,
 		},
 		Store: store,
 	}
 	// Persist the Participation into the database
-	err = part.Persist()
+	err = part.PersistWithSecrets()
 	return part, err
+}
+
+// PersistWithSecrets writes Participation struct to the database along with all the secrets it contains
+func (part PersistedParticipation) PersistWithSecrets() error {
+	err := part.Persist()
+	if err != nil {
+		return err
+	}
+	return part.StateProofSecrets.Persist(part.Store) // must be called after part.Persist()
 }
 
 // Persist writes a Participation out to a database on the disk
@@ -201,6 +277,7 @@ func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
+	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
@@ -208,8 +285,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
@@ -226,7 +303,12 @@ func (part PersistedParticipation) Persist() error {
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return partMigrate(tx)
+		err := partMigrate(tx)
+		if err != nil {
+			return err
+		}
+
+		return merklesignature.InstallStateProofTable(tx)
 	})
 }
 

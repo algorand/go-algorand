@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
@@ -59,13 +60,13 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 	genesisFile := filepath.Join(targetFolder, genesisFileName)
 
 	nodeDirs = make(map[string]string)
-	getGenesisVerCmd := filepath.Join(binDir, "algod")
 	importKeysCmd := filepath.Join(binDir, "goal")
-	genesisVer, _, err := util.ExecAndCaptureOutput(getGenesisVerCmd, "-G", "-d", targetFolder)
+
+	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(targetFolder, "genesis.json"))
 	if err != nil {
 		return
 	}
-	genesisVer = strings.TrimSpace(genesisVer)
+	genesisVer := genesis.ID()
 
 	relaysCount := countRelayNodes(t.Nodes)
 
@@ -73,7 +74,16 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
 		if err != nil {
-			return
+			if !os.IsExist(err) {
+				return
+			}
+
+			// allow some flexibility around pre-existing directories to
+			// support docker and pre-mounted volumes.
+			if !util.IsEmpty(nodeDir) {
+				err = fmt.Errorf("duplicate node directory detected: %w", err)
+				return
+			}
 		}
 
 		_, err = util.CopyFile(genesisFile, filepath.Join(nodeDir, genesisFileName))
@@ -211,6 +221,11 @@ func (t NetworkTemplate) Validate() error {
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
+
+	if t.Genesis.DevMode && len(t.Nodes) != 1 {
+		return fmt.Errorf("invalid template: DevMode should only have a single node")
+	}
+
 	return nil
 }
 
@@ -231,6 +246,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	cfg.EndpointAddress = "127.0.0.1:0"
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
+	cfg.EnableRuntimeMetrics = true
 	if relaysCount == 0 {
 		cfg.DisableNetworking = true
 	}

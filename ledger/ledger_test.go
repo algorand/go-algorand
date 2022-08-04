@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,19 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
-	"runtime/pprof"
+	"runtime"
+	"sort"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 
 	"github.com/stretchr/testify/require"
 
@@ -112,7 +118,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.Equal(t, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -120,13 +126,13 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	if proto.SupportGenesisHash {
@@ -152,7 +158,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
 	blk.Payset = append(blk.Payset, txib)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.appendUnvalidated(blk)
 }
@@ -171,7 +177,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 		blk.Payset = append(blk.Payset, txib)
 	}
 	var err error
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.AddBlock(blk, agreement.Certificate{})
 }
@@ -211,7 +217,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
@@ -219,7 +225,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
@@ -228,7 +234,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	emptyBlock := bookkeeping.Block{
 		BlockHeader: correctHeader,
 	}
-	correctHeader.TxnRoot, err = emptyBlock.PaysetCommit()
+	correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	correctHeader.RewardsPool = testPoolAddr
@@ -321,11 +327,11 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot = crypto.Hash([]byte{0})
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
 	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot[0]++
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
 	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
@@ -688,6 +694,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
 	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	badTx.ApprovalProgram = []byte{242}
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx
@@ -795,9 +805,9 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 	addEmptyValidatedBlock(t, l, initAccounts)
@@ -826,23 +836,19 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
-
-	acctwr, err := l.Lookup(rnd, creator)
-	a.NoError(err)
-	a.Equal(acctwor.AppParams[appIdx].GlobalState["counter"], acctwr.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	acctworRes, err = l.LookupApplication(l.Latest()-1, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	acctRes, err = l.LookupApplication(rnd, user, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
 
 // TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
@@ -923,9 +929,9 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
 	// make two app call txns and put into the same block, with and without groupping
 	var tests = []struct {
@@ -993,20 +999,16 @@ int 1                   // [1]
 			a.NoError(err)
 			blk.TxnCounter = blk.TxnCounter + 2
 			blk.Payset = append(blk.Payset, txib1, txib2)
-			blk.TxnRoot, err = blk.PaysetCommit()
+			blk.TxnCommitments, err = blk.PaysetCommit()
 			a.NoError(err)
 			err = l.appendUnvalidated(blk)
 			a.NoError(err)
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 			a.NoError(err)
-			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
-
-			acctwr, err := l.Lookup(rnd, creator)
-			a.NoError(err)
-			a.Equal(acctwor.AppParams[appIdx].GlobalState["key"], acctwr.AppParams[appIdx].GlobalState["key"])
+			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
 	}
 }
@@ -1078,6 +1080,21 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteKeyDilution: proto.DefaultKeyDilution,
 		VoteFirst:       0,
 		VoteLast:        10000,
+	}
+
+	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	if proto.EnableStateProofKeyregCheck {
+		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
+		store, err := db.MakeAccessor("test-DB", false, true)
+		a.NoError(err)
+		defer store.Close()
+		root, err := account.GenerateRoot(store)
+		a.NoError(err)
+		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		signer := p.Participation.StateProofSecrets
+		require.NoError(t, err)
+
+		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1206,7 +1223,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 			}
-			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			poolBal, _, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
@@ -1216,7 +1233,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				Round:        l.Latest() + 1,
 				Branch:       lastBlock.Hash(),
 				TimeStamp:    0,
-				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// Seed:       does not matter,
 				// UpgradeVote: empty,
@@ -1231,7 +1248,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			correctBlock.TxnRoot, err = correctBlock.PaysetCommit()
+			correctBlock.TxnCommitments, err = correctBlock.PaysetCommit()
 			a.NoError(err)
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
@@ -1426,7 +1443,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 
 	// set some value
 	lastCatchpointLabel := "someCatchpointLabel"
-	ledger.accts.lastCatchpointLabel = lastCatchpointLabel
+	ledger.catchpoint.lastCatchpointLabel = lastCatchpointLabel
 
 	// verify the value is returned
 	require.Equal(t, lastCatchpointLabel, ledger.GetLastCatchpointLabel())
@@ -1519,6 +1536,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max asset id limit
 	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	require.NoError(t, err)
 	assetCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AssetCreatable &&
@@ -1537,6 +1555,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max application id limit
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	require.NoError(t, err)
 	appCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AppCreatable &&
@@ -1558,13 +1577,16 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
+	deadlock.Opts.Disable = true // catchpoint writing might take long
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
-	maxBlocks := 10000
+	const maxBlocks = 1_000_000
 	nftPerAcct := make(map[basics.Address]int)
 	lastBlock, err := l.Block(l.Latest())
+	require.NoError(t, err)
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
@@ -1579,6 +1601,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 		accounts[addr] = genesisInitState.Accounts[addr]
 		keys[addr] = initKeys[addr]
 	}
+
+	fmt.Printf("%s\t%s\t%s\t%s\n", "Round", "TotalAlloc, MB", "HeapAlloc, MB", "LiveObj")
+	fmt.Printf("%s\t%s\t%s\t%s\n", "-----", "--------------", "-------------", "-------")
 
 	curAddressIdx := 0
 	// run for maxBlocks rounds
@@ -1645,7 +1670,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 
 					err = l.appendUnvalidatedTx(t, accounts, keys, correctPay, transactions.ApplyData{})
 					require.NoError(t, err)
-					ad, err := l.Lookup(l.Latest(), addr)
+					ad, _, _, err := l.LookupLatest(addr)
 					require.NoError(t, err)
 
 					addresses = append(addresses, addr)
@@ -1657,26 +1682,81 @@ func TestLedgerMemoryLeak(t *testing.T) {
 		}
 		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
 		require.NoError(t, err)
-		if i%100 == 0 {
-			l.WaitForCommit(l.Latest())
-			fmt.Printf("block: %d\n", l.Latest())
+
+		latest := l.Latest()
+		if latest%100 == 0 {
+			l.WaitForCommit(latest)
 		}
-		if i%1000 == 0 && i > 0 {
-			memprofile := fmt.Sprintf("%s-memprof-%d", t.Name(), i)
-			f, err := os.Create(memprofile)
-			require.NoError(t, err)
-			err = pprof.WriteHeapProfile(f)
-			require.NoError(t, err)
-			f.Close()
-			fmt.Printf("Profile %s created\n", memprofile)
+		if latest%1000 == 0 || i%1000 == 0 && i > 0 {
+			// pct := debug.SetGCPercent(-1) // prevent CG in between memory stats reading and heap profiling
+
+			var rtm runtime.MemStats
+			runtime.ReadMemStats(&rtm)
+			const meg = 1024 * 1024
+			fmt.Printf("%5d\t%14d\t%13d\t%7d\n", latest, rtm.TotalAlloc/meg, rtm.HeapAlloc/meg, rtm.Mallocs-rtm.Frees)
+
+			// Use the code below to generate memory profile if needed for debugging
+			// memprofile := fmt.Sprintf("%s-memprof-%d", t.Name(), latest)
+			// f, err := os.Create(memprofile)
+			// require.NoError(t, err)
+			// err = pprof.WriteHeapProfile(f)
+			// require.NoError(t, err)
+			// f.Close()
+
+			// debug.SetGCPercent(pct)
 		}
 	}
 }
 
+// TestLookupAgreement ensures LookupAgreement return an empty data for offline accounts
+func TestLookupAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	var addrOnline, addrOffline basics.Address
+	for addr, ad := range genesisInitState.Accounts {
+		if addrOffline.IsZero() {
+			addrOffline = addr
+			ad.Status = basics.Offline
+			crypto.RandBytes(ad.VoteID[:]) // this is invalid but we set VoteID to ensure the account gets cleared
+			genesisInitState.Accounts[addr] = ad
+		} else if ad.Status == basics.Online {
+			addrOnline = addr
+			crypto.RandBytes(ad.VoteID[:])
+			genesisInitState.Accounts[addr] = ad
+			break
+		}
+	}
+
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	oad, err := ledger.LookupAgreement(0, addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, oad)
+	ad, _, _, err := ledger.LookupLatest(addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
+
+	require.NoError(t, err)
+	oad, err = ledger.LookupAgreement(0, addrOffline)
+	require.NoError(t, err)
+	require.Empty(t, oad)
+	ad, _, _, err = ledger.LookupLatest(addrOffline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
+}
+
 func BenchmarkLedgerStartup(b *testing.B) {
 	log := logging.TestingLog(b)
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkLedgerStartup")
-	require.NoError(b, err)
+	tmpDir := b.TempDir()
 	genesisInitState, _ := ledgertesting.GenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 
 	cfg := config.GetDefaultLocal()
@@ -1708,5 +1788,635 @@ func BenchmarkLedgerStartup(b *testing.B) {
 	b.Run("DiskDatabase/Archival", func(b *testing.B) {
 		testOpenLedger(b, false, cfg)
 	})
-	os.RemoveAll(tmpDir)
+}
+
+// TestLedgerReloadShrinkDeltas checks the ledger has correct account state
+// after reloading with new configuration with shorter in-memory deltas for trackers
+func TestLedgerReloadShrinkDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = proto.MaxBalLookback
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
+
+	maxBlocks := int(proto.MaxBalLookback * 2)
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
+	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts))
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+		accounts[addr] = genesisInitState.Accounts[addr]
+		keys[addr] = initKeys[addr]
+	}
+	sort.SliceStable(addresses, func(i, j int) bool { return bytes.Compare(addresses[i][:], addresses[j][:]) == -1 })
+
+	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
+	curAddressIdx := 0
+	maxValidity := basics.Round(20) // some number different from number of txns in blocks
+	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
+	// run for maxBlocks rounds with random payment transactions
+	// generate 1000 txn per block
+	for i := 0; i < maxBlocks; i++ {
+		stxns := make([]transactions.SignedTxn, 10)
+		latest := l.Latest()
+		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
+		for j := 0; j < 10; j++ {
+			feeMult := rand.Intn(5) + 1
+			amountMult := rand.Intn(1000) + 1
+			receiver := ledgertesting.RandomAddress()
+			txHeader := transactions.Header{
+				Sender:      addresses[curAddressIdx],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * uint64(feeMult)},
+				FirstValid:  latest + 1,
+				LastValid:   latest + maxValidity,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			correctPayFields := transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: uint64(100 * amountMult)},
+			}
+
+			tx := transactions.Transaction{
+				Type:             protocol.PaymentTx,
+				Header:           txHeader,
+				PaymentTxnFields: correctPayFields,
+			}
+
+			stxns[j] = sign(initKeys, tx)
+			curAddressIdx = (curAddressIdx + 1) % len(addresses)
+			txnIDs[latest+1][tx.ID()] = struct{}{}
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(latest + 1)
+		}
+		onlineTotals[i+1], err = l.accts.onlineTotals(basics.Round(i + 1))
+		require.NoError(t, err)
+	}
+
+	latest := l.Latest()
+	nextRound := latest + 1
+	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
+
+	origBalances := make([]basics.MicroAlgos, len(addresses))
+	origRewardsBalances := make([]basics.MicroAlgos, len(addresses))
+	origAgreementBalances := make([]basics.MicroAlgos, len(addresses))
+	for i, addr := range addresses {
+		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		origBalances[i] = ad.MicroAlgos
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], wo)
+		origRewardsBalances[i] = acct.MicroAlgos
+
+		oad, err := l.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		origAgreementBalances[i] = oad.MicroAlgosWithRewards
+	}
+
+	var nonZeros int
+	for _, bal := range origAgreementBalances {
+		if bal.Raw > 0 {
+			nonZeros++
+		}
+	}
+	require.Greater(t, nonZeros, 0)
+
+	// at round "maxBlocks" the ledger must have maxValidity blocks of transactions
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+	}
+
+	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
+	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
+	cfg.MaxAcctLookback = shorterLookback
+	l.cfg = cfg
+	l.reloadLedger()
+
+	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	require.Error(t, err)
+	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
+		online, err := l.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, onlineTotals[i], online)
+	}
+
+	for i, addr := range addresses {
+		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], ad.MicroAlgos)
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
+		require.Equal(t, origBalances[i], wo)
+
+		oad, err := l.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
+
+		// TODO:
+		// add a test checking all committed pre-reload entries are gone
+		// add as a tracker test
+	}
+
+	// at round maxBlocks the ledger must have maxValidity blocks of transactions, check
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+	}
+}
+
+// TestLedgerMigrateV6ShrinkDeltas opens a ledger + dbV6, submits a bunch of txns,
+// then migrates db and reopens ledger, and checks that the state is correct
+func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accountDBVersion = 6
+	defer func() {
+		accountDBVersion = 7
+	}()
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
+	proto := config.Consensus[protocol.ConsensusV31]
+	proto.RewardsRateRefreshInterval = 500
+	config.Consensus[testProtocolVersion] = proto
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, testProtocolVersion, 10_000_000_000)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = proto.MaxBalLookback
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
+	require.NoError(t, err)
+	defer func() {
+		trackerDB.Close()
+		blockDB.Close()
+	}()
+	// create tables so online accounts can still be written
+	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+		os.Remove(dbName + ".block.sqlite-shm")
+		os.Remove(dbName + ".tracker.sqlite-shm")
+		os.Remove(dbName + ".block.sqlite-wal")
+		os.Remove(dbName + ".tracker.sqlite-wal")
+	}()
+
+	// remove online tracker in order to make v6 schema work
+	for i := range l.trackers.trackers {
+		if l.trackers.trackers[i] == l.trackers.acctsOnline {
+			l.trackers.trackers = append(l.trackers.trackers[:i], l.trackers.trackers[i+1:]...)
+			break
+		}
+	}
+	l.trackers.acctsOnline = nil
+	l.acctsOnline = onlineAccounts{}
+
+	maxBlocks := 2000
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
+	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts))
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+		accounts[addr] = genesisInitState.Accounts[addr]
+		keys[addr] = initKeys[addr]
+	}
+	sort.SliceStable(addresses, func(i, j int) bool { return bytes.Compare(addresses[i][:], addresses[j][:]) == -1 })
+
+	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
+	curAddressIdx := 0
+	maxValidity := basics.Round(20) // some number different from number of txns in blocks
+	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
+	// run for maxBlocks rounds with random payment transactions
+	// generate numTxns txn per block
+	for i := 0; i < maxBlocks; i++ {
+		numTxns := crypto.RandUint64()%9 + 7
+		stxns := make([]transactions.SignedTxn, numTxns)
+		latest := l.Latest()
+		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
+		for j := 0; j < int(numTxns); j++ {
+			feeMult := rand.Intn(5) + 1
+			amountMult := rand.Intn(1000) + 1
+			receiver := ledgertesting.RandomAddress()
+			txHeader := transactions.Header{
+				Sender:      addresses[curAddressIdx],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * uint64(feeMult)},
+				FirstValid:  latest + 1,
+				LastValid:   latest + maxValidity,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			tx := transactions.Transaction{
+				Header: txHeader,
+			}
+
+			// have one txn be a keyreg txn that flips online to offline
+			// have all other txns be random payment txns
+			if j == 0 {
+				var keyregTxnFields transactions.KeyregTxnFields
+				// keep low accounts online, high accounts offline
+				// otherwise all accounts become offline eventually and no agreement balances to check
+				if curAddressIdx < len(addresses)/2 {
+					keyregTxnFields = transactions.KeyregTxnFields{
+						VoteFirst: latest + 1,
+						VoteLast:  latest + 100_000,
+					}
+					var votepk crypto.OneTimeSignatureVerifier
+					votepk[0] = byte(j % 256)
+					votepk[1] = byte(i % 256)
+					votepk[2] = byte(254)
+					var selpk crypto.VRFVerifier
+					selpk[0] = byte(j % 256)
+					selpk[1] = byte(i % 256)
+					selpk[2] = byte(255)
+
+					keyregTxnFields.VotePK = votepk
+					keyregTxnFields.SelectionPK = selpk
+				}
+				tx.Type = protocol.KeyRegistrationTx
+				tx.KeyregTxnFields = keyregTxnFields
+			} else {
+				correctPayFields := transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: uint64(100 * amountMult)},
+				}
+				tx.Type = protocol.PaymentTx
+				tx.PaymentTxnFields = correctPayFields
+			}
+
+			stxns[j] = sign(initKeys, tx)
+			curAddressIdx = (curAddressIdx + 1) % len(addresses)
+			txnIDs[latest+1][tx.ID()] = struct{}{}
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(latest + 1)
+		}
+		onlineTotals[i+1], err = l.accts.onlineTotals(basics.Round(i + 1))
+		require.NoError(t, err)
+	}
+
+	latest := l.Latest()
+	nextRound := latest + 1
+	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
+
+	origBalances := make([]basics.MicroAlgos, len(addresses))
+	origRewardsBalances := make([]basics.MicroAlgos, len(addresses))
+	origAgreementBalances := make([]basics.MicroAlgos, len(addresses))
+	for i, addr := range addresses {
+		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		origBalances[i] = ad.MicroAlgos
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], wo)
+		origRewardsBalances[i] = acct.MicroAlgos
+
+		acct, rnd, _, err = l.LookupAccount(balancesRound, addr)
+		require.NoError(t, err)
+		require.Equal(t, balancesRound, rnd)
+		if acct.Status == basics.Online {
+			origAgreementBalances[i] = acct.MicroAlgos
+		} else {
+			origAgreementBalances[i] = basics.MicroAlgos{}
+		}
+	}
+
+	var nonZeros int
+	for _, bal := range origAgreementBalances {
+		if bal.Raw > 0 {
+			nonZeros++
+		}
+	}
+	require.Greater(t, nonZeros, 0)
+
+	// at round "maxBlocks" the ledger must have maxValidity blocks of transactions
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+	}
+
+	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
+	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
+	l.Close()
+
+	cfg.MaxAcctLookback = shorterLookback
+	accountDBVersion = 7
+	// delete tables since we want to check they can be made from other data
+	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail"); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail"); err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	l2, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l2.Close()
+	}()
+
+	_, err = l2.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	require.Error(t, err)
+	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
+		online, err := l2.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, onlineTotals[i], online)
+	}
+
+	for i, addr := range addresses {
+		ad, rnd, err := l2.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], ad.MicroAlgos)
+
+		acct, rnd, wo, err := l2.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
+		require.Equal(t, origBalances[i], wo)
+
+		oad, err := l2.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
+	}
+
+	// at round maxBlocks the ledger must have maxValidity blocks of transactions, check
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l2.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+	}
+}
+
+// TestLedgerTxTailCachedBlockHeaders checks [Latest - MaxTxnLife...Latest] block headers
+// are available via txTail
+func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10_000_000_000)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	maxBlocks := 2 * proto.MaxTxnLife
+	for i := uint64(0); i < maxBlocks; i++ {
+		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(l.Latest())
+		}
+	}
+
+	latest := l.Latest()
+	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
+		blk, err := l.BlockHdrCached(i)
+		require.NoError(t, err)
+		require.Equal(t, blk.Round, i)
+	}
+
+	// additional checks: the txTail should have additional blocks:
+	// dbRound - (MaxTxnLife+1) is expected to be deleted and dbRound - (MaxTxnLife) is earliest available
+	l.trackerMu.RLock()
+	dbRound := l.trackers.dbRound
+	l.trackerMu.RUnlock()
+
+	start := dbRound - basics.Round(proto.MaxTxnLife)
+	end := latest - basics.Round(proto.MaxTxnLife)
+	for i := start; i < end; i++ {
+		blk, err := l.BlockHdrCached(i)
+		require.NoError(t, err)
+		require.Equal(t, blk.Round, i)
+	}
+
+	_, err = l.BlockHdrCached(start - 1)
+	require.Error(t, err)
+}
+
+// TestLedgerKeyregFlip generates keyreg transactions for flipping genesis accounts state.
+// It checks 1) lookup returns correct values 2) lookup agreement returns correct values
+func TestLedgerKeyregFlip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
+
+	const numFullBlocks = 1000
+	const numEmptyBlocks = 500
+
+	require.Equal(t, len(genesisInitState.Accounts), 12)
+	const numAccounts = 10 // 12 - pool and sink
+
+	// preallocate data for saving account info
+	var accounts [numFullBlocks][numAccounts]ledgercore.AccountData
+
+	lastBlock, err := l.Block(l.Latest())
+	require.NoError(t, err)
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, numAccounts)
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+	}
+
+	isOnline := func(rndIdx, acctIdx, seed int) bool {
+		return (rndIdx+acctIdx+seed)%4 == 1
+	}
+	// run for numFullBlocks rounds
+	// generate 10 txn per block
+	for i := 0; i < numFullBlocks; i++ {
+		stxns := make([]transactions.SignedTxn, numAccounts)
+		latest := l.Latest()
+		require.Equal(t, basics.Round(i), latest)
+		seed := int(crypto.RandUint63() % 1_000_000)
+		for j := 0; j < numAccounts; j++ {
+			txHeader := transactions.Header{
+				Sender:      addresses[j],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  latest + 1,
+				LastValid:   latest + 10,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			keyregFields := transactions.KeyregTxnFields{
+				VoteFirst: latest + 1,
+				VoteLast:  latest + 100_000,
+			}
+			if isOnline(i, j, seed) {
+				var votepk crypto.OneTimeSignatureVerifier
+				votepk[0] = byte(j % 256)
+				votepk[1] = byte(i % 256)
+				votepk[2] = byte(254)
+				var selpk crypto.VRFVerifier
+				selpk[0] = byte(j % 256)
+				selpk[1] = byte(i % 256)
+				selpk[2] = byte(255)
+
+				keyregFields.VotePK = votepk
+				keyregFields.SelectionPK = selpk
+			}
+
+			tx := transactions.Transaction{
+				Type:            protocol.KeyRegistrationTx,
+				Header:          txHeader,
+				KeyregTxnFields: keyregFields,
+			}
+			stxns[j] = sign(initKeys, tx)
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		for k := 0; k < numAccounts; k++ {
+			data, rnd, _, err := l.LookupAccount(basics.Round(i+1), addresses[k])
+			require.NoError(t, err)
+			require.Equal(t, rnd, basics.Round(i+1))
+			online := isOnline(i, k, seed)
+			require.Equal(t, online, data.Status == basics.Online)
+			if online {
+				require.Equal(t, byte(k%256), data.VoteID[0])
+				require.Equal(t, byte(i%256), data.VoteID[1])
+				require.Equal(t, byte(254), data.VoteID[2])
+				require.Equal(t, byte(k%256), data.SelectionID[0])
+				require.Equal(t, byte(i%256), data.SelectionID[1])
+				require.Equal(t, byte(255), data.SelectionID[2])
+				accounts[i][k] = data
+			}
+		}
+	}
+	l.WaitForCommit(l.Latest())
+	require.Equal(t, basics.Round(numFullBlocks), l.Latest())
+
+	for i := 0; i < numEmptyBlocks; i++ {
+		nextRound := basics.Round(numFullBlocks + i + 1)
+		balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
+		acctRoundIdx := int(balancesRound) - 1
+		if acctRoundIdx >= len(accounts) {
+			// checked all saved history, stop
+			break
+		}
+		for k := 0; k < numAccounts; k++ {
+			od, err := l.LookupAgreement(balancesRound, addresses[k])
+			require.NoError(t, err)
+			data := accounts[acctRoundIdx][k]
+			require.Equal(t, data.MicroAlgos, od.MicroAlgosWithRewards)
+			require.Equal(t, data.VoteFirstValid, od.VoteFirstValid)
+			require.Equal(t, data.VoteLastValid, od.VoteLastValid)
+			require.Equal(t, data.VoteID, od.VoteID)
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(l.Latest())
 }

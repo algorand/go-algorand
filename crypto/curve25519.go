@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,19 +69,10 @@ func init() {
 // A Seed holds the entropy needed to generate cryptographic keys.
 type Seed ed25519Seed
 
-// PublicKeyByteLength is the length, in bytes, of a public key
-const PublicKeyByteLength = 32
-
-// PrivateKeyByteLength is the length, in bytes, of a private key
-const PrivateKeyByteLength = 64
-
-// SignatureByteLength is the length, in bytes, of a signature
-const SignatureByteLength = 64
-
 /* Classical signatures */
-type ed25519Signature [SignatureByteLength]byte
-type ed25519PublicKey [PublicKeyByteLength]byte
-type ed25519PrivateKey [PrivateKeyByteLength]byte
+type ed25519Signature [64]byte
+type ed25519PublicKey [32]byte
+type ed25519PrivateKey [64]byte
 type ed25519Seed [32]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
@@ -128,7 +119,7 @@ func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) b
 		d = (*C.uchar)(&data[0])
 	}
 	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
-	result := C.crypto_sign_ed25519_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
+	result := C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
 	return result == 0
 }
 
@@ -197,21 +188,21 @@ func SecretKeyToSeed(secret PrivateKey) (Seed, error) {
 func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 	pk0, sk := ed25519GenerateKeySeed(ed25519Seed(seed))
 	pk := SignatureVerifier(pk0)
-	cryptoGenSigSecretsTotal.Inc(map[string]string{})
+	cryptoGenSigSecretsTotal.Inc(nil)
 	return &SignatureSecrets{SignatureVerifier: pk, SK: sk}
 }
 
 // Sign produces a cryptographic Signature of a Hashable message, given
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
-	cryptoSigSecretsSignTotal.Inc(map[string]string{})
-	return s.SignBytes(hashRep(message))
+	cryptoSigSecretsSignTotal.Inc(nil)
+	return s.SignBytes(HashRep(message))
 }
 
 // SignBytes signs a message directly, without first hashing.
 // Caller is responsible for domain separation.
 func (s *SignatureSecrets) SignBytes(message []byte) Signature {
-	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
+	cryptoSigSecretsSignBytesTotal.Inc(nil)
 	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
 }
 
@@ -221,14 +212,14 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // It returns true if this is the case; otherwise, it returns false.
 //
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
-	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
+	cryptoSigSecretsVerifyTotal.Inc(nil)
+	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
 func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
-	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
+	cryptoSigSecretsVerifyBytesTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

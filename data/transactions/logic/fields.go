@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,41 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
+
+// FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
+type FieldSpec interface {
+	Field() byte
+	Type() StackType
+	OpVersion() uint64
+	Note() string
+	Version() uint64
+}
+
+// fieldSpecMap is something that yields a FieldSpec, given a name for the field
+type fieldSpecMap interface {
+	get(name string) (FieldSpec, bool)
+}
+
+// FieldGroup binds all the info for a field (names, int value, spec access) so
+// they can be attached to opcodes and used by doc generation
+type FieldGroup struct {
+	Name  string
+	Doc   string
+	Names []string
+	specs fieldSpecMap
+}
+
+// SpecByName returns a FieldsSpec for a name, respecting the "sparseness" of
+// the Names array to hide some names
+func (fg *FieldGroup) SpecByName(name string) (FieldSpec, bool) {
+	if fs, ok := fg.specs.get(name); ok {
+		if fg.Names[fs.Field()] != "" {
+			return fs, true
+		}
+	}
+	return nil, false
+}
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -35,7 +69,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime panic
+	// FirstValidTime timestamp of block(FirstValid-1)
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
@@ -161,122 +195,239 @@ const (
 	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
 	CreatedApplicationID
 
-	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
+	// LastLog Logs[len(Logs)-1]
+	LastLog
+
+	// StateProofPK Transaction.StateProofPK
+	StateProofPK
+
+	// ApprovalProgramPages [][]byte
+	ApprovalProgramPages
+
+	// NumApprovalProgramPages = len(ApprovalProgramPages) // 4096
+	NumApprovalProgramPages
+
+	// ClearStateProgramPages [][]byte
+	ClearStateProgramPages
+
+	// NumClearStateProgramPages = len(ClearStateProgramPages) // 4096
+	NumClearStateProgramPages
+
+	invalidTxnField // compile-time constant for number of fields
 )
 
-// TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
-var TxnFieldNames []string
+func txnFieldSpecByField(f TxnField) (txnFieldSpec, bool) {
+	if int(f) >= len(txnFieldSpecs) {
+		return txnFieldSpec{}, false
+	}
+	return txnFieldSpecs[f], true
+}
 
-// TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
-var TxnFieldTypes []StackType
+// TxnFieldNames are arguments to the 'txn' family of opcodes.
+var TxnFieldNames [invalidTxnField]string
 
-var txnFieldSpecByField map[TxnField]txnFieldSpec
-var txnFieldSpecByName tfNameSpecMap
+var txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type tfNameSpecMap map[string]txnFieldSpec
 
-func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
-	if s[name].version > 1 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s tfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
+	array      bool   // Is this an array field?
 	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
 	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
+	doc        string
 }
 
-var txnFieldSpecs = []txnFieldSpec{
-	{Sender, StackBytes, 0, 5, false},
-	{Fee, StackUint64, 0, 5, false},
-	{FirstValid, StackUint64, 0, 0, false},
-	{FirstValidTime, StackUint64, 0, 0, false},
-	{LastValid, StackUint64, 0, 0, false},
-	{Note, StackBytes, 0, 6, false},
-	{Lease, StackBytes, 0, 0, false},
-	{Receiver, StackBytes, 0, 5, false},
-	{Amount, StackUint64, 0, 5, false},
-	{CloseRemainderTo, StackBytes, 0, 5, false},
-	{VotePK, StackBytes, 0, 6, false},
-	{SelectionPK, StackBytes, 0, 6, false},
-	{VoteFirst, StackUint64, 0, 6, false},
-	{VoteLast, StackUint64, 0, 6, false},
-	{VoteKeyDilution, StackUint64, 0, 6, false},
-	{Type, StackBytes, 0, 5, false},
-	{TypeEnum, StackUint64, 0, 5, false},
-	{XferAsset, StackUint64, 0, 5, false},
-	{AssetAmount, StackUint64, 0, 5, false},
-	{AssetSender, StackBytes, 0, 5, false},
-	{AssetReceiver, StackBytes, 0, 5, false},
-	{AssetCloseTo, StackBytes, 0, 5, false},
-	{GroupIndex, StackUint64, 0, 0, false},
-	{TxID, StackBytes, 0, 0, false},
-	{ApplicationID, StackUint64, 2, 0, false},
-	{OnCompletion, StackUint64, 2, 0, false},
-	{ApplicationArgs, StackBytes, 2, 0, false},
-	{NumAppArgs, StackUint64, 2, 0, false},
-	{Accounts, StackBytes, 2, 0, false},
-	{NumAccounts, StackUint64, 2, 0, false},
-	{ApprovalProgram, StackBytes, 2, 0, false},
-	{ClearStateProgram, StackBytes, 2, 0, false},
-	{RekeyTo, StackBytes, 2, 6, false},
-	{ConfigAsset, StackUint64, 2, 5, false},
-	{ConfigAssetTotal, StackUint64, 2, 5, false},
-	{ConfigAssetDecimals, StackUint64, 2, 5, false},
-	{ConfigAssetDefaultFrozen, StackUint64, 2, 5, false},
-	{ConfigAssetUnitName, StackBytes, 2, 5, false},
-	{ConfigAssetName, StackBytes, 2, 5, false},
-	{ConfigAssetURL, StackBytes, 2, 5, false},
-	{ConfigAssetMetadataHash, StackBytes, 2, 5, false},
-	{ConfigAssetManager, StackBytes, 2, 5, false},
-	{ConfigAssetReserve, StackBytes, 2, 5, false},
-	{ConfigAssetFreeze, StackBytes, 2, 5, false},
-	{ConfigAssetClawback, StackBytes, 2, 5, false},
-	{FreezeAsset, StackUint64, 2, 5, false},
-	{FreezeAssetAccount, StackBytes, 2, 5, false},
-	{FreezeAssetFrozen, StackUint64, 2, 5, false},
-	{Assets, StackUint64, 3, 0, false},
-	{NumAssets, StackUint64, 3, 0, false},
-	{Applications, StackUint64, 3, 0, false},
-	{NumApplications, StackUint64, 3, 0, false},
-	{GlobalNumUint, StackUint64, 3, 0, false},
-	{GlobalNumByteSlice, StackUint64, 3, 0, false},
-	{LocalNumUint, StackUint64, 3, 0, false},
-	{LocalNumByteSlice, StackUint64, 3, 0, false},
-	{ExtraProgramPages, StackUint64, 4, 0, false},
-	{Nonparticipation, StackUint64, 5, 6, false},
-
-	{Logs, StackBytes, 5, 5, true},
-	{NumLogs, StackUint64, 5, 5, true},
-	{CreatedAssetID, StackUint64, 5, 5, true},
-	{CreatedApplicationID, StackUint64, 5, 5, true},
+func (fs txnFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs txnFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs txnFieldSpec) OpVersion() uint64 {
+	return 0
+}
+func (fs txnFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs txnFieldSpec) Note() string {
+	note := fs.doc
+	if fs.effects {
+		note = addExtra(note, "Application mode only")
+	}
+	return note
 }
 
-// TxnaFieldNames are arguments to the 'txna' opcode
-// It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String(), Logs.String()}
+var txnFieldSpecs = [...]txnFieldSpec{
+	{Sender, StackBytes, false, 0, 5, false, "32 byte address"},
+	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
+	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
+	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
+	{LastValid, StackUint64, false, 0, 0, false, "round number"},
+	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
+	{Lease, StackBytes, false, 0, 0, false, "32 byte lease value"},
+	{Receiver, StackBytes, false, 0, 5, false, "32 byte address"},
+	{Amount, StackUint64, false, 0, 5, false, "microalgos"},
+	{CloseRemainderTo, StackBytes, false, 0, 5, false, "32 byte address"},
+	{VotePK, StackBytes, false, 0, 6, false, "32 byte address"},
+	{SelectionPK, StackBytes, false, 0, 6, false, "32 byte address"},
+	{VoteFirst, StackUint64, false, 0, 6, false, "The first round that the participation key is valid."},
+	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
+	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
+	{Type, StackBytes, false, 0, 5, false, "Transaction type as bytes"},
+	{TypeEnum, StackUint64, false, 0, 5, false, "Transaction type as integer"},
+	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
+	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
+	{AssetSender, StackBytes, false, 0, 5, false,
+		"32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset."},
+	{AssetReceiver, StackBytes, false, 0, 5, false, "32 byte address"},
+	{AssetCloseTo, StackBytes, false, 0, 5, false, "32 byte address"},
+	{GroupIndex, StackUint64, false, 0, 0, false,
+		"Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1"},
+	{TxID, StackBytes, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
+	{ApplicationID, StackUint64, false, 2, 6, false, "ApplicationID from ApplicationCall transaction"},
+	{OnCompletion, StackUint64, false, 2, 6, false, "ApplicationCall transaction on completion action"},
+	{ApplicationArgs, StackBytes, true, 2, 6, false,
+		"Arguments passed to the application in the ApplicationCall transaction"},
+	{NumAppArgs, StackUint64, false, 2, 0, false, "Number of ApplicationArgs"},
+	{Accounts, StackBytes, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
+	{NumAccounts, StackUint64, false, 2, 0, false, "Number of Accounts"},
+	{ApprovalProgram, StackBytes, false, 2, 6, false, "Approval program"},
+	{ClearStateProgram, StackBytes, false, 2, 6, false, "Clear state program"},
+	{RekeyTo, StackBytes, false, 2, 6, false, "32 byte Sender's new AuthAddr"},
+	{ConfigAsset, StackUint64, false, 2, 5, false, "Asset ID in asset config transaction"},
+	{ConfigAssetTotal, StackUint64, false, 2, 5, false, "Total number of units of this asset created"},
+	{ConfigAssetDecimals, StackUint64, false, 2, 5, false,
+		"Number of digits to display after the decimal place when displaying the asset"},
+	{ConfigAssetDefaultFrozen, StackUint64, false, 2, 5, false,
+		"Whether the asset's slots are frozen by default or not, 0 or 1"},
+	{ConfigAssetUnitName, StackBytes, false, 2, 5, false, "Unit name of the asset"},
+	{ConfigAssetName, StackBytes, false, 2, 5, false, "The asset name"},
+	{ConfigAssetURL, StackBytes, false, 2, 5, false, "URL"},
+	{ConfigAssetMetadataHash, StackBytes, false, 2, 5, false,
+		"32 byte commitment to unspecified asset metadata"},
+	{ConfigAssetManager, StackBytes, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetReserve, StackBytes, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetFreeze, StackBytes, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetClawback, StackBytes, false, 2, 5, false, "32 byte address"},
+	{FreezeAsset, StackUint64, false, 2, 5, false, "Asset ID being frozen or un-frozen"},
+	{FreezeAssetAccount, StackBytes, false, 2, 5, false,
+		"32 byte address of the account whose asset slot is being frozen or un-frozen"},
+	{FreezeAssetFrozen, StackUint64, false, 2, 5, false, "The new frozen value, 0 or 1"},
+	{Assets, StackUint64, true, 3, 6, false, "Foreign Assets listed in the ApplicationCall transaction"},
+	{NumAssets, StackUint64, false, 3, 0, false, "Number of Assets"},
+	{Applications, StackUint64, true, 3, 6, false, "Foreign Apps listed in the ApplicationCall transaction"},
+	{NumApplications, StackUint64, false, 3, 0, false, "Number of Applications"},
+	{GlobalNumUint, StackUint64, false, 3, 6, false, "Number of global state integers in ApplicationCall"},
+	{GlobalNumByteSlice, StackUint64, false, 3, 6, false, "Number of global state byteslices in ApplicationCall"},
+	{LocalNumUint, StackUint64, false, 3, 6, false, "Number of local state integers in ApplicationCall"},
+	{LocalNumByteSlice, StackUint64, false, 3, 6, false, "Number of local state byteslices in ApplicationCall"},
+	{ExtraProgramPages, StackUint64, false, 4, 6, false,
+		"Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program."},
+	{Nonparticipation, StackUint64, false, 5, 6, false, "Marks an account nonparticipating for rewards"},
 
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
-var TxnaFieldTypes = []StackType{
-	txnaFieldSpecByField[ApplicationArgs].ftype,
-	txnaFieldSpecByField[Accounts].ftype,
-	txnaFieldSpecByField[Assets].ftype,
-	txnaFieldSpecByField[Applications].ftype,
-	txnaFieldSpecByField[Logs].ftype,
+	// "Effects" Last two things are always going to: 0, true
+	{Logs, StackBytes, true, 5, 0, true, "Log messages emitted by an application call (only with `itxn` in v5)"},
+	{NumLogs, StackUint64, false, 5, 0, true, "Number of Logs (only with `itxn` in v5)"},
+	{CreatedAssetID, StackUint64, false, 5, 0, true,
+		"Asset ID allocated by the creation of an ASA (only with `itxn` in v5)"},
+	{CreatedApplicationID, StackUint64, false, 5, 0, true,
+		"ApplicationID allocated by the creation of an application (only with `itxn` in v5)"},
+	{LastLog, StackBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
+
+	// Not an effect. Just added after the effects fields.
+	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key commitment"},
+
+	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
+	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories
+	{ApprovalProgramPages, StackBytes, true, 7, 7, false, "Approval Program as an array of pages"},
+	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
+	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
+	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
 }
 
-var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
-	ApplicationArgs: {ApplicationArgs, StackBytes, 2, 0, false},
-	Accounts:        {Accounts, StackBytes, 2, 0, false},
-	Assets:          {Assets, StackUint64, 3, 0, false},
-	Applications:    {Applications, StackUint64, 3, 0, false},
+// TxnFields contains info on the arguments to the txn* family of opcodes
+var TxnFields = FieldGroup{
+	"txn", "",
+	TxnFieldNames[:],
+	txnFieldSpecByName,
+}
 
-	Logs: {Logs, StackBytes, 5, 5, true},
+// TxnScalarFields narrows TxnFields to only have the names of scalar fetching opcodes
+var TxnScalarFields = FieldGroup{
+	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	txnScalarFieldNames(),
+	txnFieldSpecByName,
+}
+
+// txnScalarFieldNames are txn field names that return scalars. Return value is
+// a "sparse" slice, the names appear at their usual index, array slots are set
+// to "".  They are laid out this way so that it is possible to get the name
+// from the index value.
+func txnScalarFieldNames() []string {
+	names := make([]string, len(txnFieldSpecs))
+	for i, fs := range txnFieldSpecs {
+		if fs.array {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
+}
+
+// TxnArrayFields narows TxnFields to only have the names of array fetching opcodes
+var TxnArrayFields = FieldGroup{
+	"txna", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	txnaFieldNames(),
+	txnFieldSpecByName,
+}
+
+// txnaFieldNames are txn field names that return arrays. Return value is a
+// "sparse" slice, the names appear at their usual index, non-array slots are
+// set to "".  They are laid out this way so that it is possible to get the name
+// from the index value.
+func txnaFieldNames() []string {
+	names := make([]string, len(txnFieldSpecs))
+	for i, fs := range txnFieldSpecs {
+		if fs.array {
+			names[i] = fs.field.String()
+		} else {
+			names[i] = ""
+		}
+	}
+	return names
+}
+
+// ItxnSettableFields collects info for itxn_field opcode
+var ItxnSettableFields = FieldGroup{
+	"itxn_field", "",
+	itxnSettableFieldNames(),
+	txnFieldSpecByName,
+}
+
+// itxnSettableFieldNames are txn field names that can be set by
+// itxn_field. Return value is a "sparse" slice, the names appear at their usual
+// index, unsettable slots are set to "".  They are laid out this way so that it is
+// possible to get the name from the index value.
+func itxnSettableFieldNames() []string {
+	names := make([]string, len(txnFieldSpecs))
+	for i, fs := range txnFieldSpecs {
+		if fs.itxVersion == 0 {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
 }
 
 var innerTxnTypes = map[string]uint64{
@@ -285,10 +436,11 @@ var innerTxnTypes = map[string]uint64{
 	string(protocol.AssetTransferTx):   5,
 	string(protocol.AssetConfigTx):     5,
 	string(protocol.AssetFreezeTx):     5,
+	string(protocol.ApplicationCallTx): 6,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
-var TxnTypeNames = []string{
+var TxnTypeNames = [...]string{
 	string(protocol.UnknownTx),
 	string(protocol.PaymentTx),
 	string(protocol.KeyRegistrationTx),
@@ -298,37 +450,34 @@ var TxnTypeNames = []string{
 	string(protocol.ApplicationCallTx),
 }
 
-// map TxnTypeName to its enum index, for `txn TypeEnum`
-var txnTypeIndexes map[string]uint64
-
-// map symbolic name to uint64 for assembleInt
-var txnTypeConstToUint64 map[string]uint64
+// map txn type names (long and short) to index/enum value
+var txnTypeMap = make(map[string]uint64)
 
 // OnCompletionConstType is the same as transactions.OnCompletion
 type OnCompletionConstType transactions.OnCompletion
 
 const (
 	// NoOp = transactions.NoOpOC
-	NoOp OnCompletionConstType = OnCompletionConstType(transactions.NoOpOC)
+	NoOp = OnCompletionConstType(transactions.NoOpOC)
 	// OptIn = transactions.OptInOC
-	OptIn OnCompletionConstType = OnCompletionConstType(transactions.OptInOC)
+	OptIn = OnCompletionConstType(transactions.OptInOC)
 	// CloseOut = transactions.CloseOutOC
-	CloseOut OnCompletionConstType = OnCompletionConstType(transactions.CloseOutOC)
+	CloseOut = OnCompletionConstType(transactions.CloseOutOC)
 	// ClearState = transactions.ClearStateOC
-	ClearState OnCompletionConstType = OnCompletionConstType(transactions.ClearStateOC)
+	ClearState = OnCompletionConstType(transactions.ClearStateOC)
 	// UpdateApplication = transactions.UpdateApplicationOC
-	UpdateApplication OnCompletionConstType = OnCompletionConstType(transactions.UpdateApplicationOC)
+	UpdateApplication = OnCompletionConstType(transactions.UpdateApplicationOC)
 	// DeleteApplication = transactions.DeleteApplicationOC
-	DeleteApplication OnCompletionConstType = OnCompletionConstType(transactions.DeleteApplicationOC)
+	DeleteApplication = OnCompletionConstType(transactions.DeleteApplicationOC)
 	// end of constants
-	invalidOnCompletionConst OnCompletionConstType = DeleteApplication + 1
+	invalidOnCompletionConst = DeleteApplication + 1
 )
 
 // OnCompletionNames is the string names of Txn.OnCompletion, array index is the const value
-var OnCompletionNames []string
+var OnCompletionNames [invalidOnCompletionConst]string
 
-// onCompletionConstToUint64 map symbolic name to uint64 for assembleInt
-var onCompletionConstToUint64 map[string]uint64
+// onCompletionMap maps symbolic name to uint64 for assembleInt
+var onCompletionMap map[string]uint64
 
 // GlobalField is an enum for `global` opcode
 type GlobalField uint64
@@ -368,49 +517,100 @@ const (
 	// GroupID [32]byte
 	GroupID
 
-	invalidGlobalField
+	// v6
+
+	// OpcodeBudget The remaining budget available for execution
+	OpcodeBudget
+
+	// CallerApplicationID The ID of the caller app, else 0
+	CallerApplicationID
+
+	// CallerApplicationAddress The Address of the caller app, else ZeroAddress
+	CallerApplicationAddress
+
+	invalidGlobalField // compile-time constant for number of fields
 )
 
 // GlobalFieldNames are arguments to the 'global' opcode
-var GlobalFieldNames []string
-
-// GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
-var GlobalFieldTypes []StackType
+var GlobalFieldNames [invalidGlobalField]string
 
 type globalFieldSpec struct {
 	field   GlobalField
 	ftype   StackType
 	mode    runMode
 	version uint64
+	doc     string
 }
 
-var globalFieldSpecs = []globalFieldSpec{
-	{MinTxnFee, StackUint64, modeAny, 0}, // version 0 is the same as TEAL v1 (initial TEAL release)
-	{MinBalance, StackUint64, modeAny, 0},
-	{MaxTxnLife, StackUint64, modeAny, 0},
-	{ZeroAddress, StackBytes, modeAny, 0},
-	{GroupSize, StackUint64, modeAny, 0},
-	{LogicSigVersion, StackUint64, modeAny, 2},
-	{Round, StackUint64, runModeApplication, 2},
-	{LatestTimestamp, StackUint64, runModeApplication, 2},
-	{CurrentApplicationID, StackUint64, runModeApplication, 2},
-	{CreatorAddress, StackBytes, runModeApplication, 3},
-	{CurrentApplicationAddress, StackBytes, runModeApplication, 5},
-	{GroupID, StackBytes, modeAny, 5},
+func (fs globalFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs globalFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs globalFieldSpec) OpVersion() uint64 {
+	return 0
+}
+func (fs globalFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs globalFieldSpec) Note() string {
+	note := fs.doc
+	if fs.mode == modeApp {
+		note = addExtra(note, "Application mode only.")
+	}
+	// There are no Signature mode only globals
+	return note
 }
 
-// GlobalFieldSpecByField maps GlobalField to spec
-var globalFieldSpecByField map[GlobalField]globalFieldSpec
-var globalFieldSpecByName gfNameSpecMap
+var globalFieldSpecs = [...]globalFieldSpec{
+	// version 0 is the same as v1 (initial release)
+	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
+	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
+	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
+	{ZeroAddress, StackBytes, modeAny, 0, "32 byte address of all zero bytes"},
+	{GroupSize, StackUint64, modeAny, 0,
+		"Number of transactions in this atomic transaction group. At least 1"},
+	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
+	{Round, StackUint64, modeApp, 2, "Current round number"},
+	{LatestTimestamp, StackUint64, modeApp, 2,
+		"Last confirmed block UNIX timestamp. Fails if negative"},
+	{CurrentApplicationID, StackUint64, modeApp, 2, "ID of current application executing"},
+	{CreatorAddress, StackBytes, modeApp, 3,
+		"Address of the creator of the current application"},
+	{CurrentApplicationAddress, StackBytes, modeApp, 5,
+		"Address that the current application controls"},
+	{GroupID, StackBytes, modeAny, 5,
+		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
+	{OpcodeBudget, StackUint64, modeAny, 6,
+		"The remaining cost that can be spent by opcodes in this program."},
+	{CallerApplicationID, StackUint64, modeApp, 6,
+		"The application ID of the application that called this application. 0 if this application is at the top-level."},
+	{CallerApplicationAddress, StackBytes, modeApp, 6,
+		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
+}
 
-// simple interface used by doc generator for fields versioning
+func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
+	if int(f) >= len(globalFieldSpecs) {
+		return globalFieldSpec{}, false
+	}
+	return globalFieldSpecs[f], true
+}
+
+var globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
+
 type gfNameSpecMap map[string]globalFieldSpec
 
-func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
-	if s[name].version > 1 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s gfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// GlobalFields has info on the global opcode's immediate
+var GlobalFields = FieldGroup{
+	"global", "Fields",
+	GlobalFieldNames[:],
+	globalFieldSpecByName,
 }
 
 // EcdsaCurve is an enum for `ecdsa_` opcodes
@@ -419,33 +619,330 @@ type EcdsaCurve int
 const (
 	// Secp256k1 curve for bitcoin/ethereum
 	Secp256k1 EcdsaCurve = iota
-	invalidEcdsaCurve
+	// Secp256r1 curve
+	Secp256r1
+	invalidEcdsaCurve // compile-time constant for number of fields
 )
 
-// EcdsaCurveNames are arguments to the 'ecdsa_' opcode
-var EcdsaCurveNames []string
+var ecdsaCurveNames [invalidEcdsaCurve]string
 
 type ecdsaCurveSpec struct {
 	field   EcdsaCurve
 	version uint64
+	doc     string
 }
 
-var ecdsaCurveSpecs = []ecdsaCurveSpec{
-	{Secp256k1, 5},
+func (fs ecdsaCurveSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs ecdsaCurveSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs ecdsaCurveSpec) OpVersion() uint64 {
+	return 5
+}
+func (fs ecdsaCurveSpec) Version() uint64 {
+	return fs.version
+}
+func (fs ecdsaCurveSpec) Note() string {
+	return fs.doc
 }
 
-var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
-var ecdsaCurveSpecByName ecDsaCurveNameSpecMap
+var ecdsaCurveSpecs = [...]ecdsaCurveSpec{
+	{Secp256k1, 5, "secp256k1 curve, used in Bitcoin"},
+	{Secp256r1, fidoVersion, "secp256r1 curve, NIST standard"},
+}
 
-// simple interface used by doc generator for fields versioning
-type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
-
-func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 5 here because ecdsa fields were introduced in 5
-	if s[name].version > 5 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+func ecdsaCurveSpecByField(c EcdsaCurve) (ecdsaCurveSpec, bool) {
+	if int(c) >= len(ecdsaCurveSpecs) {
+		return ecdsaCurveSpec{}, false
 	}
-	return
+	return ecdsaCurveSpecs[c], true
+}
+
+var ecdsaCurveSpecByName = make(ecdsaCurveNameSpecMap, len(ecdsaCurveNames))
+
+type ecdsaCurveNameSpecMap map[string]ecdsaCurveSpec
+
+func (s ecdsaCurveNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// EcdsaCurves collects details about the constants used to describe EcdsaCurves
+var EcdsaCurves = FieldGroup{
+	"ECDSA", "Curves",
+	ecdsaCurveNames[:],
+	ecdsaCurveSpecByName,
+}
+
+// Base64Encoding is an enum for the `base64decode` opcode
+type Base64Encoding int
+
+const (
+	// URLEncoding represents the base64url encoding defined in https://www.rfc-editor.org/rfc/rfc4648.html
+	URLEncoding Base64Encoding = iota
+	// StdEncoding represents the standard encoding of the RFC
+	StdEncoding
+	invalidBase64Encoding // compile-time constant for number of fields
+)
+
+var base64EncodingNames [invalidBase64Encoding]string
+
+type base64EncodingSpec struct {
+	field   Base64Encoding
+	version uint64
+}
+
+var base64EncodingSpecs = [...]base64EncodingSpec{
+	{URLEncoding, 6},
+	{StdEncoding, 6},
+}
+
+func base64EncodingSpecByField(e Base64Encoding) (base64EncodingSpec, bool) {
+	if int(e) >= len(base64EncodingSpecs) {
+		return base64EncodingSpec{}, false
+	}
+	return base64EncodingSpecs[e], true
+}
+
+var base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
+
+type base64EncodingSpecMap map[string]base64EncodingSpec
+
+func (fs base64EncodingSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs base64EncodingSpec) Type() StackType {
+	return StackAny // Will not show in docs, since all are untyped
+}
+func (fs base64EncodingSpec) OpVersion() uint64 {
+	return 6
+}
+func (fs base64EncodingSpec) Version() uint64 {
+	return fs.version
+}
+func (fs base64EncodingSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
+
+func (s base64EncodingSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// Base64Encodings describes the base64_encode immediate
+var Base64Encodings = FieldGroup{
+	"base64", "Encodings",
+	base64EncodingNames[:],
+	base64EncodingSpecByName,
+}
+
+// JSONRefType is an enum for the `json_ref` opcode
+type JSONRefType int
+
+const (
+	// JSONString represents string json value
+	JSONString JSONRefType = iota
+	// JSONUint64 represents uint64 json value
+	JSONUint64
+	// JSONObject represents json object
+	JSONObject
+	invalidJSONRefType // compile-time constant for number of fields
+)
+
+var jsonRefTypeNames [invalidJSONRefType]string
+
+type jsonRefSpec struct {
+	field   JSONRefType
+	ftype   StackType
+	version uint64
+}
+
+var jsonRefSpecs = [...]jsonRefSpec{
+	{JSONString, StackBytes, fidoVersion},
+	{JSONUint64, StackUint64, fidoVersion},
+	{JSONObject, StackBytes, fidoVersion},
+}
+
+func jsonRefSpecByField(r JSONRefType) (jsonRefSpec, bool) {
+	if int(r) >= len(jsonRefSpecs) {
+		return jsonRefSpec{}, false
+	}
+	return jsonRefSpecs[r], true
+}
+
+var jsonRefSpecByName = make(jsonRefSpecMap, len(jsonRefTypeNames))
+
+type jsonRefSpecMap map[string]jsonRefSpec
+
+func (fs jsonRefSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs jsonRefSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs jsonRefSpec) OpVersion() uint64 {
+	return fidoVersion
+}
+func (fs jsonRefSpec) Version() uint64 {
+	return fs.version
+}
+func (fs jsonRefSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
+
+func (s jsonRefSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// JSONRefTypes describes the json_ref immediate
+var JSONRefTypes = FieldGroup{
+	"json_ref", "Types",
+	jsonRefTypeNames[:],
+	jsonRefSpecByName,
+}
+
+// VrfStandard is an enum for the `vrf_verify` opcode
+type VrfStandard int
+
+const (
+	// VrfAlgorand is the built-in VRF of the Algorand chain
+	VrfAlgorand        VrfStandard = iota
+	invalidVrfStandard             // compile-time constant for number of fields
+)
+
+var vrfStandardNames [invalidVrfStandard]string
+
+type vrfStandardSpec struct {
+	field   VrfStandard
+	version uint64
+}
+
+var vrfStandardSpecs = [...]vrfStandardSpec{
+	{VrfAlgorand, randomnessVersion},
+}
+
+func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {
+	if int(r) >= len(vrfStandardSpecs) {
+		return vrfStandardSpec{}, false
+	}
+	return vrfStandardSpecs[r], true
+}
+
+var vrfStandardSpecByName = make(vrfStandardSpecMap, len(vrfStandardNames))
+
+type vrfStandardSpecMap map[string]vrfStandardSpec
+
+func (s vrfStandardSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs vrfStandardSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs vrfStandardSpec) Type() StackType {
+	return StackNone // Will not show, since all are the same
+}
+
+func (fs vrfStandardSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs vrfStandardSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs vrfStandardSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
+
+func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// VrfStandards describes the json_ref immediate
+var VrfStandards = FieldGroup{
+	"vrf_verify", "Standards",
+	vrfStandardNames[:],
+	vrfStandardSpecByName,
+}
+
+// BlockField is an enum for the `block` opcode
+type BlockField int
+
+const (
+	// BlkSeed is the Block's vrf seed
+	BlkSeed BlockField = iota
+	// BlkTimestamp is the Block's timestamp, seconds from epoch
+	BlkTimestamp
+	invalidBlockField // compile-time constant for number of fields
+)
+
+var blockFieldNames [invalidBlockField]string
+
+type blockFieldSpec struct {
+	field   BlockField
+	ftype   StackType
+	version uint64
+}
+
+var blockFieldSpecs = [...]blockFieldSpec{
+	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkTimestamp, StackUint64, randomnessVersion},
+}
+
+func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
+	if int(r) >= len(blockFieldSpecs) {
+		return blockFieldSpec{}, false
+	}
+	return blockFieldSpecs[r], true
+}
+
+var blockFieldSpecByName = make(blockFieldSpecMap, len(blockFieldNames))
+
+type blockFieldSpecMap map[string]blockFieldSpec
+
+func (s blockFieldSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs blockFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs blockFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs blockFieldSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs blockFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs blockFieldSpec) Note() string {
+	return ""
+}
+
+func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// BlockFields describes the json_ref immediate
+var BlockFields = FieldGroup{
+	"block", "Fields",
+	blockFieldNames[:],
+	blockFieldSpecByName,
 }
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
@@ -456,38 +953,60 @@ const (
 	AssetBalance AssetHoldingField = iota
 	// AssetFrozen AssetHolding.Frozen
 	AssetFrozen
-	invalidAssetHoldingField
+	invalidAssetHoldingField // compile-time constant for number of fields
 )
 
-// AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
-var AssetHoldingFieldNames []string
-
-// AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
-var AssetHoldingFieldTypes []StackType
+var assetHoldingFieldNames [invalidAssetHoldingField]string
 
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
-var assetHoldingFieldSpecs = []assetHoldingFieldSpec{
-	{AssetBalance, StackUint64, 2},
-	{AssetFrozen, StackUint64, 2},
+func (fs assetHoldingFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs assetHoldingFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs assetHoldingFieldSpec) OpVersion() uint64 {
+	return 2
+}
+func (fs assetHoldingFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs assetHoldingFieldSpec) Note() string {
+	return fs.doc
 }
 
-var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec
-var assetHoldingFieldSpecByName ahfNameSpecMap
+var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
+	{AssetBalance, StackUint64, 2, "Amount of the asset unit held by this account"},
+	{AssetFrozen, StackUint64, 2, "Is the asset frozen or not"},
+}
 
-// simple interface used by doc generator for fields versioning
+func assetHoldingFieldSpecByField(f AssetHoldingField) (assetHoldingFieldSpec, bool) {
+	if int(f) >= len(assetHoldingFieldSpecs) {
+		return assetHoldingFieldSpec{}, false
+	}
+	return assetHoldingFieldSpecs[f], true
+}
+
+var assetHoldingFieldSpecByName = make(ahfNameSpecMap, len(assetHoldingFieldNames))
+
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
 
-func (s ahfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were introduced in 2
-	if s[name].version > 2 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s ahfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// AssetHoldingFields describes asset_holding_get's immediates
+var AssetHoldingFields = FieldGroup{
+	"asset_holding", "Fields",
+	assetHoldingFieldNames[:],
+	assetHoldingFieldSpecByName,
 }
 
 // AssetParamsField is an enum for `asset_params_get` opcode
@@ -520,48 +1039,70 @@ const (
 	// AssetCreator is not *in* the Params, but it is uniquely determined.
 	AssetCreator
 
-	invalidAssetParamsField
+	invalidAssetParamsField // compile-time constant for number of fields
 )
 
-// AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
-var AssetParamsFieldNames []string
-
-// AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
-var AssetParamsFieldTypes []StackType
+var assetParamsFieldNames [invalidAssetParamsField]string
 
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
-var assetParamsFieldSpecs = []assetParamsFieldSpec{
-	{AssetTotal, StackUint64, 2},
-	{AssetDecimals, StackUint64, 2},
-	{AssetDefaultFrozen, StackUint64, 2},
-	{AssetUnitName, StackBytes, 2},
-	{AssetName, StackBytes, 2},
-	{AssetURL, StackBytes, 2},
-	{AssetMetadataHash, StackBytes, 2},
-	{AssetManager, StackBytes, 2},
-	{AssetReserve, StackBytes, 2},
-	{AssetFreeze, StackBytes, 2},
-	{AssetClawback, StackBytes, 2},
-	{AssetCreator, StackBytes, 5},
+func (fs assetParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs assetParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs assetParamsFieldSpec) OpVersion() uint64 {
+	return 2
+}
+func (fs assetParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs assetParamsFieldSpec) Note() string {
+	return fs.doc
 }
 
-var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec
-var assetParamsFieldSpecByName apfNameSpecMap
+var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
+	{AssetTotal, StackUint64, 2, "Total number of units of this asset"},
+	{AssetDecimals, StackUint64, 2, "See AssetParams.Decimals"},
+	{AssetDefaultFrozen, StackUint64, 2, "Frozen by default or not"},
+	{AssetUnitName, StackBytes, 2, "Asset unit name"},
+	{AssetName, StackBytes, 2, "Asset name"},
+	{AssetURL, StackBytes, 2, "URL with additional info about the asset"},
+	{AssetMetadataHash, StackBytes, 2, "Arbitrary commitment"},
+	{AssetManager, StackBytes, 2, "Manager address"},
+	{AssetReserve, StackBytes, 2, "Reserve address"},
+	{AssetFreeze, StackBytes, 2, "Freeze address"},
+	{AssetClawback, StackBytes, 2, "Clawback address"},
+	{AssetCreator, StackBytes, 5, "Creator address"},
+}
 
-// simple interface used by doc generator for fields versioning
+func assetParamsFieldSpecByField(f AssetParamsField) (assetParamsFieldSpec, bool) {
+	if int(f) >= len(assetParamsFieldSpecs) {
+		return assetParamsFieldSpec{}, false
+	}
+	return assetParamsFieldSpecs[f], true
+}
+
+var assetParamsFieldSpecByName = make(apfNameSpecMap, len(assetParamsFieldNames))
+
 type apfNameSpecMap map[string]assetParamsFieldSpec
 
-func (s apfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were introduced in 2
-	if s[name].version > 2 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s apfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// AssetParamsFields describes asset_params_get's immediates
+var AssetParamsFields = FieldGroup{
+	"asset_params", "Fields",
+	assetParamsFieldNames[:],
+	assetParamsFieldSpecByName,
 }
 
 // AppParamsField is an enum for `app_params_get` opcode
@@ -589,159 +1130,235 @@ const (
 	// AppAddress is also not *in* the Params, but can be derived
 	AppAddress
 
-	invalidAppParamsField
+	invalidAppParamsField // compile-time constant for number of fields
 )
 
-// AppParamsFieldNames are arguments to the 'app_params_get' opcode
-var AppParamsFieldNames []string
-
-// AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
-var AppParamsFieldTypes []StackType
+var appParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
 	field   AppParamsField
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
-var appParamsFieldSpecs = []appParamsFieldSpec{
-	{AppApprovalProgram, StackBytes, 5},
-	{AppClearStateProgram, StackBytes, 5},
-	{AppGlobalNumUint, StackUint64, 5},
-	{AppGlobalNumByteSlice, StackUint64, 5},
-	{AppLocalNumUint, StackUint64, 5},
-	{AppLocalNumByteSlice, StackUint64, 5},
-	{AppExtraProgramPages, StackUint64, 5},
-	{AppCreator, StackBytes, 5},
-	{AppAddress, StackBytes, 5},
+func (fs appParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs appParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs appParamsFieldSpec) OpVersion() uint64 {
+	return 5
+}
+func (fs appParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs appParamsFieldSpec) Note() string {
+	return fs.doc
 }
 
-var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
-var appParamsFieldSpecByName appNameSpecMap
+var appParamsFieldSpecs = [...]appParamsFieldSpec{
+	{AppApprovalProgram, StackBytes, 5, "Bytecode of Approval Program"},
+	{AppClearStateProgram, StackBytes, 5, "Bytecode of Clear State Program"},
+	{AppGlobalNumUint, StackUint64, 5, "Number of uint64 values allowed in Global State"},
+	{AppGlobalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Global State"},
+	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
+	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
+	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
+	{AppCreator, StackBytes, 5, "Creator address"},
+	{AppAddress, StackBytes, 5, "Address for which this application has authority"},
+}
+
+func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
+	if int(f) >= len(appParamsFieldSpecs) {
+		return appParamsFieldSpec{}, false
+	}
+	return appParamsFieldSpecs[f], true
+}
+
+var appParamsFieldSpecByName = make(appNameSpecMap, len(appParamsFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type appNameSpecMap map[string]appParamsFieldSpec
 
-func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 5 here because app fields were introduced in 5
-	if s[name].version > 5 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+func (s appNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// AppParamsFields describes app_params_get's immediates
+var AppParamsFields = FieldGroup{
+	"app_params", "Fields",
+	appParamsFieldNames[:],
+	appParamsFieldSpecByName,
+}
+
+// AcctParamsField is an enum for `acct_params_get` opcode
+type AcctParamsField int
+
+const (
+	// AcctBalance is the balance, with pending rewards
+	AcctBalance AcctParamsField = iota
+	// AcctMinBalance is algos needed for this accounts apps and assets
+	AcctMinBalance
+	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
+	AcctAuthAddr
+
+	invalidAcctParamsField // compile-time constant for number of fields
+)
+
+var acctParamsFieldNames [invalidAcctParamsField]string
+
+type acctParamsFieldSpec struct {
+	field   AcctParamsField
+	ftype   StackType
+	version uint64
+	doc     string
+}
+
+func (fs acctParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs acctParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs acctParamsFieldSpec) OpVersion() uint64 {
+	return 6
+}
+func (fs acctParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs acctParamsFieldSpec) Note() string {
+	return fs.doc
+}
+
+var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
+	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
+	{AcctMinBalance, StackUint64, 6, "Minimum required blance for account, in microalgos"},
+	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
+}
+
+func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {
+	if int(f) >= len(acctParamsFieldSpecs) {
+		return acctParamsFieldSpec{}, false
 	}
-	return
+	return acctParamsFieldSpecs[f], true
+}
+
+var acctParamsFieldSpecByName = make(acctNameSpecMap, len(acctParamsFieldNames))
+
+type acctNameSpecMap map[string]acctParamsFieldSpec
+
+func (s acctNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// AcctParamsFields describes acct_params_get's immediates
+var AcctParamsFields = FieldGroup{
+	"acct_params", "Fields",
+	acctParamsFieldNames[:],
+	acctParamsFieldSpecByName,
 }
 
 func init() {
-	TxnFieldNames = make([]string, int(invalidTxnField))
-	for fi := Sender; fi < invalidTxnField; fi++ {
-		TxnFieldNames[fi] = fi.String()
+	equal := func(x int, y int) {
+		if x != y {
+			panic(fmt.Sprintf("%d != %d", x, y))
+		}
 	}
-	TxnFieldTypes = make([]StackType, int(invalidTxnField))
-	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
+
+	equal(len(txnFieldSpecs), len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
-		if int(s.field) != i {
-			panic("txnFieldSpecs disjoint with TxnField enum")
-		}
-		TxnFieldTypes[i] = s.ftype
-		txnFieldSpecByField[s.field] = s
-	}
-	txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
-	for i, tfn := range TxnFieldNames {
-		txnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
+		equal(int(s.field), i)
+		TxnFieldNames[s.field] = s.field.String()
+		txnFieldSpecByName[s.field.String()] = s
 	}
 
-	GlobalFieldNames = make([]string, int(invalidGlobalField))
-	for i := MinTxnFee; i < invalidGlobalField; i++ {
-		GlobalFieldNames[int(i)] = i.String()
-	}
-	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
-	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
+	equal(len(globalFieldSpecs), len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
-		if int(s.field) != i {
-			panic("globalFieldSpecs disjoint with GlobalField enum")
-		}
-		GlobalFieldTypes[i] = s.ftype
-		globalFieldSpecByField[s.field] = s
-	}
-	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
-	for i, gfn := range GlobalFieldNames {
-		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
+		equal(int(s.field), i)
+		GlobalFieldNames[s.field] = s.field.String()
+		globalFieldSpecByName[s.field.String()] = s
 	}
 
-	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
-	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
-		EcdsaCurveNames[int(i)] = i.String()
-	}
-	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
-	for _, s := range ecdsaCurveSpecs {
-		ecdsaCurveSpecByField[s.field] = s
+	equal(len(ecdsaCurveSpecs), len(ecdsaCurveNames))
+	for i, s := range ecdsaCurveSpecs {
+		equal(int(s.field), i)
+		ecdsaCurveNames[s.field] = s.field.String()
+		ecdsaCurveSpecByName[s.field.String()] = s
 	}
 
-	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
-	for i, ahfn := range EcdsaCurveNames {
-		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+	equal(len(base64EncodingSpecs), len(base64EncodingNames))
+	for i, s := range base64EncodingSpecs {
+		equal(int(s.field), i)
+		base64EncodingNames[i] = s.field.String()
+		base64EncodingSpecByName[s.field.String()] = s
 	}
 
-	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
-	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
-		AssetHoldingFieldNames[int(i)] = i.String()
-	}
-	AssetHoldingFieldTypes = make([]StackType, len(AssetHoldingFieldNames))
-	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
-	for _, s := range assetHoldingFieldSpecs {
-		AssetHoldingFieldTypes[int(s.field)] = s.ftype
-		assetHoldingFieldSpecByField[s.field] = s
-	}
-	assetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
-	for i, ahfn := range AssetHoldingFieldNames {
-		assetHoldingFieldSpecByName[ahfn] = assetHoldingFieldSpecByField[AssetHoldingField(i)]
+	equal(len(jsonRefSpecs), len(jsonRefTypeNames))
+	for i, s := range jsonRefSpecs {
+		equal(int(s.field), i)
+		jsonRefTypeNames[i] = s.field.String()
+		jsonRefSpecByName[s.field.String()] = s
 	}
 
-	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
-	for i := AssetTotal; i < invalidAssetParamsField; i++ {
-		AssetParamsFieldNames[int(i)] = i.String()
-	}
-	AssetParamsFieldTypes = make([]StackType, len(AssetParamsFieldNames))
-	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
-	for _, s := range assetParamsFieldSpecs {
-		AssetParamsFieldTypes[int(s.field)] = s.ftype
-		assetParamsFieldSpecByField[s.field] = s
-	}
-	assetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
-	for i, apfn := range AssetParamsFieldNames {
-		assetParamsFieldSpecByName[apfn] = assetParamsFieldSpecByField[AssetParamsField(i)]
+	equal(len(vrfStandardSpecs), len(vrfStandardNames))
+	for i, s := range vrfStandardSpecs {
+		equal(int(s.field), i)
+		vrfStandardNames[i] = s.field.String()
+		vrfStandardSpecByName[s.field.String()] = s
 	}
 
-	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
-	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
-		AppParamsFieldNames[int(i)] = i.String()
-	}
-	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
-	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
-	for _, s := range appParamsFieldSpecs {
-		AppParamsFieldTypes[int(s.field)] = s.ftype
-		appParamsFieldSpecByField[s.field] = s
-	}
-	appParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
-	for i, apfn := range AppParamsFieldNames {
-		appParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+	equal(len(blockFieldSpecs), len(blockFieldNames))
+	for i, s := range blockFieldSpecs {
+		equal(int(s.field), i)
+		blockFieldNames[i] = s.field.String()
+		blockFieldSpecByName[s.field.String()] = s
 	}
 
-	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))
+	equal(len(assetHoldingFieldSpecs), len(assetHoldingFieldNames))
+	for i, s := range assetHoldingFieldSpecs {
+		equal(int(s.field), i)
+		assetHoldingFieldNames[i] = s.field.String()
+		assetHoldingFieldSpecByName[s.field.String()] = s
+	}
+
+	equal(len(assetParamsFieldSpecs), len(assetParamsFieldNames))
+	for i, s := range assetParamsFieldSpecs {
+		equal(int(s.field), i)
+		assetParamsFieldNames[i] = s.field.String()
+		assetParamsFieldSpecByName[s.field.String()] = s
+	}
+
+	equal(len(appParamsFieldSpecs), len(appParamsFieldNames))
+	for i, s := range appParamsFieldSpecs {
+		equal(int(s.field), i)
+		appParamsFieldNames[i] = s.field.String()
+		appParamsFieldSpecByName[s.field.String()] = s
+	}
+
+	equal(len(acctParamsFieldSpecs), len(acctParamsFieldNames))
+	for i, s := range acctParamsFieldSpecs {
+		equal(int(s.field), i)
+		acctParamsFieldNames[i] = s.field.String()
+		acctParamsFieldSpecByName[s.field.String()] = s
+	}
+
+	txnTypeMap = make(map[string]uint64)
 	for i, tt := range TxnTypeNames {
-		txnTypeIndexes[tt] = uint64(i)
+		txnTypeMap[tt] = uint64(i)
+	}
+	for k, v := range TypeNameDescriptions {
+		txnTypeMap[v] = txnTypeMap[k]
 	}
 
-	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
-	for tt, v := range txnTypeIndexes {
-		symbol := TypeNameDescriptions[tt]
-		txnTypeConstToUint64[symbol] = v
-	}
-
-	OnCompletionNames = make([]string, int(invalidOnCompletionConst))
-	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionNames))
+	onCompletionMap = make(map[string]uint64, len(OnCompletionNames))
 	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
 		symbol := oc.String()
 		OnCompletionNames[oc] = symbol
-		onCompletionConstToUint64[symbol] = uint64(oc)
+		onCompletionMap[symbol] = uint64(oc)
 	}
+
 }

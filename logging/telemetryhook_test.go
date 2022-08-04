@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,12 +45,10 @@ func TestLoadDefaultConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	defer os.RemoveAll(configDir)
-	currentRoot := config.SetGlobalConfigFileRoot(configDir)
+	currentRoot := config.SetGlobalConfigFileRoot(t.TempDir())
 	defer config.SetGlobalConfigFileRoot(currentRoot)
 
-	_, err = EnsureTelemetryConfig(nil, "")
+	_, err := EnsureTelemetryConfig(nil, "")
 
 	a.Nil(err)
 
@@ -62,6 +59,7 @@ func isDefault(cfg TelemetryConfig) bool {
 	cfg.FilePath = "" // Reset to compare the rest
 	cfg.GUID = ""
 	cfg.ChainID = ""
+	cfg.Version = ""
 	defaultCfg.GUID = ""
 	return cfg == defaultCfg
 }
@@ -70,17 +68,15 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
-	dataDir, err := ioutil.TempDir("", "dataDir")
-	defer os.RemoveAll(dataDir)
+	dataDir := t.TempDir()
 	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 	_, err = os.Stat(dataDirLoggingPath)
 	a.True(os.IsNotExist(err))
@@ -103,6 +99,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -115,13 +112,12 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 
 	cfgPath := "/missing-directory"
@@ -136,6 +132,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -147,14 +144,12 @@ func TestSaveLoadConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
+	globalConfigRoot := t.TempDir()
 	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
 	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	os.RemoveAll(configDir)
-	err = os.Mkdir(configDir, 0777)
+	configDir := t.TempDir()
+	err := os.Mkdir(configDir, 0777)
 
 	cfg, err := EnsureTelemetryConfig(&configDir, "")
 	cfg.Name = "testname"
@@ -163,16 +158,18 @@ func TestSaveLoadConfig(t *testing.T) {
 
 	cfgLoad, err := LoadTelemetryConfig(cfg.FilePath)
 
-	// ChainId isn't stored.
+	// ChainId and Version aren't stored.
 	a.NotEmpty(cfg.ChainID)
 	a.Empty(cfgLoad.ChainID)
 	cfg.ChainID = ""
 
+	a.NotEmpty(cfg.Version)
+	a.Empty(cfgLoad.Version)
+	cfg.Version = ""
+
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)
 	a.Equal(cfgLoad, cfg)
-
-	os.RemoveAll(configDir)
 }
 
 func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
@@ -225,5 +222,10 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	require.Equal(t, maxDepth, len(testHook.entries()))
+	hookEntries := len(testHook.entries())
+	require.GreaterOrEqual(t, hookEntries, maxDepth)
+	// the anonymous goroutine in createAsyncHookLevels might pull an entry off the pending list before
+	// writing it off to the underlying hook. when that happens, the total number of sent entries could
+	// be one higher then the maxDepth.
+	require.LessOrEqual(t, hookEntries, maxDepth+1)
 }

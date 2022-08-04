@@ -1,8 +1,0 @@
-task:
-  freebsd_instance:
-    matrix:
-      - image_family: freebsd-11-3-snap
-      - image_family: freebsd-12-1-snap
-  install_script: pkg install -y gmake
-  script:
-    - gmake check

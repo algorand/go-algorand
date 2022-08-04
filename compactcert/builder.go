@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -347,7 +347,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
 		stxn.Txn.CertRound = rnd
 		stxn.Txn.Cert = *cert
-		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
+		err = ccw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
 		}

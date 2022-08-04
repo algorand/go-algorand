@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -371,6 +371,9 @@ func (n *NetworkFacade) Rezero() {
 		fmt.Printf("NetworkFacade service-%v rezero clock = %d\n", n.nodeID, n.zeroClock)
 	}
 }
+
+// Since implements the Clock interface.
+func (n *NetworkFacade) Since() time.Duration { return 0 }
 
 func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
 	defer n.timeoutAtInitOnce.Do(func() {

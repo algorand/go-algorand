@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,7 +71,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
@@ -81,6 +81,8 @@ import (
 
 const (
 	apiV1Tag = "/v1"
+	// TokenHeader is the header where we put the token.
+	TokenHeader = "X-Algo-API-Token"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -99,11 +101,8 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-// TokenHeader is the header where we put the token.
-const TokenHeader = "X-Algo-API-Token"
-
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
 	if err := tokens.ValidateAPIToken(apiToken); err != nil {
 		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
 	}
@@ -118,9 +117,12 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Listener = listener
 	e.HideBanner = true
 
-	e.Pre(middleware.RemoveTrailingSlash())
-	e.Use(middlewares.MakeLogger(logger))
-	e.Use(middlewares.MakeCORS(TokenHeader))
+	e.Pre(
+		middlewares.MakeConnectionLimiter(numConnectionsLimit),
+		middleware.RemoveTrailingSlash())
+	e.Use(
+		middlewares.MakeLogger(logger),
+		middlewares.MakeCORS(TokenHeader))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
@@ -141,7 +143,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     node,
+		Node:     apiNode{node},
 		Log:      logger,
 		Shutdown: shutdown,
 	}
@@ -150,3 +152,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	return e
 }
+
+// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type apiNode struct{ *node.AlgorandFullNode }
+
+func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }

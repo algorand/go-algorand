@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -89,7 +89,7 @@ func TestAccountInformationV2(t *testing.T) {
 	proto.AgreementFilterTimeout = 400 * time.Millisecond
 	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusFuture: proto})
 
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV26.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -105,13 +105,15 @@ func TestAccountInformationV2(t *testing.T) {
 
 	fee := uint64(1000)
 
+	var txn transactions.Transaction
+
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
+	txn, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	a.NoError(err)
 
 	round, err := client.CurrentRound()
 	a.NoError(err)
-	client.WaitForRound(round + 4)
+	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
@@ -202,8 +204,14 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	txInfo, err := fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound := *txInfo.ConfirmedRound
+
 	// 1 global state update in total, 1 local state updates
-	checkEvalDelta(t, &client, round, round+5, 1, 1)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
 	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
@@ -268,8 +276,14 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound = *txInfo.ConfirmedRound
+
 	// 2 global state update in total, 1 local state updates
-	checkEvalDelta(t, &client, round+2, round+5, 2, 1)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 2, 1)
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
@@ -285,16 +299,23 @@ int 1
 	a.NoError(err)
 	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err = client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	round, err = client.CurrentRound()
-	a.NoError(err)
-	_, err = client.WaitForRound(round + 2)
-	a.NoError(err)
-	// Ensure the txn committed
-	resp, err = client.GetPendingTransactions(2)
-	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTxns)
+	for {
+		round, err = client.CurrentRound()
+		a.NoError(err)
+		_, err = client.WaitForRound(round + 1)
+		a.NoError(err)
+		// Ensure the txn committed
+		resp, err = client.GetPendingTransactions(2)
+		a.NoError(err)
+		if resp.TotalTxns == 1 {
+			a.Equal(resp.TruncatedTxns.Transactions[0].TxID, txid)
+			continue
+		}
+		a.Equal(uint64(0), resp.TotalTxns)
+		break
+	}
 
 	ad, err = client.AccountData(creator)
 	a.NoError(err)
@@ -305,6 +326,12 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(3), value.Uint)
 
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound = *txInfo.ConfirmedRound
+
 	// 3 global state update in total, 2 local state updates
-	checkEvalDelta(t, &client, round, round+5, 3, 2)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 3, 2)
 }

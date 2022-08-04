@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -141,7 +141,7 @@ func BenchmarkValidate(b *testing.B) {
 			newblk.Payset = append(newblk.Payset, txib)
 		}
 
-		newblk.BlockHeader.TxnRoot, err = newblk.PaysetCommit()
+		newblk.BlockHeader.TxnCommitments, err = newblk.PaysetCommit()
 		require.NoError(b, err)
 
 		b.StartTimer()

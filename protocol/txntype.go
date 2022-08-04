@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,15 +47,3 @@ const (
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
-
-// TxnTypes is an array containing all the defined transaction types
-var TxnTypes = []TxType{
-	PaymentTx,
-	KeyRegistrationTx,
-	AssetConfigTx,
-	AssetTransferTx,
-	AssetFreezeTx,
-	ApplicationCallTx,
-	CompactCertTx,
-	UnknownTx,
-}

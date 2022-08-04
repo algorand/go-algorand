@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package logging
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,7 +64,7 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	testDir := os.Getenv("TESTDIR")
 
 	if testDir == "" {
-		testDir, _ = ioutil.TempDir("", "tmp")
+		testDir = t.TempDir()
 	}
 
 	a := require.New(t)
@@ -143,7 +142,7 @@ func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
 	testDir := os.Getenv("TESTDIR")
 
 	if testDir == "" {
-		testDir, _ = ioutil.TempDir("", "tmp")
+		testDir = t.TempDir()
 	}
 
 	a := require.New(t)

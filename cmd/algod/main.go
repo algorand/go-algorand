@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,10 +50,11 @@ var versionCheck = flag.Bool("v", false, "Display and write current build versio
 var branchCheck = flag.Bool("b", false, "Display the git branch behind the build")
 var channelCheck = flag.Bool("c", false, "Display and release channel behind the build")
 var initAndExit = flag.Bool("x", false, "Initialize the ledger and exit")
+var logToStdout = flag.Bool("o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
 var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
-var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
+var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 func main() {
@@ -84,12 +85,12 @@ func run() int {
 	}
 
 	version := config.GetCurrentVersion()
-	heartbeatGauge := metrics.MakeStringGauge()
-	heartbeatGauge.Set("version", version.String())
-	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
-	heartbeatGauge.Set("channel", version.Channel)
-	heartbeatGauge.Set("branch", version.Branch)
-	heartbeatGauge.Set("commit-hash", version.GetCommitHash())
+	var baseHeartbeatEvent telemetryspec.HeartbeatEventDetails
+	baseHeartbeatEvent.Info.Version = version.String()
+	baseHeartbeatEvent.Info.VersionNum = strconv.FormatUint(version.AsUInt64(), 10)
+	baseHeartbeatEvent.Info.Channel = version.Channel
+	baseHeartbeatEvent.Info.Branch = version.Branch
+	baseHeartbeatEvent.Info.CommitHash = version.GetCommitHash()
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
@@ -292,6 +293,10 @@ func run() int {
 		}
 	}
 
+	if logToStdout != nil && *logToStdout {
+		cfg.LogSizeLimit = 0
+	}
+
 	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -339,12 +344,11 @@ func run() int {
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {
-				values := make(map[string]string)
+				values := make(map[string]float64)
 				metrics.DefaultRegistry().AddMetrics(values)
 
-				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-					Metrics: values,
-				}
+				heartbeatDetails := baseHeartbeatEvent
+				heartbeatDetails.Metrics = values
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 			}

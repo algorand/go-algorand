@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,7 @@ var (
 	rejectsFilename string
 	closeToAddress  string
 	noProgramOutput bool
+	writeSourceMap  bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
@@ -123,6 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&writeSourceMap, "map", "m", false, "write out source map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
@@ -194,34 +197,54 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 	return
 }
 
-func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, signer basics.Address) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
-		if err != nil {
-			return
+		if signer.IsZero() {
+			stxn, err = client.SignTransactionWithWallet(wh, pw, tx)
+		} else {
+			stxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signer.String(), tx)
 		}
-	} else {
-		// Wrap in a transactions.SignedTxn with an empty sig.
-		// This way protocol.Encode will encode the transaction type
-		stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-		if err != nil {
-			return
-		}
-
-		stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
+		return
 	}
+
+	// Wrap in a transactions.SignedTxn with an empty sig.
+	// This way protocol.Encode will encode the transaction type
+	stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	if err != nil {
+		return
+	}
+
+	stxn = populateBlankMultisig(client, dataDir, walletName, stxn)
 	return
 }
 
+func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
+	var outData []byte
+	for _, stxn := range stxns {
+		outData = append(outData, protocol.Encode(&stxn)...)
+	}
+
+	return writeFile(filename, outData, 0600)
+}
+
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx)
+	var authAddr basics.Address
+	var err error
+	if signerAddress != "" {
+		authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+		if err != nil {
+			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+		}
+	}
+
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
 	if err != nil {
 		return err
 	}
 	// Write the SignedTxn to the output file
-	return writeFile(filename, protocol.Encode(&stxn), 0600)
+	return writeSignedTxnsToFile([]transactions.SignedTxn{stxn}, filename)
 }
 
 func getB64Args(args []string) [][]byte {
@@ -310,7 +333,7 @@ var sendCmd = &cobra.Command{
 		var err error
 		if progByteFile != "" {
 			if programSource != "" || logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
 			program, err = readFile(progByteFile)
 			if err != nil {
@@ -318,9 +341,9 @@ var sendCmd = &cobra.Command{
 			}
 		} else if programSource != "" {
 			if logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
-			program = assembleFile(programSource)
+			program = assembleFile(programSource, false)
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
 		}
@@ -419,7 +442,17 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
+			var authAddr basics.Address
+			if signerAddress != "" {
+				if !signTx {
+					reportErrorf("Signer specified when txn won't be signed")
+				}
+				authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+				if err != nil {
+					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+				}
+			}
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, authAddr)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -713,7 +746,7 @@ var signCmd = &cobra.Command{
 		}
 
 		var lsig transactions.LogicSig
-
+		var authAddr basics.Address
 		var client libgoal.Client
 		var wh []byte
 		var pw []byte
@@ -722,7 +755,7 @@ var signCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
 			}
-			lsig.Logic = assembleFile(programSource)
+			lsig.Logic = assembleFile(programSource, false)
 			lsig.Args = getProgramArgs()
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
@@ -732,6 +765,11 @@ var signCmd = &cobra.Command{
 			dataDir := ensureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		} else if signerAddress != "" {
+			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+			if err != nil {
+				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
 		}
 
 		var outData []byte
@@ -777,6 +815,12 @@ var signCmd = &cobra.Command{
 		for _, group := range groupsOrder {
 			txnGroup := []transactions.SignedTxn{}
 			for _, txn := range txnGroups[group] {
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+					if signerAddress != "" {
+						txn.AuthAddr = authAddr
+					}
+				}
 				txnGroup = append(txnGroup, *txn)
 			}
 			var groupCtx *verify.GroupContext
@@ -790,7 +834,6 @@ var signCmd = &cobra.Command{
 			for i, txn := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					txn.Lsig = lsig
 					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
@@ -850,17 +893,16 @@ var groupCmd = &cobra.Command{
 			}
 
 			stxns = append(stxns, stxn)
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(stxn.Txn))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxn.ID()))
 			transactionIdx++
 		}
 
-		var outData []byte
-		for _, stxn := range stxns {
-			stxn.Txn.Group = crypto.HashObj(group)
-			outData = append(outData, protocol.Encode(&stxn)...)
+		groupHash := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupHash
 		}
 
-		err = writeFile(outFilename, outData, 0600)
+		err = writeSignedTxnsToFile(stxns, outFilename)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
 		}
@@ -915,14 +957,14 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFile(fname string) (program []byte) {
+func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname)
+		ops.ReportProblems(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
@@ -936,7 +978,28 @@ func assembleFile(fname string) (program []byte) {
 		}
 	}
 
+	if printWarnings && len(ops.Warnings) != 0 {
+		for _, warning := range ops.Warnings {
+			reportWarnRawln(warning.Error())
+		}
+		plural := "s"
+		if len(ops.Warnings) == 1 {
+			plural = ""
+		}
+		reportWarnRawf("%d warning%s", len(ops.Warnings), plural)
+	}
+
+	return ops
+}
+
+func assembleFile(fname string, printWarnings bool) (program []byte) {
+	ops := assembleFileImpl(fname, printWarnings)
 	return ops.Program
+}
+
+func assembleFileWithMap(fname string, printWarnings bool) ([]byte, logic.SourceMap) {
+	ops := assembleFileImpl(fname, printWarnings)
+	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
 }
 
 func disassembleFile(fname, outname string) {
@@ -985,8 +1048,6 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
-			outblob := program
 			outname := outFilename
 			if outname == "" {
 				if fname == stdinFileNameValue {
@@ -995,6 +1056,9 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
+			program, sourceMap := assembleFileWithMap(fname, true)
+			outblob := program
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1024,7 +1088,21 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
-			if !signProgram && outname != stdoutFilenameValue {
+			if writeSourceMap {
+				if outname == stdoutFilenameValue {
+					reportErrorf("%s: %s", outname, "cannot print map to stdout")
+				}
+				mapname := outname + ".map"
+				pcblob, err := json.Marshal(sourceMap)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+				err = writeFile(mapname, pcblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+			}
+			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
@@ -1055,10 +1133,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			stxns = append(stxns, txn)
 		}
-		txgroup := make([]transactions.SignedTxn, len(stxns))
-		for i, st := range stxns {
-			txgroup[i] = st
-		}
+		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
@@ -1068,7 +1143,7 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(err.Error())
 			}
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, accts, string(proto), dumpForDryrunFormat.String())
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1086,22 +1161,15 @@ var dryrunCmd = &cobra.Command{
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: uint64(i), TxnGroup: txgroup}
-			err := logic.Check(txn.Lsig.Logic, ep)
+			ep := logic.NewEvalParams(txgroup, &params, nil)
+			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
-			sb := strings.Builder{}
-			ep = logic.EvalParams{
-				Txn:        &txn,
-				GroupIndex: uint64(i),
-				Proto:      &params,
-				Trace:      &sb,
-				TxnGroup:   txgroup,
-			}
-			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			ep.Trace = &strings.Builder{}
+			pass, err := logic.EvalSignature(i, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {
@@ -1164,6 +1232,12 @@ var dryrunRemoteCmd = &cobra.Command{
 				}
 				if txnResult.Cost != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
+				}
+				if txnResult.BudgetConsumed != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
+				}
+				if txnResult.BudgetAdded != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
 				}
 
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)

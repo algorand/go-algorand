@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,13 +45,18 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		return fmt.Errorf("cannot change online/offline status of non-participating account %v", header.Sender)
 	}
 
+	params := balances.ConsensusParams()
+
 	// Update the registered keys and mark account as online
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
+	if params.EnableStateProofKeyregCheck {
+		record.StateProofID = keyreg.StateProofPK
+	}
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
 		if keyreg.Nonparticipation {
-			if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+			if params.SupportBecomeNonParticipatingTransactions {
 				record.Status = basics.NotParticipating
 			} else {
 				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
@@ -63,8 +68,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
 	} else {
-
-		if balances.ConsensusParams().EnableKeyregCoherencyCheck {
+		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
 				return errKeyregGoingOnlineExpiredParticipationKey
 			}

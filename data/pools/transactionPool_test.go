@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
@@ -59,15 +58,6 @@ type TestingT interface {
 
 var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	txgroup := pooldata.SignedTxGroup{
-		Transactions: []transactions.SignedTxn{t},
-	}
-	return pool.Remember(txgroup)
-}
-
 func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
@@ -93,14 +83,14 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	}
 
 	var err error
-	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
 	genesisInitState := ledgercore.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
+	cfg.Archival = true
 	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
 	require.NoError(t, err)
 	return l
@@ -571,7 +561,7 @@ func TestRememberForget(t *testing.T) {
 		}
 	}
 
-	pending, _ := transactionPool.PendingTxGroups()
+	pending := transactionPool.PendingTxGroups()
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
 
@@ -582,7 +572,7 @@ func TestRememberForget(t *testing.T) {
 	require.NoError(t, err)
 	transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
-	pending, _ = transactionPool.PendingTxGroups()
+	pending = transactionPool.PendingTxGroups()
 	require.Len(t, pending, 0)
 }
 
@@ -647,7 +637,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
-	pending, _ := transactionPool.PendingTxGroups()
+	pending := transactionPool.PendingTxGroups()
 	require.Zero(t, len(pending))
 	require.Zero(t, transactionPool.NumExpired(4))
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
@@ -721,7 +711,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 			}
 		}
 	}
-	pending, _ := transactionPool.PendingTxGroups()
+	pending := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
 
 	secret := keypair()
@@ -757,7 +747,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 	transactionPool.OnNewBlock(block.Block(), ledgercore.StateDelta{})
 
-	pending, _ = transactionPool.PendingTxGroups()
+	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
 }
@@ -865,15 +855,7 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
-	pendingTxGroups, _ := transactionPool.PendingTxGroups()
-	require.Equal(t, []pooldata.SignedTxGroup{
-		{
-			Transactions:       []transactions.SignedTxn{signedTx},
-			GroupCounter:       1,
-			GroupTransactionID: (pooldata.SignedTxnSlice{signedTx}).ID(),
-			EncodedLength:      len(signedTx.MarshalMsg([]byte{})),
-		},
-	}, pendingTxGroups)
+	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{{signedTx}})
 }
 
 func TestLogicSigOK(t *testing.T) {
@@ -1364,7 +1346,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 	}
 
 	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
-		var txgroup pooldata.SignedTxGroup
+		var txgroup []transactions.SignedTxn
 		// fill the transaction group with groupSize transactions.
 		for i := 0; i < groupSize; i++ {
 			tx := transactions.Transaction{
@@ -1383,7 +1365,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 				},
 			}
 			signedTx := tx.Sign(secrets[0])
-			txgroup.Transactions = append(txgroup.Transactions, signedTx)
+			txgroup = append(txgroup, signedTx)
 			uniqueTxID++
 		}
 
@@ -1393,7 +1375,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 		if groupSize > 1 {
 			// add a single transaction and ensure we succeed
 			// consume the transaction of allowed limit
-			require.NoError(t, transactionPool.RememberOne(txgroup.Transactions[0]))
+			require.NoError(t, transactionPool.RememberOne(txgroup[0]))
 		}
 	}
 }

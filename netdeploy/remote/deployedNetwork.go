@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -394,7 +394,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
 		round:         basics.Round(0),
 		genesisID:     genesis.ID(),
-		genesisHash:   crypto.HashObj(genesis),
+		genesisHash:   genesis.Hash(),
 		poolAddr:      poolAddr,
 		sinkAddr:      sinkAddr,
 	}
@@ -555,7 +555,7 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	payset = append(payset, txibs...)
 	bootstrappedNet.txnCount += uint64(len(payset))
 	block.Payset = payset
-	block.TxnRoot, err = block.PaysetCommit()
+	block.TxnCommitments, err = block.PaysetCommit()
 	if err != nil {
 		return bookkeeping.Block{}, err
 	}
@@ -587,6 +587,12 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 	var nAppAcct uint64
 
 	maxApps = uint64(params.MaxAppsCreated)
+	// TODO : given that we've added unlimited app support, we should revise this
+	// code so that we'll have control on how many app/account we want to create.
+	// for now, I'm going to keep the previous max values until we have refactored this code.
+	if maxApps == 0 {
+		maxApps = uint64(config.Consensus[protocol.ConsensusV30].MaxAppsCreated)
+	}
 
 	if maxApps > 0 {
 		nAppAcct = appsCount / maxApps
@@ -598,6 +604,12 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 	var maxAssets uint64
 	var nAssetAcct uint64
 	maxAssets = uint64(params.MaxAssetsPerAccount)
+	// TODO : given that we've added unlimited asset support, we should revise this
+	// code so that we'll have control on how many asset/account we want to create.
+	// for now, I'm going to keep the previous max values until we have refactored this code.
+	if maxAssets == 0 {
+		maxAssets = uint64(config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount)
+	}
 
 	if maxAssets > 0 {
 		nAssetAcct = assetCount / maxAssets
@@ -710,7 +722,14 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 		bootstrappedNet.assetPerAcct++
 		bootstrappedNet.nAssets -= uint64(len(sgtxns))
 
-		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == params.MaxAssetsPerAccount {
+		maxAssets := params.MaxAssetsPerAccount
+		// TODO : given that we've added unlimited asset support, we should revise this
+		// code so that we'll have control on how many asset/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		if maxAssets == 0 {
+			maxAssets = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+		}
+		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == maxAssets {
 			if bootstrappedNet.nApplications > 0 {
 				bootstrappedNet.txnState = protocol.ApplicationCallTx
 			} else {
@@ -758,7 +777,14 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 		bootstrappedNet.nApplications -= uint64(len(sgtxns))
 		bootstrappedNet.appsPerAcct++
-		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == params.MaxAppsCreated {
+		// TODO : given that we've added unlimited app support, we should revise this
+		// code so that we'll have control on how many app/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		maxApps := params.MaxAppsCreated
+		if maxApps == 0 {
+			maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+		}
+		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == maxApps {
 			bootstrappedNet.txnState = protocol.PaymentTx
 		}
 	}

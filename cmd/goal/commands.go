@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -517,19 +517,33 @@ func reportInfof(format string, args ...interface{}) {
 	reportInfoln(fmt.Sprintf(format, args...))
 }
 
-func reportWarnln(args ...interface{}) {
-	fmt.Print("Warning: ")
-
+// reportWarnRawln prints a warning message to stderr. Only use this function if that warning
+// message already indicates that it's a warning. Otherwise, use reportWarnln
+func reportWarnRawln(args ...interface{}) {
 	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
-			fmt.Println(infoNonPrintableCharacters)
+			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
 		}
 
-		fmt.Println(line)
+		fmt.Fprintln(os.Stderr, line)
 	}
 }
 
+// reportWarnRawf prints a warning message to stderr. Only use this function if that warning message
+// already indicates that it's a warning. Otherwise, use reportWarnf
+func reportWarnRawf(format string, args ...interface{}) {
+	reportWarnRawln(fmt.Sprintf(format, args...))
+}
+
+// reportWarnln prints a warning message to stderr. The message will be prefixed with "Warning: ".
+// If you don't want this prefix, use reportWarnRawln
+func reportWarnln(args ...interface{}) {
+	reportWarnRawf("Warning: %s", fmt.Sprint(args...))
+}
+
+// reportWarnf prints a warning message to stderr. The message will be prefixed with "Warning: ". If
+// you don't want this prefix, use reportWarnRawf
 func reportWarnf(format string, args ...interface{}) {
 	reportWarnln(fmt.Sprintf(format, args...))
 }

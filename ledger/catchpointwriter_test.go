@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,14 +25,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -48,12 +49,15 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
-	er := encodedBalanceRecord{}
+func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
+	er := encodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
+
 	ad := basics.AccountData{
 		Status:             basics.NotParticipating,
 		MicroAlgos:         basics.MicroAlgos{},
@@ -61,6 +65,7 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		RewardedMicroAlgos: basics.MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
+		StateProofID:       stateProofID,
 		VoteFirstValid:     basics.Round(0x1234123412341234),
 		VoteLastValid:      basics.Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,
@@ -69,8 +74,12 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
 	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
+	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
+	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
+	if maxAssetsPerAccount == 0 {
+		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+	}
+	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
 		ap := basics.AssetParams{
 			Total:         0x1234123412341234,
 			Decimals:      0x12341234,
@@ -87,7 +96,7 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
 	}
 
-	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
+	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
 		ah := basics.AssetHolding{
 			Amount: 0x1234123412341234,
 			Frozen: true,
@@ -97,6 +106,12 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 
 	maxApps := currentConsensusParams.MaxAppsCreated
 	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	if maxApps == 0 {
+		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	}
+	if maxOptIns == 0 {
+		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
+	}
 	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
 	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
 
@@ -143,10 +158,10 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	er := makeTestEncodedBalanceRecord(t)
+	er := makeTestEncodedBalanceRecordV5(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecord
+	var er2 encodedBalanceRecordV5
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -156,17 +171,24 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fbc := catchpointFileBalancesChunk{}
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
+	fbc := catchpointFileBalancesChunkV5{}
 	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
+		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
 	}
 	encodedFbc := fbc.MarshalMsg(nil)
 
-	var fbc2 catchpointFileBalancesChunk
+	var fbc2 catchpointFileBalancesChunkV5
 	_, err := fbc2.UnmarshalMsg(encodedFbc)
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)
+	// Garbage collection helps prevent trashing
+	// for next tests
+	runtime.GC()
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
@@ -175,14 +197,11 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
+	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectroy := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectroy)
 	}()
 	accts := ledgertesting.RandomAccounts(300, false)
 
@@ -192,18 +211,18 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
-	blocksRound := basics.Round(12345)
-	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
-	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	fileName := filepath.Join(temporaryDirectroy, "15.data")
 
 	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -218,53 +237,40 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
+	defer compressorReader.Close()
+	tarReader := tar.NewReader(compressorReader)
+
+	header, err := tarReader.Next()
+	require.NoError(t, err)
+
+	balancesBlockBytes := make([]byte, header.Size)
+	readComplete := int64(0)
+
+	for readComplete < header.Size {
+		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+		readComplete += int64(bytesRead)
 		if err != nil {
 			if err == io.EOF {
-				break
+				if readComplete == header.Size {
+					break
+				}
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 			break
 		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-
-		if header.Name == "content.msgpack" {
-			var fileHeader CatchpointFileHeader
-			err = protocol.Decode(balancesBlockBytes, &fileHeader)
-			require.NoError(t, err)
-			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
-			require.Equal(t, blocksRound, fileHeader.BlocksRound)
-			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
-			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
-		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunk
-			err = protocol.Decode(balancesBlockBytes, &balances)
-			require.NoError(t, err)
-			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
-		} else {
-			require.Failf(t, "unexpected tar chunk name", "tar chunk name %s", header.Name)
-		}
 	}
+
+	require.Equal(t, "balances.1.1.msgpack", header.Name)
+
+	var balances catchpointFileBalancesChunkV6
+	err = protocol.Decode(balancesBlockBytes, &balances)
+	require.NoError(t, err)
+	require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
+
+	_, err = tarReader.Next()
+	require.Equal(t, io.EOF, err)
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
@@ -273,14 +279,11 @@ func TestFullCatchpointWriter(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
+	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectory := t.TempDir()
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectroy)
 	}()
 
 	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
@@ -290,17 +293,23 @@ func TestFullCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
-	blocksRound := basics.Round(12345)
-	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
-	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
+	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	readDb := ml.trackerDB().Rdb
+	var totalAccounts uint64
+	var totalChunks uint64
+	var biggestChunkLen uint64
+	var accountsRnd basics.Round
+	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx)
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -308,8 +317,33 @@ func TestFullCatchpointWriter(t *testing.T) {
 				break
 			}
 		}
+		totalAccounts = writer.GetTotalAccounts()
+		totalChunks = writer.GetTotalChunks()
+		biggestChunkLen = writer.GetBiggestChunkLen()
+		accountsRnd, err = accountsRound(tx)
+		if err != nil {
+			return
+		}
+		totals, err = accountsTotals(ctx, tx, false)
 		return
 	})
+	require.NoError(t, err)
+	blocksRound := accountsRnd + 1
+	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
+	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	catchpointFileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     accountsRnd,
+		BlocksRound:       blocksRound,
+		Totals:            totals,
+		TotalAccounts:     totalAccounts,
+		TotalChunks:       totalChunks,
+		Catchpoint:        catchpointLabel,
+		BlockHeaderDigest: blockHeaderDigest,
+	}
+	err = repackCatchpoint(
+		context.Background(), catchpointFileHeader, biggestChunkLen,
+		catchpointDataFilePath, catchpointFilePath)
 	require.NoError(t, err)
 
 	// create a ledger.
@@ -324,7 +358,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(fileName)
+	fileContent, err := ioutil.ReadFile(catchpointFilePath)
 	require.NoError(t, err)
 	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)
@@ -361,15 +395,15 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0)
+		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
-		require.NoError(t, err)
+		acctData, validThrough, _, err := l.LookupLatest(addr)
+		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}

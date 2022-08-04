@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ var outDir = flag.String("d", "", "The directory containing the generated ledger
 var netName = flag.String("n", "", "The name of the network for this ledger (will override config file).")
 var configFile = flag.String("c", "", "The config file containing the genesis ledger and wallets")
 var quiet = flag.Bool("q", false, "Skip verbose informational messages")
+var short = flag.Bool("s", false, "Cap the last participation key round to 1500")
 
 func init() {
 	flag.Parse()
@@ -60,6 +61,13 @@ func main() {
 	if !*quiet {
 		verboseOut = os.Stdout
 	}
+
+	if *short {
+		if genesisData.LastPartKeyRound > 1500 {
+			genesisData.LastPartKeyRound = 1500
+		}
+	}
+
 	err = gen.GenerateGenesisFiles(genesisData, config.Consensus, *outDir, verboseOut)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)

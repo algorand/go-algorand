@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,15 +21,29 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// SimpleKeyManager provides a simple implementation of a KeyManager.
+// SimpleKeyManager provides a simple implementation of a KeyManager for unit tests.
 type SimpleKeyManager []account.Participation
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRecordForRound {
+	var km []account.ParticipationRecordForRound
 	for _, acc := range m {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
+			record := account.ParticipationRecord{
+				ParticipationID:   acc.ID(),
+				Account:           acc.Parent,
+				FirstValid:        acc.FirstValid,
+				LastValid:         acc.LastValid,
+				KeyDilution:       acc.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    acc.FirstValid,
+				EffectiveLast:     acc.LastValid,
+				VRF:               acc.VRF,
+				Voting:            acc.Voting,
+			}
+			km = append(km, account.ParticipationRecordForRound{ParticipationRecord: record})
 		}
 	}
 	return km
@@ -37,7 +51,8 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.
 func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
-	// for _, acc := range m {
-	// acc.DeleteOldKeys(r)
-	// }
+}
+
+// Record implements KeyManager.Record.
+func (m SimpleKeyManager) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
 }

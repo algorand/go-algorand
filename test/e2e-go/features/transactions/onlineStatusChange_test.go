@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -85,7 +86,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be no errors when creating partkeys")
 	a.Equal(initiallyOffline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
-	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -144,4 +145,41 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 		a.NoError(err)
 		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 	}
+}
+
+func TestCloseOnError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
+	defer fixture.Shutdown()
+	client := fixture.LibGoalClient
+
+	// Capture the account we're tracking
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+
+	initiallyOnline := accountList[0].Address  // 35% stake
+	initiallyOffline := accountList[1].Address // 20% stake
+
+	// get the current round for partkey creation
+	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
+
+	var partkeyFile string
+	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir())
+
+	// make a participation key for initiallyOffline
+	_, err = client.AddParticipationKey(partkeyFile)
+	a.NoError(err)
+	// check duplicate keys does not crash
+	_, err = client.AddParticipationKey(partkeyFile)
+	a.Error(err)
+	a.Contains(err.Error(), "cannot register duplicate participation key")
+	// check lastValid < firstValid does not crash
+	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)
+	expected := fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))
+	a.Equal(expected, err.Error())
 }

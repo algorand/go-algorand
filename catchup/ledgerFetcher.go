@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -139,10 +139,25 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	defer watchdogReader.Close()
 	tarReader := tar.NewReader(watchdogReader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
+	var writeDuration time.Duration
+
+	printLogsFunc := func() {
+		lf.log.Infof(
+			"writing balances to disk took %d seconds, "+
+				"writing creatables to disk took %d seconds, "+
+				"writing hashes to disk took %d seconds, "+
+				"total duration is %d seconds",
+			downloadProgress.BalancesWriteDuration/time.Second,
+			downloadProgress.CreatablesWriteDuration/time.Second,
+			downloadProgress.HashesWriteDuration/time.Second,
+			writeDuration/time.Second)
+	}
+
 	for {
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
+				printLogsFunc()
 				return nil
 			}
 			return err
@@ -151,30 +166,22 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
 		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
-				}
-				return err
-			}
+		_, err = io.ReadFull(tarReader, balancesBlockBytes)
+		if err != nil {
+			return err
 		}
+		start := time.Now()
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)
 		if err != nil {
 			return err
 		}
+		writeDuration += time.Since(start)
 		if lf.reporter != nil {
 			lf.reporter.updateLedgerFetcherProgress(&downloadProgress)
 		}
 		if err = watchdogReader.Reset(); err != nil {
 			if err == io.EOF {
+				printLogsFunc()
 				return nil
 			}
 			err = fmt.Errorf("getPeerLedger received the following error while reading the catchpoint file : %v", err)

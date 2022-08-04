@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ func TestOpSpecs(t *testing.T) {
 	t.Parallel()
 
 	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.Details, spec)
+		require.NotEmpty(t, spec.OpDetails, spec)
 	}
 }
 
@@ -42,10 +42,10 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	if os.Name != oso.Name {
 		return false
 	}
-	if !reflect.DeepEqual(os.Args, oso.Args) {
+	if !reflect.DeepEqual(os.Arg, oso.Arg) {
 		return false
 	}
-	if !reflect.DeepEqual(os.Returns, oso.Returns) {
+	if !reflect.DeepEqual(os.Return, oso.Return) {
 		return false
 	}
 	if os.Version != oso.Version {
@@ -77,13 +77,15 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 	OpSpecs[1] = OpSpecs[4]
 	OpSpecs[4] = tmp
 
-	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
+	t.Run("TestOpcodesByVersion", testOpcodesByVersion)
 }
 
 func TestOpcodesByVersion(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// has partitioning in the TestOpcodesByVersionReordered()
+	partitiontest.PartitionTest(t)
+	testOpcodesByVersion(t)
+}
 
+func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
 	for idx, opspec := range OpSpecs {
@@ -165,11 +167,10 @@ func TestOpcodesVersioningV2(t *testing.T) {
 		eq = a.Opcode == b.Opcode && a.Name == b.Name &&
 			reflect.ValueOf(a.op).Pointer() == reflect.ValueOf(b.op).Pointer() &&
 			reflect.ValueOf(a.asm).Pointer() == reflect.ValueOf(b.asm).Pointer() &&
-			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
-			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
+			reflect.DeepEqual(a.Arg, b.Arg) && reflect.DeepEqual(a.Return, b.Return) &&
 			a.Modes == b.Modes &&
-			a.Details.Cost == b.Details.Cost && a.Details.Size == b.Details.Size &&
-			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
+			a.OpDetails.FullCost == b.OpDetails.FullCost && a.OpDetails.Size == b.OpDetails.Size &&
+			reflect.ValueOf(a.OpDetails.check).Pointer() == reflect.ValueOf(b.OpDetails.check).Pointer()
 		return
 	}
 	// ensure v0 and v1 are the same
@@ -206,7 +207,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 
 	// hardcode and ensure amount of new v2 opcodes
 	newOpcodes := 22
-	overwritten := 5 // sha256, keccak256, sha512_256, txn, gtxn
+	overwritten := 3 // sha256, keccak256, sha512_256
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 
 	require.Equal(t, cntv2, cntv1+newOpcodes)

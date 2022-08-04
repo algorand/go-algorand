@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,7 +97,7 @@ func BenchmarkSign(b *testing.B) {
 		_ = c.Sign(s)
 	}
 }
-func BenchmarkVerify(b *testing.B) {
+func BenchmarkVerify25519(b *testing.B) {
 	c := makeCurve25519Secret()
 	strs := make([]TestingHashable, b.N)
 	sigs := make([]Signature, b.N)

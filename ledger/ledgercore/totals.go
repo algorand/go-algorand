@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AlgoCount represents a total of algos of a certain class
@@ -52,6 +53,15 @@ type AccountTotals struct {
 	RewardsLevel uint64 `codec:"rwdlvl"`
 }
 
+// OnlineRoundParamsData keeps track of parameters needed for agreement from maxBalLookback ago
+type OnlineRoundParamsData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	OnlineSupply    uint64                    `codec:"online"`
+	RewardsLevel    uint64                    `codec:"rwdlvl"`
+	CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+}
+
 func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	switch status {
 	case basics.Online:
@@ -69,7 +79,7 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 }
 
 // AddAccount adds an account algos from the total money
-func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
@@ -77,7 +87,7 @@ func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.Ac
 }
 
 // DelAccount removes an account algos from the total money
-func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)

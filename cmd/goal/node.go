@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,12 +16,16 @@
 
 package main
 
+//go:generate ./bundle_genesis_json.sh
+
 import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,8 +57,11 @@ var newNodeDestination string
 var newNodeArchival bool
 var newNodeIndexer bool
 var newNodeRelay string
+var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
+
+const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -92,6 +99,7 @@ func init() {
 	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
+	createCmd.Flags().BoolVar(&newNodeFullConfig, "full-config", false, "Store full config file")
 	createCmd.MarkFlagRequired("destination")
 	createCmd.MarkFlagRequired("network")
 
@@ -114,18 +122,54 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
+func getMissingCatchpointLabel(URL string) (label string, err error) {
+	resp, err := http.Get(URL)
+	if err != nil {
+		return
+	}
+	if resp.StatusCode != 200 {
+		err = errors.New(resp.Status)
+		return
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+	label = string(body)
+	label = strings.TrimSuffix(label, "\n")
+
+	// check if label is a valid catchpoint label
+	_, _, err = ledgercore.ParseCatchpointLabel(label)
+	if err != nil {
+		return
+	}
+	return
+}
+
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round.",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round. If no catchpoint is provided, this command attempts to lookup the latest catchpoint from algorand-catchpoints.s3.us-east-2.amazonaws.com.",
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
-		if abortCatchup == false && len(args) == 0 {
-			fmt.Println(errorCatchpointLabelMissing)
-			os.Exit(1)
-		}
-		onDataDirs(func(datadir string) { catchup(datadir, args) })
+		onDataDirs(func(dataDir string) {
+			if !abortCatchup && len(args) == 0 {
+				client := ensureAlgodClient(dataDir)
+				vers, err := client.AlgodVersions()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				genesis := strings.Split(vers.GenesisID, "-")[0]
+				URL := fmt.Sprintf(catchpointURL, genesis)
+				label, err := getMissingCatchpointLabel(URL)
+				if err != nil {
+					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel)
+				}
+				args = append(args, label)
+			}
+			catchup(dataDir, args)
+		})
 	},
 }
 
@@ -559,8 +603,15 @@ var createCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 
 		// validate network input
-		validNetworks := map[string]bool{"mainnet": true, "testnet": true, "devnet": true, "betanet": true}
-		if !validNetworks[newNodeNetwork] {
+		validNetworks := map[string][]byte{
+			"mainnet": genesisMainnet,
+			"testnet": genesisTestnet,
+			"betanet": genesisBetanet,
+			"devnet":  genesisDevnet,
+		}
+		var genesisContent []byte
+		var ok bool
+		if genesisContent, ok = validNetworks[newNodeNetwork]; !ok {
 			reportErrorf(errorNodeCreation, "passed network name invalid")
 		}
 
@@ -586,44 +637,28 @@ var createCmd = &cobra.Command{
 		localConfig.EnableLedgerService = localConfig.Archival
 		localConfig.EnableBlockService = localConfig.Archival
 
-		// locate genesis block
-		exePath, err := util.ExeDir()
-		if err != nil {
-			reportErrorln(errorNodeCreation, err)
-		}
-		firstChoicePath := filepath.Join(exePath, "genesisfiles", newNodeNetwork, "genesis.json")
-		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
-		thirdChoicePath := filepath.Join(exePath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
-		paths := []string{firstChoicePath, secondChoicePath, thirdChoicePath}
-		correctPath := ""
-		for _, pathCandidate := range paths {
-			if util.FileExists(pathCandidate) {
-				correctPath = pathCandidate
-				break
-			}
-		}
-		if correctPath == "" {
-			reportErrorf("Could not find genesis.json file. Paths checked: %v", strings.Join(paths, ","))
-		}
-
 		// verify destination does not exist, and attempt to create destination folder
 		if util.FileExists(newNodeDestination) {
 			reportErrorf(errorNodeCreation, "destination folder already exists")
 		}
 		destPath := filepath.Join(newNodeDestination, "genesis.json")
-		err = os.MkdirAll(newNodeDestination, 0766)
+		err := os.MkdirAll(newNodeDestination, 0766)
 		if err != nil {
 			reportErrorf(errorNodeCreation, "could not create destination folder")
 		}
 
 		// copy genesis block to destination
-		_, err = util.CopyFile(correctPath, destPath)
+		err = ioutil.WriteFile(destPath, genesisContent, 0644)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}
 
 		// save config to destination
-		err = localConfig.SaveToDisk(newNodeDestination)
+		if newNodeFullConfig {
+			err = localConfig.SaveAllToDisk(newNodeDestination)
+		} else {
+			err = localConfig.SaveToDisk(newNodeDestination)
+		}
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}

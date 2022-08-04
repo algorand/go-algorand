@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -47,7 +47,7 @@ var schema = []string{
 
 type pendingSig struct {
 	signer       basics.Address
-	sig          crypto.OneTimeSignature
+	sig          merklesignature.Signature
 	fromThisNode bool
 }
 

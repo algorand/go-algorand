@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,17 +17,29 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
+
+	cmdutil "github.com/algorand/go-algorand/cmd/util"
 )
 
 func main() {
+	// Hidden command to generate docs in a given directory
+	// tealdbg generate-docs [path]
+	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
+		err := doc.GenMarkdownTree(rootCmd, os.Args[2])
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Println(err)
 		os.Exit(1)
@@ -65,49 +77,16 @@ var remoteCmd = &cobra.Command{
 	},
 }
 
-// cobraStringValue is a cobra's string flag with restricted values
-type cobraStringValue struct {
-	value   string
-	allowed []string
-	isSet   bool
-}
-
-func makeCobraStringValue(value string, others []string) *cobraStringValue {
-	c := new(cobraStringValue)
-	c.value = value
-	c.allowed = make([]string, 0, len(others)+1)
-	c.allowed = append(c.allowed, value)
-	for _, s := range others {
-		c.allowed = append(c.allowed, s)
-	}
-	return c
-}
-
-func (c *cobraStringValue) String() string { return c.value }
-func (c *cobraStringValue) Type() string   { return "string" }
-func (c *cobraStringValue) IsSet() bool    { return c.isSet }
-
-func (c *cobraStringValue) Set(other string) error {
-	for _, s := range c.allowed {
-		if other == s {
-			c.value = other
-			c.isSet = true
-			return nil
-		}
-	}
-	return fmt.Errorf("value %s not allowed", other)
-}
-
-func (c *cobraStringValue) AllowedString() string {
-	return strings.Join(c.allowed, ", ")
-}
-
 type frontendValue struct {
-	*cobraStringValue
+	*cmdutil.CobraStringValue
+}
+
+func (f *frontendValue) value() string {
+	return f.CobraStringValue.String()
 }
 
 func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
-	switch f.value {
+	switch f.value() {
 	case "web":
 		wa := MakeWebPageFrontend(&WebPageFrontendParams{router, appAddress})
 		return wa
@@ -120,10 +99,10 @@ func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAda
 }
 
 type runModeValue struct {
-	*cobraStringValue
+	*cmdutil.CobraStringValue
 }
 
-var frontend frontendValue = frontendValue{makeCobraStringValue("cdt", []string{"web"})}
+var frontend frontendValue = frontendValue{cmdutil.MakeCobraStringValue("cdt", []string{"web"})}
 var proto string
 var txnFile string
 var groupIndex int
@@ -133,7 +112,7 @@ var indexerURL string
 var indexerToken string
 var roundNumber uint64
 var timestamp int64
-var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
+var runMode runModeValue = runModeValue{cmdutil.MakeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
 var iface string
 var noFirstRun bool
@@ -240,7 +219,7 @@ func debugLocal(args []string) {
 	if len(txnFile) > 0 {
 		txnBlob, err = ioutil.ReadFile(txnFile)
 		if err != nil {
-			log.Fatalf("Error txn reading %s: %s", balanceFile, err)
+			log.Fatalf("Error txn reading %s: %s", txnFile, err)
 		}
 	}
 

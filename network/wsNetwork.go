@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -31,7 +30,6 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,24 +39,21 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/netutil"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const incomingThreads = 20
-
-// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
-// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
-// as the transaction sync messages should not included in this filter.
-const messageFilterSize = 200000
+const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
@@ -82,9 +77,6 @@ const httpServerIdleTimeout = time.Second * 4
 // values, including the request line. It does not limit the
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
-
-// MaxInt is the maximum int which might be int32 or int64
-const MaxInt = int((^uint(0)) >> 1)
 
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
@@ -133,6 +125,12 @@ var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max
 var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
+
+// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
+const peerDisconnectionAckDuration time.Duration = 5 * time.Second
+
+// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
+const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
@@ -224,9 +222,6 @@ type IncomingMessage struct {
 	Err    error
 	Net    GossipNode
 
-	// Sequence is the sequence number of the message for the specific tag and peer
-	Sequence uint64
-
 	// Received is time.Time.UnixNano()
 	Received int64
 
@@ -305,6 +300,19 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
 // Contains {genesisID} param to be handled by gorilla/mux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
+
+// NodeInfo helps the network get information about the node it is running on
+type NodeInfo interface {
+	// IsParticipating returns true if this node has stake and may vote on blocks or propose blocks.
+	IsParticipating() bool
+}
+
+type nopeNodeInfo struct {
+}
+
+func (nnni *nopeNodeInfo) IsParticipating() bool {
+	return false
+}
 
 // WebsocketNetwork implements GossipNode
 type WebsocketNetwork struct {
@@ -402,20 +410,33 @@ type WebsocketNetwork struct {
 	// to be sent to new peers.  This is filled in at network start,
 	// at which point messagesOfInterestEncoded is set to prevent
 	// further changes.
-	messagesOfInterestEnc     []byte
-	messagesOfInterestEncoded bool
+	messagesOfInterestEnc        []byte
+	messagesOfInterestEncoded    bool
+	messagesOfInterestGeneration uint32
 
 	// messagesOfInterestMu protects messagesOfInterest and ensures
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
-	messagesOfInterestMu deadlock.Mutex
+	messagesOfInterestMu      deadlock.Mutex
+	messagesOfInterestRefresh chan struct{}
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
 	// is consumed by any of the messageHandlerThread(s). The ticker itself is created during
 	// Start(), and being shut down when Stop() is called.
 	peersConnectivityCheckTicker *time.Ticker
+
+	nodeInfo NodeInfo
+
+	// atomic {0:unknown, 1:yes, 2:no}
+	wantTXGossip uint32
 }
+
+const (
+	wantTXGossipUnk = 0
+	wantTXGossipYes = 1
+	wantTXGossipNo  = 2
+)
 
 type broadcastRequest struct {
 	tags        []Tag
@@ -554,13 +575,13 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 		return
 	}
 	peer := badnode.(*wsPeer)
-	peer.CloseAndWait()
+	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
 }
 
-func closeWaiter(wg *sync.WaitGroup, peer *wsPeer) {
+func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	defer wg.Done()
-	peer.CloseAndWait()
+	peer.CloseAndWait(deadline)
 }
 
 // DisconnectPeers shuts down all connections
@@ -569,8 +590,9 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
+	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&closeGroup, peer)
+		go closeWaiter(&closeGroup, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 	closeGroup.Wait()
@@ -665,6 +687,9 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
+	if wn.nodeInfo == nil {
+		wn.nodeInfo = &nopeNodeInfo{}
+	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
@@ -688,6 +713,9 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
+	if wn.relayMessages || wn.config.ForceFetchTransactions {
+		wn.wantTXGossip = wantTXGossipYes
+	}
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
 	// extra space there.
@@ -736,6 +764,8 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
+	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
+	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
 	}
@@ -743,25 +773,11 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	var err error
-	if wn.config.IncomingConnectionsLimit < 0 {
-		wn.config.IncomingConnectionsLimit = MaxInt
-	}
-
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
-	}
-
-	// Make sure we do not accept more incoming connections than our
-	// open file rlimit, with some headroom for other FDs (DNS, log
-	// files, SQLite files, telemetry, ...)
-	err = wn.rlimitIncomingConnections()
-	if err != nil {
-		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
-		return
 	}
 
 	if wn.config.NetAddress != "" {
@@ -771,7 +787,8 @@ func (wn *WebsocketNetwork) Start() {
 			return
 		}
 		// wrap the original listener with a limited connection listener
-		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		listener = limitlistener.RejectingLimitListener(
+			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
@@ -789,9 +806,6 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	if wn.config.EnablePingHandler {
-		wn.RegisterHandlers(pingHandlers)
-	}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -801,10 +815,7 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
-	if wn.config.PeerPingPeriodSeconds > 0 {
-		wn.wg.Add(1)
-		go wn.pingThread()
-	}
+
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
 		wn.peersConnectivityCheckTicker.Stop()
@@ -821,6 +832,9 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.prioWeightRefresh()
 	}
+
+	go wn.postMessagesOfInterestThread()
+
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
 
@@ -843,8 +857,12 @@ func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	wn.wg.Add(len(wn.peers))
+	// this method is called only during node shutdown. In this case, we want to send the
+	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
+	// to get a response.
+	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&wn.wg, peer)
+		go closeWaiter(&wn.wg, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 }
@@ -899,7 +917,7 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localTelemetryGUID := wn.log.GetTelemetryGUID()
 	localInstanceName := wn.log.GetInstanceName()
 	header.Set(TelemetryIDHeader, localTelemetryGUID)
 	header.Set(InstanceNameHeader, localInstanceName)
@@ -952,11 +970,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -967,11 +985,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Remote IP Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Remote IP Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -1136,22 +1154,33 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      trackedRequest.remoteHost,
-			HostName:     trackedRequest.otherTelemetryGUID,
-			Incoming:     true,
-			InstanceName: trackedRequest.otherInstanceName,
+			Address:       trackedRequest.remoteHost,
+			TelemetryGUID: trackedRequest.otherTelemetryGUID,
+			Incoming:      true,
+			InstanceName:  trackedRequest.otherInstanceName,
 		})
 
-	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
-	if wn.messagesOfInterestEnc != nil {
-		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
-		if err != nil {
-			wn.log.Infof("ws send msgOfInterest: %v", err)
-		}
-	}
+	wn.maybeSendMessagesOfInterest(peer, nil)
 
 	peers.Set(float64(wn.NumPeers()), nil)
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
+}
+
+func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
+	messagesOfInterestGeneration := atomic.LoadUint32(&wn.messagesOfInterestGeneration)
+	peerMessagesOfInterestGeneration := atomic.LoadUint32(&peer.messagesOfInterestGeneration)
+	if peerMessagesOfInterestGeneration != messagesOfInterestGeneration {
+		if messagesOfInterestEnc == nil {
+			wn.messagesOfInterestMu.Lock()
+			messagesOfInterestEnc = wn.messagesOfInterestEnc
+			wn.messagesOfInterestMu.Unlock()
+		}
+		if messagesOfInterestEnc != nil {
+			peer.sendMessagesOfInterest(messagesOfInterestGeneration, messagesOfInterestEnc)
+		} else {
+			wn.log.Infof("msgOfInterest Enc=nil, MOIGen=%d", messagesOfInterestGeneration)
+		}
+	}
 }
 
 func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
@@ -1294,7 +1323,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 				}
 			}
 			select {
-			case <-time.After(sleepDuration):
+			case <-util.NanoAfter(sleepDuration):
 				if (request != nil) && time.Now().After(requestDeadline) {
 					// message time have elapsed.
 					return true
@@ -1426,7 +1455,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime, nil)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1696,6 +1725,13 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
 	wn.lastNetworkAdvance = time.Now().UTC()
+	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
+		select {
+		case wn.messagesOfInterestRefresh <- struct{}{}:
+		default:
+			// if the notify chan is full, it will get around to updating the latest when it actually runs
+		}
+	}
 }
 
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
@@ -1714,7 +1750,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
 			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
-			HostName:           peer.TelemetryGUID,
+			TelemetryGUID:      peer.TelemetryGUID,
 			InstanceName:       peer.InstanceName,
 		}
 		if peer.outgoing {
@@ -1771,81 +1807,6 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
-// Wake up the thread to do work this often.
-const pingThreadPeriod = 30 * time.Second
-
-// If ping stats are older than this, don't include in metrics.
-const maxPingAge = 30 * time.Minute
-
-// pingThread wakes up periodically to refresh the ping times on peers and update the metrics gauges.
-func (wn *WebsocketNetwork) pingThread() {
-	defer wn.wg.Done()
-	ticker := time.NewTicker(pingThreadPeriod)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-		case <-wn.ctx.Done():
-			return
-		}
-		sendList := wn.peersToPing()
-		wn.log.Debugf("ping %d peers...", len(sendList))
-		for _, peer := range sendList {
-			if !peer.sendPing() {
-				// if we failed to send a ping, see how long it was since last successful ping.
-				lastPingSent, _ := peer.pingTimes()
-				wn.log.Infof("failed to ping to %v for the past %f seconds", peer, time.Now().Sub(lastPingSent).Seconds())
-			}
-		}
-	}
-}
-
-// Walks list of peers, gathers list of peers to ping, also calculates statistics.
-func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
-	wn.peersLock.RLock()
-	defer wn.peersLock.RUnlock()
-	// Never flood outbound traffic by trying to ping all the peers at once.
-	// Send to at most one fifth of the peers.
-	maxSend := 1 + (len(wn.peers) / 5)
-	out := make([]*wsPeer, 0, maxSend)
-	now := time.Now()
-	// a list to sort to find median
-	times := make([]float64, 0, len(wn.peers))
-	var min = math.MaxFloat64
-	var max float64
-	var sum float64
-	pingPeriod := time.Duration(wn.config.PeerPingPeriodSeconds) * time.Second
-	for _, peer := range wn.peers {
-		lastPingSent, lastPingRoundTripTime := peer.pingTimes()
-		sendToNow := now.Sub(lastPingSent)
-		if (sendToNow > pingPeriod) && (len(out) < maxSend) {
-			out = append(out, peer)
-		}
-		if (lastPingRoundTripTime > 0) && (sendToNow < maxPingAge) {
-			ftime := lastPingRoundTripTime.Seconds()
-			sum += ftime
-			times = append(times, ftime)
-			if ftime < min {
-				min = ftime
-			}
-			if ftime > max {
-				max = ftime
-			}
-		}
-	}
-	if len(times) != 0 {
-		sort.Float64s(times)
-		median := times[len(times)/2]
-		medianPing.Set(median, nil)
-		mean := sum / float64(len(times))
-		meanPing.Set(mean, nil)
-		minPing.Set(min, nil)
-		maxPing.Set(max, nil)
-		wn.log.Infof("ping times min=%f mean=%f median=%f max=%f", min, mean, median, max)
-	}
-	return out
-}
-
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
 	var err error
 	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
@@ -1876,15 +1837,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"3.0", "2.1"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  3.0 Introduced new transaction gossiping protocol
  */
-const ProtocolVersion = "3.0"
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2134,12 +2094,14 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      justHost(conn.RemoteAddr().String()),
-			HostName:     peer.TelemetryGUID,
-			Incoming:     false,
-			InstanceName: peer.InstanceName,
-			Endpoint:     peer.GetAddress(),
+			Address:       justHost(conn.RemoteAddr().String()),
+			TelemetryGUID: peer.TelemetryGUID,
+			Incoming:      false,
+			InstanceName:  peer.InstanceName,
+			Endpoint:      peer.GetAddress(),
 		})
+
+	wn.maybeSendMessagesOfInterest(peer, nil)
 
 	peers.Set(float64(wn.NumPeers()), nil)
 	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
@@ -2150,7 +2112,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now(), nil)
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}
@@ -2180,7 +2142,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
@@ -2190,6 +2152,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		phonebook: phonebook,
 		GenesisID: genesisID,
 		NetworkID: networkID,
+		nodeInfo:  nodeInfo,
 	}
 
 	wn.setup()
@@ -2198,7 +2161,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node
@@ -2239,10 +2202,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		}
 	}
 	eventDetails := telemetryspec.PeerEventDetails{
-		Address:      peerAddr,
-		HostName:     peer.TelemetryGUID,
-		Incoming:     !peer.outgoing,
-		InstanceName: peer.InstanceName,
+		Address:       peerAddr,
+		TelemetryGUID: peer.TelemetryGUID,
+		Incoming:      !peer.outgoing,
+		InstanceName:  peer.InstanceName,
 	}
 	if peer.outgoing {
 		eventDetails.Endpoint = peer.GetAddress()
@@ -2349,10 +2312,6 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
-	if wn.messagesOfInterestEncoded {
-		return fmt.Errorf("network already started")
-	}
-
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
 		for tag, flag := range defaultSendMessageTags {
@@ -2361,7 +2320,52 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 	}
 
 	wn.messagesOfInterest[t] = true
+	wn.updateMessagesOfInterestEnc()
 	return nil
+}
+
+// DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
+func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
+	wn.messagesOfInterestMu.Lock()
+	defer wn.messagesOfInterestMu.Unlock()
+
+	if wn.messagesOfInterest == nil {
+		wn.messagesOfInterest = make(map[protocol.Tag]bool)
+		for tag, flag := range defaultSendMessageTags {
+			wn.messagesOfInterest[tag] = flag
+		}
+	}
+
+	delete(wn.messagesOfInterest, t)
+	wn.updateMessagesOfInterestEnc()
+	return nil
+}
+
+func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
+	// must run inside wn.messagesOfInterestMu.Lock
+	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	wn.messagesOfInterestEncoded = true
+	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
+	var peers []*wsPeer
+	peers, _ = wn.peerSnapshot(peers)
+	for _, peer := range peers {
+		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
+	}
+}
+
+func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
+	for {
+		<-wn.messagesOfInterestRefresh
+		// if we're not a relay, and not participating, we don't need txn pool
+		wantTXGossip := wn.nodeInfo.IsParticipating()
+		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.RegisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
+		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.DeregisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
+		}
+	}
 }
 
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.

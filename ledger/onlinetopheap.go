@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,11 +47,7 @@ func (h *onlineTopHeap) Less(i, j int) bool {
 	}
 
 	bcmp := bytes.Compare(h.accts[i].Address[:], h.accts[j].Address[:])
-	if bcmp > 0 {
-		return true
-	}
-
-	return false
+	return bcmp > 0
 }
 
 // Swap implements sort.Interface

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-const maxMessageLength = 4 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+const maxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
 const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
@@ -48,14 +48,14 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 const msgsInReadBufferPerPeer = 10
 
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
-var networkSentBytesByTag = metrics.NewTagCounter("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network per message tag")
+var networkSentBytesByTag = metrics.NewTagCounter("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages")
 var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytesTotal)
-var networkReceivedBytesByTag = metrics.NewTagCounter("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network per message tag")
+var networkReceivedBytesByTag = metrics.NewTagCounter("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages")
 
 var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
-var networkMessageReceivedByTag = metrics.NewTagCounter("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network per message tag")
+var networkMessageReceivedByTag = metrics.NewTagCounter("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages")
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
-var networkMessageSentByTag = metrics.NewTagCounter("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network per message tag")
+var networkMessageSentByTag = metrics.NewTagCounter("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages")
 
 var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
 var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})
@@ -76,10 +76,10 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.ProposalPayloadTag: true,
 	protocol.TopicMsgRespTag:    true,
 	protocol.MsgOfInterestTag:   true,
+	protocol.TxnTag:             true,
 	protocol.UniCatchupReqTag:   true,
 	protocol.UniEnsBlockReqTag:  true,
 	protocol.VoteBundleTag:      true,
-	protocol.Txn2Tag:            true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -90,14 +90,16 @@ type wsPeerWebsocketConn interface {
 	WriteControl(int, []byte, time.Time) error
 	SetReadLimit(int64)
 	CloseWithoutFlush() error
+	SetPingHandler(h func(appData string) error)
+	SetPongHandler(h func(appData string) error)
 }
 
 type sendMessage struct {
 	data         []byte
-	enqueued     time.Time                            // the time at which the message was first generated
-	peerEnqueued time.Time                            // the time at which the peer was attempting to enqueue the message
-	msgTags      map[protocol.Tag]bool                // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
-	callback     UnicastWebsocketMessageStateCallback // when non-nil, the callback function would be called after entry would be placed on the outgoing websocket queue
+	enqueued     time.Time             // the time at which the message was first generated
+	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
+	msgTags      map[protocol.Tag]bool // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
+	hash         crypto.Digest
 	ctx          context.Context
 }
 
@@ -122,7 +124,6 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
-const disconnectClientCallback disconnectReason = "ClientCallback"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -137,7 +138,7 @@ type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
-	// we want this to be a 64-bit aligned for atomics.
+	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
@@ -205,6 +206,9 @@ type wsPeer struct {
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
+	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seent to this peer.
+	messagesOfInterestGeneration uint32
+
 	// connMonitor used to measure the relative performance of the connection
 	// compared to the other outgoing connections. Incoming connections would have this
 	// field set to nil.
@@ -223,9 +227,6 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
-
-	// outgoingMessageCounters counts the number of messages send for each tag. It allows us to use implicit message counting.
-	outgoingMessageCounters map[protocol.Tag]uint64
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -235,21 +236,16 @@ type HTTPPeer interface {
 	GetHTTPClient() *http.Client
 }
 
-// UnicastWebsocketMessageStateCallback provide asyncrounious feedback for the sequence number of a message
-// if the caller return an error, the network peer would disconnect
-type UnicastWebsocketMessageStateCallback func(enqueued bool, sequenceNumber uint64) error
-
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
 	GetAddress() string
 	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-	Unicast(ctx context.Context, data []byte, tag protocol.Tag, callback UnicastWebsocketMessageStateCallback) error
+	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
 	// Version returns the matching version from network.SupportedProtocolVersions
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
-	IsOutgoing() bool
 }
 
 // Create a wsPeerCore object
@@ -279,15 +275,9 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// IsOutgoing returns true if the connection is an outgoing connection or false if it the connection
-// is an incoming connection.
-func (wp *wsPeer) IsOutgoing() bool {
-	return wp.outgoing
-}
-
 // 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
-func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, callback UnicastWebsocketMessageStateCallback) error {
+func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
 
 	tbytes := []byte(tag)
@@ -299,7 +289,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, cal
 		digest = crypto.Hash(mbytes)
 	}
 
-	ok := wp.writeNonBlock(ctx, mbytes, false, digest, time.Now(), callback)
+	ok := wp.writeNonBlock(ctx, mbytes, false, digest, time.Now())
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -352,7 +342,6 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
 	wp.clientDataStore = make(map[string]interface{})
-	wp.outgoingMessageCounters = make(map[protocol.Tag]uint64)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -365,17 +354,6 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	if config.EnableOutgoingNetworkMessageFiltering {
 		wp.outgoingMsgFilter = makeMessageFilter(config.OutgoingMessageFilterBucketCount, config.OutgoingMessageFilterBucketSize)
-	}
-
-	// if we're on an older version, then add the old style transaction message to the send messages tag.
-	// once we deprecate old style transaction sending, this part can go away.
-	if wp.version != "3.0" {
-		txSendMsgTags := make(map[protocol.Tag]bool)
-		for tag := range wp.sendMessageTag {
-			txSendMsgTags[tag] = true
-		}
-		txSendMsgTags[protocol.TxnTag] = true
-		wp.sendMessageTag = txSendMsgTags
 	}
 
 	wp.wg.Add(2)
@@ -410,7 +388,6 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
-	sequenceCounters := make(map[protocol.Tag]uint64)
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
@@ -446,6 +423,7 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
@@ -456,8 +434,6 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
 		networkMessageReceivedByTag.Add(string(tag[:]), 1)
 		msg.Sender = wp
-		msg.Sequence = sequenceCounters[msg.Tag]
-		sequenceCounters[msg.Tag] = msg.Sequence + 1
 
 		// for outgoing connections, we want to notify the connection monitor that we've received
 		// a message. The connection monitor would update it's statistics accordingly.
@@ -611,12 +587,6 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	if len(msg.data) > maxMessageLength {
 		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
-		if msg.callback != nil {
-			// let the callback know that the message was not sent.
-			if nil != msg.callback(false, 0) {
-				return disconnectClientCallback
-			}
-		}
 		return disconnectReasonNone
 	}
 	if msg.msgTags != nil {
@@ -629,28 +599,18 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	tag := protocol.Tag(msg.data[:2])
 	if !wp.sendMessageTag[tag] {
 		// the peer isn't interested in this message.
-		if msg.callback != nil {
-			// let the callback know that the message was not sent.
-			if nil != msg.callback(false, 0) {
-				return disconnectClientCallback
-			}
-		}
 		return disconnectReasonNone
 	}
 
 	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
-	msgWaitDuration := time.Now().Sub(msg.enqueued)
+	now := time.Now()
+	msgWaitDuration := now.Sub(msg.enqueued)
 	if msgWaitDuration > maxMessageQueueDuration {
 		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
-		if msg.callback != nil {
-			// let the callback know that the message was not sent.
-			if nil != msg.callback(false, 0) {
-				return disconnectClientCallback
-			}
-		}
 		return disconnectStaleWrite
 	}
+
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
 	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
@@ -658,12 +618,6 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		if atomic.LoadInt32(&wp.didInnerClose) == 0 {
 			wp.net.log.Warn("peer write error ", err)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "write err"})
-		}
-		if msg.callback != nil {
-			// let the callback know that the message was not sent.
-			if nil != msg.callback(false, 0) {
-				return disconnectClientCallback
-			}
 		}
 		return disconnectWriteError
 	}
@@ -673,16 +627,6 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	networkMessageSentTotal.AddUint64(1, nil)
 	networkMessageSentByTag.Add(string(tag), 1)
 	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Now().Sub(msg.peerEnqueued).Nanoseconds()/1000), nil)
-
-	if msg.callback != nil {
-		// for performance reasons, we count messages only for messages that request a callback. we might want to revisit this
-		// in the future.
-		seq := wp.outgoingMessageCounters[tag]
-		if nil != msg.callback(true, seq) {
-			return disconnectClientCallback
-		}
-		wp.outgoingMessageCounters[tag] = seq + 1
-	}
 	return disconnectReasonNone
 }
 
@@ -725,16 +669,16 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 	wp.wg.Done()
 }
 
-func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time, callback UnicastWebsocketMessageStateCallback) bool {
+func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
 	msgs := make([][]byte, 1, 1)
 	digests := make([]crypto.Digest, 1, 1)
 	msgs[0] = data
 	digests[0] = digest
-	return wp.writeNonBlockMsgs(ctx, msgs, highPrio, digests, msgEnqueueTime, callback)
+	return wp.writeNonBlockMsgs(ctx, msgs, highPrio, digests, msgEnqueueTime)
 }
 
 // return true if enqueued/sent
-func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time, callback UnicastWebsocketMessageStateCallback) bool {
+func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time) bool {
 	includeIndices := make([]int, 0, len(data))
 	for i := range data {
 		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
@@ -756,7 +700,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	msgs := make([]sendMessage, 0, len(includeIndices))
 	enqueueTime := time.Now()
 	for _, index := range includeIndices {
-		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, ctx: ctx, callback: callback})
+		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[index], ctx: ctx})
 	}
 
 	if highPrio {
@@ -790,7 +734,7 @@ func (wp *wsPeer) sendPing() bool {
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(context.Background(), mbytes, false, crypto.Digest{}, time.Now(), nil) // todo : we might want to use the callback function to figure a more precise sending time.
+	sent := wp.writeNonBlock(context.Background(), mbytes, false, crypto.Digest{}, time.Now())
 
 	if sent {
 		wp.pingInFlight = true
@@ -813,15 +757,15 @@ func (wp *wsPeer) internalClose(reason disconnectReason) {
 	if atomic.CompareAndSwapInt32(&wp.didSignalClose, 0, 1) {
 		wp.net.peerRemoteClose(wp, reason)
 	}
-	wp.Close()
+	wp.Close(time.Now().Add(peerDisconnectionAckDuration))
 }
 
 // called either here or from above enclosing node logic
-func (wp *wsPeer) Close() {
+func (wp *wsPeer) Close(deadline time.Time) {
 	atomic.StoreInt32(&wp.didSignalClose, 1)
 	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
 		close(wp.closing)
-		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), deadline)
 		if err != nil {
 			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String())
 		}
@@ -833,8 +777,8 @@ func (wp *wsPeer) Close() {
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
-func (wp *wsPeer) CloseAndWait() {
-	wp.Close()
+func (wp *wsPeer) CloseAndWait(deadline time.Time) {
+	wp.Close(deadline)
 	wp.wg.Wait()
 }
 
@@ -934,5 +878,14 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 		delete(wp.clientDataStore, key)
 	} else {
 		wp.clientDataStore[key] = value
+	}
+}
+
+func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
+	err := wp.Unicast(wp.net.ctx, messagesOfInterestEnc, protocol.MsgOfInterestTag)
+	if err != nil {
+		wp.net.log.Errorf("ws send msgOfInterest: %v", err)
+	} else {
+		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
 }

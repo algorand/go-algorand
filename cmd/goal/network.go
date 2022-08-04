@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ var networkTemplateFile string
 var startNode string
 var noImportKeys bool
 var noClean bool
+var devModeOverride bool
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -41,11 +42,11 @@ func init() {
 	networkCmd.MarkPersistentFlagRequired("rootdir")
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
-	networkCreateCmd.MarkFlagRequired("network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
 	networkCreateCmd.MarkFlagRequired("template")
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
+	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
 
 	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
 
@@ -83,9 +84,8 @@ var networkCreateCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		// Make sure target directory doesn't already exist
-		exists := util.FileExists(networkRootDir)
-		if exists {
+		// Make sure target directory does not exist or is empty
+		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
 		}
 
@@ -101,7 +101,7 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)

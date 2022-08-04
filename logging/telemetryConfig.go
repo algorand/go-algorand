@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,10 +24,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/util/uuid"
 )
 
 // TelemetryConfigFilename default file name for telemetry config "logging.config"
@@ -63,7 +63,7 @@ func createTelemetryConfig() TelemetryConfig {
 
 	return TelemetryConfig{
 		Enable:             enable,
-		GUID:               uuid.NewV4().String(),
+		GUID:               uuid.New(),
 		URI:                "",
 		MinLogLevel:        logrus.WarnLevel,
 		ReportHistoryLevel: logrus.WarnLevel,
@@ -105,13 +105,13 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	return err
 }
 
-// getHostName returns the HostName for telemetry (GUID:Name -- :Name is optional if blank)
-func (cfg TelemetryConfig) getHostName() string {
-	hostName := cfg.GUID
+// getHostGUID returns the Host GUID for telemetry (GUID:Name -- :Name is optional if blank)
+func (cfg TelemetryConfig) getHostGUID() string {
+	ret := cfg.GUID
 	if cfg.Enable && len(cfg.Name) > 0 {
-		hostName += ":" + cfg.Name
+		ret += ":" + cfg.Name
 	}
-	return hostName
+	return ret
 }
 
 // getInstanceName allows us to distinguish between multiple instances running on the same node.

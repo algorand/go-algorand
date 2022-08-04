@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ type votersTracker struct {
 	round map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
-	au *accountUpdates
+	ao *onlineAccounts
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -79,9 +79,9 @@ func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams)
 	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) error {
 	vt.l = l
-	vt.au = au
+	vt.ao = ao
 	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
@@ -139,18 +139,17 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.au.onlineTop)
+		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
 		err := tr.LoadTree(onlineAccounts, hdr)
 		if err != nil {
-			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
+			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
 			tr.BroadcastError(err)
 		}
 	}()
-	return
 }
 
-// close waits until all the internal spawned go-rouines are done before returning, allowing clean
+// close waits until all the internal spawned go-routines are done before returning, allowing clean
 // shutdown.
 func (vt *votersTracker) close() {
 	vt.loadWaitGroup.Wait()
@@ -179,7 +178,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
 		_, ok := vt.round[basics.Round(r)]
 		if ok {
-			vt.au.log.Errorf("votersTracker.newBlock: round %d already present", r)
+			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
 			vt.loadTree(hdr)
 		}

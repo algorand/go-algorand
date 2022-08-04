@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -185,5 +186,90 @@ func TestEvalDeltaEqual(t *testing.T) {
 		}},
 	}
 	a.False(d1.Equal(d2))
+
+}
+
+// TestUnchangedAllocBounds ensure that the allocbounds on EvalDelta have not
+// changed.  If they change, EvalDelta.checkAllocBounds must be changed, or at
+// least reconsidered, as well. We must give plenty of thought to whether a new
+// allocound, used by new versions, is compatible with old code. If the change
+// can only show up in new protocol versions, it should be ok. But if we change
+// a bound, it will go into effect immediately, not with Protocol upgrade. So we
+// must be extremely careful that old protocol versions can not emit messages
+// that take advnatage of a new, bigger bound. (Or, if the bound is *lowered* it
+// had better be the case that such messages cannot be emitted in old code.)
+func TestUnchangedAllocBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	delta := &EvalDelta{}
+	max := 256 // Hardcodes config.MaxEvalDeltaAccounts
+	for i := 0; i < max; i++ {
+		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+		msg := delta.MarshalMsg(nil)
+		_, err := delta.UnmarshalMsg(msg)
+		require.NoError(t, err)
+	}
+	delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+	msg := delta.MarshalMsg(nil)
+	_, err := delta.UnmarshalMsg(msg)
+	require.Error(t, err)
+
+	delta = &EvalDelta{}
+	max = 2048 // Hardcodes config.MaxLogCalls, currently MaxAppProgramLen
+	for i := 0; i < max; i++ {
+		delta.Logs = append(delta.Logs, "junk")
+		msg := delta.MarshalMsg(nil)
+		_, err := delta.UnmarshalMsg(msg)
+		require.NoError(t, err)
+	}
+	delta.Logs = append(delta.Logs, "junk")
+	msg = delta.MarshalMsg(nil)
+	_, err = delta.UnmarshalMsg(msg)
+	require.Error(t, err)
+
+	delta = &EvalDelta{}
+	max = 256 // Hardcodes config.MaxInnerTransactionsPerDelta
+	for i := 0; i < max; i++ {
+		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+		msg := delta.MarshalMsg(nil)
+		_, err := delta.UnmarshalMsg(msg)
+		require.NoError(t, err)
+	}
+	delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+	msg = delta.MarshalMsg(nil)
+	_, err = delta.UnmarshalMsg(msg)
+	require.Error(t, err)
+
+	// This one appears wildly conservative. The real max is something like
+	// MaxAppTxnAccounts (4) + 1, since the key must be an index in the static
+	// array of touchable accounts.
+	delta = &EvalDelta{LocalDeltas: make(map[uint64]basics.StateDelta)}
+	max = 2048 // Hardcodes config.MaxEvalDeltaAccounts
+	for i := 0; i < max; i++ {
+		delta.LocalDeltas[uint64(i)] = basics.StateDelta{}
+		msg := delta.MarshalMsg(nil)
+		_, err := delta.UnmarshalMsg(msg)
+		require.NoError(t, err)
+	}
+	delta.LocalDeltas[uint64(max)] = basics.StateDelta{}
+	msg = delta.MarshalMsg(nil)
+	_, err = delta.UnmarshalMsg(msg)
+	require.Error(t, err)
+
+	// This one *might* be wildly conservative. Only 64 keys can be set in
+	// globals, but I don't know what happens if you set and delete 65 (or way
+	// more) keys in a single transaction.
+	delta = &EvalDelta{GlobalDelta: make(basics.StateDelta)}
+	max = 2048 // Hardcodes config.MaxStateDeltaKeys
+	for i := 0; i < max; i++ {
+		delta.GlobalDelta[fmt.Sprintf("%d", i)] = basics.ValueDelta{}
+		msg := delta.MarshalMsg(nil)
+		_, err := delta.UnmarshalMsg(msg)
+		require.NoError(t, err)
+	}
+	delta.GlobalDelta[fmt.Sprintf("%d", max)] = basics.ValueDelta{}
+	msg = delta.MarshalMsg(nil)
+	_, err = delta.UnmarshalMsg(msg)
+	require.Error(t, err)
 
 }

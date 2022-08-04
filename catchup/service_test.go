@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -726,7 +726,7 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 	return basics.OnlineAccountData{}, errors.New("not needed for mockedLedger")
 }
 
-func (m *mockedLedger) IsWritingCatchpointFile() bool {
+func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
 }
 
@@ -791,6 +791,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service

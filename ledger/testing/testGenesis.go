@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package testing
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -88,16 +89,21 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	blk.RewardsPool = testPoolAddr
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
-	addrs := []basics.Address{}
-	keys := []*crypto.SignatureSecrets{}
+	addrs := make([]basics.Address, 0, naccts)
+	keys := make([]*crypto.SignatureSecrets, 0, naccts)
 	accts := make(map[basics.Address]basics.AccountData)
 
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(naccts+2)
 
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
 	for i := 0; i < naccts; i++ {
-		var seed crypto.Seed
-		crypto.RandBytes(seed[:])
+		seed[0] = byte(i)
+		seed[1] = byte(i >> 8)
+		seed[2] = byte(i >> 16)
+		seed[3] = byte(i >> 24)
+
 		key := crypto.GenerateSignatureSecrets(seed)
 		addr := basics.Address(key.SignatureVerifier)
 
@@ -120,6 +126,16 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	accts[testSinkAddr] = sinkdata
 
 	genesisHash := blk.BlockHeader.GenesisHash
+
+	incentivePoolBalanceAtGenesis := pooldata.MicroAlgos
+	var initialRewardsPerRound uint64
+	params := config.Consensus[proto]
+	if params.InitialRewardsRateCalculation {
+		initialRewardsPerRound = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+	} else {
+		initialRewardsPerRound = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	}
+	blk.RewardsRate = initialRewardsPerRound
 
 	return ledgercore.InitState{Block: blk, Accounts: accts, GenesisHash: genesisHash}, addrs, keys
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ func (d *testDbgAdapter) WaitForCompletion() {
 	<-d.done
 }
 
-func (d *testDbgAdapter) SessionStarted(sid string, debugger Control, ch chan Notification) {
+func (d *testDbgAdapter) SessionStarted(_ string, debugger Control, ch chan Notification) {
 	d.debugger = debugger
 	d.notifications = ch
 
@@ -62,7 +62,7 @@ func (d *testDbgAdapter) SessionStarted(sid string, debugger Control, ch chan No
 	d.started = true
 }
 
-func (d *testDbgAdapter) SessionEnded(sid string) {
+func (d *testDbgAdapter) SessionEnded(_ string) {
 	d.ended = true
 }
 
@@ -84,7 +84,8 @@ func (d *testDbgAdapter) eventLoop() {
 				require.NotNil(d.t, n.DebugState.Scratch)
 				require.NotEmpty(d.t, n.DebugState.Disassembly)
 				require.NotEmpty(d.t, n.DebugState.ExecID)
-				d.debugger.SetBreakpoint(n.DebugState.Line + 1)
+				err := d.debugger.SetBreakpoint(n.DebugState.Line + 1)
+				require.NoError(d.t, err)
 			}
 			d.debugger.Resume()
 		}
@@ -100,11 +101,8 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := logic.EvalParams{
-		Proto:    &proto,
-		Debugger: debugger,
-		Txn:      &transactions.SignedTxn{},
-	}
+	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
+	ep.Debugger = debugger
 
 	source := `int 0
 int 1
@@ -112,8 +110,9 @@ int 1
 `
 	ops, err := logic.AssembleStringWithVersion(source, 1)
 	require.NoError(t, err)
+	ep.TxnGroup[0].Lsig.Logic = ops.Program
 
-	_, err = logic.Eval(ops.Program, ep)
+	_, err = logic.EvalSignature(0, ep)
 	require.NoError(t, err)
 
 	da.WaitForCompletion()
@@ -123,9 +122,8 @@ int 1
 	require.Equal(t, 3, da.eventCount) // register, update, complete
 }
 
-func TestSession(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	source := fmt.Sprintf("#pragma version %d\nint 1\ndup\n+\n", logic.LogicVersion)
+func createSessionFromSource(t *testing.T, program string) *session {
+	source := fmt.Sprintf(program, logic.LogicVersion)
 	ops, err := logic.AssembleStringWithVersion(source, logic.LogicVersion)
 	require.NoError(t, err)
 	disassembly, err := logic.Disassemble(ops.Program)
@@ -143,7 +141,14 @@ func TestSession(t *testing.T) {
 	s.programName = "test"
 	s.offsetToLine = ops.OffsetToLine
 	s.pcOffset = pcOffset
-	err = s.SetBreakpoint(2)
+
+	return s
+}
+
+func TestSession(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	s := createSessionFromSource(t, "#pragma version %d\nint 1\ndup\n+\n")
+	err := s.SetBreakpoint(2)
 	require.NoError(t, err)
 
 	ackCount := 0
@@ -157,9 +162,9 @@ func TestSession(t *testing.T) {
 
 	s.Resume()
 	<-done
-
-	require.Equal(t, breakpointLine(2), s.debugConfig.BreakAtLine)
+	require.Equal(t, map[int]struct{}{2: {}}, s.debugConfig.ActiveBreak)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+	require.Equal(t, true, s.debugConfig.isBreak(2, len(s.callStack)))
 	require.Equal(t, 1, ackCount)
 
 	s.SetBreakpointsActive(false)
@@ -168,7 +173,8 @@ func TestSession(t *testing.T) {
 	s.SetBreakpointsActive(true)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
 
-	s.RemoveBreakpoint(2)
+	err = s.RemoveBreakpoint(2)
+	require.NoError(t, err)
 	require.Equal(t, breakpoint{false, false}, s.breakpoints[2])
 
 	go ackFunc()
@@ -176,9 +182,177 @@ func TestSession(t *testing.T) {
 	s.Step()
 	<-done
 
-	require.Equal(t, stepBreak, s.debugConfig.BreakAtLine)
+	require.Equal(t, true, s.debugConfig.StepBreak)
 	require.Equal(t, 2, ackCount)
 
+	data, err := s.GetSourceMap()
+	require.NoError(t, err)
+	require.Greater(t, len(data), 0)
+
+	name, data := s.GetSource()
+	require.NotEmpty(t, name)
+	require.Greater(t, len(data), 0)
+}
+
+// Tests control functions for stepping over subroutines and checks
+// that call stack is inspected correctly.
+func TestCallStackControl(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	newTestCase := func() (*session, chan struct{}, func(), *int) {
+		s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
+
+		ackCount := 0
+		done := make(chan struct{})
+		ackFunc := func() {
+			ackCount++
+			<-s.acknowledged
+			done <- struct{}{}
+
+		}
+
+		return s, done, ackFunc, &ackCount
+	}
+
+	cases := map[string]func(*testing.T){
+		"Check that step over on callsub line returns correct callstack depth": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
+			initialStackDepth := len(s.callStack)
+			s.line.Store(3)
+
+			go ackFunc()
+			s.StepOver()
+			<-done
+
+			require.Equal(t, map[int]struct{}{4: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+
+			require.Equal(t, false, s.debugConfig.NoBreak)
+			require.Equal(t, false, s.debugConfig.StepBreak)
+			require.Equal(t, true, s.debugConfig.StepOutOver)
+
+			require.Equal(t, 1, *ackCount)
+			require.Equal(t, initialStackDepth, len(s.callStack))
+		},
+		"Breakpoint should not trigger at the wrong call stack height": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
+			s.line.Store(3)
+
+			go ackFunc()
+			s.StepOver()
+			<-done
+
+			s.setCallStack([]logic.CallFrame{
+				{FrameLine: 2, LabelName: "lab1"},
+				{FrameLine: 2, LabelName: "lab1"},
+			})
+			require.Equal(t, false, s.debugConfig.isBreak(4, len(s.callStack)))
+
+			s.setCallStack([]logic.CallFrame{
+				{FrameLine: 2, LabelName: "lab1"},
+			})
+			require.Equal(t, true, s.debugConfig.isBreak(4, len(s.callStack)))
+			require.Equal(t, 1, *ackCount)
+		},
+		"Check step over on a non callsub line breaks at next line": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+
+			s.line.Store(4)
+
+			go ackFunc()
+			s.StepOver()
+			<-done
+
+			require.Equal(t, false, s.debugConfig.NoBreak)
+			require.Equal(t, true, s.debugConfig.StepBreak)
+			require.Equal(t, false, s.debugConfig.StepOutOver)
+
+			require.Equal(t, 1, *ackCount)
+			require.Equal(t, 0, len(s.callStack))
+		},
+		"Check that step out when call stack depth is 1 sets breakpoint to the line after frame": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
+			s.line.Store(4)
+
+			go ackFunc()
+			s.StepOut()
+			<-done
+
+			require.Equal(t, map[int]struct{}{3: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[3])
+			require.Equal(t, true, s.debugConfig.isBreak(3, len(s.callStack)-1))
+
+			require.Equal(t, false, s.debugConfig.NoBreak)
+			require.Equal(t, false, s.debugConfig.StepBreak)
+			require.Equal(t, true, s.debugConfig.StepOutOver)
+
+			require.Equal(t, 1, *ackCount)
+			require.Equal(t, 1, len(s.callStack))
+		},
+		"Check that step out when call stack depth is 0 sets NoBreak to true": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+
+			s.setCallStack(nil)
+			s.line.Store(3)
+
+			go ackFunc()
+			s.StepOut()
+			<-done
+
+			require.Equal(t, true, s.debugConfig.NoBreak)
+			require.Equal(t, false, s.debugConfig.StepBreak)
+			require.Equal(t, false, s.debugConfig.StepOutOver)
+
+			require.Equal(t, 1, *ackCount)
+			require.Equal(t, 0, len(s.callStack))
+		},
+		"Check that resume keeps track of every breakpoint": func(t *testing.T) {
+			s, done, ackFunc, ackCount := newTestCase()
+
+			s.line.Store(3)
+			err := s.RemoveBreakpoint(3)
+			require.NoError(t, err)
+			require.Equal(t, breakpoint{false, false}, s.breakpoints[2])
+			err = s.SetBreakpoint(2)
+			require.NoError(t, err)
+			err = s.SetBreakpoint(4)
+			require.NoError(t, err)
+
+			go ackFunc()
+			s.Resume()
+			<-done
+
+			require.Equal(t, map[int]struct{}{2: {}, 4: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+			require.Equal(t, true, s.debugConfig.isBreak(2, len(s.callStack)))
+			require.Equal(t, false, s.debugConfig.isBreak(3, len(s.callStack)))
+			require.Equal(t, true, s.debugConfig.isBreak(4, len(s.callStack)))
+
+			require.Equal(t, false, s.debugConfig.NoBreak)
+			require.Equal(t, false, s.debugConfig.StepBreak)
+			require.Equal(t, false, s.debugConfig.StepOutOver)
+
+			require.Equal(t, 1, *ackCount)
+			require.Equal(t, 0, len(s.callStack))
+		},
+	}
+
+	for name, f := range cases {
+		t.Run(name, f)
+	}
+}
+
+func TestSourceMaps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	s := createSessionFromSource(t, "#pragma version %d\nint 1\n")
+
+	// Source and source map checks
 	data, err := s.GetSourceMap()
 	require.NoError(t, err)
 	require.Greater(t, len(data), 0)

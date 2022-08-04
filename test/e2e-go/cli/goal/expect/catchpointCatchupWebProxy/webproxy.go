@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,7 @@ func main() {
 		mu.Unlock()
 		// prevent requests for block #2 to go through.
 		if strings.HasSuffix(request.URL.String(), "/block/2") {
+			response.Write([]byte("webProxy prevents block 2 from serving"))
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}

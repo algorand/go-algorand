@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -178,7 +178,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.CompactCertRounds = 128
+	proto.CompactCertRounds = 256
 	config.Consensus[ccProto] = proto
 
 	stxn := transactions.SignedTxn{

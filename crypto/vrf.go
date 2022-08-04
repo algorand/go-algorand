@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,9 +45,6 @@ type VRFVerifier = VrfPubkey
 // VRFProof is a deprecated name for VrfProof
 type VRFProof = VrfProof
 
-// VrfPubkeyByteLength is the size, in bytes, of a VRF public key.
-const VrfPubkeyByteLength = 32
-
 // VRFSecrets is a wrapper for a VRF keypair. Use *VrfPrivkey instead
 type VRFSecrets struct {
 	_struct struct{} `codec:""`
@@ -71,7 +68,7 @@ type (
 	// Specifically, we use a 64-byte ed25519 private key (the latter 32-bytes are the precomputed public key)
 	VrfPrivkey [64]byte
 	// A VrfPubkey is a public key that can be used to verify VRF proofs.
-	VrfPubkey [VrfPubkeyByteLength]byte
+	VrfPubkey [32]byte
 	// A VrfProof for a message can be generated with a secret key and verified against a public key, like a signature.
 	// Proofs are malleable, however, for a given message and public key, the VRF output that can be computed from a proof is unique.
 	VrfProof [80]byte
@@ -111,7 +108,7 @@ func (sk VrfPrivkey) proveBytes(msg []byte) (proof VrfProof, ok bool) {
 // Prove constructs a VRF Proof for a given Hashable.
 // ok will be false if the private key is malformed.
 func (sk VrfPrivkey) Prove(message Hashable) (proof VrfProof, ok bool) {
-	return sk.proveBytes(hashRep(message))
+	return sk.proveBytes(HashRep(message))
 }
 
 // Hash converts a VRF proof to a VRF output without verifying the proof.
@@ -137,5 +134,5 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 // However, given a public key and message, all valid proofs will yield the same output.
 // Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
 func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
-	return pk.verifyBytes(p, hashRep(message))
+	return pk.verifyBytes(p, HashRep(message))
 }

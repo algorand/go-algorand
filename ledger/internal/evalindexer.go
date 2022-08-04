@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,11 +46,6 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
 	}
-
-	// here, in the EvalForIndexer, we don't want to call finalValidation(). This would
-	// skip the calculation of the account totals in the state delta, which is a serious
-	// issue if it were to be used by algod, but it's perfectly fine for the indexer since
-	// it doesn't track any totals and therefore cannot calculate the new totals.
 
 	return eval.state.deltas(), eval.block.Payset, nil
 }

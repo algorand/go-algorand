@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,32 +37,35 @@ type cdtState struct {
 	// immutable content
 	disassembly string
 	proto       *config.ConsensusParams
-	txnGroup    []transactions.SignedTxn
+	txnGroup    []transactions.SignedTxnWithAD
 	groupIndex  int
 	globals     []basics.TealValue
 
 	// mutable program state
-	mu      deadlock.Mutex
-	stack   []basics.TealValue
-	scratch []basics.TealValue
-	pc      atomicInt
-	line    atomicInt
-	err     atomicString
+	mu        deadlock.Mutex
+	stack     []basics.TealValue
+	scratch   []basics.TealValue
+	pc        atomicInt
+	line      atomicInt
+	err       atomicString
+	callStack []logic.CallFrame
 	AppState
 
 	// debugger states
-	lastAction      atomicString
-	pauseOnError    atomicBool
-	pauseOnCompeted atomicBool
-	completed       atomicBool
+	lastAction       atomicString
+	pauseOnError     atomicBool
+	pauseOnCompleted atomicBool
+	completed        atomicBool
 }
 
 type cdtStateUpdate struct {
-	stack   []basics.TealValue
-	scratch []basics.TealValue
-	pc      int
-	line    int
-	err     string
+	stack        []basics.TealValue
+	scratch      []basics.TealValue
+	pc           int
+	line         int
+	err          string
+	opcodeBudget int
+	callStack    []logic.CallFrame
 
 	AppState
 }
@@ -90,7 +93,7 @@ var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.FreezeAssetAccount:  addressHint,
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxnWithAD, groupIndex int, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
@@ -107,33 +110,9 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.stack = state.stack
 	s.scratch = state.scratch
 	s.AppState = state.AppState
-}
-
-const localScopeObjID = "localScopeObjId"
-const globalScopeObjID = "globalScopeObjID"
-const globalsObjID = "globalsObjID"
-const txnObjID = "txnObjID"
-const gtxnObjID = "gtxnObjID"
-const stackObjID = "stackObjID"
-const scratchObjID = "scratchObjID"
-const tealErrorID = "tealErrorID"
-const appGlobalObjID = "appGlobalObjID"
-const appLocalsObjID = "appLocalsObjID"
-const txnArrayFieldObjID = "txnArrayField"
-
-type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
-
-var objectDescMap = map[string]objectDescFn{
-	globalScopeObjID: makeGlobalScope,
-	localScopeObjID:  makeLocalScope,
-	globalsObjID:     makeGlobals,
-	txnObjID:         makeTxn,
-	gtxnObjID:        makeTxnGroup,
-	stackObjID:       makeStack,
-	scratchObjID:     makeScratch,
-	tealErrorID:      makeTealError,
-	appGlobalObjID:   makeAppGlobalState,
-	appLocalsObjID:   makeAppLocalsState,
+	// We need to dynamically override opcodeBudget with the proper value each step.
+	s.globals[logic.OpcodeBudget].Uint = uint64(state.opcodeBudget)
+	s.callStack = state.callStack
 }
 
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {
@@ -145,7 +124,31 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return
 			}
 			if len(s.txnGroup) > 0 {
-				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
+				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, false, preview), nil
+			}
+		} else if parentObjID, idxs, ok := decodeNestedObjID(objID); ok {
+			var itxn transactions.SignedTxnWithAD
+			itxns := s.innerTxns
+
+			// Traverse to the itxn we want using the idxs.
+			for _, idx := range idxs {
+				if idx >= len(itxns) || idx < 0 {
+					err = fmt.Errorf("invalid group idx: %d", idx)
+					return
+				}
+				itxn = itxns[idx]
+				itxns = itxn.EvalDelta.InnerTxns
+			}
+
+			switch parentObjID {
+			case logObjIDPrefix:
+				logs := itxn.EvalDelta.Logs
+				return makeLogsSlice(logs, 0, len(logs)-1, preview), nil
+			case innerTxnObjIDPrefix:
+				return makeInnerTxnImpl(&itxn, idxs, preview), nil
+			case innerNestedTxnObjIDPrefix:
+				return makeInnerTxnsSlice(itxns, idxs, 0, len(itxns)-1, preview), nil
+			default:
 			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
@@ -357,19 +360,39 @@ func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	return result
 }
 
-func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
+// These fields should not be included in any transaction.
+func illegalTxnField(field int) bool {
+	return field == int(logic.FirstValidTime) ||
+		field == int(logic.Accounts) ||
+		field == int(logic.ApplicationArgs) ||
+		field == int(logic.Assets) ||
+		field == int(logic.Applications) ||
+		field == int(logic.Type) || // Use TypeEnum field instead
+		field == int(logic.Logs) ||
+		field == int(logic.NumLogs) ||
+		field == int(logic.LastLog) ||
+		field == int(logic.CreatedApplicationID) ||
+		field == int(logic.CreatedAssetID)
+}
+
+// These fields should not be included in inner level transactions.
+func illegalInnerTxnField(field int) bool {
+	return illegalTxnField(field) ||
+		field == int(logic.GroupIndex) ||
+		field == int(logic.TxID)
+}
+
+func prepareTxn(txn *transactions.Transaction, groupIndex int, inner bool) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for field, name := range logic.TxnFieldNames {
-		if field == int(logic.FirstValidTime) ||
-			field == int(logic.Accounts) ||
-			field == int(logic.ApplicationArgs) ||
-			field == int(logic.Assets) ||
-			field == int(logic.Applications) {
+		if !inner && illegalTxnField(field) {
+			continue
+		} else if inner && illegalInnerTxnField(field) {
 			continue
 		}
 		var value string
 		var valType string
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0, inner)
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
@@ -430,6 +453,16 @@ func prepareArray(array []basics.TealValue) []fieldDesc {
 	return result
 }
 
+func prepareStringArray(array []string) []fieldDesc {
+	result := make([]fieldDesc, 0)
+	for i := 0; i < len(array); i++ {
+		value := array[i]
+		name := strconv.Itoa(i)
+		result = append(result, fieldDesc{name, value, "string"})
+	}
+	return result
+}
+
 func makePreview(fields []fieldDesc) (prop []cdt.RuntimePropertyPreview) {
 	prop = make([]cdt.RuntimePropertyPreview, 0, len(fields))
 	for _, field := range fields {
@@ -456,10 +489,10 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 	return
 }
 
-func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.RuntimeObjectPreview {
+func makeTxnPreview(txnGroup []transactions.SignedTxnWithAD, groupIndex int) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
-		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
+		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex, false)
 		prop = makePreview(fields)
 	}
 
@@ -467,7 +500,7 @@ func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.Runti
 	return p
 }
 
-func makeGtxnPreview(txnGroup []transactions.SignedTxn) cdt.RuntimeObjectPreview {
+func makeGtxnPreview(txnGroup []transactions.SignedTxnWithAD) cdt.RuntimeObjectPreview {
 	prop := makeIntPreview(len(txnGroup))
 	p := cdt.RuntimeObjectPreview{
 		Type:        "object",
@@ -499,6 +532,25 @@ func makeArrayPreview(array []basics.TealValue) cdt.RuntimeObjectPreview {
 	return p
 }
 
+func makeStringArrayPreview(array []string) cdt.RuntimeObjectPreview {
+	fields := prepareStringArray(array)
+
+	length := len(fields)
+	overflow := length > maxArrayPreviewLength
+	if overflow {
+		length = maxArrayPreviewLength
+	}
+	prop := makePreview(fields[:length])
+
+	p := cdt.RuntimeObjectPreview{
+		Type:        "object",
+		Subtype:     "array",
+		Description: fmt.Sprintf("Array(%d)", len(array)),
+		Overflow:    overflow,
+		Properties:  prop}
+	return p
+}
+
 func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 	fields := prepareGlobals(globals)
 	prop := makePreview(fields)
@@ -511,8 +563,6 @@ func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 	return p
 }
 
-var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
-
 func encodeGroupTxnID(groupIndex int) string {
 	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
 }
@@ -524,6 +574,53 @@ func decodeGroupTxnID(objID string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func encodeNestedObjID(groupIndexes []int, prefix string) string {
+	encodedElements := []string{prefix}
+	for _, i := range groupIndexes {
+		encodedElements = append(encodedElements, strconv.Itoa(i))
+	}
+	encodedItxnID := strings.Join(encodedElements, "_")
+	return encodedItxnID
+}
+
+func decodeNestedObjID(objID string) (string, []int, bool) {
+	var prefix string
+	parsedIDs := make([]int, 0)
+
+	if strings.HasPrefix(objID, logObjIDPrefix) {
+		prefix = logObjIDPrefix
+	} else if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
+		prefix = innerTxnObjIDPrefix
+	} else if strings.HasPrefix(objID, innerNestedTxnObjIDPrefix) {
+		prefix = innerNestedTxnObjIDPrefix
+	} else {
+		return "", []int{}, false
+	}
+
+	groupIDs := objID[len(prefix)+1:]
+	parts := strings.Split(groupIDs, "_")
+	for _, id := range parts {
+		if val, err := strconv.ParseInt(id, 10, 32); err == nil {
+			parsedIDs = append(parsedIDs, int(val))
+		} else {
+			return "", []int{}, false
+		}
+	}
+	return prefix, parsedIDs, true
+}
+
+func encodeLogsID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, logObjIDPrefix)
+}
+
+func encodeInnerTxnID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, innerTxnObjIDPrefix)
+}
+
+func encodeNestedInnerTxnID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, innerNestedTxnObjIDPrefix)
 }
 
 func encodeArrayLength(objID string) string {
@@ -564,8 +661,6 @@ func decodeArraySlice(objID string) (string, int, int, bool) {
 	return "", 0, 0, false
 }
 
-var appGlobalObjIDPrefix = fmt.Sprintf("%s_", appGlobalObjID)
-
 func encodeAppGlobalAppID(key string) string {
 	return appGlobalObjIDPrefix + key
 }
@@ -579,8 +674,6 @@ func decodeAppGlobalAppID(objID string) (uint64, bool) {
 	return 0, false
 }
 
-var appLocalsObjIDPrefix = fmt.Sprintf("%s_", appLocalsObjID)
-
 func encodeAppLocalsAddr(addr string) string {
 	return appLocalsObjIDPrefix + addr
 }
@@ -591,8 +684,6 @@ func decodeAppLocalsAddr(objID string) (string, bool) {
 	}
 	return "", false
 }
-
-var appLocalAppIDPrefix = fmt.Sprintf("%s__", appLocalsObjID)
 
 func encodeAppLocalsAppID(addr string, appID string) string {
 	return fmt.Sprintf("%s%s_%s", appLocalAppIDPrefix, addr, appID)
@@ -608,8 +699,6 @@ func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
 	}
 	return "", 0, false
 }
-
-var txnArrayFieldPrefix = fmt.Sprintf("%s__", txnArrayFieldObjID)
 
 func encodeTxnArrayField(groupIndex int, field int) string {
 	return fmt.Sprintf("%s%d_%d", txnArrayFieldPrefix, groupIndex, field)
@@ -650,6 +739,8 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 	gtxn := makeArray("gtxn", len(s.txnGroup), gtxnObjID)
 	stack := makeArray("stack", len(s.stack), stackObjID)
 	scratch := makeArray("scratch", len(s.scratch), scratchObjID)
+	logs := makeArray("logs", len(s.logs), logsObjID)
+	innerTxns := makeArray("innerTxns", len(s.innerTxns), innerTxnsObjID)
 	if preview {
 		txnPreview := makeTxnPreview(s.txnGroup, s.groupIndex)
 		if len(txnPreview.Properties) > 0 {
@@ -665,6 +756,14 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		if len(scratchPreview.Properties) > 0 {
 			scratch.Value.Preview = &scratchPreview
 		}
+		logsPreview := makeStringArrayPreview(s.logs)
+		if len(logsPreview.Properties) > 0 {
+			logs.Value.Preview = &logsPreview
+		}
+		innerTxnsPreview := makeGtxnPreview(s.innerTxns)
+		if len(innerTxnsPreview.Properties) > 0 {
+			innerTxns.Value.Preview = &innerTxnsPreview
+		}
 	}
 
 	pc := makePrimitive(fieldDesc{
@@ -678,6 +777,8 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		gtxn,
 		stack,
 		scratch,
+		logs,
+		innerTxns,
 	}
 
 	if !s.AppState.empty() {
@@ -706,14 +807,14 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
-		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
+		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, false, preview)
 	}
 	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	fields := prepareTxn(txn, groupIndex)
+func makeTxnImpl(txn *transactions.Transaction, groupIndex int, inner bool, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	fields := prepareTxn(txn, groupIndex, inner)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
 	}
@@ -750,9 +851,35 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	return
 }
 
+func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	groupIndex := groupIndexes[len(groupIndexes)-1]
+	desc = makeTxnImpl(&txn.Txn, groupIndex, true, preview)
+
+	logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
+	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
+	createdApplicationID := fieldDesc{
+		Name:  "CreatedApplicationID",
+		Value: strconv.FormatUint(uint64(txn.ApplicationID), 10),
+		Type:  "number",
+	}
+	configAsset := fieldDesc{
+		Name:  "CreatedAssetID",
+		Value: strconv.FormatUint(uint64(txn.ConfigAsset), 10),
+		Type:  "number",
+	}
+	desc = append(
+		desc,
+		logs,
+		innerTxns,
+		makePrimitive(createdApplicationID),
+		makePrimitive(configAsset),
+	)
+	return
+}
+
 func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
 	for i := 0; i < length; i++ {
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i), false)
 		if err != nil {
 			return []fieldDesc{}
 		}
@@ -913,6 +1040,41 @@ func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.R
 
 func makeScratch(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
+}
+
+func makeLogsSlice(logs []string, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	logs = logs[from : to+1]
+	fields := prepareStringArray(logs)
+	for _, field := range fields {
+		desc = append(desc, makePrimitive(field))
+	}
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(logs)), Type: "number"}
+	desc = append(desc, makePrimitive(field))
+	return
+}
+
+func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	return makeLogsSlice(s.logs, 0, len(s.logs)-1, preview)
+}
+
+func makeInnerTxnsSlice(stxns []transactions.SignedTxnWithAD, groupIndexes []int, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	stxns = stxns[from : to+1]
+	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(stxns))
+	for i := 0; i < len(stxns); i++ {
+		groupIDs := groupIndexes
+		groupIDs = append(groupIDs, i)
+		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(groupIDs))
+		if preview {
+			txnPreview := makeTxnPreview(stxns, i)
+			item.Value.Preview = &txnPreview
+		}
+		desc = append(desc, item)
+	}
+	return
+}
+
+func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	return makeInnerTxnsSlice(s.innerTxns, []int{}, 0, len(s.innerTxns)-1, preview)
 }
 
 func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {

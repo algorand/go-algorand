@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,6 +104,12 @@ type MockDebugControl struct {
 }
 
 func (c *MockDebugControl) Step() {
+}
+
+func (c *MockDebugControl) StepOver() {
+}
+
+func (c *MockDebugControl) StepOut() {
 }
 
 func (c *MockDebugControl) Resume() {

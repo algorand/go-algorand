@@ -25,7 +25,7 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
-make gen
+make gen SHORT_PART_PERIOD=1
 
 function runGoFmt() {
     unformatted=$(gofmt -l .)
@@ -56,7 +56,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+make vet
 
 echo "Running gofmt..."
 runGoFmt
@@ -78,17 +78,21 @@ GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
 echo "Updating TEAL Specs"
+touch data/transactions/logic/fields_string.go # ensure rebuild
 make -C data/transactions/logic
 
 echo "Regenerate REST server"
 touch daemon/algod/api/algod.oas2.json
 make -C daemon/algod/api generate
 
+echo "Regenerate msgp files"
+make msgp
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?
    git status -s
-   git diff
+   git --no-pager diff
    exit 1
 else
    echo Enlistment is clean

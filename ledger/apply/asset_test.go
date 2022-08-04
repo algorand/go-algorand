@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,22 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
+	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
+	for id, val := range m {
+		res[id] = val
+	}
+	return res
+}
+
+func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
+	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
+	for id, val := range m {
+		res[id] = val
+	}
+	return res
+}
 
 func TestAssetTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)

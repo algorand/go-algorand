@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -453,6 +453,11 @@ func (t *demuxTester) Encode() []byte {
 func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
 	// we don't care about this function in this test.
 	return t, nil
+}
+
+// implement timers.Clock
+func (t *demuxTester) Since() time.Duration {
+	return 0
 }
 
 // implement Ledger

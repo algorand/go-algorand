@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -101,6 +101,51 @@ func (genesis Genesis) ID() string {
 	return string(genesis.Network) + "-" + genesis.SchemaID
 }
 
+// Hash is the genesis hash.
+func (genesis Genesis) Hash() crypto.Digest {
+	return crypto.HashObj(genesis)
+}
+
+// Balances returns the genesis account balances.
+func (genesis Genesis) Balances() (GenesisBalances, error) {
+	genalloc := make(map[basics.Address]basics.AccountData)
+	for _, entry := range genesis.Allocation {
+		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
+		if err != nil {
+			return GenesisBalances{}, fmt.Errorf("cannot parse genesis addr %s: %w", entry.Address, err)
+		}
+
+		_, present := genalloc[addr]
+		if present {
+			return GenesisBalances{}, fmt.Errorf("repeated allocation to %s", entry.Address)
+		}
+
+		genalloc[addr] = entry.State
+	}
+
+	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse fee sink addr %s: %w", genesis.FeeSink, err)
+	}
+
+	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse rewards pool addr %s: %w", genesis.RewardsPool, err)
+	}
+
+	return MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
+}
+
+// Block computes the genesis block.
+func (genesis Genesis) Block() (Block, error) {
+	genBal, err := genesis.Balances()
+	if err != nil {
+		return Block{}, err
+	}
+
+	return MakeGenesisBlock(genesis.Proto, genBal, genesis.ID(), genesis.Hash())
+}
+
 // A GenesisAllocation object represents an allocation of algos to
 // an address in the genesis block.  Address is the checksummed
 // short address.  Comment is a note about what this address is
@@ -164,13 +209,13 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 
 	blk := Block{
 		BlockHeader: BlockHeader{
-			Round:        0,
-			Branch:       BlockHash{},
-			Seed:         committee.Seed(genesisHash),
-			TxnRoot:      transactions.Payset{}.CommitGenesis(),
-			TimeStamp:    genesisBal.Timestamp,
-			GenesisID:    genesisID,
-			RewardsState: genesisRewardsState,
+			Round:          0,
+			Branch:         BlockHash{},
+			Seed:           committee.Seed(genesisHash),
+			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}},
+			TimeStamp:      genesisBal.Timestamp,
+			GenesisID:      genesisID,
+			RewardsState:   genesisRewardsState,
 			UpgradeState: UpgradeState{
 				CurrentProtocol: proto,
 			},

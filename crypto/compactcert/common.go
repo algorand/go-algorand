@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,12 +29,12 @@ import (
 type coinChoice struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	J            uint64        `codec:"j"`
-	SignedWeight uint64        `codec:"sigweight"`
-	ProvenWeight uint64        `codec:"provenweight"`
-	Sigcom       crypto.Digest `codec:"sigcom"`
-	Partcom      crypto.Digest `codec:"partcom"`
-	MsgHash      crypto.Digest `codec:"msghash"`
+	J            uint64               `codec:"j"`
+	SignedWeight uint64               `codec:"sigweight"`
+	ProvenWeight uint64               `codec:"provenweight"`
+	Sigcom       crypto.GenericDigest `codec:"sigcom"`
+	Partcom      crypto.GenericDigest `codec:"partcom"`
+	MsgHash      crypto.GenericDigest `codec:"msghash"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

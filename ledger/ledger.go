@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,14 +72,17 @@ type Ledger struct {
 
 	genesisAccounts map[basics.Address]basics.AccountData
 
-	genesisProto config.ConsensusParams
+	genesisProto        config.ConsensusParams
+	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
-	accts    accountUpdates
-	txTail   txTail
-	bulletin bulletin
-	notifier blockNotifier
-	metrics  metricsTracker
+	accts       accountUpdates
+	acctsOnline onlineAccounts
+	catchpoint  catchpointTracker
+	txTail      txTail
+	bulletin    bulletin
+	notifier    blockNotifier
+	metrics     metricsTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -90,6 +93,8 @@ type Ledger struct {
 	verifiedTxnCache verify.VerifiedTransactionCache
 
 	cfg config.Local
+
+	dbPathPrefix string
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -112,10 +117,12 @@ func OpenLedger(
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
+		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
+		dbPathPrefix:                   dbPathPrefix,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -153,8 +160,6 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg, dbPathPrefix)
-
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -188,28 +193,34 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// init tracker db
-	trackerDBInitParams, err := trackerDBInitialize(l, l.accts.catchpointEnabled(), l.accts.dbDirectory)
+	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
 		return err
 	}
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,    // update the balances
-		&l.txTail,   // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin, // provide closed channel signaling support for completed rounds
-		&l.notifier, // send OnNewBlocks to subscribers
-		&l.metrics,  // provides metrics reporting support
+		&l.accts,       // update the balances
+		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline, // update online account balances history
+		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,    // provide closed channel signaling support for completed rounds
+		&l.notifier,    // send OnNewBlocks to subscribers
+		&l.metrics,     // provides metrics reporting support
 	}
 
-	err = l.trackers.initialize(&l.accts, l, trackers)
+	l.accts.initialize(l.cfg)
+	l.acctsOnline.initialize(l.cfg)
+	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
+
+	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
 		return err
 	}
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
 
@@ -271,7 +282,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 			// before launch, we used to have both blocks and tracker
 			// state in a single SQLite db file. We don't have that anymore,
 			// and we want to fail when that's the case.
-			err = fmt.Errorf("A single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+			err = fmt.Errorf("a single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
 			return
 		}
 	}
@@ -399,17 +410,7 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		minToSave = 0
 	}
 
-	l.trackers.scheduleCommit(r)
-
 	return minToSave
-}
-
-func (l *Ledger) waitAccountsWriting() {
-	l.trackers.waitAccountsWriting()
-}
-
-func (l *Ledger) scheduleCommit(rnd basics.Round) {
-	l.trackers.scheduleCommit(rnd)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
@@ -417,7 +418,7 @@ func (l *Ledger) scheduleCommit(rnd basics.Round) {
 func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetLastCatchpointLabel()
+	return l.catchpoint.GetLastCatchpointLabel()
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
@@ -443,7 +444,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.voters.getVoters(rnd)
+	return l.acctsOnline.voters.getVoters(rnd)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -464,20 +465,66 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
-// Lookup uses the accounts tracker to return the account state for a
-// given account in a particular round.  The account values reflect
-// the changes of all blocks up to and including rnd.
-func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+// LookupLatest uses the accounts tracker to return the account state (including
+// resources) for a given address, for the latest round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupWithRewards(rnd, addr)
+	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+	return data, rnd, withoutRewards, nil
+}
+
+// LookupAccount uses the accounts tracker to return the account state (without
+// resources) for a given address, for a given round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+// The returned AccountData contains the rewards applied up to that round number,
+// and the additional withoutRewards return value contains the value before rewards
+// were applied.
+func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, withoutRewards basics.MicroAlgos, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	data, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
+	if err != nil {
+		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
-	return data, nil
+	// Intentionally apply (pending) rewards up to rnd, remembering the old value
+	withoutRewards = data.MicroAlgos
+	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
+	return data, rnd, withoutRewards, nil
+}
+
+// LookupApplication loads an application resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+// LookupAsset loads an asset resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+// lookupResource loads a resource that matches the request parameters from the accounts update
+func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	res, _, err := l.accts.LookupResource(rnd, addr, aidx, ctype)
+	if err != nil {
+		return ledgercore.AccountResource{}, err
+	}
+
+	return res, nil
 }
 
 // LookupAgreement returns account data used by agreement.
@@ -486,26 +533,28 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupWithRewards(rnd, addr)
+	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}
 
-	return data.OnlineAccountData(), nil
+	return data, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	var result ledgercore.AccountData
+
+	result, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
-		return basics.AccountData{}, basics.Round(0), err
+		return ledgercore.AccountData{}, basics.Round(0), err
 	}
 
-	return data, validThrough, nil
+	return result, validThrough, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
@@ -519,11 +568,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	totals, err := l.accts.Totals(rnd)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-	return totals.Online.Money, nil
+	return l.acctsOnline.OnlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -585,8 +630,14 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 
 	updates, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
+		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+			return ledgercore.BlockInLedgerError{
+				LastRound: errNSBE.EvaluatorRound,
+				NextRound: errNSBE.LatestRound + 1}
+		}
 		return err
 	}
+	updates.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback)
 	vb := ledgercore.MakeValidatedBlock(blk, updates)
 
 	return l.AddValidatedBlock(vb, cert)
@@ -609,7 +660,7 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	}
 	l.headerCache.Put(blk.Round(), blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
-	l.log.Debugf("added blk %d", blk.Round())
+	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
 }
 
@@ -640,9 +691,35 @@ func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return l.genesisProto
 }
 
+// GenesisProtoVersion returns the initial protocol version for this ledger.
+func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
+}
+
 // GenesisAccounts returns initial accounts for this ledger.
 func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
+}
+
+// BlockHdrCached returns the block header if available.
+// Expected availability range is [Latest - MaxTxnLife, Latest]
+// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+// and currently set to 1.
+// Explanation:
+// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+// and because a txn is alive when the current round <= txn.LastValid
+// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		err = fmt.Errorf("no cached header data for round %d", rnd)
+	}
+	return hdr, err
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
@@ -658,7 +735,7 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetCatchpointStream(round)
+	return l.catchpoint.GetCatchpointStream(round)
 }
 
 // ledgerForTracker methods
@@ -683,12 +760,13 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger int
 	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
-// to avoid memory pressure until the catchpoint file writing is complete.
-func (l *Ledger) IsWritingCatchpointFile() bool {
+// IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
+// The function is used by the catchup service to avoid memory pressure until the
+// catchpoint data file writing is complete.
+func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.IsWritingCatchpointFile()
+	return l.catchpoint.IsWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache

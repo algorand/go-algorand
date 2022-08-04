@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,8 +24,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -74,14 +76,32 @@ var partGenerateCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
-		partkey, err := account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
+		fmt.Println("Please stand by while generating keys. This might take a few minutes...")
+
+		var partkey account.PersistedParticipation
+		participationGen := func() {
+			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
+		}
+
+		util.RunFuncWithSpinningCursor(participationGen)
+
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
+			err = os.Remove(partKeyfile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to cleanup the database file %s: %v\n", partKeyfile, err)
+			}
 			os.Exit(1)
 		}
 
+		fmt.Println("Participation key generation successful")
+
 		printPartkey(partkey.Participation)
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with algokey v" + version.String())
 	},
 }
 
@@ -97,6 +117,7 @@ var partInfoCmd = &cobra.Command{
 		}
 
 		partkey, err := account.RestoreParticipation(partdb)
+		partdb.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
@@ -123,6 +144,7 @@ var partReparentCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
 		partkey, err := account.RestoreParticipation(partdb)
 		if err != nil {
@@ -146,6 +168,9 @@ func printPartkey(partkey account.Participation) {
 	fmt.Printf("Parent address:    %s\n", partkey.Parent.String())
 	fmt.Printf("VRF public key:    %s\n", base64.StdEncoding.EncodeToString(partkey.VRF.PK[:]))
 	fmt.Printf("Voting public key: %s\n", base64.StdEncoding.EncodeToString(partkey.Voting.OneTimeSignatureVerifier[:]))
+	if partkey.StateProofSecrets != nil && !partkey.StateProofSecrets.GetVerifier().IsEmpty() {
+		fmt.Printf("State proof key:   %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier()[:]))
+	}
 	fmt.Printf("First round:       %d\n", partkey.FirstValid)
 	fmt.Printf("Last round:        %d\n", partkey.LastValid)
 	fmt.Printf("Key dilution:      %d\n", partkey.KeyDilution)
@@ -157,11 +182,12 @@ func init() {
 	partCmd.AddCommand(partGenerateCmd)
 	partCmd.AddCommand(partInfoCmd)
 	partCmd.AddCommand(partReparentCmd)
+	partCmd.AddCommand(keyregCmd)
 
 	partGenerateCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
 	partGenerateCmd.Flags().Uint64Var(&partFirstRound, "first", 0, "First round for participation key")
 	partGenerateCmd.Flags().Uint64Var(&partLastRound, "last", 0, "Last round for participation key")
-	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution (default to sqrt of validity window)")
+	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
 	partGenerateCmd.Flags().StringVar(&partParent, "parent", "", "Address of parent account")
 	partGenerateCmd.MarkFlagRequired("first")
 	partGenerateCmd.MarkFlagRequired("last")

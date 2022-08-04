@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -136,5 +137,29 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	bigJumpID.Batch++
 	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
+	}
+}
+
+func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
+	for _, enabled := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
+			// generate a bunch of signatures
+			c := GenerateOneTimeSignatureSecrets(0, 1000)
+			sigs := make([]OneTimeSignature, b.N)
+			ids := make([]OneTimeSignatureIdentifier, b.N)
+			msg := randString()
+
+			for i := 0; i < b.N; i++ {
+				ids[i] = randID()
+				sigs[i] = c.Sign(ids[i], msg)
+			}
+
+			v := c.OneTimeSignatureVerifier
+			// verify them
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				v.Verify(ids[i], msg, sigs[i])
+			}
+		})
 	}
 }

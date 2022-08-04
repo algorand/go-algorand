@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,11 +136,9 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
-	require.NoError(b, err)
+	dbTempDir := b.TempDir()
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
 
 	genesisInitState := getInitState()
 
@@ -153,7 +149,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
 	creator := basics.Address{}
-	_, err = rand.Read(creator[:])
+	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
 	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 
@@ -290,6 +286,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
 					err = eval.Transaction(stxn, transactions.ApplyData{})
+					require.NoError(b, err)
 				}
 				break
 			}
@@ -404,7 +401,7 @@ func init() {
 
 	params = testParams{
 		testType: "app",
-		name:     fmt.Sprintf("int-1"),
+		name:     "int-1",
 		program:  ops.Program,
 	}
 	testCases[params.name] = params
@@ -412,7 +409,7 @@ func init() {
 	// Int 1 many apps
 	params = testParams{
 		testType: "app",
-		name:     fmt.Sprintf("int-1-many-apps"),
+		name:     "int-1-many-apps",
 		program:  ops.Program,
 		numApps:  10,
 	}

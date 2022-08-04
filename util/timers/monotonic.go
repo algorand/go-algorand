@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ type Monotonic struct {
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
-func MakeMonotonicClock(zero time.Time) WallClock {
+func MakeMonotonicClock(zero time.Time) Clock {
 	return &Monotonic{
 		zero: zero,
 	}
@@ -90,10 +90,4 @@ func (m *Monotonic) String() string {
 // Since returns the time that has passed between the time the clock was last zeroed out and now
 func (m *Monotonic) Since() time.Duration {
 	return time.Since(m.zero)
-}
-
-// DeadlineMonitorAt returns a DeadlineMonitor that expires after the provided delta time from zero has passed.
-// The method must be called after Zero; otherwise, the context's behavior is undefined.
-func (m *Monotonic) DeadlineMonitorAt(at time.Duration) DeadlineMonitor {
-	return MakeMonotonicDeadlineMonitor(m, at)
 }

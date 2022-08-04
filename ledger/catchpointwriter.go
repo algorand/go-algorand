@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,20 +18,16 @@ package ledger
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
-	"hash"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -39,9 +35,6 @@ const (
 	// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
-
-	// catchpointFileVersion is the catchpoint file version
-	catchpointFileVersion = uint64(0200)
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -49,128 +42,98 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
-	ctx               context.Context
-	hasher            hash.Hash
-	innerWriter       io.WriteCloser
-	tx                *sql.Tx
-	filePath          string
-	file              *os.File
-	gzip              *gzip.Writer
-	tar               *tar.Writer
-	headerWritten     bool
-	balancesOffset    int
-	balancesChunk     catchpointFileBalancesChunk
-	fileHeader        *CatchpointFileHeader
-	balancesChunkNum  uint64
-	writtenBytes      int64
-	blocksRound       basics.Round
-	blockHeaderDigest crypto.Digest
-	label             string
-	accountsIterator  encodedAccountsBatchIter
+	ctx              context.Context
+	tx               *sql.Tx
+	filePath         string
+	totalAccounts    uint64
+	totalChunks      uint64
+	file             *os.File
+	tar              *tar.Writer
+	compressor       io.WriteCloser
+	balancesChunk    catchpointFileBalancesChunkV6
+	balancesChunkNum uint64
+	writtenBytes     int64
+	biggestChunkLen  uint64
+	accountsIterator encodedAccountsBatchIter
 }
 
-type encodedBalanceRecord struct {
+type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
-// CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
-// we need it to be public, as it's being decoded externally by the catchpointdump utility.
-type CatchpointFileHeader struct {
+type catchpointFileBalancesChunkV5 struct {
+	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+}
+
+// SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
+// encoding the resources map below.
+type SortUint64 = basics.SortUint64
+
+type encodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version           uint64                   `codec:"version"`
-	BalancesRound     basics.Round             `codec:"balancesRound"`
-	BlocksRound       basics.Round             `codec:"blocksRound"`
-	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64                   `codec:"accountsCount"`
-	TotalChunks       uint64                   `codec:"chunksCount"`
-	Catchpoint        string                   `codec:"catchpoint"`
-	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
+	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
+	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
-type catchpointFileBalancesChunk struct {
-	_struct  struct{}               `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+type catchpointFileBalancesChunkV6 struct {
+	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
-	return &catchpointWriter{
-		ctx:               ctx,
-		filePath:          filePath,
-		tx:                tx,
-		blocksRound:       blocksRound,
-		blockHeaderDigest: blockHeaderDigest,
-		label:             label,
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*catchpointWriter, error) {
+	totalAccounts, err := totalAccounts(ctx, tx)
+	if err != nil {
+		return nil, err
 	}
+
+	err = os.MkdirAll(filepath.Dir(filePath), 0700)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	compressor, err := catchpointStage1Encoder(file)
+	if err != nil {
+		return nil, err
+	}
+	tar := tar.NewWriter(compressor)
+
+	res := &catchpointWriter{
+		ctx:           ctx,
+		tx:            tx,
+		filePath:      filePath,
+		totalAccounts: totalAccounts,
+		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		file:          file,
+		compressor:    compressor,
+		tar:           tar,
+	}
+	return res, nil
 }
 
 func (cw *catchpointWriter) Abort() error {
 	cw.accountsIterator.Close()
-	if cw.tar != nil {
-		cw.tar.Close()
-	}
-	if cw.gzip != nil {
-		cw.gzip.Close()
-	}
-	if cw.file != nil {
-		cw.gzip.Close()
-	}
-	err := os.Remove(cw.filePath)
-	return err
+	cw.tar.Close()
+	cw.compressor.Close()
+	cw.file.Close()
+	return os.Remove(cw.filePath)
 }
 
 func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
-	if cw.file == nil {
-		err = os.MkdirAll(filepath.Dir(cw.filePath), 0700)
-		if err != nil {
-			return
-		}
-		cw.file, err = os.OpenFile(cw.filePath, os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			return
-		}
-		cw.gzip = gzip.NewWriter(cw.file)
-		cw.tar = tar.NewWriter(cw.gzip)
-	}
-
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 		return
 	}
 
-	if cw.fileHeader == nil {
-		err = cw.readHeaderFromDatabase(cw.ctx, cw.tx)
-		if err != nil {
-			return
-		}
-	}
-
-	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
-		return
-	}
-
-	if !cw.headerWritten {
-		encodedHeader := protocol.Encode(cw.fileHeader)
-		err = cw.tar.WriteHeader(&tar.Header{
-			Name: "content.msgpack",
-			Mode: 0600,
-			Size: int64(len(encodedHeader)),
-		})
-		if err != nil {
-			return
-		}
-		_, err = cw.tar.Write(encodedHeader)
-		if err != nil {
-			return
-		}
-		cw.headerWritten = true
-	}
-
-	writerRequest := make(chan catchpointFileBalancesChunk, 1)
+	writerRequest := make(chan catchpointFileBalancesChunkV6, 1)
 	writerResponse := make(chan error, 2)
 	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum)
 	defer func() {
@@ -190,7 +153,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 	for {
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
 
@@ -202,7 +165,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
 
@@ -210,9 +173,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		select {
 		case err := <-writerResponse:
 			// we ran into an error. wait for the channel to close before returning with the error.
-			select {
-			case <-writerResponse:
-			}
+			<-writerResponse
 			return false, err
 		default:
 		}
@@ -221,28 +182,24 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		if len(cw.balancesChunk.Balances) > 0 {
 			cw.balancesChunkNum++
 			writerRequest <- cw.balancesChunk
-			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
+			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.totalChunks {
 				cw.accountsIterator.Close()
 				// if we're done, wait for the writer to complete it's writing.
-				select {
-				case err, opened := <-writerResponse:
-					if opened {
-						// we ran into an error. wait for the channel to close before returning with the error.
-						select {
-						case <-writerResponse:
-						}
-						return false, err
-					}
-					// channel is closed. we're done writing and no issues detected.
-					return false, nil
+				err, opened := <-writerResponse
+				if opened {
+					// we ran into an error. wait for the channel to close before returning with the error.
+					<-writerResponse
+					return false, err
 				}
+				// channel is closed. we're done writing and no issues detected.
+				return false, nil
 			}
 			cw.balancesChunk.Balances = nil
 		}
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunk, response chan error, initialBalancesChunkNum uint64) {
+func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64) {
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
 	for bc := range balances {
@@ -253,7 +210,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 
 		encodedChunk := protocol.Encode(&bc)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.%d.msgpack", balancesChunkNum, cw.fileHeader.TotalChunks),
+			Name: fmt.Sprintf("balances.%d.%d.msgpack", balancesChunkNum, cw.totalChunks),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})
@@ -266,12 +223,14 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 			response <- err
 			break
 		}
+		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
+			cw.biggestChunkLen = chunkLen
+		}
 
-		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.fileHeader.TotalChunks {
+		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
 			cw.tar.Close()
-			cw.gzip.Close()
+			cw.compressor.Close()
 			cw.file.Close()
-			cw.file = nil
 			var fileInfo os.FileInfo
 			fileInfo, err = os.Stat(cw.filePath)
 			if err != nil {
@@ -286,32 +245,6 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
 	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
-	if err == nil {
-		cw.balancesOffset += BalancesPerCatchpointFileChunk
-	}
-	return
-}
-
-func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
-	var header CatchpointFileHeader
-	header.BalancesRound, err = accountsRound(tx)
-	if err != nil {
-		return
-	}
-	header.Totals, err = accountsTotals(tx, false)
-	if err != nil {
-		return
-	}
-	header.TotalAccounts, err = totalAccounts(context.Background(), tx)
-	if err != nil {
-		return
-	}
-	header.TotalChunks = (header.TotalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
-	header.BlocksRound = cw.blocksRound
-	header.Catchpoint = cw.label
-	header.Version = catchpointFileVersion
-	header.BlockHeaderDigest = cw.blockHeaderDigest
-	cw.fileHeader = &header
 	return
 }
 
@@ -320,28 +253,17 @@ func (cw *catchpointWriter) GetSize() int64 {
 	return cw.writtenBytes
 }
 
-// GetBalancesRound returns the round number of the balances to which this catchpoint is generated for.
-func (cw *catchpointWriter) GetBalancesRound() basics.Round {
-	if cw.fileHeader != nil {
-		return cw.fileHeader.BalancesRound
-	}
-	return basics.Round(0)
-}
-
 // GetBalancesCount returns the number of balances written to this catchpoint file.
 func (cw *catchpointWriter) GetTotalAccounts() uint64 {
-	if cw.fileHeader != nil {
-		return cw.fileHeader.TotalAccounts
-	}
-	return 0
+	return cw.totalAccounts
 }
 
-// GetCatchpoint returns the catchpoint string to which this catchpoint file was generated for.
-func (cw *catchpointWriter) GetCatchpoint() string {
-	if cw.fileHeader != nil {
-		return cw.fileHeader.Catchpoint
-	}
-	return ""
+func (cw *catchpointWriter) GetTotalChunks() uint64 {
+	return cw.totalChunks
+}
+
+func (cw *catchpointWriter) GetBiggestChunkLen() uint64 {
+	return cw.biggestChunkLen
 }
 
 // hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.

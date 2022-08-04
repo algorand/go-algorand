@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,7 +92,7 @@ func (f *RestClientFixture) ClientWaitForRound(client client.RestClient, round u
 		}
 		select {
 		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for round %v", round)
+			return fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
 		case <-time.After(200 * time.Millisecond):
 		}
 	}

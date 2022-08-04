@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package pingpong
 import (
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -131,17 +130,6 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 	return
 }
 
-// throttle transaction rate
-func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64) {
-	localTimeDelta := time.Since(startTime)
-	currentTps := float64(totalSent) / localTimeDelta.Seconds()
-	if currentTps > float64(cfg.TxnPerSec) {
-		sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
-		sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-		time.Sleep(sleepTime)
-	}
-}
-
 // Prepare assets for asset transaction testing
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
@@ -152,13 +140,14 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 		return
 	}
 
-	var startTime = time.Now()
-	var totalSent uint64 = 0
 	resultAssetMaps = make(map[uint64]v1.AssetParams)
 
 	// optIns contains own and explicitly opted-in assets
 	optIns = make(map[uint64][]string)
 	numCreatedAssetsByAddr := make(map[string]int, len(accounts))
+
+	nextSendTime := time.Now()
+
 	// 1) Create X assets for each of the participant accounts
 	for addr := range accounts {
 		if addr == pps.cfg.SrcAccount {
@@ -178,6 +167,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", pps.cfg.NumAsset, addrAccount.AssetParams)
 
 		totalSupply := pps.cfg.MinAccountAsset * uint64(pps.cfg.NumPartAccounts) * 9 * uint64(pps.cfg.GroupSize) * uint64(pps.cfg.RefreshTime.Seconds()) / pps.cfg.TxnPerSec
+
 		// create assets in participant account
 		for i := 0; i < toCreate; i++ {
 			var metaLen = 32
@@ -204,14 +194,12 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				return
 			}
 			tx.Note = pps.makeNextUniqueNoteField()
+			schedule(pps.cfg.TxnPerSec, &nextSendTime)
 			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
 				return
 			}
-
-			totalSent++
-			throttleTransactionRate(startTime, pps.cfg, totalSent)
 		}
 	}
 
@@ -254,10 +242,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 	// optInsByAddr tracks only explicitly opted-in assetsA
 	optInsByAddr := make(map[string]map[uint64]bool)
 
-	// reset rate-control
-	startTime = time.Now()
-	totalSent = 0
-
 	// 2) For each participant account, opt-in up to proto.MaxAssetsPerAccount assets of all other participant accounts
 	for addr := range accounts {
 		if addr == pps.cfg.SrcAccount {
@@ -273,7 +257,14 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			err = addrErr
 			return
 		}
-		numSlots := proto.MaxAssetsPerAccount - len(acct.Assets)
+		maxAssetsPerAccount := proto.MaxAssetsPerAccount
+		// TODO : given that we've added unlimited asset support, we should revise this
+		// code so that we'll have control on how many asset/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		if maxAssetsPerAccount == 0 {
+			maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+		}
+		numSlots := maxAssetsPerAccount - len(acct.Assets)
 		optInsByAddr[addr] = make(map[uint64]bool)
 		for k, creator := range allAssets {
 			if creator == addr {
@@ -300,17 +291,14 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			}
 			tx.Note = pps.makeNextUniqueNoteField()
 
+			schedule(pps.cfg.TxnPerSec, &nextSendTime)
 			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
 				return
 			}
-			totalSent++
-
 			optIns[k] = append(optIns[k], addr)
 			optInsByAddr[addr][k] = true
-
-			throttleTransactionRate(startTime, pps.cfg, totalSent)
 		}
 	}
 
@@ -345,10 +333,6 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 		}
 	}
-
-	// reset rate-control
-	startTime = time.Now()
-	totalSent = 0
 
 	// Step 3) Evenly distribute the assets across all opted-in accounts
 	for k, creator := range allAssets {
@@ -395,14 +379,12 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 				}
 			}
 
+			schedule(pps.cfg.TxnPerSec, &nextSendTime)
 			_, err = signAndBroadcastTransaction(accounts[creator], tx, client)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 				return
 			}
-
-			totalSent++
-			throttleTransactionRate(startTime, pps.cfg, totalSent)
 		}
 		// append the asset to the result assets
 		resultAssetMaps[k] = assetParams[k]
@@ -667,6 +649,13 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 
 	toCreate := int(cfg.NumApp)
 	appsPerAcct := proto.MaxAppsCreated
+	// TODO : given that we've added unlimited app support, we should revise this
+	// code so that we'll have control on how many app/account we want to create.
+	// for now, I'm going to keep the previous max values until we have refactored this code.
+	if appsPerAcct == 0 {
+		appsPerAcct = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	}
+
 	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches
 	groupSize := proto.MaxTxGroupSize
 	if appsPerAcct > groupSize {
@@ -682,7 +671,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		return
 	}
 	maxOptIn := uint32(config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn)
-	if cfg.NumAppOptIn > maxOptIn {
+	if maxOptIn > 0 && cfg.NumAppOptIn > maxOptIn {
 		err = fmt.Errorf("each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
 		return
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,7 +128,7 @@ const ConsensusV23 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f",
 )
 
-// ConsensusV24 include the applications, rekeying and teal v2
+// ConsensusV24 include the applications, rekeying and AVM v2
 const ConsensusV24 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
 )
@@ -164,6 +164,18 @@ const ConsensusV30 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
+// ConsensusV31 enables the batch verification for ed25519 signatures, Fix reward calculation issue, introduces the ability
+// to force an expired participation offline, enables TEAL 6 ( AVM 1.1 ) and add support for creating
+// state proof keys.
+const ConsensusV31 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/85e6db1fdbdef00aa232c75199e10dc5fe9498f6",
+)
+
+// ConsensusV32 enables the unlimited assets.
+const ConsensusV32 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -176,7 +188,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV30
+const ConsensusCurrentVersion = ConsensusV32
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

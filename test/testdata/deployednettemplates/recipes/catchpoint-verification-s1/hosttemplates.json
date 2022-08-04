@@ -1,0 +1,16 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-EAST-1-m5d.4xl",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "i3en.xlarge"
+    },
+    {
+      "Name": "AWS-US-EAST-1-m5d.2xl",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "i3en.xlarge"
+    }
+  ]
+}

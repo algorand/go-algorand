@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,11 +21,11 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
@@ -74,6 +74,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
+	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
@@ -81,21 +82,45 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
-	ledger    *data.Ledger
+	ledger    v2.LedgerForAPI
 	genesisID string
 	config    config.Local
 	err       error
+	id        account.ParticipationID
+	keys      account.StateProofKeys
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
-	return mockNode{
+func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+	panic("implement me")
+}
+
+func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
+	panic("implement me")
+}
+
+func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
+	m.id = id
+	m.keys = keys
+	return m.err
+}
+
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
+	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),
 		err:       nodeError}
 }
 
-func (m mockNode) Ledger() *data.Ledger {
+func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 
@@ -108,7 +133,7 @@ func (m mockNode) GenesisID() string {
 }
 
 func (m mockNode) GenesisHash() crypto.Digest {
-	return m.ledger.GenesisHash()
+	return m.ledger.(*data.Ledger).GenesisHash()
 }
 
 func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
@@ -171,7 +196,7 @@ func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 

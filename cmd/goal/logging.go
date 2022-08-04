@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ var loggingCmd = &cobra.Command{
 	Long:  `Enable/disable and configure Algorand remote logging.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		fmt.Fprintf(os.Stderr, "Warning: `goal logging` deprecated, use `diagcfg telemetry status`\n")
+		reportWarnln("`goal logging` deprecated, use `diagcfg telemetry status`")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
@@ -72,7 +72,7 @@ var enableCmd = &cobra.Command{
 	Long:  `This will turn on remote logging. The "friendly name" for the node, used by logging, will be determined by -n nodename.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		fmt.Fprintf(os.Stderr, "Warning: `goal logging enable` deprecated, use `diagcfg telemetry enable`\n")
+		reportWarnln("`goal logging enable` deprecated, use `diagcfg telemetry enable`")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
@@ -93,7 +93,7 @@ var disableCmd = &cobra.Command{
 	Short: "Disable Algorand remote logging",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		fmt.Fprintf(os.Stderr, "Warning: `goal logging disable` deprecated, use `diagcfg telemetry disable`\n")
+		reportWarnf("`goal logging disable` deprecated, use `diagcfg telemetry disable`")
 		dataDir := ensureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
@@ -123,6 +123,8 @@ var loggingSendCmd = &cobra.Command{
 
 		modifier := ""
 		counter := uint(1)
+		errcount := 0
+		var firsterr error = nil
 		onDataDirs(func(dataDir string) {
 			cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 			if err != nil {
@@ -138,9 +140,16 @@ var loggingSendCmd = &cobra.Command{
 
 			for err := range logging.CollectAndUploadData(dataDir, name, targetFolder) {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
+				if firsterr == nil {
+					firsterr = err
+				}
+				errcount++
 			}
 			modifier = fmt.Sprintf("-%d", counter)
 			counter++
 		})
+		if errcount != 0 {
+			reportErrorf("had %d errors, first: %v", errcount, firsterr)
+		}
 	},
 }

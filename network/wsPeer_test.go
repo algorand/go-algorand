@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -32,6 +33,9 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 	now := time.Now()
 	peer := wsPeer{
 		intermittentOutgoingMessageEnqueueTime: 0,
+		wsPeerCore: wsPeerCore{net: &WebsocketNetwork{
+			log: logging.TestingLog(t),
+		}},
 	}
 	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 

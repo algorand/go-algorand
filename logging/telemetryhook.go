@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -242,7 +242,7 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		err = fmt.Errorf("Unable to create new elastic client on '%s' using '%s:%s' : %w", cfg.URI, cfg.UserName, cfg.Password, err)
 		return nil, err
 	}
-	hostName := cfg.getHostName()
+	hostName := cfg.getHostGUID()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
 	if err != nil {

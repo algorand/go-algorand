@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,9 @@ package algod
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -35,10 +37,13 @@ import (
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
@@ -78,11 +83,45 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			maxLogAge = 0
 		}
 	}
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+
+	var logWriter io.Writer
+	if cfg.LogSizeLimit > 0 {
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+	} else {
+		logWriter = os.Stdout
+	}
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))
 	setupDeadlockLogger()
+
+	// Check some config parameters.
+	if cfg.RestConnectionsSoftLimit > cfg.RestConnectionsHardLimit {
+		s.log.Warnf(
+			"RestConnectionsSoftLimit %d exceeds RestConnectionsHardLimit %d",
+			cfg.RestConnectionsSoftLimit, cfg.RestConnectionsHardLimit)
+		cfg.RestConnectionsSoftLimit = cfg.RestConnectionsHardLimit
+	}
+	if cfg.IncomingConnectionsLimit < 0 {
+		return fmt.Errorf(
+			"Initialize() IncomingConnectionsLimit %d must be non-negative",
+			cfg.IncomingConnectionsLimit)
+	}
+
+	// Set large enough soft file descriptors limit.
+	var ot basics.OverflowTracker
+	fdRequired := ot.Add(
+		cfg.ReservedFDs,
+		ot.Add(uint64(cfg.IncomingConnectionsLimit), cfg.RestConnectionsHardLimit))
+	if ot.Overflowed {
+		return errors.New(
+			"Initialize() overflowed when adding up ReservedFDs, IncomingConnectionsLimit " +
+				"RestConnectionsHardLimit; decrease them")
+	}
+	err = util.SetFdSoftLimit(fdRequired)
+	if err != nil {
+		return fmt.Errorf("Initialize() err: %w", err)
+	}
 
 	// configure the deadlock detector library
 	switch {
@@ -98,6 +137,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		// Default setting - host app should configure this
 		// If host doesn't, the default is Disable = false (so, enabled)
 	}
+	if !deadlock.Opts.Disable {
+		deadlock.Opts.DeadlockTimeout = time.Second * time.Duration(cfg.DeadlockDetectionThreshold)
+	}
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
@@ -105,7 +147,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	fmt.Fprintln(logWriter, "Logging Starting")
 	if s.log.GetTelemetryUploadingEnabled() {
 		// May or may not be logging to node.log
-		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryHostName())
+		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryGUID())
 		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
 	} else {
 		// May or may not be logging to node.log
@@ -116,6 +158,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
 		metricLabels["telemetry_session"] = s.log.GetTelemetrySession()
+		if h := s.log.GetTelemetryGUID(); h != "" {
+			metricLabels["telemetry_host"] = h
+		}
+		if i := s.log.GetInstanceName(); i != "" {
+			metricLabels["telemetry_instance"] = i
+		}
 	}
 	s.metricCollector = metrics.MakeMetricService(
 		&metrics.ServiceConfig{
@@ -161,6 +209,10 @@ func (s *Server) Start() {
 
 	cfg := s.node.Config()
 
+	if cfg.EnableRuntimeMetrics {
+		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
+
 	if cfg.EnableMetricReporting {
 		if err := s.metricCollector.Start(context.Background()); err != nil {
 			// log this error
@@ -189,11 +241,12 @@ func (s *Server) Start() {
 	}
 
 	listener, err := makeListener(addr)
-
 	if err != nil {
 		fmt.Printf("Could not start node: %v\n", err)
 		os.Exit(1)
 	}
+	listener = limitlistener.RejectingLimitListener(
+		listener, cfg.RestConnectionsHardLimit, s.log)
 
 	addr = listener.Addr().String()
 	server = http.Server{
@@ -202,9 +255,9 @@ func (s *Server) Start() {
 		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
 
-	tcpListener := listener.(*net.TCPListener)
-
-	e := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken, adminAPIToken, tcpListener)
+	e := apiServer.NewRouter(
+		s.log, s.node, s.stopping, apiToken, adminAPIToken, listener,
+		cfg.RestConnectionsSoftLimit)
 
 	// Set up files for our PID and our listening address
 	// before beginning to listen to prevent 'goal node start'
