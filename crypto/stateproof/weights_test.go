@@ -118,22 +118,29 @@ func TestNumRevealsApproxBound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
+	// In order to create a valid state proof we need to be bound to a MaxNumberOfReveals.
+	// according to SNARK-friendly weight-verification formula there would be a ratio signedWt/provenWt > 1
+	// that we would not be able to generate proof since the MaxReveals would be too high.
+	// This test points out on the minimal ratio signedWt/provenWt we would ever prdouce.
+
 	for j := 0; j < 10; j++ {
 		sigWt := uint64(1<<(40-j) - 1)
-		// we check the ratios = signedWt/provenWt {3, 2.9, 2.8...1}
-		// ratio 1.41 (i==17) will exceed the max number of reveals (signed and proven wt are too close) -
-		// so we lower the Strength param for testing
-		for i := 0; i < 17; i++ {
+		// we check the ratios = signedWt/provenWt {3, 2.99, 2.98...1}
+		// ratio = 1.33 (i==167) would give 625 would be the lower bound we can expect
+		for i := 0; i < 168; i++ {
 			checkRatio(i, sigWt, stateProofStrengthTargetForTests, a)
 		}
-
-		checkRatio(17, sigWt, stateProofStrengthTargetForTests/2, a)
-
+		provenWtRatio := 3 - (float64(168) / 100)
+		provenWt := uint64(float64(sigWt) / (provenWtRatio))
+		lnProvenWt, err := LnIntApproximation(provenWt)
+		a.NoError(err)
+		_, err = numReveals(sigWt, lnProvenWt, stateProofStrengthTargetForTests)
+		a.ErrorIs(err, ErrTooManyReveals)
 	}
 }
 
 func checkRatio(i int, sigWt uint64, secParam uint64, a *require.Assertions) {
-	provenWtRatio := 3 - (float64(i) / 10)
+	provenWtRatio := 3 - (float64(i) / 100)
 	provenWt := uint64(float64(sigWt) / (provenWtRatio))
 	lnProvenWt, err := LnIntApproximation(provenWt)
 	a.NoError(err)
