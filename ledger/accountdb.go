@@ -2724,9 +2724,9 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
 	data := ledgercore.OnlineRoundParamsData{}
 	err := db.Retry(func() error {
-		rows := qs.lookupOnlineTotalsHistoryStmt.QueryRow(round)
+		row := qs.lookupOnlineTotalsHistoryStmt.QueryRow(round)
 		var buf []byte
-		err := rows.Scan(&buf)
+		err := row.Scan(&buf)
 		if err != nil {
 			return err
 		}

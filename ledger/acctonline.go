@@ -515,7 +515,7 @@ func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, err
 
 	var roundOffsetError *RoundOffsetError
 	if !errors.As(err, &roundOffsetError) {
-		return basics.MicroAlgos{}, err
+		ao.log.Errorf("got an error from onlineTotalsImpl - %w", err)
 	}
 
 	totalsOnline, err = ao.accountsq.lookupOnlineTotalsHistory(rnd)
