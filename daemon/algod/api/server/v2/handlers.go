@@ -70,9 +70,13 @@ type LedgerForAPI interface {
 	LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error)
 	CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
+	GenesisHash() crypto.Digest
+	GenesisProto() config.ConsensusParams
+	BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
+	GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error)
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
@@ -821,14 +825,8 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 
 	actualLedger := v2.Node.LedgerForAPI()
 
-	// Fetch previous block header just once to prevent racing with network
-	hdr, err := actualLedger.BlockHdr(actualLedger.Latest())
-	if err != nil {
-		return internalError(ctx, err, "current block error", v2.Log)
-	}
-
 	// Simulate transaction
-	simulator := MakeSimulatorFromAPILedger(actualLedger, hdr)
+	simulator := MakeSimulator(actualLedger)
 	result, err := simulator.SimulateSignedTxGroup(txgroup)
 	if err != nil {
 		var invalidTxErr *InvalidTxGroupError

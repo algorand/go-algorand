@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
@@ -99,6 +100,15 @@ func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, ai
 func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
 	panic("not implemented")
 }
+func (l *mockLedger) GenesisHash() crypto.Digest {
+	panic("not implemented")
+}
+func (l *mockLedger) GenesisProto() config.ConsensusParams {
+	panic("not implemented")
+}
+func (l *mockLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	panic("not implemented")
+}
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
@@ -109,6 +119,9 @@ func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, er
 	panic("not implemented")
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
+	panic("not implemented")
+}
+func (l *mockLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	panic("not implemented")
 }
 func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {

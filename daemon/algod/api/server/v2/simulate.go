@@ -19,11 +19,8 @@ package v2
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
@@ -31,69 +28,23 @@ import (
 )
 
 // ==============================
-// > Simulation Ledger
+// > Simulator Ledger
 // ==============================
 
-// LedgerForSimulator is a ledger interface for the simulator.
-type LedgerForSimulator interface {
+// simulatorLedger patches the ledger interface to use a constant latest round.
+type simulatorLedger struct {
 	ledger.DebuggerLedgerForEval
-}
-
-type apiSimulatorLedgerConnector struct {
-	LedgerForAPI
-	hdr bookkeeping.BlockHeader
+	latest basics.Round
 }
 
 // Latest is part of the LedgerForSimulator interface.
-// We override this to use the set hdr to prevent racing with the network
-func (l apiSimulatorLedgerConnector) Latest() basics.Round {
-	return l.hdr.Round
+// We override this to use the set latest to prevent racing with the network
+func (l simulatorLedger) Latest() basics.Round {
+	return l.latest
 }
 
-// BlockHdr is part of the LedgerForSimulator interface.
-// We override this to use the set hdr to prevent racing with the network
-func (l apiSimulatorLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
-	if round != l.Latest() {
-		err := fmt.Errorf(
-			"BlockHdr() evaluator called this function for the wrong round %d, "+
-				"latest round is %d",
-			round, l.Latest())
-		return bookkeeping.BlockHeader{}, err
-	}
-
-	return l.LedgerForAPI.BlockHdr(round)
-}
-
-// BlockHdrCached is part of the LedgerForSimulator interface.
-func (l apiSimulatorLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.BlockHdr(round)
-}
-
-// GenesisHash is part of LedgerForSimulator interface.
-func (l apiSimulatorLedgerConnector) GenesisHash() crypto.Digest {
-	return l.hdr.GenesisHash
-}
-
-// GenesisProto is part of LedgerForSimulator interface.
-func (l apiSimulatorLedgerConnector) GenesisProto() config.ConsensusParams {
-	return config.Consensus[l.hdr.CurrentProtocol]
-}
-
-// GetCreatorForRound is part of LedgerForSimulator interface.
-func (l apiSimulatorLedgerConnector) GetCreatorForRound(round basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	if round != l.Latest() {
-		err = fmt.Errorf(
-			"GetCreatorForRound() evaluator called this function for the wrong round %d, "+
-				"latest round is %d",
-			round, l.Latest())
-		return
-	}
-
-	return l.GetCreator(cidx, ctype)
-}
-
-func makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI LedgerForAPI, hdr bookkeeping.BlockHeader) LedgerForSimulator {
-	return &apiSimulatorLedgerConnector{ledgerForAPI, hdr}
+func makeSimulatorLedgerFromDebuggerLedger(ledger ledger.DebuggerLedgerForEval) simulatorLedger {
+	return simulatorLedger{ledger, ledger.Latest()}
 }
 
 // ==============================
@@ -141,20 +92,15 @@ func isInvalidSignatureError(err error) bool {
 
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
-	ledger LedgerForSimulator
+	ledger simulatorLedger
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger LedgerForSimulator) *Simulator {
+func MakeSimulator(debuggerLedger ledger.DebuggerLedgerForEval) *Simulator {
+	ledger := makeSimulatorLedgerFromDebuggerLedger(debuggerLedger)
 	return &Simulator{
 		ledger: ledger,
 	}
-}
-
-// MakeSimulatorFromAPILedger creates a new simulator from an API ledger.
-func MakeSimulatorFromAPILedger(ledgerForAPI LedgerForAPI, hdr bookkeeping.BlockHeader) *Simulator {
-	ledger := makeLedgerForSimulatorFromLedgerForAPI(ledgerForAPI, hdr)
-	return MakeSimulator(ledger)
 }
 
 // checkWellFormed checks that the transaction is well-formed. A failure message is returned if the transaction is not well-formed.
