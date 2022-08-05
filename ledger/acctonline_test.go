@@ -173,7 +173,7 @@ func TestAcctOnline(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	maxDeltaLookback := conf.MaxAcctLookback
 
-	au, oa := newAcctUpdates(t, ml, conf, ".")
+	au, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 
 	_, totals, err := au.LatestTotals()
@@ -462,7 +462,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			conf.MaxAcctLookback = val
 			maxDeltaLookback := conf.MaxAcctLookback
 
-			au, oa := newAcctUpdates(t, ml, conf, ".")
+			au, oa := newAcctUpdates(t, ml, conf)
 			defer oa.close()
 
 			_, totals, err := au.LatestTotals()
@@ -723,7 +723,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, ao := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
 
@@ -871,7 +871,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		conf := config.GetDefaultLocal()
 		conf.MaxAcctLookback = maxBalLookback
 
-		au, oa := newAcctUpdates(t, ml, conf, ".")
+		au, oa := newAcctUpdates(t, ml, conf)
 		defer oa.close()
 		_, totals, err := au.LatestTotals()
 		require.NoError(t, err)
@@ -951,7 +951,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		conf := config.GetDefaultLocal()
 		conf.MaxAcctLookback = 4
 
-		au, oa := newAcctUpdates(t, ml, conf, ".")
+		au, oa := newAcctUpdates(t, ml, conf)
 		defer oa.close()
 		_, totals, err := au.LatestTotals()
 		require.NoError(t, err)
@@ -999,7 +999,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		const maxDeltaLookback = 0
 		conf.MaxAcctLookback = maxDeltaLookback
 
-		au, oa := newAcctUpdates(t, ml, conf, ".")
+		au, oa := newAcctUpdates(t, ml, conf)
 		defer oa.close()
 		_, totals, err := au.LatestTotals()
 		require.NoError(t, err)
@@ -1152,7 +1152,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	defer ml.Close()
 	conf := config.GetDefaultLocal()
 
-	au, oa := newAcctUpdates(t, ml, conf, ".")
+	au, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 	_, totals, err := au.LatestTotals()
 	require.NoError(t, err)
@@ -1292,7 +1292,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, oa := newAcctUpdates(t, ml, conf, ".")
+	au, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 
 	top, err := oa.onlineTop(0, 0, 5)
@@ -1383,7 +1383,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	_, oa := newAcctUpdates(t, ml, conf, ".")
+	_, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 
 	top, err := oa.onlineTop(0, 0, 2048)
@@ -1427,7 +1427,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	}
 
 	conf := config.GetDefaultLocal()
-	au, oa := newAcctUpdates(t, ml, conf, ".")
+	au, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
@@ -1518,7 +1518,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	}
 
 	conf := config.GetDefaultLocal()
-	au, oa := newAcctUpdates(t, ml, conf, ".")
+	au, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
