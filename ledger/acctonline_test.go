@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -1313,7 +1312,6 @@ func TestAcctOnlineTop(t *testing.T) {
 	defer oa.close()
 	initialOnlineTotals, err := oa.onlineTotals(0)
 	a.NoError(err)
-	fmt.Println("initialOnlineTotals:", initialOnlineTotals)
 	top := compareOnlineTotals(a, oa, 0, 0, 5, initialOnlineTotals, initialOnlineTotals)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1343,7 +1341,6 @@ func TestAcctOnlineTop(t *testing.T) {
 			VoteLastValid:  1,
 		}})
 	totals = newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 2, oa)
-	fmt.Println("Updated account:", allAccts[numAccts-2].Addr)
 	// we expect the previous account to be removed from the top N accounts since its keys are expired.
 	// remove it from the expected allAccts slice by marking it as offline
 	accountToBeUpdated = allAccts[numAccts-2]
@@ -1694,13 +1691,10 @@ func (m *MicroAlgoOperations) Add(x, y basics.MicroAlgos) basics.MicroAlgos {
 func compareOnlineTotals(a *require.Assertions, oa *onlineAccounts, rnd, voteRnd basics.Round, n uint64, expectedForRnd, expectedForVoteRnd basics.MicroAlgos) []*ledgercore.OnlineAccount {
 	top, onlineTotalVoteRnd, err := oa.TopOnlineAccounts(rnd, voteRnd, n)
 	a.NoError(err)
-	fmt.Println("Total online stake voteRnd:", onlineTotalVoteRnd)
 	a.Equal(expectedForVoteRnd, onlineTotalVoteRnd)
 	onlineTotalsRnd, err := oa.onlineTotals(rnd)
 	a.NoError(err)
 	a.Equal(expectedForRnd, onlineTotalsRnd)
-	fmt.Println("Total online stake rnd:", onlineTotalsRnd)
-	fmt.Println()
 	a.LessOrEqual(onlineTotalVoteRnd.Raw, onlineTotalsRnd.Raw)
 	return top
 }
