@@ -749,10 +749,9 @@ func TestSPWithTXPoolFull(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	configurableConsensus := make(config.ConsensusProtocols)
-	consensusVersion := protocol.ConsensusVersion("future")
 	consensusParams := getDefaultStateProofConsensusParams()
 	consensusParams.StateProofInterval = 4
-	configurableConsensus[consensusVersion] = consensusParams
+	configurableConsensus[protocol.ConsensusFuture] = consensusParams
 
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -817,10 +816,9 @@ func TestSPWithCounterReset(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	configurableConsensus := make(config.ConsensusProtocols)
-	consensusVersion := protocol.ConsensusVersion("future")
 	consensusParams := getDefaultStateProofConsensusParams()
 	consensusParams.StateProofInterval = 4
-	configurableConsensus[consensusVersion] = consensusParams
+	configurableConsensus[protocol.ConsensusFuture] = consensusParams
 
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
@@ -899,8 +897,6 @@ func TestSPWithCounterReset(t *testing.T) {
 	expectedSPRound := consensusParams.StateProofInterval * 2
 	for round < consensusParams.StateProofInterval*5 {
 		round = params.LastRound
-		fmt.Println(round)
-		require.NoError(t, err)
 
 		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
@@ -909,6 +905,7 @@ func TestSPWithCounterReset(t *testing.T) {
 		require.NoError(t, err)
 
 		params, err = relay.SuggestedParams()
+		require.NoError(t, err)
 		if len(b.Transactions.Transactions) == 0 {
 			continue
 		}
