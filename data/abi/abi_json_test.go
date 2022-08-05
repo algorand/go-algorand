@@ -26,8 +26,11 @@ import (
 )
 
 func TestAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	t.Run("valid", func(t *testing.T) {
-		partitiontest.PartitionTest(t)
+		t.Parallel()
 		testCases := []struct {
 			addressString   string
 			addressBytes    [32]byte
@@ -63,6 +66,7 @@ func TestAddress(t *testing.T) {
 	})
 
 	t.Run("invalid", func(t *testing.T) {
+		t.Parallel()
 		testCases := []struct {
 			addressString string
 			expectedError string
@@ -100,6 +104,7 @@ func TestAddress(t *testing.T) {
 
 func TestUnmarshalFromJSON(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	var testCases = []struct {
 		input    string
 		typeStr  string
@@ -184,24 +189,26 @@ func TestUnmarshalFromJSON(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		abiT, err := TypeOf(testCase.typeStr)
-		require.NoError(t, err, "fail to construct ABI type: %s", testCase.typeStr)
+		t.Run(testCase.input, func(t *testing.T) {
+			abiT, err := TypeOf(testCase.typeStr)
+			require.NoError(t, err, "fail to construct ABI type: %s", testCase.typeStr)
 
-		res, err := abiT.UnmarshalFromJSON([]byte(testCase.input))
-		require.NoError(t, err, "fail to unmarshal JSON to interface: (%s): %v", testCase.input, err)
-		require.Equal(t, testCase.expected, res, "%v not matching with expected value %v", res, testCase.expected)
+			res, err := abiT.UnmarshalFromJSON([]byte(testCase.input))
+			require.NoError(t, err, "fail to unmarshal JSON to interface: (%s): %v", testCase.input, err)
+			require.Equal(t, testCase.expected, res, "%v not matching with expected value %v", res, testCase.expected)
 
-		resEncoded, err := abiT.Encode(res)
-		require.NoError(t, err, "fail to encode %v to ABI bytes: %v", res, err)
-		resDecoded, err := abiT.Decode(resEncoded)
-		require.NoError(t, err, "fail to decode ABI bytes of %v: %v", res, err)
-		require.Equal(t, res, resDecoded, "ABI encode-decode round trip: %v not match with expected %v", resDecoded, res)
+			resEncoded, err := abiT.Encode(res)
+			require.NoError(t, err, "fail to encode %v to ABI bytes: %v", res, err)
+			resDecoded, err := abiT.Decode(resEncoded)
+			require.NoError(t, err, "fail to decode ABI bytes of %v: %v", res, err)
+			require.Equal(t, res, resDecoded, "ABI encode-decode round trip: %v not match with expected %v", resDecoded, res)
+		})
 	}
 }
 
 func TestMarshalToJSON(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
+	t.Parallel()
 	var testCases = []struct {
 		input    interface{}
 		typeStr  string
