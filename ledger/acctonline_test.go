@@ -1655,28 +1655,23 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 	a.NoError(err)
 	rnd15TotalOnlineStake := algops.Sub(initialOnlineStake, allAccts[15].MicroAlgos) // 15 is offline
 
-	fmt.Println("CASE 1")
+	// Case 1: sanity check
 	top := compareOnlineTotals(a, oa, 0, 1, 5, initialOnlineStake, initialOnlineStake)
 	compareTopAccounts(a, top, allAccts)
 
-	// In db
-	fmt.Println("CASE 2")
+	// Case 2: In db
 	voteRndExpectedStake := algops.Sub(initialOnlineStake, acctInvalidFromRnd2.MicroAlgos) // Online on rnd but not valid on voteRnd
 	top = compareOnlineTotals(a, oa, 0, 2, 5, initialOnlineStake, voteRndExpectedStake)
 	updatedAccts := allAccts[:numAccts-1]
 	compareTopAccounts(a, top, updatedAccts)
 
-	// In memory (deltas)
-	fmt.Println("CASE 3")
+	// Case 3: In memory (deltas)
 	voteRndExpectedStake = algops.Sub(rnd15TotalOnlineStake, acctInvalidFromRnd2.MicroAlgos)
 	voteRndExpectedStake = algops.Sub(voteRndExpectedStake, allAccts[18].MicroAlgos) // Online on rnd but not valid on voteRnd
+	updatedAccts[15].Status = basics.Offline                                         // Mark account 15 offline for comparison
+	updatedAccts[18].Status = basics.Offline                                         // Mark account 18 offline for comparison
 	top = compareOnlineTotals(a, oa, 18, 19, 5, rnd15TotalOnlineStake, voteRndExpectedStake)
-	updatedAccts[15].Status = basics.Offline // mark account 15 offline for comparison
-	updatedAccts[18].Status = basics.Offline // mark account 18 offline for comparison
 	compareTopAccounts(a, top, updatedAccts)
-
-	fmt.Println("CASE 4")
-
 }
 
 type MicroAlgoOperations struct {
