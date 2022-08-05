@@ -1534,6 +1534,12 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+// processFields walks through the input fields and expands any macros along the way
+// until it gets to a semi-colon at the end of a field at which point it returns
+// everything prior as current and everything following the semicolon as next
+
+// fields should not be used after as processFields mangles it
+// current and next do share the same array if next is not nil
 func processFields(ops *OpStream, fields []string) (current, next []string) {
 	for i := 0; i < len(fields); i++ {
 		field := fields[i]

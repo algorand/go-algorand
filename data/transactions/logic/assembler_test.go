@@ -2741,7 +2741,48 @@ func TestMacros(t *testing.T) {
 	otherOps, _ := AssembleStringWithVersion("pushint 0\npushint 1\n+", 7)
 	require.Equal(t, otherOps.Program, ops.Program)
 
-	checkSame(t, "#define ==? ==; bnz\n #define one 1\n #define two 2\npushint one; pushint two; ==? label1; err; label1:; pushint one", "pushint 1\npushint 2\n==\nbnz label1\nerr\nlabel1:\npushint 1")
-	checkSame(t, "#define rowSize 3\n#define columnSize 5\n#define tableDimensions rowSize columnSize\npushbytes 0x100000000000; substring tableDimensions\n#define rowSize 0\n#define columnSize 1\nsubstring tableDimensions", "pushbytes 0x100000000000; substring 3 5; substring 0 1")
-	checkSame(t, "#define &x 0\n#define x load &x;\n#define &y 1\n#define y load &y;\n#define -> ; store\nint 3 -> &x; int 4 -> &y\nx y <", "int 3\nstore 0\nint 4\nstore 1\nload 0\nload 1\n<")
+	checkSame(t, `
+#define ==? ==; bnz
+#define one 1
+#define two 2
+pushint one; pushint two; ==? label1
+err
+label1: 
+pushint one`, `
+
+pushint 1
+pushint 2
+==
+bnz label1
+err
+label1:
+pushint 1`)
+
+	checkSame(t, `
+#define rowSize 3
+#define columnSize 5
+#define tableDimensions rowSize columnSize
+pushbytes 0x100000000000; substring tableDimensions
+#define rowSize 0
+#define columnSize 1
+substring tableDimensions`, `
+
+pushbytes 0x100000000000; substring 3 5; substring 0 1`)
+
+	checkSame(t, `
+#define &x 0
+#define x load &x;
+#define &y 1
+#define y load &y;
+#define -> ; store
+int 3 -> &x; int 4 -> &y
+x y <`, `
+
+int 3
+store 0
+int 4
+store 1
+load 0
+load 1
+<`)
 }
