@@ -877,7 +877,7 @@ func TestSPWithCounterReset(t *testing.T) {
 		go func(amt uint64) {
 			defer wg.Done()
 			cntr := uint64(1)
-			params, err = relay.SuggestedParams()
+			params, err := relay.SuggestedParams()
 			require.NoError(t, err)
 
 			ps := paymentSender{
