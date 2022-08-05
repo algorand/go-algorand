@@ -53,7 +53,15 @@ func makeSimulatorLedgerFromDebuggerLedger(ledger ledger.DebuggerLedgerForEval) 
 
 // SimulatorError is the base error type for all simulator errors.
 type SimulatorError struct {
-	error
+	err error
+}
+
+func (s SimulatorError) Error() string {
+	return s.err.Error()
+}
+
+func (s SimulatorError) Unwrap() error {
+	return s.err
 }
 
 // InvalidTxGroupError occurs when an invalid transaction group was submitted to the simulator.
@@ -132,9 +140,9 @@ func (s Simulator) SimulateSignedTxGroup(txgroup []transactions.SignedTxn) (gene
 	// check that the transaction is well-formed. Signatures are checked after evaluation
 	err := s.checkWellFormed(txgroup)
 	if err != nil {
-		errMessage := err.Error()
 		switch err.(type) {
 		case InvalidSignatureError:
+			errMessage := err.Error()
 			result.SignatureFailureMessage = &errMessage
 		default:
 			return result, err

@@ -603,6 +603,39 @@ func TestSignatureCheck(t *testing.T) {
 	require.Contains(t, *result.SignatureFailureMessage, "one signature didn't pass")
 }
 
+// TestInvalidTxGroup tests that a transaction group with invalid transactions
+// is rejected by the simulator as an error instead of a failure message.
+func TestInvalidTxGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := makeSimulationTestLedger()
+	s := v2.MakeSimulator(l)
+
+	accounts := makeTestAccounts()
+	receiver := accounts[0].Address
+	_, rewards := makeSpecialAccounts()
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				// invalid sender
+				Header: makeBasicTxnHeader(rewards),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			},
+		},
+	}
+
+	// should error with invalid transaction group error
+	_, err := s.SimulateSignedTxGroup(txgroup)
+	require.ErrorAs(t, err, &v2.InvalidTxGroupError{})
+	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
+}
+
 const accountBalanceCheckProgram = `#pragma version 4
   txn ApplicationID      // [appId]
 	bz end                 // []
