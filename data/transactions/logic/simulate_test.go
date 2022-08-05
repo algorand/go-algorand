@@ -515,7 +515,6 @@ func TestRejectAppCall(t *testing.T) {
 	prog := ops.Program
 
 	// Create program and call it
-	futureAppID := 1
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
@@ -533,17 +532,6 @@ func TestRejectAppCall(t *testing.T) {
 						NumUint:      0,
 						NumByteSlice: 0,
 					},
-				},
-			},
-		},
-		{
-			Txn: transactions.Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: makeBasicTxnHeader(sender),
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID:     basics.AppIndex(futureAppID),
-					ApprovalProgram:   prog,
-					ClearStateProgram: prog,
 				},
 			},
 		},
@@ -596,7 +584,7 @@ func TestSignatureCheck(t *testing.T) {
 	require.Empty(t, result.SignatureFailureMessage)
 
 	// should error with invalid signature
-	txgroup[0].Sig[0] = 0x0 // != 0xe
+	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
 	result, err = s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
