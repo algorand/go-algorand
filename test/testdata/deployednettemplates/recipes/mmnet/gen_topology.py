@@ -24,55 +24,89 @@ REGION_DEFAULTS = {
 # mapping of regions and associated number of relays, nodes, and non-participating nodes
 REGIONS = {
     "AWS-US-EAST-1": {      # Virginia, USA
-        "R": 20
+        "R": 20,
+        "NPN": 2,
+        "N": 20
     },
     "AWS-US-EAST-2": {      # Ohio, USA
-        "R": 20
+        "R": 20,
+        "NPN": 2,
+        "N": 20
     },
     "AWS-US-WEST-2": {      # Oregon, USA
-        "R": 10
+        "R": 10,
+        "NPN": 2,
+        "N": 20
     },
     "AWS-CA-CENTRAL-1": {   # Canada
-        "R": 6
+        "R": 6,
+        "NPN": 1,
+        "N": 5
     },
     "AWS-EU-CENTRAL-1": {   # Frankfurt, Germany
-        "R": 10
+        "R": 10,
+        "NPN": 2,
+        "N": 10
     },
     "AWS-EU-WEST-1": {      # Ireland
-        "R": 14
+        "R": 14,
+        "NPN": 1,
+        "N": 8
     },
     "AWS-EU-NORTH-1": {     # Stockholm, Sweden
-        "R": 2
+        "R": 2,
+        "NPN": 1,
+        "N": 6
     },
-    "AWS-EU-SOUTH-1": {     # Milan, Ital
-        "R": 4
+    "AWS-EU-SOUTH-1": {     # Milan, Italy
+        "R": 4,
+        "NPN": 1,
+        "N": 4
     },
     "AWS-AP-EAST-1": {      # Hong Kong, China
-        "R": 5
+        "R": 5,
+        "NPN": 2,
+        "N": 10
     },
     "AWS-AP-SOUTH-1": {     # Mumbai, India
-        "R": 3
+        "R": 3,
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-SOUTHEAST-1": { # Singapore
-        "R": 12
+        "R": 12,
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-SOUTHEAST-2": { # Sydney, Australia
-        "R": 4
+        "R": 4,
+        "NPN": 1,
+        "N": 4
     },
     "AWS-AP-NORTHEAST-2": { # Seoul, South Korea
-        "R": 1
+        "R": 1,
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AP-NORTHEAST-3": { # Osaka, Japan
-        "R": 15
+        "R": 15,
+        "NPN": 1,
+        "N": 12
     },
     "AWS-ME-SOUTH-1": {     # Middle East
-        "R": 2
+        "R": 2,
+        "NPN": 1,
+        "N": 2
     },
     "AWS-AF-SOUTH-1": {     # Cape Town, South Africa
-        "R": 4
+        "R": 4,
+        "NPN": 1,
+        "N": 1
     },
     "AWS-SA-EAST-1": {      # Sao Paulo, Brazil
-        "R": 4
+        "R": 4,
+        "NPN": 1,
+        "N": 4
     }
 }
 
@@ -99,7 +133,7 @@ for region in REGIONS.keys():
             host["Template"] = f"{region}-{NODE_SIZES[node_type]}"
             host_elements.append(host)
 
-            # increment counter for specific node_type 
+            # increment counter for specific node_type
             node_count[node_type] += 1
 
 
