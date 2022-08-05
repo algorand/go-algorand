@@ -1107,11 +1107,11 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The byte encoded transaction to broadcast to network",
+            "description": "The byte encoded transaction to simulate",
             "name": "rawtxn",
             "in": "body",
             "required": true,
@@ -1126,7 +1126,7 @@
             "$ref": "#/responses/SimulationResponse"
           },
           "400": {
-            "description": "Bad Request - Malformed Algorand transaction ",
+            "description": "Bad Request - Malformed Algorand transaction",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }

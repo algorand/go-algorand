@@ -4369,7 +4369,7 @@
               }
             }
           },
-          "description": "The byte encoded transaction to broadcast to network",
+          "description": "The byte encoded transaction to simulate",
           "required": true
         },
         "responses": {
@@ -4391,7 +4391,7 @@
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction "
+            "description": "Bad Request - Malformed Algorand transaction"
           },
           "401": {
             "content": {
@@ -4428,7 +4428,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
         "x-codegen-request-body-name": "rawtxn"
       }
     },
