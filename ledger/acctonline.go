@@ -534,6 +534,7 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := ao.roundParamsOffset(rnd)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online totals for rnd: %d", rnd)
 		return basics.MicroAlgos{}, err
 	}
 
@@ -545,6 +546,7 @@ func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	oad, err := ao.lookupOnlineAccountData(rnd, addr)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online account data for rnd: %d, addr: %v", rnd, addr)
 		return
 	}
 
@@ -601,8 +603,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
 func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
-	ao.accountsMu.RLock()
-	needUnlock := true
+	needUnlock := false
 	defer func() {
 		if needUnlock {
 			ao.accountsMu.RUnlock()
@@ -620,6 +621,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	// the function was analyzing deltas or caches.
 	// a similar approach is used in other lookup- methods in acctupdates as well.
 	for {
+		ao.accountsMu.RLock()
+		needUnlock = true
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		inHistory := false
@@ -708,7 +711,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 			// not advanced or postCommit not called yet, write to the cache and return the value
 			ao.onlineAccountsCache.clear(addr)
-			if !ao.onlineAccountsCache.full() {
+			if ao.onlineAccountsCache.full() {
+				ao.log.Info("onlineAccountsCache full, cannot insert")
+			} else {
 				for _, data := range persistedDataHistory {
 					written := ao.onlineAccountsCache.writeFront(
 						data.addr,
@@ -722,6 +727,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 						return ledgercore.OnlineAccountData{}, err
 					}
 				}
+				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
 			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil

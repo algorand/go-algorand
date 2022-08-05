@@ -211,7 +211,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
@@ -293,7 +293,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()

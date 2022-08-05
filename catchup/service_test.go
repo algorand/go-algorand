@@ -792,6 +792,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service

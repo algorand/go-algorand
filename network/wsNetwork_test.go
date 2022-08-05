@@ -1794,7 +1794,6 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
 	expectedCounts := make(map[protocol.Tag]int)
-	expectedCounts[ft1] = 5
 	expectedCounts[ft2] = 5
 	var failed uint32
 	messageArriveWg := sync.WaitGroup{}
@@ -1839,21 +1838,20 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	require.NoError(t, netB.RegisterMessageInterest(ft1))
 	require.NoError(t, netB.RegisterMessageInterest(ft2))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
 	waitPeerInternalChanQuiet(t, netA)
 
-	messageArriveWg.Add(5 * 2) // we're expecting exactly 10 messages.
+	messageArriveWg.Add(5) // we're expecting exactly 5 messages.
 	// send 5 messages of few types.
 	for i := 0; i < 5; i++ {
 		if atomic.LoadUint32(&failed) != 0 {
 			t.Errorf("failed")
 			break
 		}
-		netA.Broadcast(context.Background(), ft1, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), ft1, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
 		netA.Broadcast(context.Background(), ft3, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
 		netA.Broadcast(context.Background(), ft2, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), ft4, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
@@ -1865,7 +1863,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
 	defer incomingMsgSync.Unlock()
-	require.Equal(t, 2, len(msgCounters))
+	require.Equal(t, 1, len(msgCounters))
 	for tag, count := range msgCounters {
 		if atomic.LoadUint32(&failed) != 0 {
 			t.Errorf("failed")
