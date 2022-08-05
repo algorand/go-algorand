@@ -324,10 +324,10 @@ func TestMarshalToJSON(t *testing.T) {
 			abiT, err := TypeOf(testCase.typeStr)
 			require.NoError(t, err, "fail to construct ABI type: %s", testCase.typeStr)
 
-			actualJson, err := abiT.MarshalToJSON(testCase.input)
+			actualJSON, err := abiT.MarshalToJSON(testCase.input)
 			require.NoError(t, err)
 
-			require.Equal(t, testCase.expected, string(actualJson))
+			require.Equal(t, testCase.expected, string(actualJSON))
 		})
 	}
 }
