@@ -17,6 +17,7 @@
 package stateproof
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -118,37 +119,44 @@ func TestNumRevealsApproxBound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
+	// In order to create a valid state proof we need to be bound to a MaxNumberOfReveals.
+	// according to SNARK-friendly weight-verification formula there would be a ratio signedWt/provenWt > 1
+	// that we would not be able to generate proof since the MaxReveals would be too high.
+	// This test points out on the minimal ratio signedWt/provenWt we would ever prdouce.
+
 	for j := 0; j < 10; j++ {
 		sigWt := uint64(1<<(40-j) - 1)
-		// we check the ratios = signedWt/provenWt {3, 2.9, 2.8...1}
-		// ratio 1.1 (i==19) will exceed the max number of reveals (signed and proven wt are too close) -
-		// so we lower the Strength param for testing
-		for i := 0; i < 19; i++ {
-			checkRatio(i, sigWt, stateProofStrengthTargetForTests, a)
+		// we check the ratios = signedWt/provenWt {3, 2.99, 2.98...1}
+		// ratio = 1.33 (i==167) would give 625 would be the lower bound we can expect
+		for i := 0; i < 168; i++ {
+			a.NoError(checkRatio(i, sigWt, stateProofStrengthTargetForTests))
 		}
-
-		checkRatio(19, sigWt, stateProofStrengthTargetForTests/2, a)
-
+		a.ErrorIs(checkRatio(168, sigWt, stateProofStrengthTargetForTests), ErrTooManyReveals)
 	}
 }
 
-func checkRatio(i int, sigWt uint64, secParam uint64, a *require.Assertions) {
-	provenWtRatio := 3 - (float64(i) / 10)
+func checkRatio(i int, sigWt uint64, secParam uint64) error {
+	provenWtRatio := 3 - (float64(i) / 100)
 	provenWt := uint64(float64(sigWt) / (provenWtRatio))
 	lnProvenWt, err := LnIntApproximation(provenWt)
-	a.NoError(err)
+	if err != nil {
+		return err
+	}
 
 	numOfReveals, err := numReveals(sigWt, lnProvenWt, secParam)
-	a.NoError(err, "failed on sigWt %v provenWt %d ratio is %v i %v", sigWt, provenWt, provenWtRatio, i)
+	if err != nil {
+		return fmt.Errorf("failed on sigWt %v provenWt %d ratio is %v i %v err: %w", sigWt, provenWt, provenWtRatio, i, err)
+	}
 
 	log2Sig := math.Log(float64(sigWt)) / math.Log(2)
 	log2Prov := math.Log(float64(provenWt)) / math.Log(2)
 	nr := float64(secParam) / (log2Sig - log2Prov)
-	a.Greater(1.01, float64(numOfReveals)/nr,
-		"Approximated number of reveals exceeds limit. "+
+	if 1.01 < float64(numOfReveals)/nr {
+		return fmt.Errorf("approximated number of reveals exceeds limit "+
 			"limit %v, signedWeight: %v provenWeight %v, "+
-			"appox numberOfReveals: %v, real numberOfReveals %v ratio is %v", 1.01, sigWt, provenWt, numOfReveals, nr,
-		provenWtRatio)
+			"appox numberOfReveals: %v, real numberOfReveals %v ratio is %v", 1.01, sigWt, provenWt, numOfReveals, nr, provenWtRatio)
+	}
+	return nil
 }
 
 func TestNumReveals(t *testing.T) {

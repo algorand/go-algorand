@@ -167,14 +167,17 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	// to eventually construct a vector commitment in a later
 	// block.
 	r := uint64(hdr.Round)
-	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {
-		_, ok := vt.votersForRoundCache[basics.Round(r)]
-		if ok {
-			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
-		} else {
-			vt.loadTree(hdr)
-		}
+	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
+		return
 	}
+
+	_, ok := vt.votersForRoundCache[basics.Round(r)]
+	if ok {
+		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
+	} else {
+		vt.loadTree(hdr)
+	}
+
 }
 
 // removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
