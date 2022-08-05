@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -40,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
-	//	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
@@ -809,7 +807,6 @@ func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.SpecialAddr, []byte(a)
 }
 
-
 func TestSPWithCounterReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -824,7 +821,7 @@ func TestSPWithCounterReset(t *testing.T) {
 	configurableConsensus[consensusVersion] = consensusParams
 
 	fixture.SetConsensus(configurableConsensus)
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))//TwoNodes100SecondFuture.json"))//TwoNodes50EachFuture.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
 
 	dir, err := fixture.GetNodeDir("Primary")
 	a.NoError(err)
@@ -833,171 +830,78 @@ func TestSPWithCounterReset(t *testing.T) {
 	a.NoError(err)
 	cfg.TxPoolSize = 0
 	cfg.SaveToDisk(dir)
-////
-////	dir, err = fixture.GetNodeDir("Node")
-////	a.NoError(err)
-////	cfg.SaveToDisk(dir)
-////
+
 	fixture.Start()
 	defer fixture.Shutdown()
 
 	relay := fixture.GetLibGoalClientForNamedNode("Primary")
-////	node := fixture.GetLibGoalClientForNamedNode("Node")
-////
+
 	params, err := relay.SuggestedParams()
 	require.NoError(t, err)
 
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], params.GenesisHash)
 
-	ps := paymentSender{
-		from:   accountFetcher{nodeName: "Primary", accountNumber: 0},
-		to:     accountFetcher{nodeName: "Node", accountNumber: 0},
-		amount: 1,
-	}
-
 	wg := sync.WaitGroup{}
 	done := false
-
 
 	defer func() {
 		done = true
 		wg.Wait()
 	}()
 
+	params, err = relay.SuggestedParams()
+	require.NoError(t, err)
+	stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
 
-	/*		wg.Add(1)
-go func() {
-		defer wg.Done()
-		params, err = node.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-*/
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+2, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+3, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+4, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound+5, genesisHash, consensusParams, t)
-		for !done {
-
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
-	
-	
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		cntr := uint64(1)
-
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-		stxn := getWellformedSPTransaction(params.LastRound, genesisHash, consensusParams, t)
-		for !done {
-			ps.amount = cntr
-			cntr = cntr + 1
-
-			account0 := ps.from.getAccount(a, &fixture)
-			//			account1 := ps.to.getAccount(a, &fixture)
-
-			_, err = relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
-			//			wh, err := relay.GetUnencryptedWalletHandle()
-			//			require.NoError(t, err)
-
-			//			sender, err := basics.UnmarshalChecksumAddress(account0)
-			//			sender = basics.Address(crypto.HashObj(specialAddr("StateProofSender")))
-			//			require.NoError(t, err)
-		
-			/*			tx := transactions.Transaction{
-				Type: protocol.StateProofTx,
-				Header: transactions.Header{
-					Sender:     sender,
-					Fee:        basics.MicroAlgos{Raw: 9},
-					FirstValid: basics.Round(params.LastRound),
-					LastValid:  basics.Round(params.LastRound+1000),
-					Lease:      [32]byte{},
-					Note:       nil,
-				},
+	for spSpam := 0; spSpam < 5; spSpam++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for !done {
+				// ignore the returned error (most of the time will be error)
+				relay.BroadcastTransaction(stxn)
 			}
-			
-			stxn, err = relay.SignTransactionWithWallet(wh, nil, tx)
-			require.NoError(t, err)
-*/
-			//			bytes := protocol.Encode(&stxn)
-			//			err = protocol.Decode(bytes, &stxn)
+		}()
+	}
 
-			_, err = relay.BroadcastTransaction(stxn)
-		}
-	}()
+	for txnSpam := 0; txnSpam < 0; txnSpam++ {
+		wg.Add(1)
+		go func(amt uint64) {
+			defer wg.Done()
+			cntr := uint64(1)
+			params, err = relay.SuggestedParams()
+			require.NoError(t, err)
+
+			ps := paymentSender{
+				from:   accountFetcher{nodeName: "Primary", accountNumber: 0},
+				amount: amt,
+			}
+			account0 := ps.from.getAccount(a, &fixture)
+
+			for !done {
+				ps.amount = cntr
+				cntr = cntr + 1
+				// ignore the returned error (most of the time will be error)
+				relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+			}
+		}(uint64(txnSpam + 1))
+	}
 
 	round := uint64(0)
 	expectedSPRound := consensusParams.StateProofInterval * 2
-	for round < consensusParams.StateProofInterval*8 {
-		params, err = relay.SuggestedParams()
-		require.NoError(t, err)
-
+	for round < consensusParams.StateProofInterval*6 {
 		round = params.LastRound
 		fmt.Println(round)
-		err = fixture.WaitForRound(round+1, 6*time.Second)
+		require.NoError(t, err)
+
+		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
 		b, err := relay.Block(round + 1)
 		require.NoError(t, err)
+
+		params, err = relay.SuggestedParams()
 		if len(b.Transactions.Transactions) == 0 {
 			continue
 		}
@@ -1005,7 +909,7 @@ go func() {
 		for ; tid < len(b.Transactions.Transactions); tid++ {
 			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
 				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
-				require.Equal(t, uint64(expectedSPRound), b.Transactions.Transactions[tid].StateProof.StateProofIntervalLatestRound)
+				require.Equal(t, int(expectedSPRound), int(b.Transactions.Transactions[tid].StateProof.StateProofIntervalLatestRound))
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break
 			}
@@ -1014,29 +918,21 @@ go func() {
 			break
 		}
 	}
-	require.Less(t, round, consensusParams.StateProofInterval*8)
+	require.Less(t, round, consensusParams.StateProofInterval*6)
 }
 
+func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
 
-func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn){
-
-	// Get the message
-	//	msg, err := stateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
 	msg := stateproofmsg.Message{}
-	//	provenWeight := uint64(1)
-	//	voters := ledgercore.VotersForRound{}
-	//	allKeys := make([]*merklesignature.Secrets, 0, 3)
-	// Get the SP
-	proof := &sp.StateProof{}//generateProofForTesting(round, stateproofmsg.Message{}, provenWeight, voters.Participants, voters.Tree, allKeys, t)
-	proto := consensusParams//config.Consensus[latestRoundHeader.CurrentProtocol]
+	proof := &sp.StateProof{}
+	proto := consensusParams
 
-	// Set the transaction with the SP
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
 	stxn.Txn.FirstValid = basics.Round(round)
-	stxn.Txn.LastValid = basics.Round(round+1000)
+	stxn.Txn.LastValid = basics.Round(round + 1000)
 	stxn.Txn.GenesisHash = genesisHash
-	stxn.Txn.StateProofIntervalLastRound = basics.Round(round-1)
+	stxn.Txn.StateProofIntervalLastRound = basics.Round(round - 1)
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
 	stxn.Txn.Message = msg
@@ -1045,55 +941,4 @@ func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consens
 	require.NoError(t, err)
 
 	return stxn
-}
-
-// Given the round number, partArray and partTree from the previous period block, the keys and the totalWeight
-// return a stateProof which can be submitted in a transaction to the transaction pool and assembled into a new block.
-func generateProofForTesting(
-	round uint64,
-	msg stateproofmsg.Message,
-	provenWeight uint64,
-	partArray basics.ParticipantsArray,
-	partTree *merklearray.Tree,
-	allKeys []*merklesignature.Secrets,
-	t *testing.T) *sp.StateProof {
-
-	data := msg.Hash()
-
-	// Sign with the participation keys
-	sigs := make(map[merklesignature.Verifier]merklesignature.Signature)
-	for _, keys := range allKeys {
-		signerInRound := keys.GetSigner(round)
-		sig, err := signerInRound.SignBytes(data[:])
-		require.NoError(t, err)
-		sigs[*keys.GetVerifier()] = sig
-	}
-
-	// Prepare the builder
-	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusFuture].StateProofStrengthTarget
-	b, err := sp.MakeBuilder(data, round, provenWeight,
-		partArray, partTree, stateProofStrengthTargetForTests)
-	require.NoError(t, err)
-
-	// Add the signatures
-	for i := range partArray {
-		p, err := b.Present(uint64(i))
-		require.False(t, p)
-		require.NoError(t, err)
-		s := sigs[partArray[i].PK]
-		err = b.IsValid(uint64(i), &s, true)
-		require.NoError(t, err)
-		b.Add(uint64(i), s)
-
-		// sanity check that the builder add the signature
-		isPresent, err := b.Present(uint64(i))
-		require.NoError(t, err)
-		require.True(t, isPresent)
-	}
-
-	// Build the SP
-	proof, err := b.Build()
-	require.NoError(t, err)
-
-	return proof
 }

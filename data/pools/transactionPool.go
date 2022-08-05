@@ -23,7 +23,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"runtime/debug"
 
 	"github.com/algorand/go-deadlock"
 
@@ -240,13 +239,6 @@ func logPrint(from, msg string) {
 	f.Close()
 }
 
-func logPrintA(from, msg string) {
-	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: %s: %s\n", time.Now().String(), from, msg))
-	f.WriteString(string(debug.Stack()))
-	f.Close()
-}
-
 // rememberCommit() saves the changes added by remember to
 // pendingTxGroups and pendingTxids.  The caller is assumed to
 // be holding pool.mu.  flush indicates whether previous
@@ -302,16 +294,7 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	txCount := len(txnGroup)
 	if pendingSize+txCount > pool.txPoolMaxSize {
 		// Allow the state proof transaction to go over txPoolMaxSize if already haven't
-		//		logPrint("transactionPool.go", "tying to use...")
-		//		logPrint("transactionPool.go", fmt.Sprintf("len(txnGroup) = %d txnGroup[0].Txn.Type [%d] txnGroup[0].Txn.Type == protocol.StateProofTx %v  pool.stateproofOverflowed %v",
-		//			len(txnGroup), txnGroup[0].Txn.Type, txnGroup[0].Txn.Type == protocol.StateProofTx, pool.stateproofOverflowed))
 		if len(txnGroup) == 1 && txnGroup[0].Txn.Type == protocol.StateProofTx {
-			if txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight > 1 {
-				//				for !pool.stateproofOverflowed {
-				//					logPrint("transactionPool.go", fmt.Sprintf("waiting firstValid %d pw=%d", txnGroup[0].Txn.Header.FirstValid, txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight))
-				//				time.Sleep(time.Millisecond*300)
-				//				}
-			}
 			pool.pendingMu.Lock()
 			defer pool.pendingMu.Unlock()
 			if !pool.stateproofOverflowed {
