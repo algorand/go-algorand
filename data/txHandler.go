@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"time"
 	"io"
 	"sync"
 
@@ -175,7 +173,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 
 	// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
 	verifiedTxGroup := wi.unverifiedTxGroup
-	//	logPrint("txHandler.go", fmt.Sprintf("%+v", verifiedTxGroup))
+
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
@@ -193,14 +191,6 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
-func logPrint(from, msg string) {
-	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: %s: %s\n", time.Now().String(), from, msg))
-	//	f.WriteString(string(debug.Stack()))
-	f.Close()
-}
-
-
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	tx := arg.(*txBacklogMsg)
@@ -215,7 +205,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
 		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
 	}
-	//	logPrint("txHandler.go", fmt.Sprintf("%+v", tx))
+
 	select {
 	case handler.postVerificationQueue <- tx:
 	default:
