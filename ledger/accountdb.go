@@ -54,8 +54,9 @@ type accountsDbQueries struct {
 }
 
 type onlineAccountsDbQueries struct {
-	lookupOnlineStmt        *sql.Stmt
-	lookupOnlineHistoryStmt *sql.Stmt
+	lookupOnlineStmt              *sql.Stmt
+	lookupOnlineHistoryStmt       *sql.Stmt
+	lookupOnlineTotalsHistoryStmt *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -2515,6 +2516,11 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 	if err != nil {
 		return nil, err
 	}
+
+	qs.lookupOnlineTotalsHistoryStmt, err = r.Prepare("SELECT data FROM onlineroundparamstail WHERE rnd=?")
+	if err != nil {
+		return nil, err
+	}
 	return qs, nil
 }
 
@@ -2713,6 +2719,24 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 		return err
 	})
 	return
+}
+
+func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
+	data := ledgercore.OnlineRoundParamsData{}
+	err := db.Retry(func() error {
+		rows := qs.lookupOnlineTotalsHistoryStmt.QueryRow(round)
+		var buf []byte
+		err := rows.Scan(&buf)
+		if err != nil {
+			return err
+		}
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
 func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {

@@ -507,8 +507,19 @@ func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredC
 // onlineTotals return the total online balance for the given round.
 func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	ao.accountsMu.RLock()
-	defer ao.accountsMu.RUnlock()
-	return ao.onlineTotalsImpl(rnd)
+	totalsOnline, err := ao.onlineTotalsImpl(rnd)
+	ao.accountsMu.RUnlock()
+	if err == nil {
+		return totalsOnline, err
+	}
+
+	var roundOffsetError *RoundOffsetError
+	if !errors.As(err, &roundOffsetError) {
+		return basics.MicroAlgos{}, err
+	}
+
+	totalsOnline, err = ao.accountsq.lookupOnlineTotalsHistory(rnd)
+	return totalsOnline, err
 }
 
 // onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.

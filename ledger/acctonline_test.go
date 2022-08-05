@@ -1202,9 +1202,16 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
 		return err
 	})
+
 	require.NoError(t, err)
 	require.Equal(t, oa.latest()-basics.Round(conf.MaxAcctLookback), endRound)
 	require.Equal(t, maxBlocks-int(lowest)-int(conf.MaxAcctLookback)+1, len(dbOnlineRoundParams))
+
+	_, err = oa.onlineTotals(lowest)
+	require.NoError(t, err)
+
+	_, err = oa.onlineTotals(lowest - 1)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
 	// +1 comes from the deletion before X without checking account state at X
