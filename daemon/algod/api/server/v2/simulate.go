@@ -43,10 +43,6 @@ func (l simulatorLedger) Latest() basics.Round {
 	return l.latest
 }
 
-func makeSimulatorLedgerFromDebuggerLedger(ledger ledger.DebuggerLedgerForEval) simulatorLedger {
-	return simulatorLedger{ledger, ledger.Latest()}
-}
-
 // ==============================
 // > Simulator Errors
 // ==============================
@@ -99,10 +95,9 @@ type Simulator struct {
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(debuggerLedger ledger.DebuggerLedgerForEval) *Simulator {
-	ledger := makeSimulatorLedgerFromDebuggerLedger(debuggerLedger)
+func MakeSimulator(ledger ledger.DebuggerLedgerForEval) *Simulator {
 	return &Simulator{
-		ledger: ledger,
+		ledger: simulatorLedger{ledger, ledger.Latest()},
 	}
 }
 
@@ -110,7 +105,7 @@ func MakeSimulator(debuggerLedger ledger.DebuggerLedgerForEval) *Simulator {
 func (s Simulator) checkWellFormed(txgroup []transactions.SignedTxn) error {
 	hdr, err := s.ledger.BlockHdr(s.ledger.Latest())
 	if err != nil {
-		return ScopedSimulatorError{SimulatorError{fmt.Errorf("please contact us, this shouldn't happen. Current block error: %v", err)}, "current block error"}
+		return ScopedSimulatorError{SimulatorError{fmt.Errorf("Current block error: %w", err)}, "current block error"}
 	}
 
 	_, err = verify.TxnGroup(txgroup, hdr, nil)
