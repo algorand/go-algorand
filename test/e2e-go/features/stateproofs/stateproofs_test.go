@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -843,10 +844,10 @@ func TestSPWithCounterReset(t *testing.T) {
 	copy(genesisHash[:], params.GenesisHash)
 
 	wg := sync.WaitGroup{}
-	done := false
+	var done uint32
 
 	defer func() {
-		done = true
+		atomic.StoreUint32(&done, uint32(1))
 		wg.Wait()
 	}()
 
@@ -859,10 +860,13 @@ func TestSPWithCounterReset(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for !done {
-				// ignore the returned error (most of the time will be error)
-				relay.BroadcastTransaction(stxn)
-				time.Sleep(25*time.Millisecond)
+			for atomic.LoadUint32(&done) != 1 {
+				_, err := relay.BroadcastTransaction(stxn)
+				// The pool is full, and only one SP transaction will be admitted in per round. Otherwise, pool is full error will be returned
+				// However, if this is the lucky SP transaction to get into the pool, it will eventually be rejected by ValidateStateProof and a different
+				// error will be returned
+				require.Error(t, err)
+				time.Sleep(25 * time.Millisecond)
 			}
 		}()
 	}
@@ -882,12 +886,14 @@ func TestSPWithCounterReset(t *testing.T) {
 			}
 			account0 := ps.from.getAccount(a, &fixture)
 
-			for !done {
+			for atomic.LoadUint32(&done) != 1 {
 				ps.amount = cntr
 				cntr = cntr + 1
 				// ignore the returned error (most of the time will be error)
-				relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
-				time.Sleep(25*time.Millisecond)
+				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+				require.Error(t, err)
+				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
+				time.Sleep(25 * time.Millisecond)
 			}
 		}(uint64(txnSpam + 1))
 	}
@@ -910,6 +916,10 @@ func TestSPWithCounterReset(t *testing.T) {
 			continue
 		}
 		tid := 0
+		// Find a SP transaction in the block. The SP should be for StateProofIntervalLatestRound expectedSPRound
+		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
+		// break after finding it, and look for the next one in a subsequent block
+		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
 		for ; tid < len(b.Transactions.Transactions); tid++ {
 			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
 				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
