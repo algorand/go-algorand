@@ -2768,7 +2768,7 @@ func (z *StateProofTrackingData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).StateProofVotersTotalWeight.MsgIsZero() {
+	if (*z).StateProofOnlineTotalWeight.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2787,7 +2787,7 @@ func (z *StateProofTrackingData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
-			o = (*z).StateProofVotersTotalWeight.MarshalMsg(o)
+			o = (*z).StateProofOnlineTotalWeight.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "v"
@@ -2826,9 +2826,9 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofVotersTotalWeight.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateProofVotersTotalWeight")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofOnlineTotalWeight")
 				return
 			}
 		}
@@ -2870,9 +2870,9 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					return
 				}
 			case "t":
-				bts, err = (*z).StateProofVotersTotalWeight.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "StateProofVotersTotalWeight")
+					err = msgp.WrapError(err, "StateProofOnlineTotalWeight")
 					return
 				}
 			case "n":
@@ -2901,13 +2901,13 @@ func (_ *StateProofTrackingData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StateProofTrackingData) Msgsize() (s int) {
-	s = 1 + 2 + (*z).StateProofVotersCommitment.Msgsize() + 2 + (*z).StateProofVotersTotalWeight.Msgsize() + 2 + (*z).StateProofNextRound.Msgsize()
+	s = 1 + 2 + (*z).StateProofVotersCommitment.Msgsize() + 2 + (*z).StateProofOnlineTotalWeight.Msgsize() + 2 + (*z).StateProofNextRound.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *StateProofTrackingData) MsgIsZero() bool {
-	return ((*z).StateProofVotersCommitment.MsgIsZero()) && ((*z).StateProofVotersTotalWeight.MsgIsZero()) && ((*z).StateProofNextRound.MsgIsZero())
+	return ((*z).StateProofVotersCommitment.MsgIsZero()) && ((*z).StateProofOnlineTotalWeight.MsgIsZero()) && ((*z).StateProofNextRound.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -63,6 +63,21 @@ func (a accountFetcher) getBalance(r *require.Assertions, f *fixtures.RestClient
 	return balance
 }
 
+func (a accountFetcher) goOffline(r *require.Assertions, f *fixtures.RestClientFixture, round uint64) {
+	account0 := a.getAccount(r, f)
+
+	minTxnFee, _, err := f.CurrentMinFeeAndBalance()
+	r.NoError(err)
+
+	client0 := f.GetLibGoalClientForNamedNode(a.nodeName)
+	txn, err := client0.MakeUnsignedGoOfflineTx(account0, round, round+1000, minTxnFee, [32]byte{})
+	r.NoError(err)
+	wallet0, err := client0.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	_, err = client0.SignAndBroadcastTransaction(wallet0, nil, txn)
+	r.NoError(err)
+}
+
 type paymentSender struct {
 	from   accountFetcher
 	to     accountFetcher
@@ -153,7 +168,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -162,7 +177,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 			}
 		} else {
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
@@ -262,7 +277,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -404,7 +419,7 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	var votersRoot = make([]byte, sp.HashSize)
 	copy(votersRoot[:], lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
 
-	provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
+	provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
 	r.False(overflowed)
 
 	verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
@@ -484,7 +499,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -572,7 +587,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -665,13 +680,13 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		// Changing the amount to pay. This should transfer most of the money from the rich node to the poort node.
+		// Changing the amount to pay. This should transfer most of the money from the rich node to the poor node.
 		if consensusParams.StateProofInterval*2 == rnd {
 			balance := paymentMaker.from.getBalance(a, &fixture)
 			// ensuring that before the test, the rich node (from) has a significantly larger balance.
 			a.True(balance/2 > paymentMaker.to.getBalance(a, &fixture))
 
-			paymentMaker.amount = balance * 3 / 4
+			paymentMaker.amount = balance * 9 / 10
 			paymentMaker.sendPayment(a, &fixture, rnd)
 		}
 
@@ -687,9 +702,9 @@ func TestAttestorsChangeTest(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
 
 			// the main part of the test (computing the total stake of the nodes):
 			sum := uint64(0)
@@ -697,12 +712,9 @@ func TestAttestorsChangeTest(t *testing.T) {
 				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
 			}
 
-			// including the stake of the rich node:
-			if blk.Round() < basics.Round(consensusParams.StateProofInterval*3) {
-				sum += accountFetcher{"richNode", 0}.getBalance(a, &fixture)
-			} else { // including the stake of the poor node (which is different)
-				sum += accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
-			}
+			richNodeStake := accountFetcher{"richNode", 0}.getBalance(a, &fixture)
+			poorNodeStake := accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
+			sum = sum + richNodeStake + poorNodeStake
 
 			a.Equal(sum, stake)
 
@@ -712,7 +724,87 @@ func TestAttestorsChangeTest(t *testing.T) {
 				lastStateProofBlock = blk
 			}
 		} else {
-			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
+		}
+
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestTotalWeightChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 4
+	consensusParams.StateProofTopVoters = 4
+	//consensusParams.StateProofInterval = 32
+
+	configurableConsensus := config.ConsensusProtocols{
+		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
+	}
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
+	defer fixture.Shutdown()
+
+	restClient, err := fixture.NC.AlgodClient()
+	a.NoError(err)
+
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoal := fixture.LibGoalClient
+
+	richNode := accountFetcher{nodeName: "richNode", accountNumber: 0}
+
+	expectedNumberOfStateProofs := uint64(4)
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
+
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		// Rich node goes offline
+		if consensusParams.StateProofInterval*2-8 == rnd {
+			// subtract 8 rounds since the total online stake is calculated prior to the actual state proof round (lookback)
+			richNode.goOffline(a, &fixture, rnd)
+		}
+
+		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			// Must have a merkle commitment for participants
+			a.Greater(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment), 0)
+			totalStake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
+			a.NotEqual(basics.MicroAlgos{}, totalStake)
+
+			if rnd <= consensusParams.StateProofInterval {
+				a.Equal(uint64(10000000000000000), totalStake)
+			} else { // richNode should be offline by now
+				a.Greater(uint64(10000000000000000), totalStake)
+			}
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		} else {
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&

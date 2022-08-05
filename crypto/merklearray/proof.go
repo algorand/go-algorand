@@ -85,7 +85,7 @@ func (p *SingleLeafProof) ToProof() *Proof {
 	return &p.Proof
 }
 
-// GetConcatenatedProof concats the verification path to a single slice
+// GetConcatenatedProof concatenates the verification path to a single slice
 // This function converts an empty element in the path (i.e occurs when the tree is not a full tree)
 // into a sequence of digest result of zero.
 func (p *SingleLeafProof) GetConcatenatedProof() []byte {

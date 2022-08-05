@@ -567,7 +567,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.OnlineTotals(rnd)
+	return l.acctsOnline.onlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.

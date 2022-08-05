@@ -50,7 +50,7 @@ var (
 func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
-	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight
+	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
 
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a proof for.
@@ -125,7 +125,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 		return 0, err
 	}
 
-	totalWeight := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+	totalWeight := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		err := fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
