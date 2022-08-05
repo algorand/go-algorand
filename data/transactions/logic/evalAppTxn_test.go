@@ -456,25 +456,25 @@ func TestNumInnerShallow(t *testing.T) {
 	ep.Reset()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
-	TestApp(t, pay+";int 1", ep)
-	TestApp(t, pay+pay+";int 1", ep)
-	TestApp(t, pay+pay+pay+";int 1", ep)
-	TestApp(t, pay+pay+pay+pay+";int 1", ep)
+	TestApp(t, pay+"; int 1", ep)
+	TestApp(t, pay+pay+"; int 1", ep)
+	TestApp(t, pay+pay+pay+"; int 1", ep)
+	TestApp(t, pay+pay+pay+pay+"; int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4
-	TestApp(t, pay+pay+pay+pay+pay+";int 1", ep, "too many inner transactions")
+	TestApp(t, pay+pay+pay+pay+pay+"; int 1", ep, "too many inner transactions")
 
 	ep, tx, ledger = MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
-	TestApp(t, pay+";int 1", ep)
-	TestApp(t, pay+pay+";int 1", ep)
-	TestApp(t, pay+pay+pay+";int 1", ep)
-	TestApp(t, pay+pay+pay+pay+";int 1", ep)
+	TestApp(t, pay+"; int 1", ep)
+	TestApp(t, pay+pay+"; int 1", ep)
+	TestApp(t, pay+pay+pay+"; int 1", ep)
+	TestApp(t, pay+pay+pay+pay+"; int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4, but when pooling you get
 	// MaxTxGroupSize (here, 8) * that.
-	TestApp(t, pay+pay+pay+pay+pay+";int 1", ep)
-	TestApp(t, strings.Repeat(pay, 32)+";int 1", ep)
-	TestApp(t, strings.Repeat(pay, 33)+";int 1", ep, "too many inner transactions")
+	TestApp(t, pay+pay+pay+pay+pay+"; int 1", ep)
+	TestApp(t, strings.Repeat(pay, 32)+"; int 1", ep)
+	TestApp(t, strings.Repeat(pay, 33)+"; int 1", ep, "too many inner transactions")
 }
 
 // TestNumInnerPooled ensures that inner call limits are pooled across app calls
@@ -499,8 +499,8 @@ func TestNumInnerPooled(t *testing.T) {
 	ledger := MakeLedger(nil)
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
-	short := pay + ";int 1"
-	long := strings.Repeat(pay, 17) + ";int 1" // More than half allowed
+	short := pay + "; int 1"
+	long := strings.Repeat(pay, 17) + "; int 1" // More than half allowed
 
 	grp := MakeSampleTxnGroup(tx)
 	TestApps(t, []string{short, ""}, grp, LogicVersion, ledger)
@@ -812,7 +812,7 @@ txn Sender; itxn_field Receiver;
 	// Force the first fee to 3, but the second will default to 2*fee-3 = 2002-3
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 3; itxn_field Fee;"+
+		"int 3; itxn_field Fee; "+
 		"itxn_next"+
 		pay+
 		"itxn_submit; itxn Fee; int 1999; ==", ep)
@@ -820,16 +820,16 @@ txn Sender; itxn_field Receiver;
 	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 3; itxn_field Fee;"+
+		"int 3; itxn_field Fee; "+
 		"itxn_next"+
 		pay+
-		"int 1998; itxn_field Fee;"+
+		"int 1998; itxn_field Fee; "+
 		"itxn_submit; int 1", ep, "fee too small")
 
 	// Overpay in first itxn, the second will default to less
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 2000; itxn_field Fee; "+
 		"itxn_next"+
 		pay+
 		"itxn_submit; itxn Fee; int 2; ==", ep)
@@ -837,25 +837,25 @@ txn Sender; itxn_field Receiver;
 	// Same first, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 2000; itxn_field Fee; "+
 		"itxn_next"+
 		pay+
-		"int 1; itxn_field Fee;"+
+		"int 1; itxn_field Fee; "+
 		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
 
 	// Test that overpay in first inner group is available in second inner group
 	// also ensure only exactly the _right_ amount of credit is available.
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2002; itxn_field Fee;"+ // double pay
+		"int 2002; itxn_field Fee; "+ // double pay
 		"itxn_next"+
 		pay+
-		"int 1001; itxn_field Fee;"+ // regular pay
-		"itxn_submit;"+
+		"int 1001; itxn_field Fee; "+ // regular pay
+		"itxn_submit; "+
 		// At beginning of second group, we should have 1 minfee of credit
 		"itxn_begin"+
 		pay+
-		"int 0; itxn_field Fee;"+ // free, due to credit
+		"int 0; itxn_field Fee; "+ // free, due to credit
 		"itxn_next"+
 		pay+
 		"itxn_submit; itxn Fee; int 1001; ==", // second one should have to pay
@@ -871,7 +871,7 @@ func TestApplCreation(t *testing.T) {
 
 	ep, tx, _ := MakeSampleEnv()
 
-	p := "itxn_begin;"
+	p := "itxn_begin; "
 	s := "; int 1"
 
 	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep,
@@ -899,31 +899,31 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs", ep,
 		"length too long")
 
-	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 12)+s, ep)
-	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 13)+s, ep,
+	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs; ", 12)+s, ep)
+	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs; ", 13)+s, ep,
 		"too many application args")
 
-	TestApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)+s, ep,
+	TestApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts; ", 3)+s, ep,
 		"invalid Account reference")
 	tx.Accounts = append(tx.Accounts, basics.Address{})
 	TestApp(t, fmt.Sprintf(p+"%s"+s,
-		strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)), ep)
+		strings.Repeat("int 32; bzero; itxn_field Accounts; ", 3)), ep)
 	TestApp(t, fmt.Sprintf(p+"%s"+s,
-		strings.Repeat("int 32; bzero; itxn_field Accounts;", 4)), ep,
+		strings.Repeat("int 32; bzero; itxn_field Accounts; ", 4)), ep,
 		"too many foreign accounts")
 
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep,
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications; ", 5)+s, ep,
 		"invalid App reference")
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(621))
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep)
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 6)+s, ep,
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications; ", 5)+s, ep)
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications; ", 6)+s, ep,
 		"too many foreign apps")
 
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep,
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets; ", 6)+s, ep,
 		"invalid Asset reference")
 	tx.ForeignAssets = append(tx.ForeignAssets, basics.AssetIndex(621))
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep)
-	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets; ", 6)+s, ep)
+	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets; ", 7)+s, ep,
 		"too many foreign assets")
 
 	TestApp(t, p+"int 2700; bzero; itxn_field ApprovalProgram"+s, ep)
@@ -955,7 +955,7 @@ func TestBigApplCreation(t *testing.T) {
 
 	ep, _, _ := MakeSampleEnv()
 
-	p := "itxn_begin;"
+	p := "itxn_begin; "
 	s := "; int 1"
 
 	// Recall that in test proto, max possible program size is 2700, because
@@ -1014,39 +1014,39 @@ func TestApplSubmission(t *testing.T) {
 
 	ops := TestProg(t, "int 1", AssemblerMaxVersion)
 	approve := hex.EncodeToString(ops.Program)
-	a := fmt.Sprintf("byte 0x%s; itxn_field ApprovalProgram;", approve)
+	a := fmt.Sprintf("byte 0x%s; itxn_field ApprovalProgram; ", approve)
 
-	p := "itxn_begin; int appl; itxn_field TypeEnum;"
-	s := ";itxn_submit; int 1"
+	p := "itxn_begin; int appl; itxn_field TypeEnum; "
+	s := "itxn_submit; int 1"
 	TestApp(t, p+a+s, ep, "ClearStateProgram: invalid program (empty)")
 
-	a += fmt.Sprintf("byte 0x%s; itxn_field ClearStateProgram;", approve)
+	a += fmt.Sprintf("byte 0x%s; itxn_field ClearStateProgram; ", approve)
 
 	// All zeros is v0, so we get a complaint, but that means lengths were ok when set.
 	TestApp(t, p+a+`int 600; bzero; itxn_field ApprovalProgram;
-                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep,
+                  int 600; bzero; itxn_field ClearStateProgram; `+s, ep,
 		"inner app call with version v0 < v4")
 
 	TestApp(t, p+`int 601; bzero; itxn_field ApprovalProgram;
-                  int 600; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
+                  int 600; bzero; itxn_field ClearStateProgram; `+s, ep, "too long")
 
 	// WellFormed does the math based on the supplied ExtraProgramPages
 	TestApp(t, p+a+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
-                  int 1200; bzero; itxn_field ClearStateProgram;`+s, ep,
+                  int 1200; bzero; itxn_field ClearStateProgram; `+s, ep,
 		"inner app call with version v0 < v4")
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
-                  int 1201; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
+                  int 1201; bzero; itxn_field ClearStateProgram; `+s, ep, "too long")
 
 	// Can't set epp when app id is given
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(7))
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages;
-                  int 7; itxn_field ApplicationID`+s, ep, "immutable")
+                  int 7; itxn_field ApplicationID; `+s, ep, "immutable")
 
-	TestApp(t, p+a+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
+	TestApp(t, p+a+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice; "+s,
 		ep, "too large")
-	TestApp(t, p+a+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice"+s,
+	TestApp(t, p+a+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice; "+s,
 		ep, "too large")
 }
 
@@ -1261,7 +1261,7 @@ func TestInnerBudgetIncrement(t *testing.T) {
 		ApprovalProgram: gasup.Program,
 	})
 
-	waste := `global CurrentApplicationAddress; keccak256; pop;`
+	waste := `global CurrentApplicationAddress; keccak256; pop; `
 	buy := `itxn_begin
 int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID

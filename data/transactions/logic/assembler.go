@@ -250,8 +250,6 @@ type OpStream struct {
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
-
-	macros map[string][]string
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -262,7 +260,6 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
-		macros:       make(map[string][]string),
 	}
 
 	for i := range o.known.scratchSpace {
@@ -1534,31 +1531,17 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// processFields walks through the input fields and expands any macros along the way
-// until it gets to a semi-colon at the end of a field at which point it returns
-// everything prior as current and everything following the semicolon as next
+// processFields walks through the input fields until it gets to a semi-colon
+// at the end of a field at which point it returns everything prior as current
+// and everything following the semicolon as next
 
 // fields should not be used after as processFields mangles it
 // current and next do share the same array if next is not nil
-func processFields(ops *OpStream, fields []string) (current, next []string) {
+func processFields(fields []string) (current, next []string) {
 	for i := 0; i < len(fields); i++ {
 		field := fields[i]
-		replacement, ok := ops.macros[field]
-		if ok {
-			fields = append(fields[0:i], append(replacement, fields[i+1:]...)...)
-			i--
-			continue
-		}
 		if string(field[len(field)-1]) == ";" {
 			field = field[0 : len(field)-1]
-			replacement, ok = ops.macros[field]
-			if ok {
-				last := replacement[len(replacement)-1]
-				fields = append(fields[0:i], append(replacement, fields[i+1:]...)...)
-				fields[i+len(replacement)-1] = last + ";"
-				i--
-				continue
-			}
 			current = fields[:i]
 			if len(field) > 0 {
 				current = append(current, field)
@@ -1608,22 +1591,13 @@ func (ops *OpStream) assemble(text string) error {
 		if ops.versionedPseudoOps == nil {
 			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 		}
-		if fields[0] == "#define" {
-			if len(fields) < 3 {
-				ops.error("Not enough arguments to define directive")
-			} else {
-				if fields[1][len(fields[1])-1] == ';' {
-					ops.error("Macro name not allowed to terminate with semicolon: " + fields[1])
-				}
-				ops.macros[fields[1]] = make([]string, len(fields[2:]))
-				copy(ops.macros[fields[1]], fields[2:])
-			}
-			continue
-		}
 		var current []string
 		var next []string
 		next = fields
-		for current, next = processFields(ops, next); len(current) > 0; current, next = processFields(ops, next) {
+		for current, next = processFields(next); len(current) > 0 || len(next) > 0; current, next = processFields(next) {
+			if len(current) == 0 {
+				continue
+			}
 			opstring := current[0]
 			if len(opstring) == 0 {
 				continue
