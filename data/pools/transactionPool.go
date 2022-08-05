@@ -19,9 +19,11 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+	"runtime/debug"
 
 	"github.com/algorand/go-deadlock"
 
@@ -92,6 +94,10 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
+
+	// stateproofOverflowed indicates that a stateproof transaction was allowed to
+	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
+	stateproofOverflowed bool
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -227,6 +233,20 @@ func (pool *TransactionPool) pendingTxIDsCount() int {
 	return len(pool.pendingTxids)
 }
 
+func logPrint(from, msg string) {
+	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f.WriteString(fmt.Sprintf("%s: %s: %s\n", time.Now().String(), from, msg))
+	//	f.WriteString(string(debug.Stack()))
+	f.Close()
+}
+
+func logPrintA(from, msg string) {
+	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f.WriteString(fmt.Sprintf("%s: %s: %s\n", time.Now().String(), from, msg))
+	f.WriteString(string(debug.Stack()))
+	f.Close()
+}
+
 // rememberCommit() saves the changes added by remember to
 // pendingTxGroups and pendingTxids.  The caller is assumed to
 // be holding pool.mu.  flush indicates whether previous
@@ -238,14 +258,18 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
+		logPrint("transactionPool.go", "reset")
+		pool.stateproofOverflowed = false
+		logPrint("transactionPool.go", fmt.Sprintf("flush: len(pool.pendingTxids)=%d  len(pool.rememberedTxids)=%d", len(pool.pendingTxids), len(pool.rememberedTxids)))
 		pool.pendingTxids = pool.rememberedTxids
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
-
+		logPrint("transactionPool.go", fmt.Sprintf("else(: len(pool.pendingTxids)=%d", len(pool.pendingTxids)))
 		for txid, txn := range pool.rememberedTxids {
 			pool.pendingTxids[txid] = txn
 		}
+		logPrint("transactionPool.go", fmt.Sprintf("else): len(pool.pendingTxids)=%d", len(pool.pendingTxids)))
 	}
 
 	pool.rememberedTxGroups = nil
@@ -274,15 +298,29 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 // and not from the total number of transaction groups.
 // As long as we haven't surpassed the size limit, we should be good to go.
 func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.SignedTxn) error {
-	// The state proof transactions sent from a StateProofSender with 0 fee can exceed the txPoolMaxSize
-	if len(txnGroup) == 1 {
-		if txnGroup[0].Txn.Type == protocol.StateProofTx && txnGroup[0].Txn.Sender == transactions.StateProofSender && txnGroup[0].Txn.Fee.IsZero() {
-			return nil
-		}
-	}
 	pendingSize := pool.pendingTxIDsCount()
 	txCount := len(txnGroup)
 	if pendingSize+txCount > pool.txPoolMaxSize {
+		// Allow the state proof transaction to go over txPoolMaxSize if already haven't
+		//		logPrint("transactionPool.go", "tying to use...")
+		//		logPrint("transactionPool.go", fmt.Sprintf("len(txnGroup) = %d txnGroup[0].Txn.Type [%d] txnGroup[0].Txn.Type == protocol.StateProofTx %v  pool.stateproofOverflowed %v",
+		//			len(txnGroup), txnGroup[0].Txn.Type, txnGroup[0].Txn.Type == protocol.StateProofTx, pool.stateproofOverflowed))
+		if len(txnGroup) == 1 && txnGroup[0].Txn.Type == protocol.StateProofTx {
+			if txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight > 1 {
+				//				for !pool.stateproofOverflowed {
+				//					logPrint("transactionPool.go", fmt.Sprintf("waiting firstValid %d pw=%d", txnGroup[0].Txn.Header.FirstValid, txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight))
+				//				time.Sleep(time.Millisecond*300)
+				//				}
+			}
+			pool.pendingMu.Lock()
+			defer pool.pendingMu.Unlock()
+			if !pool.stateproofOverflowed {
+				logPrint("transactionPool.go", fmt.Sprintf("used firstValid %d pw=%d laround=%d", txnGroup[0].Txn.Header.FirstValid, txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight, txnGroup[0].Txn.StateProofTxnFields.Message.LastAttestedRound))
+				pool.stateproofOverflowed = true
+				return nil
+			}
+		}
+		logPrint("transactionPool.go", fmt.Sprintf("MISSED firstValid %d pw=%d", txnGroup[0].Txn.Header.FirstValid, txnGroup[0].Txn.StateProofTxnFields.Message.LnProvenWeight))
 		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
