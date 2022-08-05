@@ -319,7 +319,7 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
-		require.Equal(t, 0, len(updatedBoxes))
+		require.Empty(t, updatedBoxes)
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -463,7 +463,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 				updatesResources[addr][0],
 			)
 
-			require.Equal(t, 0, len(updatedBoxes))
+			require.Empty(t, updatedBoxes)
 		})
 	}
 }
@@ -2892,9 +2892,9 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
-				a.Equal(3, len(updatedAccounts))
-				a.Equal(3, len(updatedResources))
-				a.Equal(0, len(updatedBoxes))
+				a.Len(updatedAccounts, 3)
+				a.Len(updatedResources, 3)
+				a.Empty(updatedBoxes)
 			})
 		}
 	}
@@ -3002,7 +3002,6 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 }
 
 func BenchmarkLRUResources(b *testing.B) {
-	b.StopTimer()
 	var baseResources lruResources
 	baseResources.init(nil, 1000, 850)
 
@@ -3021,7 +3020,7 @@ func BenchmarkLRUResources(b *testing.B) {
 		baseResources.write(data, addr)
 	}
 
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pos := i % 850
 		data, has = baseResources.read(addrs[pos], basics.CreatableIndex(1))
@@ -3097,7 +3096,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N; i++ {
-					var pv persistedBoxData
+					var pv persistedKVData
 					boxName := boxNames[i%totalBoxes]
 					b.StartTimer()
 					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
@@ -3128,7 +3127,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				require.NoError(b, err)
 				var v sql.NullString
 				for i := 0; i < b.N+lookback; i++ {
-					var pv persistedBoxData
+					var pv persistedKVData
 					boxName := boxNames[i%totalBoxes]
 					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
 					require.NoError(b, err)

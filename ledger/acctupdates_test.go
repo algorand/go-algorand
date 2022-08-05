@@ -1352,23 +1352,15 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	}
 }
 
-func TestBoxCache(t *testing.T) {
+func TestKVCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	initialBlocksCount := 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 8
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
-
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
 		[]map[basics.Address]basics.AccountData{accts},
 	)
 	defer ml.Close()
@@ -1378,29 +1370,31 @@ func TestBoxCache(t *testing.T) {
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
 
-	boxCnt := 1000
-	boxesPerBlock := 100
-	curBox := 0
+	kvCnt := 1000
+	kvsPerBlock := 100
+	curKV := 0
 	var currentRound basics.Round
 	currentDBRound := basics.Round(1)
 
-	boxMap := make(map[string]string)
-	for i := 0; i < boxCnt; i++ {
-		boxMap[fmt.Sprintf("%d", i)] = fmt.Sprintf("value%d", i)
+	kvMap := make(map[string]string)
+	for i := 0; i < kvCnt; i++ {
+		kvMap[fmt.Sprintf("%d", i)] = fmt.Sprintf("value%d", i)
 	}
 
-	// add boxesPerBlock boxes on each iteration
-	for i := 0; i < boxCnt/boxesPerBlock+int(conf.MaxAcctLookback); i++ {
+	// add kvsPerBlock KVs on each iteration. The first kvCnt/kvsPerBlock
+	// iterations produce a block with kvCnt kv manipulations. The last
+	// conf.MaxAcctLookback iterations are meant to verify the contents of the cache
+	// are correct after every kv containing block has been committed.
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
-
 		kvMods := make(map[string]*string)
-		if i < boxCnt/boxesPerBlock {
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", curBox)
-				curBox++
-				val := boxMap[name]
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				curKV++
+				val := kvMap[name]
 				kvMods[name] = &val
 			}
 		}
@@ -1411,44 +1405,42 @@ func TestBoxCache(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		if uint64(currentRound) > protoParams.MaxBalLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
-		// verify cache doesn't contain the new boxes until commited to DB
-		if i < boxCnt/boxesPerBlock {
-			for name := range kvMods {
-				_, has := au.baseBoxes.read(name)
-				require.False(t, has)
-			}
+		// verify cache doesn't contain the new kvs until committed to DB.
+		for name := range kvMods {
+			_, has := au.baseKV.read(name)
+			require.False(t, has)
 		}
 
-		// verify commited boxes appear in the box cache
+		// verify commited kvs appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
-			startBox := (currentDBRound - 1) * basics.Round(boxesPerBlock)
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", uint64(startBox)+uint64(j))
-				persistedValue, has := au.baseBoxes.read(name)
+			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKV.read(name)
 				require.True(t, has)
-				require.Equal(t, boxMap[name], *persistedValue.value)
+				require.Equal(t, kvMap[name], *persistedValue.value)
 			}
 		}
 	}
 
-	// updating inserted boxes
-	curBox = 0
-	for i := 0; i < boxCnt/boxesPerBlock+int(conf.MaxAcctLookback); i++ {
+	// updating inserted KVs
+	curKV = 0
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
 		kvMods := make(map[string]*string)
-		if i < boxCnt/boxesPerBlock {
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", curBox)
-				val := fmt.Sprintf("modified value%d", curBox)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				val := fmt.Sprintf("modified value%d", curKV)
 				kvMods[name] = &val
-				curBox++
+				curKV++
 			}
 		}
 
@@ -1458,28 +1450,28 @@ func TestBoxCache(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 
-		// verify cache doesn't contain updated box values that haven't been committed to db
-		if i < boxCnt/boxesPerBlock {
+		// verify cache doesn't contain updated kv values that haven't been committed to db
+		if i < kvCnt/kvsPerBlock {
 			for name := range kvMods {
-				persistedValue, has := au.baseBoxes.read(name)
+				persistedValue, has := au.baseKV.read(name)
 				require.True(t, has)
-				require.Equal(t, boxMap[name], *persistedValue.value)
+				require.Equal(t, kvMap[name], *persistedValue.value)
 			}
 		}
 
-		// verify commited updated box values appear in the box cache
+		// verify commited updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
-			lookback := basics.Round(boxCnt/boxesPerBlock + int(conf.MaxAcctLookback) + 1)
+			lookback := basics.Round(kvCnt/kvsPerBlock + int(conf.MaxAcctLookback) + 1)
 			if currentDBRound < lookback {
 				continue
 			}
 
-			startBox := (currentDBRound - lookback) * basics.Round(boxesPerBlock)
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", uint64(startBox)+uint64(j))
-				persistedValue, has := au.baseBoxes.read(name)
+			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKV.read(name)
 				require.True(t, has)
 				expectedValue := fmt.Sprintf("modified value%s", name)
 				require.Equal(t, expectedValue, *persistedValue.value)
@@ -1487,17 +1479,17 @@ func TestBoxCache(t *testing.T) {
 		}
 	}
 
-	// deleting boxes
-	curBox = 0
-	for i := 0; i < boxCnt/boxesPerBlock+int(conf.MaxAcctLookback); i++ {
+	// deleting KVs
+	curKV = 0
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
 		kvMods := make(map[string]*string)
-		if i < boxCnt/boxesPerBlock {
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", curBox)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
 				kvMods[name] = nil
-				curBox++
+				curKV++
 			}
 		}
 
@@ -1507,29 +1499,29 @@ func TestBoxCache(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 
-		// verify cache doesn't contain updated box values that haven't been committed to db
-		if i < boxCnt/boxesPerBlock {
+		// verify cache doesn't contain updated kv values that haven't been committed to db
+		if i < kvCnt/kvsPerBlock {
 			for name := range kvMods {
-				persistedValue, has := au.baseBoxes.read(name)
+				persistedValue, has := au.baseKV.read(name)
 				require.True(t, has)
 				value := fmt.Sprintf("modified value%s", name)
 				require.Equal(t, value, *persistedValue.value)
 			}
 		}
 
-		// verify commited updated box values appear in the box cache
+		// verify commited updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
-			lookback := basics.Round(2*(boxCnt/boxesPerBlock+int(conf.MaxAcctLookback)) + 1)
+			lookback := basics.Round(2*(kvCnt/kvsPerBlock+int(conf.MaxAcctLookback)) + 1)
 			if currentDBRound < lookback {
 				continue
 			}
 
-			startBox := (currentDBRound - lookback) * basics.Round(boxesPerBlock)
-			for j := 0; j < boxesPerBlock; j++ {
-				name := fmt.Sprintf("%d", uint64(startBox)+uint64(j))
-				persistedValue, has := au.baseBoxes.read(name)
+			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKV.read(name)
 				require.True(t, has)
 				require.True(t, persistedValue.value == nil)
 			}

@@ -17,7 +17,7 @@
 package ledger
 
 // persistedResourcesDataList represents a doubly linked list.
-// must initiate with newPersistedAccountList.
+// must initiate with newPersistedResourcesList.
 type persistedResourcesDataList struct {
 	root     persistedResourcesDataListNode  // sentinel list element, only &root, root.prev, and root.next are used
 	freeList *persistedResourcesDataListNode // preallocated nodes location
