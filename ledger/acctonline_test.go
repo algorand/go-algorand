@@ -1207,10 +1207,10 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.Equal(t, oa.latest()-basics.Round(conf.MaxAcctLookback), endRound)
 	require.Equal(t, maxBlocks-int(lowest)-int(conf.MaxAcctLookback)+1, len(dbOnlineRoundParams))
 
-	_, err = oa.onlineTotals(lowest)
+	_, err = oa.onlineTotalsEx(lowest)
 	require.NoError(t, err)
 
-	_, err = oa.onlineTotals(lowest - 1)
+	_, err = oa.onlineTotalsEx(lowest - 1)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
