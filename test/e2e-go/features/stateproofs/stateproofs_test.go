@@ -480,6 +480,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 		if rnd == (consensusParams.StateProofMaxRecoveryIntervals)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
+			r.NoError(err)
 			fixture.StartNode(dir)
 		}
 
@@ -556,6 +557,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
+	r.NoError(err)
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	nc.FullStop()
 
@@ -568,6 +570,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+2)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
+			r.NoError(err)
 			fixture.StartNode(dir)
 		}
 
@@ -733,7 +736,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -762,9 +765,6 @@ func TestTotalWeightChanges(t *testing.T) {
 	fixture.SetConsensus(configurableConsensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
 	defer fixture.Shutdown()
-
-	restClient, err := fixture.NC.AlgodClient()
-	a.NoError(err)
 
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
