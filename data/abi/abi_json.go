@@ -30,12 +30,47 @@ import (
 
 var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-func addressCheckSum(addressBytes []byte) ([]byte, error) {
-	if len(addressBytes) != addressByteSize {
-		return nil, fmt.Errorf("address bytes should be of length 32")
-	}
+func addressCheckSum(addressBytes [addressByteSize]byte) []byte {
 	hashed := sha512.Sum512_256(addressBytes[:])
-	return hashed[addressByteSize-checksumByteSize:], nil
+	return hashed[addressByteSize-checksumByteSize:]
+}
+
+func addressToString(addressBytes [addressByteSize]byte) string {
+	checksum := addressCheckSum(addressBytes)
+
+	var addressBytesAndChecksum [addressByteSize + checksumByteSize]byte
+	copy(addressBytesAndChecksum[:], addressBytes[:])
+	copy(addressBytesAndChecksum[addressByteSize:], checksum)
+
+	return base32Encoder.EncodeToString(addressBytesAndChecksum[:])
+}
+
+func addressFromString(addressString string) ([addressByteSize]byte, error) {
+	decoded, err := base32Encoder.DecodeString(addressString)
+	if err != nil {
+		return [addressByteSize]byte{},
+			fmt.Errorf("cannot cast encoded address string (%s) to address: base32 decode error: %w", addressString, err)
+	}
+	if len(decoded) != addressByteSize+checksumByteSize {
+		return [addressByteSize]byte{},
+			fmt.Errorf(
+				"cannot cast encoded address string (%s) to address: "+
+					"decoded byte length should equal %d with address and checksum",
+				addressString, addressByteSize+checksumByteSize,
+			)
+	}
+	var addressBytes [addressByteSize]byte
+	copy(addressBytes[:], decoded[:])
+
+	checksum := addressCheckSum(addressBytes)
+	if !bytes.Equal(checksum, decoded[addressByteSize:]) {
+		return [addressByteSize]byte{}, fmt.Errorf(
+			"cannot cast encoded address string (%s) to address: decoded checksum mismatch, %v != %v",
+			addressString, checksum, decoded[addressByteSize:],
+		)
+	}
+
+	return addressBytes, nil
 }
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
@@ -88,24 +123,19 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		}
 		return json.Marshal(byteValue)
 	case Address:
-		var addressValueInternal []byte
+		var addressBytes [addressByteSize]byte
 		switch valueCasted := value.(type) {
 		case []byte:
 			if len(valueCasted) != addressByteSize {
 				return nil, fmt.Errorf("address byte slice length not equal to 32 byte")
 			}
-			addressValueInternal = valueCasted
+			copy(addressBytes[:], valueCasted[:])
 		case [addressByteSize]byte:
-			copy(addressValueInternal[:], valueCasted[:])
+			copy(addressBytes[:], valueCasted[:])
 		default:
 			return nil, fmt.Errorf("cannot infer to byte slice/array for marshal to JSON")
 		}
-		checksum, err := addressCheckSum(addressValueInternal)
-		if err != nil {
-			return nil, err
-		}
-		addressValueInternal = append(addressValueInternal, checksum...)
-		return json.Marshal(base32Encoder.EncodeToString(addressValueInternal))
+		return json.Marshal(addressToString(addressBytes))
 	case ArrayStatic, ArrayDynamic:
 		values, err := inferToSlice(value)
 		if err != nil {
@@ -166,13 +196,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	case Uint:
 		num := new(big.Int)
 		if err := num.UnmarshalJSON(jsonEncoded); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to uint: %v", string(jsonEncoded), err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to uint: %w", string(jsonEncoded), err)
 		}
 		return castBigIntToNearestPrimitive(num, t.bitSize)
 	case Ufixed:
 		floatTemp := new(big.Rat)
 		if err := floatTemp.UnmarshalText(jsonEncoded); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %v", string(jsonEncoded), err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to ufixed: %w", string(jsonEncoded), err)
 		}
 		denom := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(t.precision)), nil)
 		denomRat := new(big.Rat).SetInt(denom)
@@ -184,47 +214,33 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	case Bool:
 		var elem bool
 		if err := json.Unmarshal(jsonEncoded, &elem); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bool: %v", string(jsonEncoded), err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bool: %w", string(jsonEncoded), err)
 		}
 		return elem, nil
 	case Byte:
 		var elem byte
 		if err := json.Unmarshal(jsonEncoded, &elem); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded to byte: %v", err)
+			return nil, fmt.Errorf("cannot cast JSON encoded to byte: %w", err)
 		}
 		return elem, nil
 	case Address:
 		var addrStr string
 		if err := json.Unmarshal(jsonEncoded, &addrStr); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded to address string: %v", err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to address string: %w", string(jsonEncoded), err)
 		}
-		decoded, err := base32Encoder.DecodeString(addrStr)
-		if err != nil {
-			return nil,
-				fmt.Errorf("cannot cast JSON encoded address string (%s) to address: %v", addrStr, err)
-		}
-		if len(decoded) != addressByteSize+checksumByteSize {
-			return nil,
-				fmt.Errorf(
-					"cannot cast JSON encoded address string (%s) to address: "+
-						"decoded byte length should equal to 36 with address and checksum",
-					string(jsonEncoded),
-				)
-		}
-		checksum, err := addressCheckSum(decoded[:addressByteSize])
+
+		addrBytes, err := addressFromString(addrStr)
 		if err != nil {
 			return nil, err
 		}
-		if !bytes.Equal(checksum, decoded[addressByteSize:]) {
-			return nil, fmt.Errorf("cannot cast JSON encoded address string (%s) to address: decoded checksum unmatch", addrStr)
-		}
-		return decoded[:addressByteSize], nil
+
+		return addrBytes[:], nil
 	case ArrayStatic, ArrayDynamic:
 		if t.childTypes[0].abiTypeID == Byte && bytes.HasPrefix(jsonEncoded, []byte{'"'}) {
 			var byteArr []byte
 			err := json.Unmarshal(jsonEncoded, &byteArr)
 			if err != nil {
-				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bytes: %v", string(jsonEncoded), err)
+				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to bytes: %w", string(jsonEncoded), err)
 			}
 			if t.abiTypeID == ArrayStatic && len(byteArr) != int(t.staticLength) {
 				return nil, fmt.Errorf("length of slice %d != type specific length %d", len(byteArr), t.staticLength)
@@ -237,7 +253,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		}
 		var elems []json.RawMessage
 		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %v", string(jsonEncoded), err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array: %w", string(jsonEncoded), err)
 		}
 		if t.abiTypeID == ArrayStatic && len(elems) != int(t.staticLength) {
 			return nil, fmt.Errorf("JSON array element number != ABI array elem number")
@@ -256,13 +272,13 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 		if bytes.HasPrefix(jsonEncoded, []byte{'"'}) {
 			var stringVar string
 			if err := json.Unmarshal(jsonEncoded, &stringVar); err != nil {
-				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
+				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %w", stringEncoded, err)
 			}
 			return stringVar, nil
 		} else if bytes.HasPrefix(jsonEncoded, []byte{'['}) {
 			var elems []byte
 			if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
-				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %v", stringEncoded, err)
+				return nil, fmt.Errorf("cannot cast JSON encoded (%s) to string: %w", stringEncoded, err)
 			}
 			return string(elems), nil
 		} else {
@@ -271,7 +287,7 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	case Tuple:
 		var elems []json.RawMessage
 		if err := json.Unmarshal(jsonEncoded, &elems); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array for tuple: %v", string(jsonEncoded), err)
+			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to array for tuple: %w", string(jsonEncoded), err)
 		}
 		if len(elems) != int(t.staticLength) {
 			return nil, fmt.Errorf("JSON array element number != ABI tuple elem number")

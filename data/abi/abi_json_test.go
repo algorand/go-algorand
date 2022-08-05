@@ -17,40 +17,88 @@
 package abi
 
 import (
-	"crypto/rand"
+	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRandomAddressEquality(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func TestAddress(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		partitiontest.PartitionTest(t)
+		testCases := []struct {
+			addressString   string
+			addressBytes    [32]byte
+			addressChecksum [4]byte
+		}{
+			{
+				addressString:   "CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JAFM",
+				addressBytes:    [32]byte{16, 10, 81, 202, 158, 158, 46, 209, 139, 213, 244, 123, 112, 56, 225, 176, 71, 198, 31, 126, 155, 105, 97, 91, 131, 241, 213, 95, 145, 71, 126, 247},
+				addressChecksum: [4]byte{15, 241, 32, 43},
+			},
+			{
+				addressString:   "OXV2VEY7QJUXGOHEVFSL7LTBMOTYI4VORBJ37CGCHKBPJSH6IZQMHDPFRA",
+				addressBytes:    [32]byte{117, 235, 170, 147, 31, 130, 105, 115, 56, 228, 169, 100, 191, 174, 97, 99, 167, 132, 114, 174, 136, 83, 191, 136, 194, 58, 130, 244, 200, 254, 70, 96},
+				addressChecksum: [4]byte{195, 141, 229, 136},
+			},
+			{
+				addressString:   "BFLADE6DETJQU7DABJANLCKH3PEFTWQQGZ34YHRPRKWYNEYC3DRWKJWZZA",
+				addressBytes:    [32]byte{9, 86, 1, 147, 195, 36, 211, 10, 124, 96, 10, 64, 213, 137, 71, 219, 200, 89, 218, 16, 54, 119, 204, 30, 47, 138, 173, 134, 147, 2, 216, 227},
+				addressChecksum: [4]byte{101, 38, 217, 200},
+			},
+		}
 
-	upperLimit := new(big.Int).Lsh(big.NewInt(1), addressByteSize<<3)
-	var addrBasics basics.Address
-	var addrABI []byte = make([]byte, addressByteSize)
+		for _, testCase := range testCases {
+			t.Run(testCase.addressString, func(t *testing.T) {
+				require.Equal(t, testCase.addressChecksum[:], addressCheckSum(testCase.addressBytes))
+				require.Equal(t, testCase.addressString, addressToString(testCase.addressBytes))
 
-	for testCaseIndex := 0; testCaseIndex < addressTestCaseCount; testCaseIndex++ {
-		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
-		require.NoError(t, err, "cryptographic random int init fail")
+				actualBytes, err := addressFromString(testCase.addressString)
+				require.NoError(t, err)
+				require.Equal(t, testCase.addressBytes, actualBytes)
+			})
+		}
+	})
 
-		randomAddrInt.FillBytes(addrBasics[:])
-		randomAddrInt.FillBytes(addrABI)
+	t.Run("invalid", func(t *testing.T) {
+		testCases := []struct {
+			addressString string
+			expectedError string
+		}{
+			{
+				// incorrect checksum
+				addressString: "CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JAQM",
+				expectedError: "decoded checksum mismatch",
+			},
+			{
+				// too many bytes
+				addressString: "CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JAFMFM",
+				expectedError: "decoded byte length should equal 36 with address and checksum",
+			},
+			{
+				// too few bytes
+				addressString: "CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JA",
+				expectedError: "decoded byte length should equal 36 with address and checksum",
+			},
+			{
+				// not base32
+				addressString: "!!!",
+				expectedError: "base32 decode error",
+			},
+		}
 
-		checkSumBasics := addrBasics.GetChecksum()
-		checkSumABI, err := addressCheckSum(addrABI)
-		require.NoError(t, err, "ABI compute checksum for address slice failed")
-
-		require.Equal(t, checkSumBasics, checkSumABI,
-			"basics.Address computed checksum %v not equal to data.abi computed checksum %v",
-		)
-	}
+		for _, testCase := range testCases {
+			t.Run(testCase.addressString, func(t *testing.T) {
+				_, err := addressFromString(testCase.addressString)
+				require.ErrorContains(t, err, testCase.expectedError)
+			})
+		}
+	})
 }
 
-func TestJSONtoInterfaceValid(t *testing.T) {
+func TestUnmarshalFromJSON(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testCases = []struct {
 		input    string
@@ -137,14 +185,149 @@ func TestJSONtoInterfaceValid(t *testing.T) {
 
 	for _, testCase := range testCases {
 		abiT, err := TypeOf(testCase.typeStr)
-		require.NoError(t, err, "fail to construct ABI type (%s): %v", testCase.typeStr, err)
+		require.NoError(t, err, "fail to construct ABI type: %s", testCase.typeStr)
+
 		res, err := abiT.UnmarshalFromJSON([]byte(testCase.input))
 		require.NoError(t, err, "fail to unmarshal JSON to interface: (%s): %v", testCase.input, err)
 		require.Equal(t, testCase.expected, res, "%v not matching with expected value %v", res, testCase.expected)
+
 		resEncoded, err := abiT.Encode(res)
 		require.NoError(t, err, "fail to encode %v to ABI bytes: %v", res, err)
 		resDecoded, err := abiT.Decode(resEncoded)
 		require.NoError(t, err, "fail to decode ABI bytes of %v: %v", res, err)
 		require.Equal(t, res, resDecoded, "ABI encode-decode round trip: %v not match with expected %v", resDecoded, res)
+	}
+}
+
+func TestMarshalToJSON(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var testCases = []struct {
+		input    interface{}
+		typeStr  string
+		expected string
+	}{
+		{
+			input:    true,
+			typeStr:  `bool`,
+			expected: `true`,
+		},
+		{
+			input:    false,
+			typeStr:  `bool`,
+			expected: `false`,
+		},
+		{
+			input:    uint64(117),
+			typeStr:  `uint64`,
+			expected: `117`,
+		},
+		{
+			input:    big.NewInt(5834),
+			typeStr:  `uint128`,
+			expected: `5834`,
+		},
+		{
+			input:    []interface{}{uint8(0), big.NewInt(1), uint32(2)},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]interface{}{uint8(0), big.NewInt(1), uint32(2)},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []uint8{0, 1, 2},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]uint8{0, 1, 2},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []uint64{0, 1, 2},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]uint64{0, 1, 2},
+			typeStr:  `(uint8,uint64,uint32)`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []interface{}{uint8(0), big.NewInt(1), uint32(2)},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]interface{}{uint8(0), big.NewInt(1), uint32(2)},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []uint8{0, 1, 2},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]uint8{0, 1, 2},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []uint64{0, 1, 2},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    [3]uint64{0, 1, 2},
+			typeStr:  `uint8[]`,
+			expected: `[0,1,2]`,
+		},
+		{
+			input:    []interface{}{byte(0), byte(1), byte(2)},
+			typeStr:  `byte[]`,
+			expected: `"AAEC"`,
+		},
+		{
+			input:    [3]interface{}{byte(0), byte(1), byte(2)},
+			typeStr:  `byte[]`,
+			expected: `"AAEC"`,
+		},
+		{
+			input:    []byte{0, 1, 2},
+			typeStr:  `byte[]`,
+			expected: `"AAEC"`,
+		},
+		{
+			input:    [3]byte{0, 1, 2},
+			typeStr:  `byte[]`,
+			expected: `"AAEC"`,
+		},
+		{
+			input:    []byte{16, 10, 81, 202, 158, 158, 46, 209, 139, 213, 244, 123, 112, 56, 225, 176, 71, 198, 31, 126, 155, 105, 97, 91, 131, 241, 213, 95, 145, 71, 126, 247},
+			typeStr:  `address`,
+			expected: `"CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JAFM"`,
+		},
+		{
+			input:    [32]byte{16, 10, 81, 202, 158, 158, 46, 209, 139, 213, 244, 123, 112, 56, 225, 176, 71, 198, 31, 126, 155, 105, 97, 91, 131, 241, 213, 95, 145, 71, 126, 247},
+			typeStr:  `address`,
+			expected: `"CAFFDSU6TYXNDC6V6R5XAOHBWBD4MH36TNUWCW4D6HKV7EKHP33Q74JAFM"`,
+		},
+	}
+
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			abiT, err := TypeOf(testCase.typeStr)
+			require.NoError(t, err, "fail to construct ABI type: %s", testCase.typeStr)
+
+			actualJson, err := abiT.MarshalToJSON(testCase.input)
+			require.NoError(t, err)
+
+			require.Equal(t, testCase.expected, string(actualJson))
+		})
 	}
 }
