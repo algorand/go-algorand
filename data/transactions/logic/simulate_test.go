@@ -412,7 +412,8 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Contains(t, *result.FailureMessage, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
-	attachGroupID(txgroup)
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
 
 	// Check balances before transaction
 	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
@@ -493,7 +494,9 @@ func TestSimpleAppCall(t *testing.T) {
 		},
 	}
 
-	attachGroupID(txgroup)
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
@@ -537,7 +540,9 @@ func TestRejectAppCall(t *testing.T) {
 		},
 	}
 
-	attachGroupID(txgroup)
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Contains(t, *result.FailureMessage, "transaction rejected by ApprovalProgram")
@@ -724,7 +729,9 @@ func TestBalanceChangesWithApp(t *testing.T) {
 		},
 	}
 
-	attachGroupID(txgroup)
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
 	result, err := s.SimulateSignedTxGroup(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
