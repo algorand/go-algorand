@@ -275,9 +275,6 @@ return stack matches the name of the input value.
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
 | `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
-| `bn256_add` | for (curve points A and B) return the curve point A + B |
-| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
-| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
