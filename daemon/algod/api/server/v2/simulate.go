@@ -86,12 +86,7 @@ type ScopedSimulatorError struct {
 // ==============================
 
 func isInvalidSignatureError(err error) bool {
-	var signatureError verify.SignatureError
-	if errors.As(err, &signatureError) {
-		return true
-	}
-
-	return false
+	return errors.As(err, &verify.SignatureError{})
 }
 
 // ==============================

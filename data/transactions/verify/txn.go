@@ -116,6 +116,23 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	return nil
 }
 
+// SignatureError is an error returned when a signature is invalid.
+type SignatureError struct {
+	err error
+}
+
+func (s SignatureError) Error() string {
+	return s.err.Error()
+}
+
+func (s SignatureError) Unwrap() error {
+	return s.err
+}
+
+func signatureErrorf(format string, args ...interface{}) SignatureError {
+	return SignatureError{fmt.Errorf(format, args...)}
+}
+
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // it is the caller responsibility to call batchVerifier.verify()
@@ -144,7 +161,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	}
 
 	if err := batchVerifier.Verify(); err != nil {
-		return nil, err
+		return nil, SignatureError{err}
 	}
 
 	return
@@ -189,15 +206,6 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 		cache.Add(stxs, groupCtx)
 	}
 	return
-}
-
-// SignatureError is an error returned when a signature is invalid.
-type SignatureError interface {
-	error
-}
-
-func signatureErrorf(format string, args ...interface{}) SignatureError {
-	return fmt.Errorf(format, args...)
 }
 
 func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
@@ -267,7 +275,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	}
 
 	if err := batchVerifier.Verify(); err != nil {
-		return SignatureError(err)
+		return SignatureError{err}
 	}
 	return nil
 }
@@ -306,7 +314,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	}
 	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
-		return SignatureError(err)
+		return SignatureError{err}
 	}
 
 	hasMsig := false
