@@ -807,6 +807,8 @@ func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.SpecialAddr, []byte(a)
 }
 
+// TestSPWithCounterReset tests if the state proof transaction is getting into the pool and the blcok
+// when the transaction pool is full (TxPoolSize=0) and when there is bad sp and payment transaction traffic.
 func TestSPWithCounterReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -854,18 +856,21 @@ func TestSPWithCounterReset(t *testing.T) {
 	require.NoError(t, err)
 	stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
 
-	for spSpam := 0; spSpam < 5; spSpam++ {
+	// Send well formed but bad stateproof transactions from two goroutines
+	for spSpam := 0; spSpam < 2; spSpam++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for !done {
 				// ignore the returned error (most of the time will be error)
 				relay.BroadcastTransaction(stxn)
+				time.Sleep(25*time.Millisecond)
 			}
 		}()
 	}
 
-	for txnSpam := 0; txnSpam < 0; txnSpam++ {
+	// Send payment transactions from two goroutines
+	for txnSpam := 0; txnSpam < 2; txnSpam++ {
 		wg.Add(1)
 		go func(amt uint64) {
 			defer wg.Done()
@@ -884,13 +889,15 @@ func TestSPWithCounterReset(t *testing.T) {
 				cntr = cntr + 1
 				// ignore the returned error (most of the time will be error)
 				relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+				time.Sleep(25*time.Millisecond)
 			}
 		}(uint64(txnSpam + 1))
 	}
 
+	// Check that the first 2 stateproofs are added to the blockchain
 	round := uint64(0)
 	expectedSPRound := consensusParams.StateProofInterval * 2
-	for round < consensusParams.StateProofInterval*6 {
+	for round < consensusParams.StateProofInterval*5 {
 		round = params.LastRound
 		fmt.Println(round)
 		require.NoError(t, err)
@@ -914,11 +921,12 @@ func TestSPWithCounterReset(t *testing.T) {
 				break
 			}
 		}
-		if expectedSPRound == consensusParams.StateProofInterval*5 {
+		if expectedSPRound == consensusParams.StateProofInterval*4 {
 			break
 		}
 	}
-	require.Less(t, round, consensusParams.StateProofInterval*6)
+	// If waited till round 20 and did not yet get the stateproof with last round 12, fail the test
+	require.Less(t, round, consensusParams.StateProofInterval*5)
 }
 
 func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
