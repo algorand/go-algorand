@@ -21,9 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	//	"os"
-	//	"time"
-	//	"runtime/debug"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -301,14 +298,6 @@ var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-
 var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
 var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
 
-/*func logPrintA(from, msg string) {
-	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: %s: %s\n", time.Now().String(), from, msg))
-	f.WriteString(string(debug.Stack()))
-	f.Close()
-}
-*/
-
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
@@ -494,7 +483,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if proto.StateProofInterval == 0 {
 			return errStateProofNotSupported
 		}
-		//		logPrintA("transaction.go", fmt.Sprintf("%+v", tx))
+
 		// This is a placeholder transaction used to store state proofs
 		// on the ledger, and ensure they are broadly available.  Most of
 		// the fields must be empty.  It must be issued from a special
