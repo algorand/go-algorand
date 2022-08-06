@@ -1230,7 +1230,7 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 		immediateCounts[i] = numImms
 		i++
 	}
-	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...))
+	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...)) //nolint:errcheck
 }
 
 // getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
@@ -1255,7 +1255,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 		}
 		pseudo.Name = name
 		if pseudo.Version > ops.Version {
-			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
+			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version) //nolint:errcheck
 		}
 		if len(args) == 0 {
 			return pseudo, pseudo.Name + " without immediates", true
@@ -1266,9 +1266,9 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	if !ok {
 		spec, ok = OpsByName[AssemblerMaxVersion][name]
 		if ok {
-			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
+			ops.errorf("%s opcode was introduced in v%d", name, spec.Version) //nolint:errcheck
 		} else {
-			ops.errorf("unknown opcode: %s", name)
+			ops.errorf("unknown opcode: %s", name) //nolint:errcheck
 		}
 	}
 	return spec, spec.Name, ok
@@ -1482,7 +1482,7 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 
 func (ops *OpStream) typeError(err error) {
 	if ops.typeTracking {
-		_ = ops.error(err)
+		ops.error(err) //nolint:errcheck
 	}
 }
 
@@ -1711,12 +1711,12 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label) //nolint:errcheck
 			continue
 		}
 		jump := dest - naturalPc
 		if jump > 0x7fff {
-			ops.errorf("label %#v is too far away", lr.label)
+			ops.errorf("label %#v is too far away", lr.label) //nolint:errcheck
 			continue
 		}
 		raw[lr.position+1] = uint8(jump >> 8)
