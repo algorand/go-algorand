@@ -542,7 +542,7 @@ function install_new_binaries() {
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new
         cp ${UPDATESRCDIR}/bin/* ${BINDIR}/new
-        mv ${BINDIR}/new/* ${BINDIR}
+        mv -f ${BINDIR}/new/* ${BINDIR}
         rm -rf ${BINDIR}/new
     fi
 }
