@@ -877,7 +877,10 @@ func TestSPWithTXPoolFull(t *testing.T) {
 			continue
 		}
 		require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[0].Type)
-		require.Equal(t, uint64(8), b.Transactions.Transactions[0].StateProof.StateProofIntervalLatestRound)
+		var msg stateproofmsg.Message
+		err = protocol.Decode(b.Transactions.Transactions[0].StateProof.StateProofMessage, &msg)
+		require.NoError(t, err)
+		require.Equal(t, uint64(8), msg.LastAttestedRound)
 		break
 	}
 	require.Less(t, round, uint64(20))
@@ -1005,7 +1008,12 @@ func TestSPWithCounterReset(t *testing.T) {
 		for ; tid < len(b.Transactions.Transactions); tid++ {
 			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
 				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
-				require.Equal(t, int(expectedSPRound), int(b.Transactions.Transactions[tid].StateProof.StateProofIntervalLatestRound))
+
+				var msg stateproofmsg.Message
+				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
+				require.NoError(t, err)
+				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break
 			}
@@ -1029,7 +1037,6 @@ func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consens
 	stxn.Txn.FirstValid = basics.Round(round)
 	stxn.Txn.LastValid = basics.Round(round + 1000)
 	stxn.Txn.GenesisHash = genesisHash
-	stxn.Txn.StateProofIntervalLastRound = basics.Round(round - 1)
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
 	stxn.Txn.Message = msg
