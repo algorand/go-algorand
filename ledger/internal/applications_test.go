@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -145,12 +146,17 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
+func (c *mockCowForLogicLedger) txnCounter() uint64 {
+	return c.txc
+}
+
 func (c *mockCowForLogicLedger) incTxnCount() {
 	c.txc++
 }
 
-func (c *mockCowForLogicLedger) txnCounter() uint64 {
-	return c.txc
+// No unit tests care about this yet, so this is a lame implementation
+func (c *mockCowForLogicLedger) blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{Round: round}, nil
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {

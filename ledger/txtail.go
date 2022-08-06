@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 )
 
 const initialLastValidArrayLen = 256
@@ -83,10 +84,14 @@ type txTail struct {
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
 	lowWaterMark basics.Round // the last round known to be committed to disk
+
+	// log copied from ledger
+	log logging.Logger
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	rdb := l.trackerDB().Rdb
+	t.log = l.trackerLog()
 
 	var roundData []*txTailRound
 	var roundTailHashes []crypto.Digest
@@ -373,5 +378,8 @@ func (t *txTail) blockHeader(rnd basics.Round) (bookkeeping.BlockHeader, bool) {
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 	hdr, ok := t.blockHeaderData[rnd]
+	if !ok {
+		t.log.Warnf("txtail failed to fetch blockHeader from rnd: %d", rnd)
+	}
 	return hdr, ok
 }

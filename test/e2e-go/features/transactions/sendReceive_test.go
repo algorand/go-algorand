@@ -124,12 +124,11 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
 		var pongTxInfo, pingTxInfo v1.Transaction
-		pongTxInfo, err = pingClient.PendingTransactionInformation(pongTx.ID().String())
+		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
 			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
 		}
 		waitForTransaction = err != nil || pongTxInfo.ConfirmedRound == 0 || pingTxInfo.ConfirmedRound == 0
-
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound
@@ -143,6 +142,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	if waitForTransaction {
 		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
 		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
+		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 	}
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
