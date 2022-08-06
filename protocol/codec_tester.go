@@ -433,7 +433,7 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 
 		// some objects might appen to the original error additional info.
 		// we ensure that invalidObject error is not failing the test.
-		if errors.As(err, &ErrInvalidObject) {
+		if errors.Is(err, ErrInvalidObject) {
 			continue
 		}
 		require.NoError(t, err)

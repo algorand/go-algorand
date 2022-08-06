@@ -2321,7 +2321,6 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
 
 	wn.messagesOfInterest[t] = true
 	wn.updateMessagesOfInterestEnc()
-	return
 }
 
 // DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
@@ -2338,7 +2337,6 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 	delete(wn.messagesOfInterest, t)
 	wn.updateMessagesOfInterestEnc()
-	return
 }
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
