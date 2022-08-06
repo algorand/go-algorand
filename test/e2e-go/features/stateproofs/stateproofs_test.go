@@ -986,7 +986,7 @@ func TestSPWithCounterReset(t *testing.T) {
 	// Check that the first 2 stateproofs are added to the blockchain
 	round := uint64(0)
 	expectedSPRound := consensusParams.StateProofInterval * 2
-	for round < consensusParams.StateProofInterval*5 {
+	for round < consensusParams.StateProofInterval*6 {
 		round = params.LastRound
 
 		err := fixture.WaitForRound(round+1, 6*time.Second)
@@ -1023,7 +1023,7 @@ func TestSPWithCounterReset(t *testing.T) {
 		}
 	}
 	// If waited till round 20 and did not yet get the stateproof with last round 12, fail the test
-	require.Less(t, round, consensusParams.StateProofInterval*5)
+	require.Less(t, round, consensusParams.StateProofInterval*6)
 }
 
 func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
