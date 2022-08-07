@@ -30,13 +30,12 @@ import (
 )
 
 var (
-	errStateProofCrypto                 = errors.New("state proof crypto error")
-	errStateProofParamCreation          = errors.New("state proof param creation error")
-	errStateProofNotEnabled             = errors.New("state proofs are not enabled")
-	errNotAtRightMultiple               = errors.New("state proof is not in a valid round multiple")
-	errInvalidVotersRound               = errors.New("invalid voters round")
-	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
-	errInsufficientWeight               = errors.New("insufficient state proof weight")
+	errStateProofCrypto        = errors.New("state proof crypto error")
+	errStateProofParamCreation = errors.New("state proof param creation error")
+	errStateProofNotEnabled    = errors.New("state proofs are not enabled")
+	errNotAtRightMultiple      = errors.New("state proof is not in a valid round multiple")
+	errInvalidVotersRound      = errors.New("invalid voters round")
+	errInsufficientWeight      = errors.New("insufficient state proof weight")
 )
 
 // AcceptableStateProofWeight computes the acceptable signed weight
@@ -137,7 +136,7 @@ func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
+func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, atRound basics.Round, msg *stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -152,11 +151,6 @@ func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, state
 	if votersRound != votersHdr.Round {
 		return fmt.Errorf("new state proof is for %d (voters %d), but votersHdr from %d: %w",
 			latestRoundInIntervalHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
-	}
-
-	if nextStateProofRnd == 0 || nextStateProofRnd != latestRoundInIntervalHdr.Round {
-		return fmt.Errorf("expecting state proof for %d, but new state proof is for %d (voters %d):%w",
-			nextStateProofRnd, latestRoundInIntervalHdr.Round, votersRound, errExpectedDifferentStateProofRound)
 	}
 
 	acceptableWeight := AcceptableStateProofWeight(votersHdr, atRound, logging.Base())
