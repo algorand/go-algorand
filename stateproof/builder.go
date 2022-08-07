@@ -65,7 +65,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	provenWeight, err := verify.GetProvenWeight(votersHdr, hdr)
+	provenWeight, err := verify.GetProvenWeight(&votersHdr, &hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -174,8 +174,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		latest := spw.ledger.Latest()
 		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
-			// The latest block in the ledger should never disappear, so this should never happen
-			return network.Disconnect, err
+			return network.Ignore, err
 		}
 
 		if sfa.Round < latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
@@ -408,7 +407,7 @@ func (spw *Worker) tryBroadcast() {
 
 	for rnd, b := range spw.builders {
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := verify.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(&b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue

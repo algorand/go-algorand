@@ -113,7 +113,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
 	for _, part := range s.keys {
 		partRecord := account.ParticipationRecord{
 			ParticipationID:   part.ID(),
@@ -130,7 +130,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 			Voting:            part.Voting,
 		}
 		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-		partRecordForRound := account.StateProofRecordForRound{
+		partRecordForRound := account.StateProofSecretsForRound{
 			ParticipationRecord: partRecord,
 			StateProofSecrets:   signerInRound,
 		}

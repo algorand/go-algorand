@@ -127,25 +127,25 @@ func TestAcceptableStateProofWeight(t *testing.T) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out := AcceptableStateProofWeight(votersHdr, firstValid, logger)
+	out := AcceptableStateProofWeight(&votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0), out)
 
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofOnlineTotalWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(&votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	// this should exercise the second return case
 	firstValid = basics.Round(3)
-	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(&votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	firstValid = basics.Round(6)
 	proto.StateProofWeightThreshold = 999999999
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(&votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x17), out)
 
 	proto.StateProofInterval = 10000
@@ -156,7 +156,7 @@ func TestAcceptableStateProofWeight(t *testing.T) {
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	proto.StateProofWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(&votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
 
 	// Covers everything except "overflow that shouldn't happen" branches
@@ -168,7 +168,7 @@ func TestStateProofParams(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
 
-	_, err := GetProvenWeight(votersHdr, hdr)
+	_, err := GetProvenWeight(&votersHdr, &hdr)
 	require.Error(t, err) // not enabled
 
 	votersHdr.CurrentProtocol = "TestStateProofParams"
@@ -176,12 +176,12 @@ func TestStateProofParams(t *testing.T) {
 	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
-	_, err = GetProvenWeight(votersHdr, hdr)
+	_, err = GetProvenWeight(&votersHdr, &hdr)
 	require.Error(t, err) // wrong round
 
 	votersHdr.Round = 2
 	hdr.Round = 3
-	_, err = GetProvenWeight(votersHdr, hdr)
+	_, err = GetProvenWeight(&votersHdr, &hdr)
 	require.Error(t, err) // wrong round
 
 	// Covers all cases except overflow

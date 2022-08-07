@@ -26,7 +26,7 @@ import (
 )
 
 // StateProof applies the StateProof transaction and setting the next StateProof round
-func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofs, validate bool) error {
+func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {
 		return fmt.Errorf("applyStateProof type %d not supported", spType)

@@ -1383,7 +1383,7 @@ func TestTStateProofLogging(t *testing.T) {
 	votersRoundHdr, err := mockLedger.BlockHdr(votersRound)
 	require.NoError(t, err)
 
-	provenWeight, err := verify.GetProvenWeight(votersRoundHdr, spRoundHdr)
+	provenWeight, err := verify.GetProvenWeight(&votersRoundHdr, &spRoundHdr)
 	require.NoError(t, err)
 
 	lookback := votersRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))

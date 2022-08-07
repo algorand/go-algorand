@@ -94,10 +94,10 @@ type (
 		ParticipationRecord
 	}
 
-	// StateProofRecordForRound contains participant's state proof secrets that corresponds to
+	// StateProofSecretsForRound contains participant's state proof secrets that corresponds to
 	// one specific round. In Addition, it also returns the participation metadata.
 	// If there are no secrets for the round a nil is returned in Stateproof field.
-	StateProofRecordForRound struct {
+	StateProofSecretsForRound struct {
 		ParticipationRecord
 
 		StateProofSecrets *merklesignature.Signer
@@ -247,8 +247,8 @@ type ParticipationRegistry interface {
 	// GetForRound fetches a record with voting secrets for a particular round.
 	GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
 
-	// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
-	GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error)
+	// GetStateProofSecretsForRound fetches a record with stateproof secrets for a particular round.
+	GetStateProofSecretsForRound(id ParticipationID, round basics.Round) (StateProofSecretsForRound, error)
 
 	// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
 	HasLiveKeys(from, to basics.Round) bool
@@ -761,14 +761,14 @@ func (db *participationDB) HasLiveKeys(from, to basics.Round) bool {
 	return false
 }
 
-// GetStateProofForRound returns the state proof data required to sign the compact certificate for this round
-func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
+// GetStateProofSecretsForRound returns the state proof data required to sign the compact certificate for this round
+func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, round basics.Round) (StateProofSecretsForRound, error) {
 	partRecord, err := db.GetForRound(id, round)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 
-	var result StateProofRecordForRound
+	var result StateProofSecretsForRound
 	result.ParticipationRecord = partRecord.ParticipationRecord
 	var rawStateProofKey []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -790,7 +790,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 		return nil
 	})
 	if err != nil {
-		return StateProofRecordForRound{}, fmt.Errorf("failed to fetch state proof for round %d: %w", round, err)
+		return StateProofSecretsForRound{}, fmt.Errorf("failed to fetch state proof for round %d: %w", round, err)
 	}
 
 	// Init stateproof fields after being able to retrieve key from database
@@ -800,7 +800,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 
 	var rawSignerContext []byte
@@ -814,11 +814,11 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 		return nil
 	})
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 	err = protocol.Decode(rawSignerContext, &result.StateProofSecrets.SignerContext)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 	return result, nil
 }
