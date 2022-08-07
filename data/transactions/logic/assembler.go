@@ -545,7 +545,7 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func base32DecdodeAnyPadding(x string) (val []byte, err error) {
+func base32DecodeAnyPadding(x string) (val []byte, err error) {
 	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
 	if err != nil {
 		// try again with standard padding
@@ -567,7 +567,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = errors.New("byte base32 arg lacks close paren")
 			return
 		}
-		val, err = base32DecdodeAnyPadding(arg[open+1 : close])
+		val, err = base32DecodeAnyPadding(arg[open+1 : close])
 		if err != nil {
 			return
 		}
@@ -595,7 +595,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = fmt.Errorf("need literal after 'byte %s'", arg)
 			return
 		}
-		val, err = base32DecdodeAnyPadding(args[1])
+		val, err = base32DecodeAnyPadding(args[1])
 		if err != nil {
 			return
 		}
@@ -1399,25 +1399,26 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-var spaces = [256]uint8{'\t': 1, ' ': 1}
+// semi-colon is quite space-like, so include it
+var spaces = [256]bool{'\t': true, ' ': true, ';': true}
 
 func fieldsFromLine(line string) []string {
 	var fields []string
 
 	i := 0
-	for i < len(line) && spaces[line[i]] != 0 {
+	for i < len(line) && spaces[line[i]] {
 		i++
 	}
 
 	start := i
-	inString := false
-	inBase64 := false
+	inString := false // tracked to allow spaces and comments inside
+	inBase64 := false // tracked to allow '//' inside
 	for i < len(line) {
-		if spaces[line[i]] == 0 { // if not space
+		if !spaces[line[i]] { // if not space
 			switch line[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+					if i == 0 || i > 0 && spaces[line[i-1]] {
 						inString = true
 					}
 				} else {
@@ -1446,19 +1447,29 @@ func fieldsFromLine(line string) []string {
 			i++
 			continue
 		}
+
+		// we've hit a space, end last token unless inString
+
 		if !inString {
 			field := line[start:i]
 			fields = append(fields, field)
-			if field == "base64" || field == "b64" {
-				inBase64 = true
-			} else if inBase64 {
+			if line[i] == ';' {
+				fields = append(fields, ";")
+			}
+			if inBase64 {
 				inBase64 = false
+			} else if field == "base64" || field == "b64" {
+				inBase64 = true
 			}
 		}
 		i++
 
+		// gooble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && spaces[line[i]] != 0 {
+			for i < len(line) && spaces[line[i]] {
+				if line[i] == ';' {
+					fields = append(fields, ";")
+				}
 				i++
 			}
 			start = i
@@ -1531,25 +1542,12 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// processFields walks through the input fields until it gets to a semi-colon
-// at the end of a field at which point it returns everything prior as current
-// and everything following the semicolon as next
-
-// fields should not be used after as processFields mangles it
-// current and next do share the same array if next is not nil
-func processFields(fields []string) (current, next []string) {
-	for i := 0; i < len(fields); i++ {
-		field := fields[i]
-		if string(field[len(field)-1]) == ";" {
-			field = field[0 : len(field)-1]
-			current = fields[:i]
-			if len(field) > 0 {
-				current = append(current, field)
-			}
-			if i+1 == len(fields) {
-				return current, nil
-			}
-			return current, fields[i+1:]
+// processFields breaks fields into a slice of tokens up to the first
+// semi-colon, and the rest.
+func processFields(fields []string) (current, rest []string) {
+	for i, field := range fields {
+		if field == ";" {
+			return fields[:i], fields[i+1:]
 		}
 	}
 	return fields, nil
@@ -1565,52 +1563,28 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if len(line) == 0 {
-			ops.trace("%3d: 0 line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			ops.trace("%3d: // line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "#pragma") {
-			ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			ops.pragma(line)
-			continue
-		}
 		fields := fieldsFromLine(line)
-		if len(fields) == 0 {
-			ops.trace("%3d: no fields\n", ops.sourceLine)
-			continue
-		}
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-		}
-		var current []string
-		var next []string
-		next = fields
-		for current, next = processFields(next); len(current) > 0 || len(next) > 0; current, next = processFields(next) {
+		for current, next := processFields(fields); len(current) > 0 || len(next) > 0; current, next = processFields(next) {
 			if len(current) == 0 {
 				continue
 			}
 			opstring := current[0]
-			if len(opstring) == 0 {
-				continue
-			}
 			if strings.HasPrefix(opstring, "//") {
-				// semicolon inside comment is not counted as newline
+				ops.trace("%3d: comment\n", ops.sourceLine)
 				break
 			}
-			currentLine := strings.Join(current, " ")
-			if strings.HasPrefix(currentLine, "#pragma") {
+			if opstring == "#pragma" {
 				ops.trace("%3d: #pragma line\n", ops.sourceLine)
-				ops.pragma(currentLine)
-				continue
+				// pragma get the rest of the tokens
+				ops.pragma(append(current, next...))
+				break
+			}
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 			}
 			if opstring[len(opstring)-1] == ':' {
 				ops.createLabel(opstring[:len(opstring)-1])
@@ -1653,6 +1627,13 @@ func (ops *OpStream) assemble(text string) error {
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			err = errors.New("line too long")
+		}
+		ops.error(err)
+	}
+
 	// backward compatibility: do not allow jumps behind last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
@@ -1680,8 +1661,7 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(line string) error {
-	fields := strings.Split(line, " ")
+func (ops *OpStream) pragma(fields []string) error {
 	if fields[0] != "#pragma" {
 		return ops.errorf("invalid syntax: %s", fields[0])
 	}

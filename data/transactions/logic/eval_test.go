@@ -3532,8 +3532,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
 	runs := 1 + b.N/2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
-	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
-	source = strings.ReplaceAll(source, ";", "\n")
+	source := prefix + ";" + strings.Repeat(operation+"\n", 2000) + ";" + suffix
 	ops := testProg(b, source, AssemblerMaxVersion)
 	evalLoop(b, runs, ops.Program)
 	b.ReportMetric(float64(inst), "extra/op")
