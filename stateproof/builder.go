@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"sort"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -405,7 +406,14 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	for rnd, b := range spw.builders {
+	sortedRounds := make([]basics.Round, 0, len(spw.builders))
+	for rnd := range spw.builders {
+		sortedRounds = append(sortedRounds, rnd)
+	}
+	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
+
+	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
+		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := verify.AcceptableStateProofWeight(&b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
@@ -437,6 +445,9 @@ func (spw *Worker) tryBroadcast() {
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: broadcasting state proof txn for %d: %v", rnd, err)
+			// if this StateProofTxn was rejected, the next one would be rejected as well since state proof should be added in
+			// a sequential order
+			break
 		}
 	}
 }
