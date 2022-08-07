@@ -19,6 +19,7 @@ package stateproof
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -728,10 +729,15 @@ const (
 	sigAlternateOrigin
 )
 
-// getSignaturesInDatabase sets up the db with signatures
+// getSignaturesInDatabase sets up the db with signatures. This function supports creating up to StateProofInterval/2 address.
 func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) (
 	signatureBcasted map[basics.Address]int, fromThisNode map[basics.Address]bool,
 	tns *testWorkerStubs, spw *Worker) {
+
+	// Some tests rely on having only one signature being broadcast at a single round.
+	// for that we need to make sure that addresses won't fall into the same broadcast round.
+	// For that same reason we can't have more than StateProofInterval / 2 address
+	require.LessOrEqual(t, uint64(numAddresses), config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
 
 	// Prepare the addresses and the keys
 	signatureBcasted = make(map[basics.Address]int)
@@ -739,7 +745,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	var keys []account.Participation
 	for i := 0; i < numAddresses; i++ {
 		var parent basics.Address
-		crypto.RandBytes(parent[:])
+		binary.LittleEndian.PutUint64(parent[:], uint64(i))
 		p := newPartKey(t, parent)
 		defer p.Close()
 		keys = append(keys, p.Participation)

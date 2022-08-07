@@ -1717,6 +1717,7 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
+	l.WaitForCommit(l.Latest())
 	// at the point the ledger would remove the voters round for the database.
 	// that will cause the stateproof transaction verification to fail because there are
 	// missing blocks
