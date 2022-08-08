@@ -890,7 +890,7 @@ func TestSPWithTXPoolFull(t *testing.T) {
 // TestAtMostOneSPFullPool tests that there is at most one SP txn is admitted to the pool per roound
 // when the pool is full. Note that the test sets TxPoolSize to 0 to simulate a full pool, which
 // guarantees that no more than 1 SP txn get into a block. In normal configuration, it is
-// possible to have multiple SPs getting into the same block when the pool is full. 
+// possible to have multiple SPs getting into the same block when the pool is full.
 func TestAtMostOneSPFullPool(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -1102,7 +1102,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 		}
 	}
 	// Do not check if the SPs were added to the block. TestAtMostOneSPFullPool checks it.
-	// In some environments (ARM) the high load may prevent it. 
+	// In some environments (ARM) the high load may prevent it.
 }
 
 func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
