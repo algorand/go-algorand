@@ -1483,7 +1483,7 @@ type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
-	ledger           logic.LedgerForLogic
+	ledger           logic.LedgerForSignature
 
 	ctx      context.Context
 	txgroups [][]transactions.SignedTxnWithAD

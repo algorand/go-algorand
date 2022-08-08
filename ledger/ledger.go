@@ -583,11 +583,11 @@ func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()
 }
 
-// Round is an alias for Latest to satisfy LedgerForSignature, which uses
-// Round() so that a LedgerForLogic is also a LedgerForSignature. Perhaps we
-// should synchronize them all to use "Latest()"
+// Round satisfies LedgerForSignature, and must act the same as the
+// LedgerForLogic values used by EvalContract.  Those return the Round being
+// evaluated, not the last committed.
 func (l *Ledger) Round() basics.Round {
-	return l.Latest()
+	return l.Latest() + 1
 }
 
 // LatestCommitted returns the last block round number written to

@@ -2546,9 +2546,9 @@ func TestBlockSeed(t *testing.T) {
 	txn.LastValid = l.round() + 10
 
 	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
-	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep)
-	testApp(t, "int 4294967301; block BlkSeed; len; int 32; ==", ep,
-		"not available") // can't get round being worked on
+	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep) // current - 1
+	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep,
+		"not available") // can't get current round's blockseed
 
 	// proto.MaxTxnLife is 1500 in test.
 	testApp(t, "int 4294967300; int 1500; -; block BlkSeed; len; int 32; ==", ep,
