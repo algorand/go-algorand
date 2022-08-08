@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
@@ -527,6 +529,13 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 	node.log.Infof("Sent signed tx group with IDs %v", txids)
 	return nil
+}
+
+// Simulate speculatively runs a transaction group against the current
+// blockchain state and returns the effects and/or errors that would result.
+func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
+	simulator := simulation.MakeSimulator(node.ledger)
+	return simulator.Simulate(txgroup)
 }
 
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).

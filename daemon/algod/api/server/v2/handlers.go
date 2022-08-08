@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,18 +68,11 @@ type LedgerForAPI interface {
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
-	LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error)
-	CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
-	GenesisHash() crypto.Digest
-	GenesisProto() config.ConsensusParams
-	BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
-	GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error)
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 }
@@ -90,6 +84,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	Simulate(txgroup []transactions.SignedTxn) (generated.SimulationResult, error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -823,14 +818,11 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	actualLedger := v2.Node.LedgerForAPI()
-
 	// Simulate transaction
-	simulator := MakeSimulator(actualLedger)
-	result, err := simulator.SimulateSignedTxGroup(txgroup)
+	result, err := v2.Node.Simulate(txgroup)
 	if err != nil {
-		var invalidTxErr *InvalidTxGroupError
-		var scopedErr *ScopedSimulatorError
+		var invalidTxErr *simulation.InvalidTxGroupError
+		var scopedErr *simulation.ScopedSimulatorError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
