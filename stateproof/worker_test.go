@@ -91,10 +91,10 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
-		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofOnlineTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
-	stateProofBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
+	stateProofBasic.StateProofOnlineTotalWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
@@ -140,8 +140,18 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	s.mu.Lock()
 	s.deletedStateProofKeys[id] = round
+	s.mu.Unlock()
+
 	return nil
+}
+func (s *testWorkerStubs) GetNumDeletedKeys() int {
+	s.mu.Lock()
+	numDeltedKeys := len(s.deletedStateProofKeys)
+	s.mu.Unlock()
+
+	return numDeltedKeys
 }
 
 func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -540,9 +550,9 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	s.advanceLatest(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
-	require.Zero(t, len(s.deletedStateProofKeys))
+	require.Zero(t, s.GetNumDeletedKeys())
 	w.signStateProof(s.blocks[basics.Round(proto.StateProofInterval)])
-	require.Equal(t, len(s.deletedStateProofKeys), nParticipants)
+	require.Equal(t, s.GetNumDeletedKeys(), nParticipants)
 }
 
 func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
@@ -578,9 +588,8 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 		}),
 	)
 
-	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
 	w.signStateProof(s.blocks[3*basics.Round(proto.StateProofInterval)])
-	require.Zero(t, len(s.deletedStateProofKeys))
+	require.Zero(t, s.GetNumDeletedKeys())
 }
 
 func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {

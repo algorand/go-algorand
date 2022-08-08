@@ -151,7 +151,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.NoError(t, err)
 		stateProofTracking := bookkeeping.StateProofTrackingData{
 			StateProofVotersCommitment:  voters.Tree.Root(),
-			StateProofVotersTotalWeight: voters.TotalWeight,
+			StateProofOnlineTotalWeight: voters.TotalWeight,
 			StateProofNextRound:         blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound,
 		}
 		blk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateProofTracking
@@ -2671,7 +2671,9 @@ func TestVotersReloadFromDisk(t *testing.T) {
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < (proto.StateProofInterval*2 - proto.StateProofVotersLookback); i++ {
+	// we add blocks to the ledger to test reload from disk. we would like the history of the acctonline to extend.
+	// but we don't want to go behind  stateproof recovery interval
+	for i := uint64(0); i < (proto.StateProofInterval*(proto.StateProofMaxRecoveryIntervals-2) - proto.StateProofVotersLookback); i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})

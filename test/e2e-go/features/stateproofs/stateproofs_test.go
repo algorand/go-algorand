@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,6 +63,21 @@ func (a accountFetcher) getAccount(r *require.Assertions, f *fixtures.RestClient
 func (a accountFetcher) getBalance(r *require.Assertions, f *fixtures.RestClientFixture) uint64 {
 	balance, _ := f.GetBalanceAndRound(a.getAccount(r, f))
 	return balance
+}
+
+func (a accountFetcher) goOffline(r *require.Assertions, f *fixtures.RestClientFixture, round uint64) {
+	account0 := a.getAccount(r, f)
+
+	minTxnFee, _, err := f.CurrentMinFeeAndBalance()
+	r.NoError(err)
+
+	client0 := f.GetLibGoalClientForNamedNode(a.nodeName)
+	txn, err := client0.MakeUnsignedGoOfflineTx(account0, round, round+1000, minTxnFee, [32]byte{})
+	r.NoError(err)
+	wallet0, err := client0.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	_, err = client0.SignAndBroadcastTransaction(wallet0, nil, txn)
+	r.NoError(err)
 }
 
 type paymentSender struct {
@@ -153,7 +170,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -162,7 +179,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 			}
 		} else {
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
@@ -183,9 +200,9 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 func TestStateProofOverlappingKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -262,7 +279,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -404,7 +421,7 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	var votersRoot = make([]byte, sp.HashSize)
 	copy(votersRoot[:], lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
 
-	provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
+	provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
 	r.False(overflowed)
 
 	verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
@@ -465,6 +482,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 		if rnd == (consensusParams.StateProofMaxRecoveryIntervals)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
+			r.NoError(err)
 			fixture.StartNode(dir)
 		}
 
@@ -484,7 +502,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -541,6 +559,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
+	r.NoError(err)
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	nc.FullStop()
 
@@ -553,6 +572,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+2)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
+			r.NoError(err)
 			fixture.StartNode(dir)
 		}
 
@@ -572,7 +592,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -665,13 +685,13 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		// Changing the amount to pay. This should transfer most of the money from the rich node to the poort node.
+		// Changing the amount to pay. This should transfer most of the money from the rich node to the poor node.
 		if consensusParams.StateProofInterval*2 == rnd {
 			balance := paymentMaker.from.getBalance(a, &fixture)
 			// ensuring that before the test, the rich node (from) has a significantly larger balance.
 			a.True(balance/2 > paymentMaker.to.getBalance(a, &fixture))
 
-			paymentMaker.amount = balance * 3 / 4
+			paymentMaker.amount = balance * 9 / 10
 			paymentMaker.sendPayment(a, &fixture, rnd)
 		}
 
@@ -687,9 +707,9 @@ func TestAttestorsChangeTest(t *testing.T) {
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
-			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
 
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
 
 			// the main part of the test (computing the total stake of the nodes):
 			sum := uint64(0)
@@ -697,12 +717,9 @@ func TestAttestorsChangeTest(t *testing.T) {
 				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
 			}
 
-			// including the stake of the rich node:
-			if blk.Round() < basics.Round(consensusParams.StateProofInterval*3) {
-				sum += accountFetcher{"richNode", 0}.getBalance(a, &fixture)
-			} else { // including the stake of the poor node (which is different)
-				sum += accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
-			}
+			richNodeStake := accountFetcher{"richNode", 0}.getBalance(a, &fixture)
+			poorNodeStake := accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
+			sum = sum + richNodeStake + poorNodeStake
 
 			a.Equal(sum, stake)
 
@@ -712,7 +729,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 				lastStateProofBlock = blk
 			}
 		} else {
-			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
@@ -728,4 +745,304 @@ func TestAttestorsChangeTest(t *testing.T) {
 	}
 
 	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestTotalWeightChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 4
+	consensusParams.StateProofTopVoters = 4
+	//consensusParams.StateProofInterval = 32
+
+	configurableConsensus := config.ConsensusProtocols{
+		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
+	}
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
+	defer fixture.Shutdown()
+
+	var lastStateProofBlock bookkeeping.Block
+	var lastStateProofMessage stateproofmsg.Message
+	libgoal := fixture.LibGoalClient
+
+	richNode := accountFetcher{nodeName: "richNode", accountNumber: 0}
+
+	expectedNumberOfStateProofs := uint64(4)
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
+
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		// Rich node goes offline
+		if consensusParams.StateProofInterval*2-8 == rnd {
+			// subtract 8 rounds since the total online stake is calculated prior to the actual state proof round (lookback)
+			richNode.goOffline(a, &fixture, rnd)
+		}
+
+		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			// Must have a merkle commitment for participants
+			a.Greater(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment), 0)
+			totalStake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
+			a.NotEqual(basics.MicroAlgos{}, totalStake)
+
+			if rnd <= consensusParams.StateProofInterval {
+				a.Equal(uint64(10000000000000000), totalStake)
+			} else { // richNode should be offline by now
+				a.Greater(uint64(10000000000000000), totalStake)
+			}
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		} else {
+			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight == basics.MicroAlgos{})
+		}
+
+		for lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
+}
+
+func TestSPWithTXPoolFull(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofInterval = 4
+	configurableConsensus[protocol.ConsensusFuture] = consensusParams
+
+	fixture.SetConsensus(configurableConsensus)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+
+	dir, err := fixture.GetNodeDir("Primary")
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(dir)
+	a.NoError(err)
+	cfg.TxPoolSize = 0
+	cfg.SaveToDisk(dir)
+
+	dir, err = fixture.GetNodeDir("Node")
+	a.NoError(err)
+	cfg.SaveToDisk(dir)
+
+	fixture.Start()
+	defer fixture.Shutdown()
+
+	relay := fixture.GetLibGoalClientForNamedNode("Primary")
+
+	params, err := relay.SuggestedParams()
+	require.NoError(t, err)
+
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], params.GenesisHash)
+
+	round := uint64(0)
+	for round < uint64(20) {
+		params, err = relay.SuggestedParams()
+		require.NoError(t, err)
+
+		round = params.LastRound
+		err = fixture.WaitForRound(round+1, 6*time.Second)
+		require.NoError(t, err)
+
+		b, err := relay.Block(round + 1)
+		require.NoError(t, err)
+		if len(b.Transactions.Transactions) == 0 {
+			continue
+		}
+		require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[0].Type)
+		var msg stateproofmsg.Message
+		err = protocol.Decode(b.Transactions.Transactions[0].StateProof.StateProofMessage, &msg)
+		require.NoError(t, err)
+		require.Equal(t, uint64(8), msg.LastAttestedRound)
+		break
+	}
+	require.Less(t, round, uint64(20))
+}
+
+type specialAddr string
+
+func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.SpecialAddr, []byte(a)
+}
+
+// TestSPWithCounterReset tests if the state proof transaction is getting into the pool and the blcok
+// when the transaction pool is full (TxPoolSize=0) and when there is bad sp and payment transaction traffic.
+func TestSPWithCounterReset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofInterval = 4
+	configurableConsensus[protocol.ConsensusFuture] = consensusParams
+
+	fixture.SetConsensus(configurableConsensus)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	dir, err := fixture.GetNodeDir("Primary")
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(dir)
+	a.NoError(err)
+	cfg.TxPoolSize = 0
+	cfg.SaveToDisk(dir)
+
+	fixture.Start()
+	defer fixture.Shutdown()
+
+	relay := fixture.GetLibGoalClientForNamedNode("Primary")
+
+	params, err := relay.SuggestedParams()
+	require.NoError(t, err)
+
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], params.GenesisHash)
+
+	wg := sync.WaitGroup{}
+	var done uint32
+
+	defer func() {
+		atomic.StoreUint32(&done, uint32(1))
+		wg.Wait()
+	}()
+
+	params, err = relay.SuggestedParams()
+	require.NoError(t, err)
+	stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
+
+	// Send well formed but bad stateproof transactions from two goroutines
+	for spSpam := 0; spSpam < 2; spSpam++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for atomic.LoadUint32(&done) != 1 {
+				_, err := relay.BroadcastTransaction(stxn)
+				// The pool is full, and only one SP transaction will be admitted in per round. Otherwise, pool is full error will be returned
+				// However, if this is the lucky SP transaction to get into the pool, it will eventually be rejected by ValidateStateProof and a different
+				// error will be returned
+				require.Error(t, err)
+				time.Sleep(25 * time.Millisecond)
+			}
+		}()
+	}
+
+	// Send payment transactions from two goroutines
+	for txnSpam := 0; txnSpam < 2; txnSpam++ {
+		wg.Add(1)
+		go func(amt uint64) {
+			defer wg.Done()
+			cntr := uint64(1)
+			params, err := relay.SuggestedParams()
+			require.NoError(t, err)
+
+			ps := paymentSender{
+				from:   accountFetcher{nodeName: "Primary", accountNumber: 0},
+				amount: amt,
+			}
+			account0 := ps.from.getAccount(a, &fixture)
+
+			for atomic.LoadUint32(&done) != 1 {
+				ps.amount = cntr
+				cntr = cntr + 1
+				// ignore the returned error (most of the time will be error)
+				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+				require.Error(t, err)
+				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
+				time.Sleep(25 * time.Millisecond)
+			}
+		}(uint64(txnSpam + 1))
+	}
+
+	// Check that the first 2 stateproofs are added to the blockchain
+	round := uint64(0)
+	expectedSPRound := consensusParams.StateProofInterval * 2
+	for round < consensusParams.StateProofInterval*10 {
+		round = params.LastRound
+
+		err := fixture.WaitForRound(round+1, 6*time.Second)
+		require.NoError(t, err)
+
+		b, err := relay.Block(round + 1)
+		require.NoError(t, err)
+
+		params, err = relay.SuggestedParams()
+		require.NoError(t, err)
+		if len(b.Transactions.Transactions) == 0 {
+			continue
+		}
+		tid := 0
+		// Find a SP transaction in the block. The SP should be for StateProofIntervalLatestRound expectedSPRound
+		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
+		// break after finding it, and look for the next one in a subsequent block
+		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
+		for ; tid < len(b.Transactions.Transactions); tid++ {
+			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
+				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+
+				var msg stateproofmsg.Message
+				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
+				require.NoError(t, err)
+				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+
+				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
+				break
+			}
+		}
+		if expectedSPRound == consensusParams.StateProofInterval*4 {
+			break
+		}
+	}
+	// If waited till round 20 and did not yet get the stateproof with last round 12, fail the test
+	require.Less(t, round, consensusParams.StateProofInterval*10)
+}
+
+func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
+
+	msg := stateproofmsg.Message{}
+	proof := &sp.StateProof{}
+	proto := consensusParams
+
+	stxn.Txn.Type = protocol.StateProofTx
+	stxn.Txn.Sender = transactions.StateProofSender
+	stxn.Txn.FirstValid = basics.Round(round)
+	stxn.Txn.LastValid = basics.Round(round + 1000)
+	stxn.Txn.GenesisHash = genesisHash
+	stxn.Txn.StateProofType = protocol.StateProofBasic
+	stxn.Txn.StateProof = *proof
+	stxn.Txn.Message = msg
+
+	err := stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
+	require.NoError(t, err)
+
+	return stxn
 }

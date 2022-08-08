@@ -1,9 +1,9 @@
-PARAMS=-w 65 -R 136 -n 65 -H 15 --node-template configs/node.json --relay-template configs/relay.json --non-participating-node-template configs/nonPartNode.json
+PARAMS=-w 130 -R 136 -n 130 -H 16 --node-template configs/node.json --relay-template configs/relay.json --non-participating-node-template configs/nonPartNode.json
 
 all: topology.json net.json genesis.json
 
-topology.json:
-	TOPOLOGY_FILE=$@ python gen_topology.py
+topology.json:	gen_topology.py
+	TOPOLOGY_FILE=$@ python3 gen_topology.py
 
 net.json: configs/node.json configs/relay.json configs/nonPartNode.json $(GOPATH)/bin/netgoal Makefile
 	netgoal generate -t net -r /tmp/wat -o net.json $(PARAMS)

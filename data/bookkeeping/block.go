@@ -226,11 +226,10 @@ type (
 		// this value is zero.
 		StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
 
-		// StateProofVotersTotalWeight is the total number of microalgos held by
-		// the accounts in StateProofVotersCommitment (or zero, if the merkle root is
-		// zero).  This is intended for computing the threshold of votes to
-		// expect from StateProofVotersCommitment.
-		StateProofVotersTotalWeight basics.MicroAlgos `codec:"t"`
+		// StateProofOnlineTotalWeight is the total number of microalgos held by the online accounts
+		// during the StateProof round (or zero, if the merkle root is zero - no commitment for StateProof voters).
+		// This is intended for computing the threshold of votes to expect from StateProofVotersCommitment.
+		StateProofOnlineTotalWeight basics.MicroAlgos `codec:"t"`
 
 		// StateProofNextRound is the next round for which we will accept
 		// a StateProof transaction.

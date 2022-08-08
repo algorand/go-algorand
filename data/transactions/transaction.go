@@ -350,7 +350,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if !suppliesNullKeys {
 				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
-
 		}
 
 		if err := tx.stateProofPKWellFormed(proto); err != nil {

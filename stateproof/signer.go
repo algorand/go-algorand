@@ -159,6 +159,7 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
+		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", hdr.Round, sfa.SignerAddress)
 		firstRoundInKeyLifetime, err := usedSigners[i].FirstRoundInKeyLifetime() // Calculate first round of the key in order to delete all previous keys (and keep the current one for now)
 		if err != nil {
 			spw.log.Warnf("spw.signBlock(%d): Signer.FirstRoundInKeyLifetime: %v", hdr.Round, err)

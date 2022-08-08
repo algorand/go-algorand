@@ -1,3 +1,4 @@
+# scenario3s is scenario3 but smaller. (10000 wallets -> 500) (1000 algod participating nodes -> 100) It still keeps a global datacenter distribution.
 node_types = {"R":20, "N":100, "NPN":15}
 node_size = {"R":"-m5d.4xl", "N":"-m5d.2xl",  "NPN":"-m5d.4xl"}
 regions = [
