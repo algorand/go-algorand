@@ -2692,6 +2692,7 @@ int 1`,
 				Proto:       makeTestProto(),
 				TxnGroup:    txgroup,
 				pastScratch: make([]*scratchSpace, 2),
+				SigLedger:   MakeLedger(nil),
 			}
 
 			switch failCase.runMode {
