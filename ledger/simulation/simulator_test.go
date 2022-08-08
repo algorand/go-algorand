@@ -47,7 +47,7 @@ type account struct {
 	acctData basics.AccountData
 }
 
-func makeSimulateEnv(t *testing.T) (l *data.Ledger, accounts []account, makeTxnHeader func(sender basics.Address) transactions.Header) {
+func prepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []account, makeTxnHeader func(sender basics.Address) transactions.Header) {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	// Prepare ledger
@@ -138,7 +138,7 @@ func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
@@ -165,7 +165,7 @@ func TestOverspendPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
@@ -194,7 +194,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender1 := accounts[0].addr
@@ -268,7 +268,7 @@ func TestSimpleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
@@ -325,7 +325,7 @@ func TestRejectAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
@@ -370,7 +370,7 @@ func TestSignatureCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
@@ -418,7 +418,7 @@ func TestInvalidTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	receiver := accounts[0].addr
@@ -462,7 +462,7 @@ func TestBalanceChangesWithApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := makeSimulateEnv(t)
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
 	sender := accounts[0].addr
