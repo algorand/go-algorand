@@ -465,7 +465,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
-// lookbackForStateproofSupport calculates the lookback (from topblock round) needed to be downloaded
+// lookbackForStateproofsSupport calculates the lookback (from topblock round) needed to be downloaded
 // in order to support state proofs verification.
 func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	proto := config.Consensus[topBlock.CurrentProtocol]
