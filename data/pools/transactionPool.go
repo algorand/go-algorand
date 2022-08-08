@@ -156,6 +156,7 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 
 	copy := TransactionPool{
 		pendingTxids:         pool.pendingTxids, // it is safe to shallow copy pendingTxids since this map is only (atomically) swapped and never directly changed
+		pendingTxGroups:      pool.pendingTxGroups,
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               specLedger,
@@ -551,7 +552,8 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	// move remembered txns to pending
 	pool.rememberCommit(false)
 
-	// create shallow pool copy
+	// create shallow pool copy, close the done channel when we're done with
+	// speculative block assembly.
 	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
 	defer close(specAsmDoneCh)
 	pool.mu.Unlock()
