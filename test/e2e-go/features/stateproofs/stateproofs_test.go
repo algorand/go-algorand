@@ -824,6 +824,7 @@ func TestTotalWeightChanges(t *testing.T) {
 	a.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
+// TestSPWithTXPoolFull makes sure a SP txn goes into the pool when the pool is full
 func TestSPWithTXPoolFull(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -886,15 +887,95 @@ func TestSPWithTXPoolFull(t *testing.T) {
 	require.Less(t, round, uint64(20))
 }
 
+// TestAtMostOneSPFullPool tests that there is at most one SP txn is admitted to the pool per roound
+// when the pool is full. Note that the test sets TxPoolSize to 0 to simulate a full pool, which
+// guarantees that no more than 1 SP txn get into a block. In normal configuration, it is
+// possible to have multiple SPs getting into the same block when the pool is full. 
+func TestAtMostOneSPFullPool(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofInterval = 4
+	configurableConsensus[protocol.ConsensusFuture] = consensusParams
+
+	fixture.SetConsensus(configurableConsensus)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	dir, err := fixture.GetNodeDir("Primary")
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(dir)
+	a.NoError(err)
+	cfg.TxPoolSize = 0
+	cfg.SaveToDisk(dir)
+
+	fixture.Start()
+	defer fixture.Shutdown()
+
+	relay := fixture.GetLibGoalClientForNamedNode("Primary")
+
+	params, err := relay.SuggestedParams()
+	require.NoError(t, err)
+
+	// Check that the first 2 stateproofs are added to the blockchain in different rounds
+	round := uint64(0)
+	expectedSPRound := consensusParams.StateProofInterval * 2
+	for round < consensusParams.StateProofInterval*10 {
+		round = params.LastRound
+
+		err := fixture.WaitForRound(round+1, 6*time.Second)
+		require.NoError(t, err)
+
+		b, err := relay.Block(round + 1)
+		require.NoError(t, err)
+
+		params, err = relay.SuggestedParams()
+		require.NoError(t, err)
+		if len(b.Transactions.Transactions) == 0 {
+			continue
+		}
+		tid := 0
+		// Find a SP transaction in the block. The SP should be for StateProofIntervalLatestRound expectedSPRound
+		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
+		// break after finding it, and look for the next one in a subsequent block
+		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
+		for ; tid < len(b.Transactions.Transactions); tid++ {
+			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
+				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+
+				var msg stateproofmsg.Message
+				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
+				require.NoError(t, err)
+				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+
+				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
+				break
+			}
+		}
+		if expectedSPRound == consensusParams.StateProofInterval*4 {
+			break
+		}
+	}
+	// If waited till round 20 and did not yet get the stateproof with last round 12, fail the test
+	require.Less(t, round, consensusParams.StateProofInterval*10)
+}
+
 type specialAddr string
 
 func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.SpecialAddr, []byte(a)
 }
 
-// TestSPWithCounterReset tests if the state proof transaction is getting into the pool and the blcok
-// when the transaction pool is full (TxPoolSize=0) and when there is bad sp and payment transaction traffic.
-func TestSPWithCounterReset(t *testing.T) {
+// TestSPWithCounterReset tests if the state proof transaction is getting into the pool and eventually
+// at most one SP is getting into the block when the transaction pool is full.
+// Bad SP and payment transaction traffic is added to increase the odds of getting SP txn into the pool
+// in the same round.
+func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -936,8 +1017,6 @@ func TestSPWithCounterReset(t *testing.T) {
 		wg.Wait()
 	}()
 
-	params, err = relay.SuggestedParams()
-	require.NoError(t, err)
 	stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
 
 	// Send well formed but bad stateproof transactions from two goroutines
@@ -1022,8 +1101,8 @@ func TestSPWithCounterReset(t *testing.T) {
 			break
 		}
 	}
-	// If waited till round 20 and did not yet get the stateproof with last round 12, fail the test
-	require.Less(t, round, consensusParams.StateProofInterval*10)
+	// Do not check if the SPs were added to the block. TestAtMostOneSPFullPool checks it.
+	// In some environments (ARM) the high load may prevent it. 
 }
 
 func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
