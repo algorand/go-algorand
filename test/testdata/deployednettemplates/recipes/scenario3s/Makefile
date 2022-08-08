@@ -1,5 +1,5 @@
 # scenario3s is scenario3 but smaller. (10000 wallets -> 500) (1000 algod participating nodes -> 100) It still keeps a global datacenter distribution.
-PARAMS=-w 500 -R 20 -N 100 -n 100 -H 15 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
+PARAMS=-w 100 -R 20 -N 100 -n 100 -H 15 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
 
 SOURCES=node.json ${GOPATH}/bin/netgoal Makefile relay.json nonPartNode.json
 
@@ -11,7 +11,7 @@ net.json:	${SOURCES}
 genesis.json:	${SOURCES}
 	netgoal generate -t genesis -r /tmp/wat -o genesis.json ${PARAMS}
 	mv genesis.json genesis.json.orig
-	jq '.NetworkName="bs3s"|.LastPartKeyRound=5000' < genesis.json.orig > genesis.json
+	jq '.NetworkName="s3s"|.LastPartKeyRound=5000|.ConsensusProtocol="future"' < genesis.json.orig > genesis.json
 	rm genesis.json.orig
 
 topology.json: gen_topology.py

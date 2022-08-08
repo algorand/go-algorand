@@ -8,6 +8,9 @@ net.json:	node.json nonPartNode.json ${GOPATH}/bin/netgoal Makefile
 
 genesis.json:	${GOPATH}/bin/netgoal Makefile
 	netgoal generate -t genesis -r /tmp/wat -o genesis.json ${PARAMS}
+	mv genesis.json genesis.json.orig
+	jq '.NetworkName="s1s"|.LastPartKeyRound=5000|.ConsensusProtocol="future"' < genesis.json.orig > genesis.json
+	rm genesis.json.orig
 
 topology.json: gen_topology.py
 	python3 gen_topology.py
