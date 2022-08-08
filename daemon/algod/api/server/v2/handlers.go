@@ -599,7 +599,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	var txID transactions.Txid
 	err := txID.UnmarshalText([]byte(txid))
 	if err != nil {
-		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
+		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
 
 	if params.Hashtype != nil && *params.Hashtype != "sha512_256" && *params.Hashtype != "sha256" {
@@ -941,7 +941,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	txID := transactions.Txid{}
 	if err := txID.UnmarshalText([]byte(txid)); err != nil {
-		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
+		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
 
 	txn, ok := v2.Node.GetPendingTransaction(txID)
