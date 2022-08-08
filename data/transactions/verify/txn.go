@@ -116,22 +116,7 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	return nil
 }
 
-// SignatureError is an error returned when a signature is invalid.
-type SignatureError struct {
-	err error
-}
-
-func (s SignatureError) Error() string {
-	return s.err.Error()
-}
-
-func (s SignatureError) Unwrap() error {
-	return s.err
-}
-
-func signatureErrorf(format string, args ...interface{}) SignatureError {
-	return SignatureError{fmt.Errorf(format, args...)}
-}
+var MissingSignatureError = errors.New("signedtxn has no sig")
 
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
@@ -161,7 +146,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	}
 
 	if err := batchVerifier.Verify(); err != nil {
-		return nil, SignatureError{err}
+		return nil, err
 	}
 
 	return
@@ -235,10 +220,10 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 			return nil
 		}
 
-		return signatureErrorf("signedtxn has no sig")
+		return MissingSignatureError
 	}
 	if numSigs > 1 {
-		return signatureErrorf("signedtxn should only have one of Sig or Msig or LogicSig")
+		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
 
 	if hasSig {
@@ -252,12 +237,12 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 			batchVerifier); ok {
 			return nil
 		}
-		return signatureErrorf("multisig validation failed")
+		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
 		return logicSigBatchVerify(s, txnIdx, groupCtx, batchVerifier)
 	}
-	return signatureErrorf("has one mystery sig. WAT?")
+	return errors.New("has one mystery sig. WAT?")
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
@@ -275,7 +260,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	}
 
 	if err := batchVerifier.Verify(); err != nil {
-		return SignatureError{err}
+		return err
 	}
 	return nil
 }
@@ -287,24 +272,24 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	lsig := txn.Lsig
 
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
-		return signatureErrorf("LogicSig not enabled")
+		return errors.New("LogicSig not enabled")
 	}
 	if len(lsig.Logic) == 0 {
-		return signatureErrorf("LogicSig.Logic empty")
+		return errors.New("LogicSig.Logic empty")
 	}
 	version, vlen := binary.Uvarint(lsig.Logic)
 	if vlen <= 0 {
-		return signatureErrorf("LogicSig.Logic bad version")
+		return errors.New("LogicSig.Logic bad version")
 	}
 	if version > groupCtx.consensusParams.LogicSigVersion {
-		return signatureErrorf("LogicSig.Logic version too new")
+		return errors.New("LogicSig.Logic version too new")
 	}
 	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
-		return signatureErrorf("LogicSig.Logic too long")
+		return errors.New("LogicSig.Logic too long")
 	}
 
 	if groupIndex < 0 {
-		return signatureErrorf("Negative groupIndex")
+		return errors.New("Negative groupIndex")
 	}
 	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
 	ep := logic.EvalParams{
@@ -314,7 +299,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	}
 	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
-		return SignatureError{err}
+		return err
 	}
 
 	hasMsig := false
@@ -333,10 +318,10 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 		if crypto.Digest(txn.Authorizer()) == lhash {
 			return nil
 		}
-		return signatureErrorf("LogicNot signed and not a Logic-only account")
+		return errors.New("LogicNot signed and not a Logic-only account")
 	}
 	if numSigs > 1 {
-		return signatureErrorf("LogicSig should only have one of Sig or Msig but has more than one")
+		return errors.New("LogicSig should only have one of Sig or Msig but has more than one")
 	}
 
 	if !hasMsig {
@@ -345,7 +330,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	} else {
 		program := logic.Program(lsig.Logic)
 		if ok, _ := crypto.MultisigBatchVerify(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
-			return signatureErrorf("logic multisig validation failed")
+			return errors.New("logic multisig validation failed")
 		}
 	}
 	return nil
@@ -360,7 +345,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	}
 
 	if groupIndex < 0 {
-		return signatureErrorf("Negative groupIndex")
+		return errors.New("Negative groupIndex")
 	}
 	ep := logic.EvalParams{
 		Proto:         &groupCtx.consensusParams,
@@ -370,11 +355,11 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return signatureErrorf("transaction %v: rejected by logic err=%w", txn.ID(), err)
+		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
-		return signatureErrorf("transaction %v: rejected by logic", txn.ID())
+		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
 	logicGoodTotal.Inc(nil)
 	return nil

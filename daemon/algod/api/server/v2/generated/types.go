@@ -444,10 +444,10 @@ type PendingTransactionResponse struct {
 type SimulationResult struct {
 
 	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage *string `json:"failure-message,omitempty"`
+	FailureMessage string `json:"failure-message"`
 
 	// \[sfm\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
-	MissingSignatures *bool `json:"missing-signatures,omitempty"`
+	MissingSignatures bool `json:"missing-signatures"`
 }
 
 // StateDelta defines model for StateDelta.

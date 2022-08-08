@@ -187,7 +187,7 @@ func TestOverspendPayTxn(t *testing.T) {
 
 	result, err := s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Contains(t, *result.FailureMessage, fmt.Sprintf("tried to spend {%d}", amount))
+	require.Contains(t, result.FailureMessage, fmt.Sprintf("tried to spend {%d}", amount))
 }
 
 func TestSimpleGroupTxn(t *testing.T) {
@@ -229,7 +229,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	// Should fail if there is no group parameter
 	result, err := s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Contains(t, *result.FailureMessage, "had zero Group but was submitted in a group of 2")
+	require.Contains(t, result.FailureMessage, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
 	err = attachGroupID(txgroup)
@@ -363,7 +363,7 @@ func TestRejectAppCall(t *testing.T) {
 
 	result, err := s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Contains(t, *result.FailureMessage, "transaction rejected by ApprovalProgram")
+	require.Contains(t, result.FailureMessage, "transaction rejected by ApprovalProgram")
 }
 
 func TestSignatureCheck(t *testing.T) {
@@ -392,7 +392,7 @@ func TestSignatureCheck(t *testing.T) {
 	result, err := s.Simulate(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
-	require.Contains(t, *result.SignatureFailureMessage, "signedtxn has no sig")
+	require.True(t, result.MissingSignatures)
 
 	// add signature
 	signatureSecrets := accounts[0].sk
@@ -402,14 +402,13 @@ func TestSignatureCheck(t *testing.T) {
 	result, err = s.Simulate(txgroup)
 	require.NoError(t, err)
 	require.Empty(t, result.FailureMessage)
-	require.Empty(t, result.SignatureFailureMessage)
+	require.False(t, result.MissingSignatures)
 
 	// should error with invalid signature
 	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
 	result, err = s.Simulate(txgroup)
-	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
-	require.Contains(t, *result.SignatureFailureMessage, "one signature didn't pass")
+	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
 // TestInvalidTxGroup tests that a transaction group with invalid transactions

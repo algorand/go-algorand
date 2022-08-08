@@ -1588,6 +1588,10 @@
             "type": "boolean"
           }
         },
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
         "type": "object"
       },
       "StateDelta": {

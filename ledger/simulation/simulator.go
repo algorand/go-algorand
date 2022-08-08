@@ -73,8 +73,8 @@ type InvalidTxGroupError struct {
 	SimulatorError
 }
 
-// InvalidSignatureError occurs when a transaction has an invalid signature.
-type InvalidSignatureError struct {
+// MissingSignatureError occurs when at least one transaction is missing a signature.
+type MissingSignatureError struct {
 	SimulatorError
 }
 
@@ -83,14 +83,6 @@ type InvalidSignatureError struct {
 type ScopedSimulatorError struct {
 	SimulatorError        // the original error for internal use
 	External       string // the external error for public use
-}
-
-// ==============================
-// > Simulator Helper Methods
-// ==============================
-
-func isInvalidSignatureError(err error) bool {
-	return errors.As(err, &verify.SignatureError{})
 }
 
 // ==============================
@@ -115,8 +107,8 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	_, err := verify.TxnGroup(txgroup, hdr, nil)
 	if err != nil {
 		// invalid signature error
-		if isInvalidSignatureError(err) {
-			return InvalidSignatureError{SimulatorError{err}}
+		if errors.Is(err, verify.MissingSignatureError) {
+			return MissingSignatureError{SimulatorError{err}}
 		}
 
 		// otherwise the transaction group was invalid in some way
@@ -166,9 +158,8 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (generated.Simulat
 	err = s.check(hdr, txgroup)
 	if err != nil {
 		switch err.(type) {
-		case InvalidSignatureError:
-			errMessage := err.Error()
-			result.SignatureFailureMessage = &errMessage
+		case MissingSignatureError:
+			result.MissingSignatures = true
 		default:
 			return result, err
 		}
@@ -176,8 +167,7 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (generated.Simulat
 
 	_, err = s.evaluate(hdr, txgroup)
 	if err != nil {
-		errStr := err.Error()
-		result.FailureMessage = &errStr
+		result.FailureMessage = err.Error()
 	}
 
 	return result, nil
