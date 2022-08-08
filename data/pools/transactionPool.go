@@ -95,8 +95,8 @@ type TransactionPool struct {
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
 
-	ctx        context.Context
-	cancelSpec context.CancelFunc
+	ctx                       context.Context
+	cancelSpeculativeAssembly context.CancelFunc
 
 	// specBlockCh has an assembled speculative block
 	specBlockCh chan *ledgercore.ValidatedBlock
@@ -174,7 +174,7 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
 
-	pool.cancelSpec = cancel
+	pool.cancelSpeculativeAssembly = cancel
 	specDoneCh := make(chan struct{})
 	pool.specAsmDone = specDoneCh
 
@@ -545,8 +545,8 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
-	if pool.cancelSpec != nil {
-		pool.cancelSpec()
+	if pool.cancelSpeculativeAssembly != nil {
+		pool.cancelSpeculativeAssembly()
 		<-pool.specAsmDone
 	}
 
