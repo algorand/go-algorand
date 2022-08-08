@@ -120,7 +120,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	fmt.Printf("Configuration file loaded successfully.\n")
+	fmt.Printf("Configuration file loaded successfully: %#v\n", cfg)
 
 	var privateKeys []*crypto.SignatureSecrets
 	var publicKeys []basics.Address
@@ -131,23 +131,42 @@ func main() {
 	}
 	if cfg.AccountMnemonic != "" { // one mnemonic provided
 		addKey(cfg.AccountMnemonic)
+		if len(privateKeys) == 0 {
+			fmt.Fprint(os.Stderr, "AccountMnemonic=%#v but no private keys to spend from\n", cfg.AccountMnemonic)
+			os.Exit(1)
+		}
 	} else if len(cfg.AccountMnemonicList) > 0 {
 		for _, mnemonic := range cfg.AccountMnemonicList {
 			addKey(mnemonic)
 		}
+		if len(privateKeys) == 0 {
+			fmt.Fprint(os.Stderr, "AccountMnemonicList=%#v but no private keys to spend from\n", cfg.AccountMnemonicList)
+			os.Exit(1)
+		}
 	} else if len(algodDir) > 0 {
+		fmt.Fprintf(os.Stderr, "loading from ALGORAND_DATA=%s\n", algodDir)
 		// get test cluster local unlocked wallet
-		privateKeys := findRootKeys(algodDir)
+		privateKeys = findRootKeys(algodDir)
 		if len(privateKeys) == 0 {
 			fmt.Fprintf(os.Stderr, "%s: found no root keys\n", algodDir)
 			os.Exit(1)
 		}
+		fmt.Fprintf(os.Stderr, "got %d private keys\n", len(privateKeys))
 		publicKeys = make([]basics.Address, len(privateKeys))
 		for i, sk := range privateKeys {
 			publicKeys[i] = basics.Address(sk.SignatureVerifier)
 		}
+		if len(privateKeys) == 0 {
+			fmt.Fprint(os.Stderr, "algodDir=%#v but no private keys to spend from\n", algodDir)
+			os.Exit(1)
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "no keys specified in config files or -d algod dir")
+	}
+
+	if len(privateKeys) == 0 {
+		fmt.Fprint(os.Stderr, "no private keys to spend from\n")
+		os.Exit(1)
 	}
 
 	for i, publicKey := range publicKeys {
