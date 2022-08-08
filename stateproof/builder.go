@@ -273,8 +273,8 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		}
 
-		spw.deleteOldSigs(hdr)
-		spw.deleteOldBuilders(hdr)
+		spw.deleteOldSigs(&hdr)
+		spw.deleteOldBuilders(&hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -357,29 +357,8 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	if proto.StateProofInterval == 0 {
-		return nextStateProofRnd
-	}
-
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
-	// we add +1 to this number since we want exactly StateProofMaxRecoveryIntervals elements in the history
-	oldestRoundOnRecoveryPeriod++
-
-	var oldestRoundToRemove basics.Round
-	if oldestRoundOnRecoveryPeriod > nextStateProofRnd {
-		oldestRoundToRemove = oldestRoundOnRecoveryPeriod
-	} else {
-		oldestRoundToRemove = nextStateProofRnd
-	}
-	return oldestRoundToRemove
-}
-
-func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
-	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
+	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
@@ -389,8 +368,8 @@ func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
 	}
 }
 
-func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
-	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
+	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	spw.mu.Lock()
 	defer spw.mu.Unlock()

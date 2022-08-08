@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -79,22 +80,6 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.Con
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func getLowestRoundForStateProof(latestHeader *bookkeeping.BlockHeader) basics.Round {
-	proto := config.Consensus[latestHeader.CurrentProtocol]
-
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(latestHeader.Round) - uint64(latestHeader.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals - 1)))
-
-	latestExceptedStateProofRound := latestHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-
-	nextStateProofToConfirm := latestExceptedStateProofRound
-	if nextStateProofToConfirm < oldestRoundOnRecoveryPeriod {
-		nextStateProofToConfirm = oldestRoundOnRecoveryPeriod
-	}
-
-	return nextStateProofToConfirm
-}
-
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
 	vt.l = l
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
@@ -112,9 +97,9 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return nil
 	}
 
-	startR := getLowestRoundForStateProof(&hdr)
+	startR := stateproof.GetOldestExpectedStateProof(&hdr)
 	startR = votersRoundForStateProofRound(startR, &proto)
-	
+
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
@@ -211,7 +196,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	lowestStateProofRound := getLowestRoundForStateProof(&hdr)
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)

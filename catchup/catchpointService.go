@@ -19,6 +19,7 @@ package catchup
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 const (
@@ -472,18 +472,10 @@ func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	if proto.StateProofInterval == 0 {
 		return 0
 	}
-	//calculate the lowest round needed for verify the upcoming state proof txn.
-	expectedStateProofRound := topBlock.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	stateproofVerificationRound := expectedStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	lowestRecoveryRound := topBlock.Round().SubSaturate(topBlock.Round() % basics.Round(proto.StateProofInterval))
-	lowestRecoveryRound = lowestRecoveryRound.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)))
-
-	if lowestRecoveryRound > stateproofVerificationRound {
-		return uint64(topBlock.Round().SubSaturate(lowestRecoveryRound))
-	}
-
-	return uint64(topBlock.Round().SubSaturate(stateproofVerificationRound))
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&topBlock.BlockHeader)
+	// in order to be able to confirm lowestStateProofRound we need to have round number: (lowestStateProofRound - stateproofInterval)
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	return uint64(topBlock.Round().SubSaturate(lowestStateProofRound))
 }
 
 // processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.

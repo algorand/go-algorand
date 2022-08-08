@@ -1657,7 +1657,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
 
@@ -2778,14 +2778,16 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 1)); i++ {
+	// we push proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2) block into the ledger
+	// the reason for + 2 is the first state proof is on 2*stateproofinterval.
+	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2)); i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	// the voters tracker should contains all the voters for each stateproof round. nothing should be removed
+	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
 	l.WaitForCommit(blk.BlockHeader.Round)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	beforeRemoveVotersLen := len(vtSnapshot)

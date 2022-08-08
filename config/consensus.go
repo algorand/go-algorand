@@ -389,7 +389,7 @@ type ConsensusParams struct {
 
 	// StateProofMaxRecoveryIntervals represents the number of state proof intervals that the network will try to catch-up with.
 	// When the difference between the latest state proof and the current round will be greater than value, Nodes will
-	// release resources allocated for creating state proofs.
+	// release resources allocated for creating state proofs. I.e assume that we are on round
 	StateProofMaxRecoveryIntervals uint64
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
