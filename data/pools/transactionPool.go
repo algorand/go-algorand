@@ -166,6 +166,7 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 		expFeeFactor:         pool.cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        pool.cfg.TxPoolSize,
 		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
+		assemblyRound:        specLedger.Latest() + 1,
 		log:                  pool.log,
 		cfg:                  pool.cfg,
 		ctx:                  copyPoolctx,
