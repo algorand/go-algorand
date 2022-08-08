@@ -61,11 +61,13 @@ type votersTracker struct {
 	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	//
-	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 2
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3
 	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
 	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
 	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
 	// to verify R-StateProofMaxRecoveryIntervals
+	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
+	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
 	l                     ledgerForTracker

@@ -169,6 +169,24 @@ func TestLimitVoterTracker(t *testing.T) {
 	}
 	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
+
+	// if the last round of the intervalForTest has not been added to the ledger the votersTracker would
+	// retain one more element
+	for ; i < intervalForTest*(recoveryIntervalForTests+5); i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, ao)
+	}
+	a.Equal(recoveryIntervalForTests+3, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
+
+	for ; i < intervalForTest*(recoveryIntervalForTests+5)+1; i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, ao)
+	}
+	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval*4-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
 func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
