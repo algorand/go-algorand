@@ -139,24 +139,25 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	curStatus, _ := pongClient.Status()
 	curRound := curStatus.LastRound
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	}
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 
-	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
-	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
+	pingBalance, err = pongClient.GetBalance(pingAccount)
+	a.NoError(err)
+	pongBalance, err = pongClient.GetBalance(pongAccount)
+	a.NoError(err)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	}
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 
-	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
-	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
+	pingBalance, err = pingClient.GetBalance(pingAccount)
+	a.NoError(err)
+	pongBalance, err = pingClient.GetBalance(pongAccount)
+	a.NoError(err)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 }
