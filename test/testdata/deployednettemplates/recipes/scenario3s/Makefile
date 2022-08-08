@@ -11,7 +11,7 @@ net.json:	${SOURCES}
 genesis.json:	${SOURCES}
 	netgoal generate -t genesis -r /tmp/wat -o genesis.json ${PARAMS}
 	mv genesis.json genesis.json.orig
-	jq '.NetworkName="bs3s"|.ConsensusProtocol="wat"|.LastPartKeyRound=5000' < genesis.json.orig > genesis.json
+	jq '.NetworkName="bs3s"|.LastPartKeyRound=5000' < genesis.json.orig > genesis.json
 	rm genesis.json.orig
 
 topology.json: gen_topology.py

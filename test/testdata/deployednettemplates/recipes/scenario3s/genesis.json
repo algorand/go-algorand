@@ -1,7 +1,7 @@
 {
   "NetworkName": "bs3s",
   "VersionModifier": "",
-  "ConsensusProtocol": "wat",
+  "ConsensusProtocol": "",
   "FirstPartKeyRound": 0,
   "LastPartKeyRound": 5000,
   "PartKeyDilution": 0,
