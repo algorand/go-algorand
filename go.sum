@@ -1,3 +1,5 @@
+github.com/algorand/avm-abi v0.0.0-20220808232014-9e35904d933c h1:D8sg59U8Zj1xDuywb/hMbxib/fNveChxPj+EAaV9xmA=
+github.com/algorand/avm-abi v0.0.0-20220808232014-9e35904d933c/go.mod h1:+CgwM46dithy850bpTeHh9MC99zpn2Snirb3QTl2O/g=
 github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123 h1:cnUjJ/iqUjJNbhUzgmxbfwHMVFnz+DLnNQx8uJcGaks=
 github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123/go.mod h1:OkQyHlGvS0kLNcIWbC21/uQcnbfwSOQm+wiqWwBG9pQ=
 github.com/algorand/go-codec v1.1.8/go.mod h1:XhzVs6VVyWMLu6cApb9/192gBjGRVGm5cX5j203Heg4=

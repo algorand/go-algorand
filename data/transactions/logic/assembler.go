@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/abi"
+	abi "github.com/algorand/avm-abi/avm-abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
