@@ -1360,3 +1360,76 @@ func TestSepculativeBlockAssembly(t *testing.T) {
 	require.NotNil(t, specBlock)
 	require.Len(t, specBlock.Block().Payset, savedTransactions)
 }
+
+func TestSepculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfAccounts := 10
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
+
+	savedTransactions := 0
+	pendingTxn := transactions.SignedTxn{}
+	for i, sender := range addresses {
+		amount := uint64(0)
+		for _, receiver := range addresses {
+			if sender != receiver {
+				tx := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+						FirstValid:  0,
+						LastValid:   10,
+						Note:        make([]byte, 0),
+						GenesisHash: mockLedger.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				}
+				amount++
+
+				signedTx := tx.Sign(secrets[i])
+				require.NoError(t, transactionPool.RememberOne(signedTx))
+				pendingTxn = signedTx
+				savedTransactions++
+			}
+		}
+	}
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, savedTransactions)
+
+	blockEval := newBlockEvaluator(t, mockLedger)
+	err := blockEval.Transaction(pendingTxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// simulate this transaction was applied
+	block, err := blockEval.GenerateBlock()
+	require.NoError(t, err)
+
+	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
+	<-transactionPool.specAsmDone
+	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
+	require.NoError(t, err)
+	require.NotNil(t, specBlock)
+	// assembled block doesn't have txn in the speculated block
+	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
+	// tx pool unaffected
+	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions)
+}
