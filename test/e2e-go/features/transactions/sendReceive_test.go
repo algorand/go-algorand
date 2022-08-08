@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"math/rand"
 	"path/filepath"
 	"testing"
@@ -139,16 +140,24 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	curStatus, _ := pongClient.Status()
 	curRound := curStatus.LastRound
 
+	fmt.Println("waitForTransaction:", waitForTransaction)
+
 	if waitForTransaction {
 		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
 		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
 		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 	}
 
+	var rnd uint64
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
-	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
-	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
-	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
+	pongBalance, rnd = fixture.GetBalanceAndRound(pongAccount)
+
+	curStatus, _ = pongClient.Status()
+	curRound = curStatus.LastRound
+	fmt.Println("pong client rnd: ", curRound, "libgoal client rnd: ", rnd)
+
+	a.LessOrEqual(expectedPingBalance, pingBalance, "ping balance is different than expected.")
+	a.LessOrEqual(expectedPongBalance, pongBalance, "pong balance is different than expected.")
 
 	if waitForTransaction {
 		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
@@ -157,6 +166,6 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
-	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
-	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
+	a.LessOrEqual(expectedPingBalance, pingBalance, "ping balance is different than expected.")
+	a.LessOrEqual(expectedPongBalance, pongBalance, "pong balance is different than expected.")
 }
