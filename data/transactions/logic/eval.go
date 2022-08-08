@@ -195,6 +195,14 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	return minVersion
 }
 
+// LedgerForSignature represents the parts of Ledger that LogicSigs can see. It
+// only exposes things that consensus has already agreed upon, so it is
+// "stateless" for signature purposes.
+type LedgerForSignature interface {
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	Round() basics.Round // don't expose the value to programs
+}
+
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
@@ -239,7 +247,8 @@ type EvalParams struct {
 
 	logger logging.Logger
 
-	Ledger LedgerForLogic
+	SigLedger LedgerForSignature
+	Ledger    LedgerForLogic
 
 	// optional debugger
 	Debugger DebuggerHook
@@ -387,6 +396,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
+		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		created:                 caller.created,
 		appAddrCache:            caller.appAddrCache,
@@ -609,6 +619,9 @@ func (e ClearStateBudgetError) Error() string {
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
+	}
+	if params.SigLedger == nil {
+		params.SigLedger = params.Ledger
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
@@ -2304,7 +2317,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.Ledger.BlockHdrCached(rnd)
+		hdr, err := cx.SigLedger.BlockHdrCached(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -4848,7 +4861,7 @@ func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
 		firstAvail = 1
 	}
-	current := cx.Ledger.Round()
+	current := cx.SigLedger.Round()
 	round := basics.Round(r)
 	if round < firstAvail || round >= current {
 		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
@@ -4868,7 +4881,7 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.Ledger.BlockHdrCached(round)
+	hdr, err := cx.SigLedger.BlockHdrCached(round)
 	if err != nil {
 		return err
 	}

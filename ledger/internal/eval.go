@@ -1157,7 +1157,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.Round())
 
 	case protocol.AssetConfigTx:
 		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
@@ -1483,6 +1483,7 @@ type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
+	ledger           logic.LedgerForLogic
 
 	ctx      context.Context
 	txgroups [][]transactions.SignedTxnWithAD
@@ -1513,7 +1514,7 @@ func (validator *evalTxValidator) run() {
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, validator.ledger)
 	if err != nil {
 		validator.done <- err
 	}

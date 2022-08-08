@@ -52,6 +52,7 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	ep := defaultEvalParamsWithVersion(nil, version)
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(makeSampleTxnGroup(makeSampleTxn()))
 	ledger := MakeLedger(map[basics.Address]uint64{})
+	ep.SigLedger = ledger
 	ep.Ledger = ledger
 	return ep, &ep.TxnGroup[0].Txn, ledger
 }
@@ -2560,6 +2561,11 @@ func TestBlockSeed(t *testing.T) {
 	// A little silly, as it only tests the test ledger: ensure samenes and differentness
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
+
+	// `block` should also work in LogicSigs, to drive home the point, blot out
+	// the normal Ledger
+	ep.Ledger = nil
+	testLogic(t, "int 0xfffffff0; block BlkTimestamp", randomnessVersion, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

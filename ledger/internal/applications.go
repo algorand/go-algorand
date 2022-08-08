@@ -44,7 +44,7 @@ type cowForLogicLedger interface {
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
-	round() basics.Round
+	Round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	txnCounter() uint64
@@ -52,6 +52,14 @@ type cowForLogicLedger interface {
 
 	// The method should use the txtail to ensure MaxTxnLife+1 headers back are available
 	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+func (cs *roundCowState) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
+	record, err := cs.Get(addr, true)
+	if err != nil {
+		return ledgercore.AccountData{}, err
+	}
+	return record, nil
 }
 
 func newLogicLedger(cow cowForLogicLedger) *logicLedger {
@@ -150,7 +158,7 @@ func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basi
 }
 
 func (al *logicLedger) Round() basics.Round {
-	return al.cow.round()
+	return al.cow.Round()
 }
 
 func (al *logicLedger) LatestTimestamp() int64 {

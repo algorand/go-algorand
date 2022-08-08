@@ -583,6 +583,13 @@ func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()
 }
 
+// Round is an alias for Latest to satisfy LedgerForSignature, which uses
+// Round() so that a LedgerForLogic is also a LedgerForSignature. Perhaps we
+// should synchronize them all to use "Latest()"
+func (l *Ledger) Round() basics.Round {
+	return l.Latest()
+}
+
 // LatestCommitted returns the last block round number written to
 // persistent storage.  This block, and all previous blocks, are
 // guaranteed to be available after a crash. In addition, it returns

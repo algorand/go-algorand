@@ -131,6 +131,7 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 		Specials:  &transactions.SpecialAddresses{},
 		Trace:     &strings.Builder{},
 		FeeCredit: &zero,
+		SigLedger: MakeLedger(nil),
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
@@ -252,15 +253,17 @@ func TestTxnFirstValidTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
-	// since it looks at the past of the blockchain, it is "stateless", in the
-	// sense that the value can not change, so it is available in logicsigs
-
 	ep, tx, ledger := makeSampleEnv()
 
 	// By default, test ledger uses an oddball round, ask it what round it's
 	// going to use and prep fv, lv accordingly.
 	current := ledger.Round()
+
+	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
+	// since it looks at the past of the blockchain, it is "stateless"
+
+	// Kill off ep.Ledger, to confirm it's not being used
+	ep.Ledger = nil
 
 	tx.FirstValid = current - 10
 	tx.LastValid = current + 10
