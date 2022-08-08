@@ -97,7 +97,8 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 }
 
 // check verifies that the transaction is well-formed and has valid or missing signatures.
-// A failure message is returned if the transaction is not well-formed.
+// An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
+// To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
 func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (err error, isMissingSigs bool) {
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     hdr.FeeSink,
