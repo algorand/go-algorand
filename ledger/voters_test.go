@@ -144,7 +144,7 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, ao)
 	}
 
-	// the votersForRoundCache should contains recoveryIntervalForTests+2 elemetns:
+	// the votersForRoundCache should contains recoveryIntervalForTests+2 elements:
 	// recoveryIntervalForTests  - since this is the recovery interval
 	// + 1 - since votersForRoundCache would contain the votersForRound for the next state proof to come
 	// + 1 - in order to confirm recoveryIntervalForTests number of state proofs we need recoveryIntervalForTests + 1 headers (for the commitment)

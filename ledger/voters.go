@@ -60,6 +60,12 @@ type votersTracker struct {
 	// the vector commitment to online accounts from the previous such block.
 	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
+	//
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 2
+	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
+	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
+	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
+	// to verify R-StateProofMaxRecoveryIntervals
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
 	l                     ledgerForTracker

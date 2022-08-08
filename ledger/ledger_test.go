@@ -1657,6 +1657,8 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// since the first state proof is expected to happen on stateproofInterval*2 we would start give-up on state proofs we would
+	// give up on old state proofs only after stateproofInterval*3
 	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
@@ -1706,6 +1708,8 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	}
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
+
+	// On this round there is no give up on any state proof - so we would be able to verify an old state proof txn.
 
 	// We now create block with stateproof transaction. since we don't want to complicate the test and create
 	// a cryptographically correct stateproof we would make sure that only the crypto part of the verification fails.

@@ -48,8 +48,8 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 
 	nextStateProofRnd := sp.GetStateProofNextRound()
 	if nextStateProofRnd == 0 || nextStateProofRnd != lastRoundInInterval {
-		return fmt.Errorf("expecting state proof for %d, but new state proof is for %d :%w",
-			nextStateProofRnd, lastRoundInInterval, ErrExpectedDifferentStateProofRound)
+		return fmt.Errorf("applyStateProof: %w - expecting state proof for %d, but new state proof is for %d",
+			ErrExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
 	}
 
 	proto := config.Consensus[lastRoundHdr.CurrentProtocol]

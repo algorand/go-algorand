@@ -677,6 +677,10 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
+	// since this test involves go routine, we would like to make sure that when
+	// we sample the builder it already processed our current round.
+	// in order to that, we wait for singer and the builder to wait.
+	// then we push one more round so the builder could process it (since the builder might skip rounds)
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	s.mu.Lock()
