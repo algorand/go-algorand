@@ -34,7 +34,7 @@ var (
 	errFailedToParseSourcemap                  = "failed to parse sourcemap"
 	errFailedToEncodeResponse                  = "failed to encode response"
 	errInternalFailure                         = "internal failure"
-	errNoTxnSpecified                          = "no valid transaction ID was specified"
+	errNoValidTxnSpecified                     = "no valid transaction ID was specified"
 	errInvalidHashType                         = "invalid hash type"
 	errTransactionNotFound                     = "could not find the transaction in the transaction pool or in the last 1000 confirmed rounds"
 	errServiceShuttingDown                     = "operation aborted as server is shutting down"
