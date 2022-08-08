@@ -4861,10 +4861,10 @@ func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
 		firstAvail = 1
 	}
-	current := cx.SigLedger.Round()
+	committed := cx.SigLedger.Round()
 	round := basics.Round(r)
-	if round < firstAvail || round >= current {
-		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
+	if round < firstAvail || round > committed {
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, committed)
 	}
 	return round, nil
 }
