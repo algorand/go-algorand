@@ -2539,18 +2539,22 @@ func TestBlockSeed(t *testing.T) {
 	ep, txn, l := makeSampleEnv()
 
 	// makeSampleEnv creates txns with fv, lv that don't actually fit the round
-	// in l.  Nothing in most tests cares. But the rule for `block` is
-	// related to lv and the current round, so we set the fv,lv more
-	// realistically.
+	// in l.  Nothing in most tests cares. But the rule for `block` is related
+	// to lv and fv, so we set the fv,lv more realistically.
 	txn.FirstValid = l.round() - 10
 	txn.LastValid = l.round() + 10
 
+	// Keep in mind that proto.MaxTxnLife is 1500 in the test proto
+
 	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
-	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep) // current - 1
+
+	// These first two tests show that current-1 is not available now, though a
+	// resonable extension is to allow such access for apps (not sigs).
+	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep,
+		"not available") // current - 1
 	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep,
 		"not available") // can't get current round's blockseed
 
-	// proto.MaxTxnLife is 1500 in test.
 	testApp(t, "int 4294967300; int 1500; -; block BlkSeed; len; int 32; ==", ep,
 		"not available") // 1500 back from current is more than 1500 back from lv
 	testApp(t, "int 4294967310; int 1500; -; block BlkSeed; len; int 32; ==", ep) // 1500 back from lv is legal

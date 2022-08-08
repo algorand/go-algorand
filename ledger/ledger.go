@@ -583,13 +583,6 @@ func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()
 }
 
-// Round satisfies LedgerForSignature, and must act the same as the
-// LedgerForLogic values used by EvalContract.  Those return the Round being
-// evaluated, not the last committed.
-func (l *Ledger) Round() basics.Round {
-	return l.Latest() + 1
-}
-
 // LatestCommitted returns the last block round number written to
 // persistent storage.  This block, and all previous blocks, are
 // guaranteed to be available after a crash. In addition, it returns

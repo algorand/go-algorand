@@ -200,7 +200,6 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 // "stateless" for signature purposes.
 type LedgerForSignature interface {
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
-	Round() basics.Round // don't expose the value to programs
 }
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
@@ -4864,10 +4863,13 @@ func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
 		firstAvail = 1
 	}
-	current := cx.SigLedger.Round()
+	lastAvail := cx.txn.Txn.FirstValid - 1
+	if lastAvail > cx.txn.Txn.FirstValid { // txn had a 0 in FirstValid
+		lastAvail = 0 // So nothing will be available
+	}
 	round := basics.Round(r)
-	if round < firstAvail || round >= current {
-		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
+	if firstAvail > round || round > lastAvail {
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, lastAvail)
 	}
 	return round, nil
 }
