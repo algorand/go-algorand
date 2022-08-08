@@ -54,14 +54,6 @@ type cowForLogicLedger interface {
 	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
-func (cs *roundCowState) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
-	record, err := cs.Get(addr, true)
-	if err != nil {
-		return ledgercore.AccountData{}, err
-	}
-	return record, nil
-}
-
 func newLogicLedger(cow cowForLogicLedger) *logicLedger {
 	return &logicLedger{
 		cow: cow,

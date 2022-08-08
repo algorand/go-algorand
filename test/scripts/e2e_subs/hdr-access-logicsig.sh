@@ -40,15 +40,24 @@ EOF
 
 ${gcmd} clerk compile -o ${TEMPDIR}/hdr.lsig -s -a ${ACCOUNT} ${TEMPDIR}/hdr.teal
 
-ACCOUNT_HDR=$(${gcmd} clerk compile -n ${TEMPDIR}/hdr.teal|awk '{ print $2 }')
+SIGACCOUNT=$(${gcmd} clerk compile -n ${TEMPDIR}/hdr.teal|awk '{ print $2 }')
 
-${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_HDR}
+# Avoid rewards by giving less than an algo
+${gcmd} clerk send --amount 900000 --from ${ACCOUNT} --to ${SIGACCOUNT}
+
+function balance {
+    acct=$1; shift
+    goal account balance -a "$acct" | awk '{print $1}'
+}
+
+[ "$(balance "$SIGACCOUNT")" =        900000 ]
 
 # Don't let goal set lastvalid so far in the future, that prevents `block` access
-${gcmd} clerk send --amount 10 --from ${ACCOUNT_HDR} --to ${ACCOUNT} --lastvalid 100 -o ${TEMPDIR}/hdr.tx
+${gcmd} clerk send --amount 10 --from ${SIGACCOUNT} --to ${ACCOUNT} --lastvalid 100 -o ${TEMPDIR}/hdr.tx
 
 ${gcmd} clerk sign -i ${TEMPDIR}/hdr.tx -o ${TEMPDIR}/hdr.stx --program ${TEMPDIR}/hdr.teal
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/hdr.stx
 
-${gcmd} clerk inspect ${TEMPDIR}/hdr.stx
+# remove min fee + 10
+[ "$(balance "$SIGACCOUNT")" =        898990 ]
