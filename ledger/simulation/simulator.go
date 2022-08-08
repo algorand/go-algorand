@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -24,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/pkg/errors"
 )
 
 // ==============================
@@ -73,11 +73,6 @@ type InvalidTxGroupError struct {
 	SimulatorError
 }
 
-// MissingSignatureError occurs when at least one transaction is missing a signature.
-type MissingSignatureError struct {
-	SimulatorError
-}
-
 // ScopedSimulatorError is a simulator error that has 2 errors, one for internal use and one for
 // displaying publicly. THe external error is useful for API routes/etc.
 type ScopedSimulatorError struct {
@@ -103,19 +98,43 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // A failure message is returned if the transaction is not well-formed.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) error {
-	_, err := verify.TxnGroup(txgroup, hdr, nil)
-	if err != nil {
-		// invalid signature error
-		if errors.Is(err, verify.MissingSignatureError) {
-			return MissingSignatureError{SimulatorError{err}}
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (err error, isMissingSigs bool) {
+	specialAddresses := transactions.SpecialAddresses{
+		FeeSink:     hdr.FeeSink,
+		RewardsPool: hdr.RewardsPool,
+	}
+	consensusParams := config.Consensus[hdr.CurrentProtocol]
+
+	// Filter signed and unsigned transactions
+	var signedTxns []transactions.SignedTxn
+	for _, tx := range txgroup {
+		// If unsigned, check that they are well-formed
+		if verify.TxnIsMissingSig(&tx) {
+			isMissingSigs = true
+			if err = tx.Txn.WellFormed(specialAddresses, consensusParams); err != nil {
+				err = InvalidTxGroupError{SimulatorError{err}}
+				return
+			}
+			continue
 		}
 
-		// otherwise the transaction group was invalid in some way
-		return InvalidTxGroupError{SimulatorError{err}}
+		// Otherwise add to the list of signed transactions
+		signedTxns = append(signedTxns, tx)
 	}
 
-	return nil
+	// Guard against no signed transactions
+	if len(signedTxns) == 0 {
+		return
+	}
+
+	// Verify the signed transactions are well-formed and have valid signatures
+	_, err = verify.TxnGroup(signedTxns, hdr, nil)
+	if err != nil {
+		err = InvalidTxGroupError{SimulatorError{err}}
+		return
+	}
+
+	return
 }
 
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn) (*ledgercore.ValidatedBlock, error) {
@@ -154,16 +173,12 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (generated.Simulat
 
 	var result generated.SimulationResult
 
-	// check that the transaction is well-formed
-	err = s.check(hdr, txgroup)
+	// check that the transaction is well-formed and mark whether signatures are missing
+	err, isMissingSigs := s.check(hdr, txgroup)
 	if err != nil {
-		switch err.(type) {
-		case MissingSignatureError:
-			result.MissingSignatures = true
-		default:
-			return result, err
-		}
+		return result, err
 	}
+	result.MissingSignatures = isMissingSigs
 
 	_, err = s.evaluate(hdr, txgroup)
 	if err != nil {

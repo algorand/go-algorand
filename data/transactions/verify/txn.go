@@ -116,8 +116,6 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	return nil
 }
 
-var MissingSignatureError = errors.New("signedtxn has no sig")
-
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // it is the caller responsibility to call batchVerifier.verify()
@@ -193,11 +191,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	return
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
-	numSigs := 0
-	hasSig := false
-	hasMsig := false
-	hasLogicSig := false
+func identifySigs(s *transactions.SignedTxn) (numSigs int, hasSig bool, hasMsig bool, hasLogicSig bool) {
 	if s.Sig != (crypto.Signature{}) {
 		numSigs++
 		hasSig = true
@@ -210,18 +204,34 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		numSigs++
 		hasLogicSig = true
 	}
-	if numSigs == 0 {
-		// Special case: special sender address can issue special transaction
-		// types (compact cert txn) without any signature.  The well-formed
-		// check ensures that this transaction cannot pay any fee, and
-		// cannot have any other interesting fields, except for the compact
-		// cert payload.
-		if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
-			return nil
-		}
+	return
+}
 
-		return MissingSignatureError
+func TxnIsMissingSig(s *transactions.SignedTxn) bool {
+	numSigs, _, _, _ := identifySigs(s)
+
+	if numSigs > 0 {
+		return false
 	}
+
+	// Special case: special sender address can issue special transaction
+	// types (compact cert txn) without anpy signature.  The well-formed
+	// check ensures that this transaction cannot pay any fee, and
+	// cannot have any other interesting fields, except for the compact
+	// cert payload.
+	if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
+		return false
+	}
+
+	return true
+}
+
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+	if TxnIsMissingSig(s) {
+		return errors.New("signedtxn has no sig")
+	}
+
+	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)
 	if numSigs > 1 {
 		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
