@@ -26,7 +26,8 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	. "github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -156,9 +157,8 @@ func TestPayTxn(t *testing.T) {
 		},
 	}
 
-	result, err := s.Simulate(txgroup)
+	_, _, err := s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
 }
 
 func TestOverspendPayTxn(t *testing.T) {
@@ -185,9 +185,9 @@ func TestOverspendPayTxn(t *testing.T) {
 		},
 	}
 
-	result, err := s.Simulate(txgroup)
-	require.NoError(t, err)
-	require.Contains(t, result.FailureMessage, fmt.Sprintf("tried to spend {%d}", amount))
+	_, _, err := s.Simulate(txgroup)
+	require.ErrorAs(t, err, &simulation.EvalFailureError{})
+	require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
 }
 
 func TestSimpleGroupTxn(t *testing.T) {
@@ -227,9 +227,9 @@ func TestSimpleGroupTxn(t *testing.T) {
 	}
 
 	// Should fail if there is no group parameter
-	result, err := s.Simulate(txgroup)
-	require.NoError(t, err)
-	require.Contains(t, result.FailureMessage, "had zero Group but was submitted in a group of 2")
+	_, _, err := s.Simulate(txgroup)
+	require.ErrorAs(t, err, &simulation.EvalFailureError{})
+	require.ErrorContains(t, err, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
 	err = attachGroupID(txgroup)
@@ -245,9 +245,8 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 
 	// Should now pass
-	result, err = s.Simulate(txgroup)
+	_, _, err = s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
 
 	// Confirm balances have not changed
 	sender1Data, _, err = l.LookupWithoutRewards(l.Latest(), sender1)
@@ -274,7 +273,7 @@ func TestSimpleAppCall(t *testing.T) {
 	sender := accounts[0].addr
 
 	// Compile AVM program
-	ops, err := AssembleString(trivialAVMProgram)
+	ops, err := logic.AssembleString(trivialAVMProgram)
 	require.NoError(t, err, ops.Errors)
 	prog := ops.Program
 
@@ -314,9 +313,8 @@ func TestSimpleAppCall(t *testing.T) {
 	err = attachGroupID(txgroup)
 	require.NoError(t, err)
 
-	result, err := s.Simulate(txgroup)
+	_, _, err = s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
 }
 
 func TestRejectAppCall(t *testing.T) {
@@ -329,7 +327,7 @@ func TestRejectAppCall(t *testing.T) {
 	sender := accounts[0].addr
 
 	// Compile AVM program
-	ops, err := AssembleString(rejectAVMProgram)
+	ops, err := logic.AssembleString(rejectAVMProgram)
 	require.NoError(t, err, ops.Errors)
 	prog := ops.Program
 
@@ -359,9 +357,9 @@ func TestRejectAppCall(t *testing.T) {
 	err = attachGroupID(txgroup)
 	require.NoError(t, err)
 
-	result, err := s.Simulate(txgroup)
-	require.NoError(t, err)
-	require.Contains(t, result.FailureMessage, "transaction rejected by ApprovalProgram")
+	_, _, err = s.Simulate(txgroup)
+	require.ErrorAs(t, err, &simulation.EvalFailureError{})
+	require.ErrorContains(t, err, "transaction rejected by ApprovalProgram")
 }
 
 func TestSignatureCheck(t *testing.T) {
@@ -387,30 +385,28 @@ func TestSignatureCheck(t *testing.T) {
 	}
 
 	// should error without a signature
-	result, err := s.Simulate(txgroup)
+	_, missingSignatures, err := s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
-	require.True(t, result.MissingSignatures)
+	require.True(t, missingSignatures)
 
 	// add signature
 	signatureSecrets := accounts[0].sk
 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
 	// should not error now that we have a signature
-	result, err = s.Simulate(txgroup)
+	_, missingSignatures, err = s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
-	require.False(t, result.MissingSignatures)
+	require.False(t, missingSignatures)
 
 	// should error with invalid signature
 	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
-	result, err = s.Simulate(txgroup)
+	_, _, err = s.Simulate(txgroup)
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
 // TestInvalidTxGroup tests that a transaction group with invalid transactions
-// is rejected by the simulator as an error instead of a failure message.
+// is rejected by the simulator as an InvalidTxGroupError instead of a EvalFailureError.
 func TestInvalidTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -435,7 +431,7 @@ func TestInvalidTxGroup(t *testing.T) {
 	}
 
 	// should error with invalid transaction group error
-	_, err := s.Simulate(txgroup)
+	_, _, err := s.Simulate(txgroup)
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
 }
@@ -469,12 +465,12 @@ func TestBalanceChangesWithApp(t *testing.T) {
 	receiverBalance := accounts[1].acctData.MicroAlgos.Raw
 
 	// Compile approval program
-	ops, err := AssembleString(accountBalanceCheckProgram)
+	ops, err := logic.AssembleString(accountBalanceCheckProgram)
 	require.NoError(t, err, ops.Errors)
 	approvalProg := ops.Program
 
 	// Compile clear program
-	ops, err = AssembleString(trivialAVMProgram)
+	ops, err = logic.AssembleString(trivialAVMProgram)
 	require.NoError(t, err, ops.Errors)
 	clearStateProg := ops.Program
 
@@ -540,7 +536,6 @@ func TestBalanceChangesWithApp(t *testing.T) {
 	err = attachGroupID(txgroup)
 	require.NoError(t, err)
 
-	result, err := s.Simulate(txgroup)
+	_, _, err = s.Simulate(txgroup)
 	require.NoError(t, err)
-	require.Empty(t, result.FailureMessage)
 }

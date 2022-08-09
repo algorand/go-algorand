@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
@@ -141,8 +140,8 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	return m.err
 }
 
-func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
-	return generated.SimulationResult{}, m.err
+func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
+	return nil, false, m.err
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {

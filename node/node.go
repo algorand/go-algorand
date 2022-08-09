@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -533,7 +532,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
+func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
 	simulator := simulation.MakeSimulator(node.ledger)
 	return simulator.Simulate(txgroup)
 }

@@ -18,7 +18,6 @@ package simulation
 
 import (
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -70,6 +69,11 @@ func (s SimulatorError) Unwrap() error {
 
 // InvalidTxGroupError occurs when an invalid transaction group was submitted to the simulator.
 type InvalidTxGroupError struct {
+	SimulatorError
+}
+
+// EvalFailureError represents an error that occurred during evaluation.
+type EvalFailureError struct {
 	SimulatorError
 }
 
@@ -150,7 +154,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 	err = eval.TransactionGroup(group)
 	if err != nil {
-		return nil, err
+		return nil, EvalFailureError{SimulatorError{err}}
 	}
 
 	// Finally, process any pending end-of-block state changes.
@@ -162,29 +166,21 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-// Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed or an
-// unexpected error occurs. Otherwise, evaluation failure messages are returned.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (generated.SimulationResult, error) {
+// Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
+func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
-		return generated.SimulationResult{}, err
+		return
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
 
-	var result generated.SimulationResult
-
 	// check that the transaction is well-formed and mark whether signatures are missing
-	isMissingSigs, err := s.check(hdr, txgroup)
+	missingSignatures, err = s.check(hdr, txgroup)
 	if err != nil {
-		return result, err
-	}
-	result.MissingSignatures = isMissingSigs
-
-	_, err = s.evaluate(hdr, txgroup)
-	if err != nil {
-		result.FailureMessage = err.Error()
+		return
 	}
 
-	return result, nil
+	vb, err = s.evaluate(hdr, txgroup)
+	return
 }
