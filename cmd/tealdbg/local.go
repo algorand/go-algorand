@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -525,13 +524,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	return
 }
 
-type noHeaders struct {
-}
-
-func (noHeaders) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, fmt.Errorf("no blockheaders in debugger")
-}
-
 // RunAll runs all the programs
 func (r *LocalRunner) RunAll() error {
 	if len(r.runs) < 1 {
@@ -553,7 +545,7 @@ func (r *LocalRunner) RunAll() error {
 	start := time.Now()
 
 	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-	ep.SigLedger = noHeaders{}
+	ep.SigLedger = logic.NoHeaderLedger{}
 	configureDebugger(ep)
 
 	var last error
