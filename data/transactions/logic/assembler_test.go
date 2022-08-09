@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"bufio"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -435,29 +434,6 @@ func pseudoOp(opcode string) bool {
 		strings.HasPrefix(opcode, "arg")
 }
 
-func addSemis(s string) (ret string) {
-	scanner := bufio.NewScanner(strings.NewReader(s))
-scanLoop:
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		fields := fieldsFromLine(line)
-		for i, field := range fields {
-			if i == 0 && strings.HasPrefix(field, "#") {
-				ret += "\n" + line + "\n"
-				continue scanLoop
-			}
-			if strings.HasPrefix(field, "//") {
-				ret += line + "\n"
-				continue scanLoop
-			}
-		}
-		if len(fields) > 0 {
-			ret += strings.Join(fields, " ") + "; "
-		}
-	}
-	return
-}
-
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -484,7 +460,6 @@ func TestAssemble(t *testing.T) {
 			}
 
 			ops := testProg(t, nonsense[v], v)
-			opsWithSemiColons := testProg(t, addSemis(nonsense[v]), v)
 			// check that compilation is stable over
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
@@ -492,7 +467,6 @@ func TestAssemble(t *testing.T) {
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
-			require.Equal(t, expectedBytes, opsWithSemiColons.Program, hex.EncodeToString(ops.Program))
 		})
 	}
 }
@@ -1128,6 +1102,29 @@ func TestFieldsFromLine(t *testing.T) {
 	require.Equal(t, "base64", fields[1])
 	require.Equal(t, "ABC//==", fields[2])
 
+	line = "op base64 base64"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "base64", fields[2])
+
+	line = "op base64 base64 //comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "base64", fields[2])
+
+	line = "op base64 base64; op2 //done"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 5, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "base64", fields[2])
+	require.Equal(t, ";", fields[3])
+	require.Equal(t, "op2", fields[4])
+
 	line = "op base64 ABC/=="
 	fields = fieldsFromLine(line)
 	require.Equal(t, 3, len(fields))
@@ -1312,6 +1309,15 @@ func TestFieldsFromLine(t *testing.T) {
 	fields = fieldsFromLine(line)
 	require.Equal(t, 1, len(fields))
 	require.Equal(t, `""`, fields[0])
+
+	line = "int 1; int 2"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 5, len(fields))
+	require.Equal(t, "int", fields[0])
+	require.Equal(t, "1", fields[1])
+	require.Equal(t, ";", fields[2])
+	require.Equal(t, "int", fields[3])
+	require.Equal(t, "2", fields[4])
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -2714,15 +2720,37 @@ func TestReplacePseudo(t *testing.T) {
 	}
 }
 
-func checkSame(t *testing.T, weird string, normal string) {
-	ops, _ := AssembleStringWithVersion(weird, 7)
-	otherOps, _ := AssembleStringWithVersion(normal, 7)
-	require.Equal(t, otherOps.Program, ops.Program)
+func checkSame(t *testing.T, first string, compares ...string) {
+	t.Helper()
+	ops, err := AssembleStringWithVersion(first, 7)
+	require.NoError(t, err, first)
+	for _, compare := range compares {
+		other, err := AssembleStringWithVersion(compare, 7)
+		assert.NoError(t, err, compare)
+		assert.Equal(t, other.Program, ops.Program, "%s unlike %s", first, compare)
+	}
 }
 
 func TestSemiColon(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	// Space for weird semicolon cases that might not be checked by rest of tests
-	checkSame(t, "pushint 0 ; pushint 1 ; +; int 3 ; *", "pushint 0\npushint 1\n+\nint 3\n*")
+
+	checkSame(t,
+		"pushint 0 ; pushint 1 ; +; int 3 ; *",
+		"pushint 0\npushint 1\n+\nint 3\n*",
+		"pushint 0; pushint 1; +; int 3; *; // comment; int 2",
+		"pushint 0; ; ; pushint 1 ; +; int 3 ; *//check",
+	)
+
+	checkSame(t,
+		"#pragma version 7\nint 1",
+		"// junk;\n#pragma version 7\nint 1",
+		"// junk;\n #pragma version 7\nint 1",
+	)
+
+	checkSame(t,
+		`byte "test;this"; pop;`,
+		`byte "test;this"; ; pop;`,
+		`byte "test;this";;pop;`,
+	)
 }
