@@ -4,8 +4,6 @@ package account
 
 import (
 	"github.com/algorand/msgp/msgp"
-
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 )
 
 // The following msgp objects are implemented in this file:
@@ -24,14 +22,6 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
-//
-// StateProofVerifier
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -326,32 +316,4 @@ func (z StateProofKeys) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateProofKeys) MsgIsZero() bool {
 	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *StateProofVerifier) MarshalMsg(b []byte) []byte {
-	return ((*(merklesignature.Verifier))(z)).MarshalMsg(b)
-}
-func (_ *StateProofVerifier) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofVerifier)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofVerifier) UnmarshalMsg(bts []byte) ([]byte, error) {
-	return ((*(merklesignature.Verifier))(z)).UnmarshalMsg(bts)
-}
-func (_ *StateProofVerifier) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofVerifier)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *StateProofVerifier) Msgsize() int {
-	return ((*(merklesignature.Verifier))(z)).Msgsize()
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *StateProofVerifier) MsgIsZero() bool {
-	return ((*(merklesignature.Verifier))(z)).MsgIsZero()
 }

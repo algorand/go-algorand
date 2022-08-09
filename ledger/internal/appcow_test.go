@@ -91,7 +91,7 @@ func (ml *emptyLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *emptyLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+func (ml *emptyLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
@@ -99,7 +99,7 @@ func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ml *emptyLedger) compactCertNext() basics.Round {
+func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
 }
 

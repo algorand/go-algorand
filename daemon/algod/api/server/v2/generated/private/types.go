@@ -366,6 +366,19 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// LightBlockHeaderProof defines model for LightBlockHeaderProof.
+type LightBlockHeaderProof struct {
+
+	// The index of the light block header in the vector commitment tree
+	Index uint64 `json:"index"`
+
+	// The encoded proof.
+	Proof []byte `json:"proof"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
+}
+
 // ParticipationKey defines model for ParticipationKey.
 type ParticipationKey struct {
 
@@ -442,6 +455,16 @@ type PendingTransactionResponse struct {
 
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
+
+// StateProof defines model for StateProof.
+type StateProof struct {
+
+	// The encoded message.
+	Message []byte `json:"Message"`
+
+	// The encoded StateProof for the message.
+	StateProof []byte `json:"StateProof"`
+}
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
@@ -637,6 +660,9 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// LightBlockHeaderProofResponse defines model for LightBlockHeaderProofResponse.
+type LightBlockHeaderProofResponse LightBlockHeaderProof
+
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {
 
@@ -736,6 +762,9 @@ type ProofResponse struct {
 	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// StateProofResponse defines model for StateProofResponse.
+type StateProofResponse StateProof
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
