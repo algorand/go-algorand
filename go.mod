@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.17
 
 require (
-	github.com/algorand/avm-abi v0.0.0-20220809184326-c360c5b4d2ff
+	github.com/algorand/avm-abi v0.0.0-20220809211845-720444b010d0
 	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
