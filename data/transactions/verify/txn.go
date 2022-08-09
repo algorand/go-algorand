@@ -191,7 +191,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	return
 }
 
-func identifySigs(s *transactions.SignedTxn) (numSigs int, hasSig bool, hasMsig bool, hasLogicSig bool) {
+func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig bool, hasLogicSig bool) {
 	if s.Sig != (crypto.Signature{}) {
 		numSigs++
 		hasSig = true
@@ -218,16 +218,7 @@ func isCompactCertSpecialCase(s *transactions.SignedTxn) bool {
 
 func TxnIsMissingSig(s *transactions.SignedTxn) bool {
 	numSigs, _, _, _ := identifySigs(s)
-
-	if numSigs > 0 {
-		return false
-	}
-
-	if isCompactCertSpecialCase(s) {
-		return false
-	}
-
-	return true
+	return numSigs == 0 && !isCompactCertSpecialCase(s)
 }
 
 func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
@@ -235,9 +226,11 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("signedtxn has no sig")
 	}
 
-	// end early if we have a special case
 	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)
-	if numSigs == 0 && isCompactCertSpecialCase(s) {
+
+	// if numSigs is 0 then we end early because this is a special case;
+	// otherwise it would have been caught by TxnIsMissingSig
+	if numSigs == 0 {
 		return nil
 	}
 
