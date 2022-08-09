@@ -33,7 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	abi "github.com/algorand/avm-abi/avm-abi"
+	avm_abi "github.com/algorand/avm-abi/avm-abi"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -266,7 +266,7 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 			parseErr = fmt.Errorf("Could not decode abi string (%s): should split abi-type and abi-value with colon", arg.Value)
 			return
 		}
-		abiType, err := abi.TypeOf(typeAndValue[0])
+		abiType, err := avm_abi.TypeOf(typeAndValue[0])
 		if err != nil {
 			parseErr = fmt.Errorf("Could not decode abi type string (%s): %v", typeAndValue[0], err)
 			return
@@ -1084,7 +1084,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 		}
 
 		expectedType := types[i]
-		if expectedType != abi.AnyTransactionType && txn.Txn.Type != protocol.TxType(expectedType) {
+		if expectedType != avm_abi.AnyTransactionType && txn.Txn.Type != protocol.TxType(expectedType) {
 			return nil, fmt.Errorf("Transaction from %s does not match method argument type. Expected %s, got %s", txFilename, expectedType, txn.Txn.Type)
 		}
 
@@ -1105,7 +1105,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 		var resolved int
 
 		switch types[i] {
-		case abi.AccountReferenceType:
+		case avm_abi.AccountReferenceType:
 			if value == sender {
 				resolved = 0
 			} else {
@@ -1122,7 +1122,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 					*accounts = append(*accounts, value)
 				}
 			}
-		case abi.ApplicationReferenceType:
+		case avm_abi.ApplicationReferenceType:
 			appID, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
@@ -1143,7 +1143,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 					*apps = append(*apps, appID)
 				}
 			}
-		case abi.AssetReferenceType:
+		case avm_abi.AssetReferenceType:
 			assetID, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse asset ID '%s': %s", value, err)
@@ -1184,9 +1184,9 @@ const methodArgsTupleThreshold = maxAppArgs - 2
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
 func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
-	abiTypes := make([]abi.Type, len(argTypes))
+	abiTypes := make([]avm_abi.Type, len(argTypes))
 	for i, typeString := range argTypes {
-		abiType, err := abi.TypeOf(typeString)
+		abiType, err := avm_abi.TypeOf(typeString)
 		if err != nil {
 			return err
 		}
@@ -1202,10 +1202,10 @@ func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applica
 	// are present, then the method arguments after the 14th are placed in a tuple in the last
 	// app argument slot
 	if len(abiTypes) > maxAppArgs-1 {
-		typesForTuple := make([]abi.Type, len(abiTypes)-methodArgsTupleThreshold)
+		typesForTuple := make([]avm_abi.Type, len(abiTypes)-methodArgsTupleThreshold)
 		copy(typesForTuple, abiTypes[methodArgsTupleThreshold:])
 
-		compactedType, err := abi.MakeTupleType(typesForTuple)
+		compactedType, err := avm_abi.MakeTupleType(typesForTuple)
 		if err != nil {
 			return err
 		}
@@ -1302,14 +1302,14 @@ var methodAppCmd = &cobra.Command{
 		applicationArgs = append(applicationArgs, hash[0:4])
 
 		// parse down the ABI type from method signature
-		_, argTypes, retTypeStr, err := abi.ParseMethodSignature(method)
+		_, argTypes, retTypeStr, err := avm_abi.ParseMethodSignature(method)
 		if err != nil {
 			reportErrorf("cannot parse method signature: %v", err)
 		}
 
-		var retType *abi.Type
-		if retTypeStr != abi.VoidReturnType {
-			theRetType, err := abi.TypeOf(retTypeStr)
+		var retType *avm_abi.Type
+		if retTypeStr != avm_abi.VoidReturnType {
+			theRetType, err := avm_abi.TypeOf(retTypeStr)
 			if err != nil {
 				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
 			}
@@ -1329,11 +1329,11 @@ var methodAppCmd = &cobra.Command{
 		refArgIndexToBasicArgIndex := make(map[int]int)
 		for i, argType := range argTypes {
 			argValue := methodArgs[i]
-			if abi.IsTransactionType(argType) {
+			if avm_abi.IsTransactionType(argType) {
 				txnArgTypes = append(txnArgTypes, argType)
 				txnArgValues = append(txnArgValues, argValue)
 			} else {
-				if abi.IsReferenceType(argType) {
+				if avm_abi.IsReferenceType(argType) {
 					refArgIndexToBasicArgIndex[len(refArgTypes)] = len(basicArgTypes)
 					refArgTypes = append(refArgTypes, argType)
 					refArgValues = append(refArgValues, argValue)

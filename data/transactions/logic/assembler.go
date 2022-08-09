@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	abi "github.com/algorand/avm-abi/avm-abi"
+	avm_abi "github.com/algorand/avm-abi/avm-abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -719,7 +719,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 			return ops.error(err)
 		}
 		methodSigStr := string(methodSig)
-		err = abi.VerifyMethodSignature(methodSigStr)
+		err = avm_abi.VerifyMethodSignature(methodSigStr)
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
