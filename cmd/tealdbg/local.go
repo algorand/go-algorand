@@ -545,6 +545,7 @@ func (r *LocalRunner) RunAll() error {
 	start := time.Now()
 
 	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	ep.SigLedger = logic.NoHeaderLedger{}
 	configureDebugger(ep)
 
 	var last error

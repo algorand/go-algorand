@@ -1447,6 +1447,7 @@ type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
+	ledger           logic.LedgerForSignature
 
 	ctx      context.Context
 	txgroups [][]transactions.SignedTxnWithAD
@@ -1477,7 +1478,7 @@ func (validator *evalTxValidator) run() {
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, validator.ledger)
 	if err != nil {
 		validator.done <- err
 	}
@@ -1532,6 +1533,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
 		txvalidator.verificationPool = executionPool
+		txvalidator.ledger = l
 
 		txvalidator.ctx = validationCtx
 		txvalidator.txgroups = paysetgroups
