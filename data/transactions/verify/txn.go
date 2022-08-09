@@ -207,6 +207,15 @@ func identifySigs(s *transactions.SignedTxn) (numSigs int, hasSig bool, hasMsig 
 	return
 }
 
+// Special case: special sender address can issue special transaction
+// types (compact cert txn) without any signature.  The well-formed
+// check ensures that this transaction cannot pay any fee, and
+// cannot have any other interesting fields, except for the compact
+// cert payload.
+func isCompactCertSpecialCase(s *transactions.SignedTxn) bool {
+	return s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx
+}
+
 func TxnIsMissingSig(s *transactions.SignedTxn) bool {
 	numSigs, _, _, _ := identifySigs(s)
 
@@ -214,12 +223,7 @@ func TxnIsMissingSig(s *transactions.SignedTxn) bool {
 		return false
 	}
 
-	// Special case: special sender address can issue special transaction
-	// types (compact cert txn) without anpy signature.  The well-formed
-	// check ensures that this transaction cannot pay any fee, and
-	// cannot have any other interesting fields, except for the compact
-	// cert payload.
-	if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
+	if isCompactCertSpecialCase(s) {
 		return false
 	}
 
@@ -231,7 +235,12 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("signedtxn has no sig")
 	}
 
+	// end early if we have a special case
 	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)
+	if numSigs == 0 && isCompactCertSpecialCase(s) {
+		return nil
+	}
+
 	if numSigs > 1 {
 		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
