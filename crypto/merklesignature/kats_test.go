@@ -60,7 +60,7 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		return mssKat{}, fmt.Errorf("error: Signature round cann't be smaller then start round")
 	}
 
-	interval := config.Consensus[protocol.ConsensusFuture].StateProofInterval
+	interval := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	stateProofSecrets, err := New(startRound, startRound+(interval*numOfKeys)-1, interval)
 	if err != nil {
 		return mssKat{}, fmt.Errorf("error: %w", err)

@@ -1135,7 +1135,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	addSinkAndPoolAccounts(genesisAccts)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnlineCacheDBSync")
-	protoParams := config.Consensus[protocol.ConsensusFuture]
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = maxBalLookback
 	protoParams.SeedLookback = seedLookback
 	protoParams.SeedRefreshInterval = seedInteval

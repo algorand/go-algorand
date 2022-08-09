@@ -1659,9 +1659,9 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 
 	// since the first state proof is expected to happen on stateproofInterval*2 we would start give-up on state proofs we would
 	// give up on old state proofs only after stateproofInterval*3
-	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10000000000)
 
 	// place real values on the participation period, so we would create a commitment with some stake.
 	accountsWithValid := make(map[basics.Address]basics.AccountData)
@@ -2656,10 +2656,10 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 func TestVotersReloadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
@@ -2702,11 +2702,11 @@ func TestVotersReloadFromDisk(t *testing.T) {
 
 func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
@@ -2761,11 +2761,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false

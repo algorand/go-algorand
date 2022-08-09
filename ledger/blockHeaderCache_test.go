@@ -90,6 +90,5 @@ func TestCacheSizeConsensus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO Stateproof: change to CurrentVersion when feature is enabled
-	a.Equal(uint64(latestHeaderCacheSize), config.Consensus[protocol.ConsensusFuture].StateProofInterval*2)
+	a.Equal(uint64(latestHeaderCacheSize), config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*2)
 }
