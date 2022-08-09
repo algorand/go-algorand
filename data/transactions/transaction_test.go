@@ -22,14 +22,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
@@ -597,7 +599,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	type keyRegTestCase struct {
 		votePK                                    crypto.OneTimeSignatureVerifier
 		selectionPK                               crypto.VRFVerifier
-		stateProofPK                              merklesignature.Verifier
+		stateProofPK                              merklesignature.Commitment
 		voteFirst                                 basics.Round
 		voteLast                                  basics.Round
 		lastValid                                 basics.Round
@@ -611,8 +613,8 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	votePKValue := crypto.OneTimeSignatureVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	selectionPKValue := crypto.VRFVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
-	stateProofPK := merklesignature.Verifier([merklesignature.MerkleSignatureSchemeRootSize]byte{1})
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod // TODO: change to curProto.MaxKeyregValidPeriod
+	stateProofPK := merklesignature.Commitment([merklesignature.MerkleSignatureSchemeRootSize]byte{1})
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
 
 	runTestCase := func(testCase keyRegTestCase) error {
 
@@ -1223,21 +1225,129 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 510 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
 		/* 511 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
 		/* 512 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: errKeyregTxnNotEmptyStateProofPK},
-		/* 513 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
+		/* 513 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
 		/* 514 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegEmptyStateProofPK},
+		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegEmptyStateProofPK},
 		/* 516 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnNonParticipantShouldBeEmptyStateProofPK},
-		/* 517 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
+		/* 517 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
 		/* 518 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnOfflineShouldBeEmptyStateProofPK},
-		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
-		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
+		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
+		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
+		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
+		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
+		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
 		err := runTestCase(testCase)
 
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
+}
+
+type stateproofTxnTestCase struct {
+	expectedError error
+
+	StateProofInterval uint64
+	fee                basics.MicroAlgos
+	note               []byte
+	group              crypto.Digest
+	lease              [32]byte
+	rekeyValue         basics.Address
+	sender             basics.Address
+}
+
+func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	curProto.StateProofInterval = s.StateProofInterval
+
+	// edit txn params. wanted
+	return Transaction{
+		Type: protocol.StateProofTx,
+		Header: Header{
+			Sender:      s.sender,
+			Fee:         s.fee,
+			FirstValid:  0,
+			LastValid:   0,
+			Note:        s.note,
+			GenesisID:   "",
+			GenesisHash: crypto.Digest{},
+			Group:       s.group,
+			Lease:       s.lease,
+			RekeyTo:     s.rekeyValue,
+		},
+		StateProofTxnFields: StateProofTxnFields{},
+	}.WellFormed(SpecialAddresses{}, curProto)
+}
+
+func TestWellFormedStateProofTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// want to create different Txns, run on all of these cases the check, and have an expected result
+	cases := []stateproofTxnTestCase{
+		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
+		/* 1 */ {expectedError: errBadSenderInStateProofTxn, StateProofInterval: 256, sender: basics.Address{1, 2, 3, 4}},
+		/* 2 */ {expectedError: errFeeMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, fee: basics.MicroAlgos{Raw: 1}},
+		/* 3 */ {expectedError: errNoteMustBeEmptyInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, note: []byte{1, 2, 3}},
+		/* 4 */ {expectedError: errGroupMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, group: crypto.Digest{1, 2, 3}},
+		/* 5 */ {expectedError: errRekeyToMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, rekeyValue: basics.Address{1, 2, 3, 4}},
+		/* 6 */ {expectedError: errLeaseMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, lease: [32]byte{1, 2, 3, 4}},
+		/* 7 */ {expectedError: nil, StateProofInterval: 256, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
+	}
+	for i, testCase := range cases {
+		cpyTestCase := testCase
+		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, cpyTestCase.expectedError, cpyTestCase.runIsWellFormedForTestCase())
+		})
+	}
+}
+
+func TestStateProofTxnShouldBeZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	curProto.StateProofInterval = 256
+	txn := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:      addr1,
+			Fee:         basics.MicroAlgos{Raw: 100},
+			FirstValid:  0,
+			LastValid:   0,
+			Note:        []byte{0, 1},
+			GenesisID:   "",
+			GenesisHash: crypto.Digest{},
+		},
+		StateProofTxnFields: StateProofTxnFields{},
+	}
+
+	const erroMsg = "type pay has non-zero fields for type stpf"
+	txn.StateProofType = 1
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProofType = 0
+	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.Message = stateproofmsg.Message{}
+	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.StateProof = stateproof.StateProof{}
+	txn.Message.LastAttestedRound = 512
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), erroMsg)
+
+	txn.Message.LastAttestedRound = 0
+	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	require.NoError(t, err)
 }

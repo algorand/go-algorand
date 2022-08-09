@@ -52,6 +52,7 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	ep := defaultEvalParamsWithVersion(nil, version)
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(makeSampleTxnGroup(makeSampleTxn()))
 	ledger := MakeLedger(map[basics.Address]uint64{})
+	ep.SigLedger = ledger
 	ep.Ledger = ledger
 	return ep, &ep.TxnGroup[0].Txn, ledger
 }
@@ -2372,7 +2373,7 @@ func TestReturnTypes(t *testing.T) {
 		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 
-		"block": ": int 4294967200; block BlkSeed",
+		"block": "block BlkSeed",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2537,19 +2538,23 @@ func TestLatestTimestamp(t *testing.T) {
 func TestBlockSeed(t *testing.T) {
 	ep, txn, l := makeSampleEnv()
 
-	// makeSampleENv creates txns with fv, lv that don't actually fit the round
-	// in l.  Nothing in most tests cares. But the rule for `block` is
-	// related to lv and the current round, so we set the fv,lv more
-	// realistically.
+	// makeSampleEnv creates txns with fv, lv that don't actually fit the round
+	// in l.  Nothing in most tests cares. But the rule for `block` is related
+	// to lv and fv, so we set the fv,lv more realistically.
 	txn.FirstValid = l.round() - 10
 	txn.LastValid = l.round() + 10
 
+	// Keep in mind that proto.MaxTxnLife is 1500 in the test proto
+
 	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
-	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep) // current - 1
+
+	// These first two tests show that current-1 is not available now, though a
+	// resonable extension is to allow such access for apps (not sigs).
+	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep,
+		"not available") // current - 1
 	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep,
 		"not available") // can't get current round's blockseed
 
-	// proto.MaxTxnLife is 1500 in test.
 	testApp(t, "int 4294967300; int 1500; -; block BlkSeed; len; int 32; ==", ep,
 		"not available") // 1500 back from current is more than 1500 back from lv
 	testApp(t, "int 4294967310; int 1500; -; block BlkSeed; len; int 32; ==", ep) // 1500 back from lv is legal
@@ -2560,6 +2565,11 @@ func TestBlockSeed(t *testing.T) {
 	// A little silly, as it only tests the test ledger: ensure samenes and differentness
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
+
+	// `block` should also work in LogicSigs, to drive home the point, blot out
+	// the normal Ledger
+	ep.Ledger = nil
+	testLogic(t, "int 0xfffffff0; block BlkTimestamp", randomnessVersion, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

@@ -32,17 +32,33 @@ assert err
 assert "invalid txn field FirstValidTime" in str(err), err
 
 
-# Test that the block timestamp from two blocks ago is between 2 and 5
-# (inclusive) seconds before the previous block timestamp. devMode
-# might mess this test up.  This works because FirstValid is set to
-# the last committed block by SDK, not the next coming one.
+# Can't access two behind FirstValid because LastValid is 1000 after
 teal = """
 #pragma version 7
  txn FirstValid
+ int 2
+ -
+ block BlkTimestamp
+"""
+txinfo, err = goal.app_create(joe, goal.assemble(teal))
+assert "not available" in str(err), err
+
+# We want to manipulate lastvalid, so we need to turn off autosend
+goal.autosend = False
+
+# We will be able to access two blocks, by setting lv explcitly. So we
+# test that the block timestamp from two blocks ago is between 2 and 5
+# (inclusive) seconds before the previous block timestamp. devMode
+# might mess this test up.
+teal = """
+#pragma version 7
+ txn FirstValid
+ int 1
+ -
  block BlkTimestamp
 
  txn FirstValid
- int 1
+ int 2
  -
  block BlkTimestamp
  // last two times are on stack
@@ -58,23 +74,6 @@ teal = """
  <
 """
 checktimes = goal.assemble(teal)
-txinfo, err = goal.app_create(joe, checktimes)
-assert not err, err
-
-# Can't access two behind FirstValid because LastValid is 1000 after
-teal = """
-#pragma version 7
- txn FirstValid
- int 2
- -
- block BlkTimestamp
-"""
-txinfo, err = goal.app_create(joe, goal.assemble(teal))
-assert "not available" in str(err), err
-
-# We want to manipulate lastvalid, so we need to turn off autosend
-goal.autosend = False
-
 tx = goal.app_create(joe, goal.assemble(teal))
 tx.last_valid_round = tx.last_valid_round - 800
 txinfo, err = goal.send(tx)

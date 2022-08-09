@@ -898,6 +898,8 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV30, // AVM v5 (inner txs)
 	protocol.ConsensusV31, // AVM v6 (inner txs with appls)
 	protocol.ConsensusV32, // unlimited assets and apps
+	protocol.ConsensusV33, // 320 rounds
+	protocol.ConsensusV34, // AVM v7, stateproofs
 	protocol.ConsensusFuture,
 }
 
@@ -969,8 +971,8 @@ func TestHeaderAccess(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// Added in v33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// Added in v34
+	testConsensusRange(t, 34, 0, func(t *testing.T, ver int) {
 		cv := consensusByNumber[ver]
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
@@ -1177,9 +1179,9 @@ func TestUnfundedSenders(t *testing.T) {
 			},
 		}
 
-		// v33 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
 		var problem string
-		if ver < 33 {
+		if ver < 34 {
 			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
 			problem = "balance 0 below min"
 		}
@@ -1232,9 +1234,9 @@ func TestAppCallAppDuringInit(t *testing.T) {
 			ForeignApps: []basics.AppIndex{approveID},
 			Fee:         2000, // Enough to have the inner fee paid for
 		}
-		// v33 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
 		var problem string
-		if ver < 33 {
+		if ver < 34 {
 			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
 			problem = "balance 0 below min"
 		}

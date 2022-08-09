@@ -423,6 +423,7 @@ var compiled = map[uint64]string{
 	5: "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03",
 	6: "06" + v6Compiled,
 	7: "07" + v7Compiled,
+	8: "08" + v8Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -518,20 +519,46 @@ func testMatch(t testing.TB, actual, expected string) bool {
 	}
 }
 
-func assemblyTrace(text string, ver uint64) string {
+func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	ops := newOpStream(ver)
 	ops.Trace = &strings.Builder{}
-	ops.assemble(text)
-	return ops.Trace.String()
+	err := ops.assemble(text)
+	return &ops, err
+}
+
+func lines(s string, num int) (bool, string) {
+	if num < 1 {
+		return true, ""
+	}
+	found := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			found++
+			if found == num {
+				return true, s[0 : i+1]
+			}
+		}
+	}
+	return false, s
+}
+
+func summarize(trace *strings.Builder) string {
+	truncated, msg := lines(trace.String(), 50)
+	if !truncated {
+		return msg
+	}
+	return msg + "(trace truncated)\n"
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpStream {
 	t.Helper()
-	program := source
-	ops, err := AssembleStringWithVersion(program, ver)
+	ops, err := assembleWithTrace(source, ver)
 	if len(expected) == 0 {
 		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, ver))
+			t.Log(summarize(ops.Trace))
+		}
+		if len(ops.Errors) > 10 {
+			ops.Errors = ops.Errors[:10] // Truncate to reasonable
 		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
@@ -539,13 +566,13 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		require.NotNil(t, ops.Program)
 		// It should always be possible to Disassemble
 		dis, err := Disassemble(ops.Program)
-		require.NoError(t, err, program)
+		require.NoError(t, err, source)
 		// And, while the disassembly may not match input
 		// exactly, the assembly of the disassembly should
 		// give the same bytecode
 		ops2, err := AssembleStringWithVersion(notrack(dis), ver)
 		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
-			t.Log(program)
+			t.Log(source)
 			t.Log(dis)
 		}
 		require.Empty(t, ops2.Errors)
@@ -553,7 +580,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		require.Equal(t, ops.Program, ops2.Program)
 	} else {
 		if err == nil {
-			t.Log(program)
+			t.Log(source)
 		}
 		require.Error(t, err)
 		errors := ops.Errors
@@ -569,7 +596,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 					}
 				}
 				if fail {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			} else {
@@ -586,7 +613,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
 				msg := found.Unwrap().Error()
 				if !testMatch(t, msg, exp.s) {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			}
