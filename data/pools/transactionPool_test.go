@@ -1384,6 +1384,7 @@ func TestSepculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 
 	savedTransactions := 0
 	pendingTxn := transactions.SignedTxn{}
+	pendingTxIDSet := make(map[crypto.Signature]bool)
 	for i, sender := range addresses {
 		amount := uint64(0)
 		for _, receiver := range addresses {
@@ -1405,15 +1406,16 @@ func TestSepculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 				}
 				amount++
 
-				signedTx := tx.Sign(secrets[i])
-				require.NoError(t, transactionPool.RememberOne(signedTx))
-				pendingTxn = signedTx
+				pendingTxn = tx.Sign(secrets[i])
+				require.NoError(t, transactionPool.RememberOne(pendingTxn))
+				pendingTxIDSet[pendingTxn.Sig] = true
 				savedTransactions++
 			}
 		}
 	}
 	pending := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
+	require.Len(t, pendingTxIDSet, savedTransactions)
 
 	blockEval := newBlockEvaluator(t, mockLedger)
 	err := blockEval.Transaction(pendingTxn, transactions.ApplyData{})
@@ -1430,6 +1432,12 @@ func TestSepculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
+
 	// tx pool unaffected
 	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions)
+
+	for _, txn := range specBlock.Block().Payset {
+		require.NotEqual(t, txn.SignedTxn.Sig, pendingTxn.Sig)
+		require.True(t, pendingTxIDSet[txn.SignedTxn.Sig])
+	}
 }
