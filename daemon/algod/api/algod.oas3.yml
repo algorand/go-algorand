@@ -216,7 +216,8 @@
             "acfg",
             "axfer",
             "afrz",
-            "appl"
+            "appl",
+            "stpf"
           ],
           "type": "string"
         }
@@ -446,6 +447,16 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "LightBlockHeaderProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LightBlockHeaderProof"
+            }
+          }
+        },
+        "description": "Proof of a light block header."
+      },
       "NodeStatusResponse": {
         "content": {
           "application/json": {
@@ -619,52 +630,15 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "ProofResponse": {
+      "StateProofResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                  "enum": [
-                    "sha512_256",
-                    "sha256"
-                  ],
-                  "type": "string"
-                },
-                "idx": {
-                  "description": "Index of the transaction in the block's payset.",
-                  "type": "integer"
-                },
-                "proof": {
-                  "description": "Merkle proof of transaction membership.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "stibhash": {
-                  "description": "Hash of SignedTxnInBlock for verifying proof.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "treedepth": {
-                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "hashtype",
-                "idx",
-                "proof",
-                "stibhash",
-                "treedepth"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/StateProof"
             }
           }
         },
-        "description": "Proof of transaction in a block."
+        "description": "StateProofResponse wraps the StateProof type in a response."
       },
       "SupplyResponse": {
         "content": {
@@ -743,6 +717,53 @@
           }
         },
         "description": "TransactionParams contains the parameters that help a client construct a new transaction."
+      },
+      "TransactionProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hashtype": {
+                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+                  "enum": [
+                    "sha512_256",
+                    "sha256"
+                  ],
+                  "type": "string"
+                },
+                "idx": {
+                  "description": "Index of the transaction in the block's payset.",
+                  "type": "integer"
+                },
+                "proof": {
+                  "description": "Proof of transaction membership.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                },
+                "stibhash": {
+                  "description": "Hash of SignedTxnInBlock for verifying proof.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                },
+                "treedepth": {
+                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "hashtype",
+                "idx",
+                "proof",
+                "stibhash",
+                "treedepth"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Proof of transaction in a block."
       },
       "VersionsResponse": {
         "content": {
@@ -1443,6 +1464,31 @@
         ],
         "type": "object"
       },
+      "LightBlockHeaderProof": {
+        "description": "Proof of membership and position of a light block header.",
+        "properties": {
+          "index": {
+            "description": "The index of the light block header in the vector commitment tree",
+            "type": "integer"
+          },
+          "proof": {
+            "description": "The encoded proof.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "treedepth": {
+            "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "proof",
+          "treedepth"
+        ],
+        "type": "object"
+      },
       "ParticipationKey": {
         "description": "Represents a participation key used by the node.",
         "properties": {
@@ -1572,6 +1618,62 @@
           "$ref": "#/components/schemas/EvalDeltaKeyValue"
         },
         "type": "array"
+      },
+      "StateProof": {
+        "description": "Represents a state proof and its corresponding message",
+        "properties": {
+          "Message": {
+            "description": "Represents the message that the state proofs are attesting to.",
+            "properties": {
+              "BlockHeadersCommitment": {
+                "description": "The vector commitment root on all light block headers within a state proof interval.",
+                "format": "byte",
+                "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                "type": "string"
+              },
+              "FirstAttestedRound": {
+                "description": "The first round the message attests to.",
+                "type": "integer",
+                "x-algorand-format": "uint64"
+              },
+              "LastAttestedRound": {
+                "description": "The last round the message attests to.",
+                "type": "integer",
+                "x-algorand-format": "uint64"
+              },
+              "LnProvenWeight": {
+                "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+                "type": "integer",
+                "x-algorand-format": "uint64"
+              },
+              "VotersCommitment": {
+                "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
+                "format": "byte",
+                "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "BlockHeadersCommitment",
+              "FirstAttestedRound",
+              "LastAttestedRound",
+              "LnProvenWeight",
+              "VotersCommitment"
+            ],
+            "type": "object"
+          },
+          "StateProof": {
+            "description": "The encoded StateProof for the message.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "Message",
+          "StateProof"
+        ],
+        "type": "object"
       },
       "TealKeyValue": {
         "description": "Represents a key-value pair in an application store.",
@@ -2596,9 +2698,83 @@
         "summary": "Get the block for the given round."
       }
     },
+    "/v2/blocks/{round}/lightheader/proof": {
+      "get": {
+        "operationId": "GetLightBlockHeaderProof",
+        "parameters": [
+          {
+            "description": "The round to which the light block header belongs.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LightBlockHeaderProof"
+                }
+              }
+            },
+            "description": "Proof of a light block header."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not create proof since some data is missing"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets a proof for a given light block header inside a state proof commitment"
+      }
+    },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
-        "operationId": "GetProof",
+        "operationId": "GetTransactionProof",
         "parameters": [
           {
             "description": "The round in which the transaction appears.",
@@ -2663,7 +2839,7 @@
                       "type": "integer"
                     },
                     "proof": {
-                      "description": "Merkle proof of transaction membership.",
+                      "description": "Proof of transaction membership.",
                       "format": "byte",
                       "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                       "type": "string"
@@ -2730,14 +2906,14 @@
                 }
               }
             },
-            "description": "Internal error, including protocol not supporting Merkle proofs."
+            "description": "Internal error, including protocol not supporting proofs."
           },
           "default": {
             "content": {},
             "description": "Unknown error"
           }
         },
-        "summary": "Get a Merkle proof for a transaction in a block."
+        "summary": "Get a proof for a transaction in a block."
       }
     },
     "/v2/catchup/{catchpoint}": {
@@ -3392,6 +3568,80 @@
         "tags": [
           "private"
         ]
+      }
+    },
+    "/v2/stateproofs/{round}": {
+      "get": {
+        "operationId": "GetStateProof",
+        "parameters": [
+          {
+            "description": "The round for which a state proof is desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateProof"
+                }
+              }
+            },
+            "description": "StateProofResponse wraps the StateProof type in a response."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a state proof that covers a given round"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a state proof that covers a given round"
       }
     },
     "/v2/status": {

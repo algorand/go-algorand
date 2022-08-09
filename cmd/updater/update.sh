@@ -1,6 +1,8 @@
 #!/bin/bash
 # shellcheck disable=2009,2093,2164
 
+UPDATER_MIN_VERSION="3.8.0"
+UPDATER_CHANNEL="stable"
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 UPDATETYPE="update"
@@ -159,7 +161,7 @@ function validate_channel_specified() {
 
 function determine_current_version() {
     CURRENTVER="$(( ${BINDIR}/algod -v 2>/dev/null || echo 0 ) | head -n 1)"
-    echo Current Version = ${CURRENTVER}
+    echo "Current Version = ${CURRENTVER}"
 }
 
 function get_updater_url() {
@@ -172,6 +174,8 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
+        elif [[ "${UNAME}" = "arm64" ]]; then
+            ARCH="arm64"
         else
             echo "This platform ${UNAME} is not supported by updater."
             exit 1
@@ -192,45 +196,41 @@ function get_updater_url() {
             exit 1
         fi
     else
-        echo "This operation system ${UNAME} is not supported by updater."
+        echo "This operating system ${UNAME} is not supported by updater."
         exit 1
     fi
 
     # the updater will auto-update itself to the latest version, this means that the version of updater that is downloaded
     # can be arbitrary as long as the self-updating functionality is working, hence the hard-coded version
-    UPDATER_URL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
-    UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
+    UPDATER_FILENAME="install_${UPDATER_CHANNEL}_${OS}-${ARCH}_${UPDATER_MIN_VERSION}.tar.gz"
+    UPDATER_URL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}"
 
-    # if on linux, also set variables for signature and checksum validation
-    if [ "$OS" = "linux" ] && [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
+    # also set variables for signature and checksum validation
+    if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
         UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
-        UPDATER_SIGURL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz.sig"
-        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/stable/hashes_stable_${OS}_${ARCH}_3.6.2"
+        UPDATER_SIGURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}.sig"
+        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/hashes_${UPDATER_CHANNEL}_${OS}_${ARCH}_${UPDATER_MIN_VERSION}"
     fi
 }
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
 function check_for_updater() {
-    local UNAME
-    UNAME="$(uname)"
-
     # check if the updater binary exist and is not empty.
     if [[ -s "${SCRIPTPATH}/updater" && -f "${SCRIPTPATH}/updater" ]]; then
         return 0
     fi
 
     # set UPDATER_URL and UPDATER_ARCHIVE as a global that can be referenced here
-    # if linux, UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
+    # UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
     get_updater_url
 
     # check if curl is available
     if ! type curl &>/dev/null; then
         # no curl is installed.
         echo "updater binary is missing and cannot be downloaded since curl is missing."
-        if [ "$UNAME" = "Linux" ]; then
-            echo "To install curl, run the following command:"
-            echo "apt-get update; apt-get install -y curl"
-        fi
+        echo "To install curl, run the following command:"
+        echo "On Linux: apt-get update; apt-get install -y curl"
+        echo "On Mac: brew install curl"
         exit 1
     fi
 
@@ -240,6 +240,7 @@ function check_for_updater() {
     UPDATER_ARCHIVE="${UPDATER_TEMPDIR}/${UPDATER_FILENAME}"
 
     # download updater archive
+    echo "Downloading $UPDATER_URL"
     if ! curl -sSL "$UPDATER_URL" -o "$UPDATER_ARCHIVE"; then
         echo "failed to download updater archive from ${UPDATER_URL} using curl."
         exit 1
@@ -248,24 +249,25 @@ function check_for_updater() {
     if [ ! -f "$UPDATER_ARCHIVE" ]; then
         echo "downloaded file ${UPDATER_ARCHIVE} is missing."
         exit
+    else
+        echo "Downloaded into file ${UPDATER_ARCHIVE}"
     fi
 
     # if -verify command line flag is set, try verifying updater archive
     if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
-        # if linux, check for checksum and signature validation dependencies
+        echo "Starting to verify the updater archive"
+        # check for checksum and signature validation dependencies
         local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
-        if [ "$UNAME" = "Linux" ]; then
-            if type gpg >&/dev/null; then
-                GPG_VERIFY="1"
-            else
-                echo "gpg is not available to perform signature validation."
-            fi
+        if type gpg >&/dev/null; then
+            GPG_VERIFY="1"
+        else
+            echo "gpg is not available to perform signature validation."
+        fi
 
-            if type sha256sum &>/dev/null; then
-                CHECKSUM_VERIFY="1"
-            else
-                echo "sha256sum is not available to perform checksum validation."
-            fi
+        if type sha256sum &>/dev/null; then
+            CHECKSUM_VERIFY="1"
+        else
+            echo "sha256sum is not available to perform checksum validation."
         fi
 
         # try signature validation
@@ -279,6 +281,8 @@ function check_for_updater() {
                         if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
                             echo "failed to verify signature of updater archive."
                             exit 1
+                        else
+                            echo "Verified signature of updater archive"
                         fi
                     else
                         echo "failed download signature file, cannot perform signature validation."
@@ -304,6 +308,8 @@ function check_for_updater() {
                     echo "failed to verify checksum of updater archive."
                     popd
                     exit 1
+                else
+                    echo "Verified checksum of updater archive"
                 fi
                 popd
             else
@@ -343,14 +349,14 @@ function check_for_update() {
 
     if [ ${CURRENTVER} -ge ${LATEST} ]; then
         if [ "${UPDATETYPE}" = "install" ]; then
-            echo No new version found - forcing install anyway
+            echo "No new version found - forcing install anyway"
         else
-            echo No new version found
+            echo "No new version found"
             return 1
         fi
     fi
 
-    echo New version found
+    echo "New version found"
     return 0
 }
 
@@ -399,10 +405,10 @@ function download_update() {
     ${SCRIPTPATH}/updater ver get -c ${CHANNEL} -o ${TARFILE} ${BUCKET} ${SPECIFIC_VERSION}
 
     if [ $? -ne 0 ]; then
-        echo Error downloading update file
+        echo "Error downloading update file"
         exit 1
     fi
-    echo Update Downloaded to ${TARFILE}
+    echo "Update Downloaded to ${TARFILE}"
 }
 
 function check_and_download_update() {
@@ -420,7 +426,7 @@ function download_update_for_current_version() {
 }
 
 function expand_update() {
-    echo Expanding update...
+    echo "Expanding update..."
     if ! tar -zxof "${TARFILE}" -C "${UPDATESRCDIR}"; then
         return 1
     fi
@@ -428,7 +434,7 @@ function expand_update() {
 }
 
 function validate_update() {
-    echo Validating update...
+    echo "Validating update..."
     # We should consider including a version.info file
     # that we can compare against the expected version
     return 0
@@ -488,7 +494,7 @@ function run_systemd_action() {
 }
 
 function backup_binaries() {
-    echo Backing up current binary files...
+    echo "Backing up current binary files..."
     mkdir -p "${BINDIR}/backup"
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
@@ -531,7 +537,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo Installing new binary files...
+        echo "Installing new binary files..."
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new
@@ -550,7 +556,7 @@ function reset_wallets_for_new_ledger() {
     for file in *.partkey *.rootkey; do
         if [ -e "${file}" ]; then
             cp "${file}" "${NEW_VER}/${file}"
-            echo 'Installed genesis account file: ' "${file}"
+            echo "Installed genesis account file: ${file}"
         fi
     done
     popd >/dev/null
@@ -633,12 +639,12 @@ function clean_legacy_logs() {
 
 function startup_node() {
     if [ "${NOSTART}" != "" ]; then
-        echo Auto-start node disabled - not starting
+        echo "Auto-start node disabled - not starting"
         return
     fi
 
     CURDATADIR=$1
-    echo Restarting node in ${CURDATADIR}...
+    echo "Restarting node in ${CURDATADIR}..."
 
     check_install_valid
     if [ $? -ne 0 ]; then
@@ -658,7 +664,7 @@ function startup_nodes() {
 }
 
 function rollback() {
-    echo Rolling back from failed update...
+    echo "Rolling back from failed update..."
     if [ ${ROLLBACKBIN} -ne 0 ]; then
         rollback_binaries
     fi

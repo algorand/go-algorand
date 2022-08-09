@@ -531,8 +531,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get a Merkle proof for a transaction in a block.",
-        "operationId": "GetProof",
+        "summary": "Get a proof for a transaction in a block.",
+        "operationId": "GetTransactionProof",
         "parameters": [
           {
             "type": "integer",
@@ -566,7 +566,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/ProofResponse"
+            "$ref": "#/responses/TransactionProofResponse"
           },
           "400": {
             "description": "Malformed round number or transaction ID",
@@ -587,7 +587,7 @@
             }
           },
           "500": {
-            "description": "Internal error, including protocol not supporting Merkle proofs.",
+            "description": "Internal error, including protocol not supporting proofs.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1246,6 +1246,130 @@
         }
       ]
     },
+    "/v2/stateproofs/{round}": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a state proof that covers a given round",
+        "operationId": "GetStateProof",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which a state proof is desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/StateProofResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a state proof that covers a given round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
+    "/v2/blocks/{round}/lightheader/proof": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets a proof for a given light block header inside a state proof commitment",
+        "operationId": "GetLightBlockHeaderProof",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round to which the light block header belongs.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LightBlockHeaderProofResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not create proof since some data is missing",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
@@ -1306,7 +1430,7 @@
           "name": "application-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/assets/{asset-id}": {
@@ -1369,7 +1493,7 @@
           "name": "asset-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/teal/compile": {
@@ -1396,7 +1520,7 @@
               "type": "string",
               "format": "binary"
             }
-          }, 
+          },
           {
             "name": "sourcemap",
             "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
@@ -1851,8 +1975,8 @@
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-           "type": "integer",
-           "x-algorand-format": "uint64"
+          "type": "integer",
+          "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
@@ -2349,7 +2473,7 @@
         "accounts": {
           "type": "array",
           "items": {
-              "$ref": "#/definitions/Account"
+            "$ref": "#/definitions/Account"
           }
         },
         "apps": {
@@ -2484,7 +2608,7 @@
         "asset-index": {
           "description": "The asset index if the transaction was found and it created an asset.",
           "type": "integer"
-          },
+        },
         "application-index": {
           "description": "The application index if the transaction was found and it created an application.",
           "type": "integer"
@@ -2545,8 +2669,85 @@
         },
         "txn": {
           "description": "The raw signed transaction.",
-            "type": "object",
+          "type": "object",
           "x-algorand-format": "SignedTransaction"
+        }
+      }
+    },
+    "StateProof": {
+      "description": "Represents a state proof and its corresponding message",
+      "type": "object",
+      "required": [
+        "Message",
+        "StateProof"
+      ],
+      "properties": {
+        "Message": {
+          "description": "Represents the message that the state proofs are attesting to.",
+          "type": "object",
+          "required": [
+            "BlockHeadersCommitment",
+            "VotersCommitment",
+            "LnProvenWeight",
+            "FirstAttestedRound",
+            "LastAttestedRound"
+          ],
+          "properties": {
+            "BlockHeadersCommitment": {
+              "description": "The vector commitment root on all light block headers within a state proof interval.",
+              "type": "string",
+              "format": "byte"
+            },
+            "VotersCommitment": {
+              "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
+              "type": "string",
+              "format": "byte"
+            },
+            "LnProvenWeight": {
+              "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "FirstAttestedRound": {
+              "description": "The first round the message attests to.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "LastAttestedRound": {
+              "description": "The last round the message attests to.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            }
+          }
+        },
+        "StateProof": {
+          "description": "The encoded StateProof for the message.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "LightBlockHeaderProof": {
+      "description": "Proof of membership and position of a light block header.",
+      "type": "object",
+      "required": [
+        "index",
+        "treedepth",
+        "proof"
+      ],
+      "properties": {
+        "index": {
+          "description": "The index of the light block header in the vector commitment tree",
+          "type": "integer"
+        },
+        "treedepth": {
+          "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+          "type": "integer"
+        },
+        "proof": {
+          "description": "The encoded proof.",
+          "type": "string",
+          "format": "byte"
         }
       }
     }
@@ -2714,7 +2915,8 @@
         "acfg",
         "axfer",
         "afrz",
-        "appl"
+        "appl",
+        "stpf"
       ],
       "type": "string",
       "name": "tx-type",
@@ -2722,6 +2924,18 @@
     }
   },
   "responses": {
+    "LightBlockHeaderProofResponse": {
+      "description": "Proof of a light block header.",
+      "schema": {
+        "$ref": "#/definitions/LightBlockHeaderProof"
+      }
+    },
+    "StateProofResponse": {
+      "description": "StateProofResponse wraps the StateProof type in a response.",
+      "schema": {
+        "$ref": "#/definitions/StateProof"
+      }
+    },
     "AccountResponse": {
       "description": "AccountResponse wraps the Account type in a response.",
       "schema": {
@@ -2762,7 +2976,7 @@
           "round": {
             "description": "The round for which this information is relevant.",
             "type": "integer"
-            },
+          },
           "app-local-state": {
             "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
             "$ref": "#/definitions/ApplicationLocalState"
@@ -2795,7 +3009,7 @@
         }
       }
     },
-    "ProofResponse": {
+    "TransactionProofResponse": {
       "description": "Proof of transaction in a block.",
       "schema": {
         "type": "object",
@@ -2808,7 +3022,7 @@
         ],
         "properties": {
           "proof": {
-            "description": "Merkle proof of transaction membership.",
+            "description": "Proof of transaction membership.",
             "type": "string",
             "format": "byte"
           },
@@ -2854,7 +3068,7 @@
         }
       }
     },
-    "CatchpointAbortResponse":{
+    "CatchpointAbortResponse": {
       "tags": [
         "private"
       ],
@@ -2990,12 +3204,12 @@
         "$ref": "#/definitions/ParticipationKey"
       }
     },
-    "PostParticipationResponse" : {
+    "PostParticipationResponse": {
       "description": "Participation ID of the submission",
       "schema": {
         "type": "object",
         "required": [
-         "partId"
+          "partId"
         ],
         "properties": {
           "partId": {
@@ -3004,9 +3218,7 @@
           }
         }
       }
-
     },
-
     "PostTransactionsResponse": {
       "description": "Transaction ID of the submission.",
       "schema": {
