@@ -539,3 +539,57 @@ func TestBalanceChangesWithApp(t *testing.T) {
 	_, _, err = s.Simulate(txgroup)
 	require.NoError(t, err)
 }
+
+// TestBalanceChangesWithApp tests that the simulator's transaction group checks
+// allow for pooled fees across a mix of signed and unsigned transactions.
+// Transaction 1 is a signed transaction with not enough fees paid on its own.
+// Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
+func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender1 := accounts[0].addr
+	sender2 := accounts[1].addr
+
+	txnHeader1 := makeTxnHeader(sender1)
+	txnHeader2 := makeTxnHeader(sender2)
+	txnHeader1.Fee = basics.MicroAlgos{Raw: txnHeader1.Fee.Raw - 100}
+	txnHeader2.Fee = basics.MicroAlgos{Raw: txnHeader2.Fee.Raw + 100}
+
+	// Send money back and forth
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: txnHeader1,
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender2,
+					Amount:   basics.MicroAlgos{Raw: 1000000},
+				},
+			},
+		},
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: txnHeader2,
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender1,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			},
+		},
+	}
+
+	err := attachGroupID(txgroup)
+	require.NoError(t, err)
+
+	// add signature to txn 1
+	signatureSecrets := accounts[0].sk
+	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
+
+	_, _, err = s.Simulate(txgroup)
+	require.NoError(t, err)
+}
