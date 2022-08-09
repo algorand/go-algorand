@@ -513,7 +513,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // 		 M     |     0     | first + validRounds - 1
 // 		 M     |     M     | error
 //
-func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, uint64, error) {
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.SuggestedParams()
 	if err != nil {
 		return 0, 0, 0, err
@@ -523,7 +523,7 @@ func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64
 		return 0, 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 
-	first, last, err := computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	first, last, err = computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
 	return first, last, params.LastRound, err
 }
 
