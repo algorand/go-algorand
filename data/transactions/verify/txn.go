@@ -97,6 +97,8 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 		g.minAvmVersion == other.minAvmVersion
 }
 
+var errMissingSig = errors.New("signedtxn has no sig")
+
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
@@ -133,9 +135,19 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, false)
+}
+
+// TxnGroupWithMissingSignatures verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
+func TxnGroupWithMissingSignatures(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, true)
+}
+
+// txnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
+func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier); err != nil {
+	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier, ignoreMissingSigs); err != nil {
 		return nil, err
 	}
 
@@ -151,8 +163,14 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 }
 
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
-// it is the caller responsibility to call batchVerifier.verify()
+// it is the caller's responsibility to call batchVerifier.verify()
 func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+	return txnGroupBatchVerify(stxs, contextHdr, cache, verifier, false)
+}
+
+// txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
+// it is the caller's responsibility to call batchVerifier.verify()
+func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
@@ -163,8 +181,13 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	for i, stxn := range stxs {
 		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
 		if err != nil {
-			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
-			return
+			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && ignoreMissingSigs
+			if !isIgnoredMissingSigError {
+				err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+				return
+			}
+			// clear error since we're ignoring it
+			err = nil
 		}
 		if stxn.Txn.Type != protocol.CompactCertTx {
 			minFeeCount++
@@ -225,7 +248,7 @@ func TxnIsMissingSig(s *transactions.SignedTxn) bool {
 
 func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	if TxnIsMissingSig(s) {
-		return errors.New("signedtxn has no sig")
+		return errMissingSig
 	}
 
 	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)

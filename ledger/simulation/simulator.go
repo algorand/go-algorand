@@ -17,7 +17,6 @@
 package simulation
 
 import (
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -104,39 +103,19 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
 func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (isMissingSigs bool, err error) {
-	specialAddresses := transactions.SpecialAddresses{
-		FeeSink:     hdr.FeeSink,
-		RewardsPool: hdr.RewardsPool,
-	}
-	consensusParams := config.Consensus[hdr.CurrentProtocol]
-
-	// Filter signed and unsigned transactions
-	var signedTxns []transactions.SignedTxn
-	for _, tx := range txgroup {
-		// If unsigned, check that they are well-formed
-		if verify.TxnIsMissingSig(&tx) {
-			isMissingSigs = true
-			if err = tx.Txn.WellFormed(specialAddresses, consensusParams); err != nil {
-				err = InvalidTxGroupError{SimulatorError{err}}
-				return
-			}
-			continue
-		}
-
-		// Otherwise add to the list of signed transactions
-		signedTxns = append(signedTxns, tx)
-	}
-
-	// Guard against no signed transactions
-	if len(signedTxns) == 0 {
-		return
-	}
-
-	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroup(signedTxns, hdr, nil)
+	// verify the signed transactions are well-formed and have valid or missing signatures
+	_, err = verify.TxnGroupWithMissingSignatures(txgroup, hdr, nil)
 	if err != nil {
 		err = InvalidTxGroupError{SimulatorError{err}}
 		return
+	}
+
+	// determine whether signatures are missing
+	for _, tx := range txgroup {
+		if verify.TxnIsMissingSig(&tx) {
+			isMissingSigs = true
+			break
+		}
 	}
 
 	return
