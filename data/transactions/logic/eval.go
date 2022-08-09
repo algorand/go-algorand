@@ -202,6 +202,15 @@ type LedgerForSignature interface {
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
+// NoHeaderLedger is intended for debugging situations in which it is reasonable
+// to preclude the use of `block` and `txn LastValidTime`
+type NoHeaderLedger struct {
+}
+
+func (NoHeaderLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
+}
+
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
