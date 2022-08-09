@@ -2586,7 +2586,7 @@ func TestAppLoop(t *testing.T) {
 	t.Parallel()
 	ep, _, _ := makeSampleEnv()
 
-	stateful := "global CurrentApplicationID; pop; "
+	stateful := "global CurrentApplicationID; pop;"
 
 	// Double until > 10. Should be 16
 	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
