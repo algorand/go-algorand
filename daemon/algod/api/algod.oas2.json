@@ -2694,17 +2694,17 @@
           ],
           "properties": {
             "BlockHeadersCommitment": {
-              "description": "The vector commitment on all light block headers within a state proof interval.",
+              "description": "The vector commitment root on all light block headers within a state proof interval.",
               "type": "string",
               "format": "byte"
             },
             "VotersCommitment": {
-              "description": "The vector commitment of the top N accounts to sign the next StateProof.",
+              "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
               "type": "string",
               "format": "byte"
             },
             "LnProvenWeight": {
-              "description": "The result of the invoking ln function on the proven weight.",
+              "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
               "type": "integer",
               "x-algorand-format": "uint64"
             },

@@ -462,7 +462,7 @@ type StateProof struct {
 	// Represents the message that the state proofs are attesting to.
 	Message struct {
 
-		// The vector commitment on all light block headers within a state proof interval.
+		// The vector commitment root on all light block headers within a state proof interval.
 		BlockHeadersCommitment []byte `json:"BlockHeadersCommitment"`
 
 		// The first round the message attests to.
@@ -471,10 +471,10 @@ type StateProof struct {
 		// The last round the message attests to.
 		LastAttestedRound uint64 `json:"LastAttestedRound"`
 
-		// The result of the invoking ln function on the proven weight.
+		// An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.
 		LnProvenWeight uint64 `json:"LnProvenWeight"`
 
-		// The vector commitment of the top N accounts to sign the next StateProof.
+		// The vector commitment root of the top N accounts to sign the next StateProof.
 		VotersCommitment []byte `json:"VotersCommitment"`
 	} `json:"Message"`
 
