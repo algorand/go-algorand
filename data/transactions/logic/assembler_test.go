@@ -2728,7 +2728,7 @@ func TestAddPseudoDocTags(t *testing.T) {
 		delete(opDocByName, "any")
 	}()
 
-	pseudoOps["tests"] = map[int]OpSpec{2: OpSpec{Name: "multiple"}, 1: OpSpec{Name: "single"}, 0: OpSpec{Name: "none"}, anyImmediates: OpSpec{Name: "any"}}
+	pseudoOps["tests"] = map[int]OpSpec{2: {Name: "multiple"}, 1: {Name: "single"}, 0: {Name: "none"}, anyImmediates: {Name: "any"}}
 	addPseudoDocTags()
 	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
 	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
