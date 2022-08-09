@@ -216,6 +216,8 @@ func isCompactCertSpecialCase(s *transactions.SignedTxn) bool {
 	return s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx
 }
 
+// TxnIsMissingSig returns true if the transaction is unsigned without reason, false otherwise.
+// Transactions are allowed to be unsigned if they are special cases, such as a compact cert transaction.
 func TxnIsMissingSig(s *transactions.SignedTxn) bool {
 	numSigs, _, _, _ := identifySigs(s)
 	return numSigs == 0 && !isCompactCertSpecialCase(s)

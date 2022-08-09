@@ -99,7 +99,7 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (err error, isMissingSigs bool) {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (isMissingSigs bool, err error) {
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     hdr.FeeSink,
 		RewardsPool: hdr.RewardsPool,
@@ -175,7 +175,7 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (generated.Simulat
 	var result generated.SimulationResult
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	err, isMissingSigs := s.check(hdr, txgroup)
+	isMissingSigs, err := s.check(hdr, txgroup)
 	if err != nil {
 		return result, err
 	}
