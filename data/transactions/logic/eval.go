@@ -207,6 +207,7 @@ type LedgerForSignature interface {
 type NoHeaderLedger struct {
 }
 
+// BlockHdrCached always errors
 func (NoHeaderLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
 }
