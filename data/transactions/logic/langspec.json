@@ -1,6 +1,6 @@
 {
   "EvalMaxVersion": 7,
-  "LogicSigVersion": 6,
+  "LogicSigVersion": 7,
   "Ops": [
     {
       "Opcode": 0,

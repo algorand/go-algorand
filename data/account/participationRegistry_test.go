@@ -47,8 +47,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO: change to ConsensusCurrentVersion when updated
-var stateProofIntervalForTests = config.Consensus[protocol.ConsensusFuture].StateProofInterval
+var stateProofIntervalForTests = config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 
 func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
 	return getRegistryImpl(t, true, false)
@@ -1222,7 +1221,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 	const targetFlushes = 5
 	go func() {
 		for i := 0; i < 25; i++ {
-			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusFuture])
+			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
 			registry.Flush(defaultTimeout)
 			if atomic.LoadInt32(&flushCount) < targetFlushes {
 				atomic.AddInt32(&flushCount, 1)

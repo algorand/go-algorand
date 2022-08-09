@@ -1890,7 +1890,7 @@ func TestInnerAppVersionCalling(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// 31 allowed inner appls. v33 lowered proto.MinInnerApplVersion
+	// 31 allowed inner appls. v34 lowered proto.MinInnerApplVersion
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -1977,7 +1977,7 @@ itxn_begin
 itxn_submit`,
 		}
 
-		if ver <= 32 {
+		if ver <= 33 {
 			dl.txn(&call, "inner app call with version v5 < v6")
 			call.ForeignApps[0] = v6id
 			dl.txn(&call, "overspend") // it tried to execute, but test doesn't bother funding
@@ -1986,7 +1986,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{three.Program, three.Program}
 			dl.txn(&createAndOptin, "inner app call with version v3 < v6")
 
-			// nor v5 in proto ver 32
+			// nor v5 in proto ver 33
 			createAndOptin.ApplicationArgs = [][]byte{five.Program, five.Program}
 			dl.txn(&createAndOptin, "inner app call with version v5 < v6")
 
@@ -1994,7 +1994,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
 			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
-			// after 32 proto.MinInnerApplVersion is lowered to 4, so calls and optins to v5 are ok
+			// after 33 proto.MinInnerApplVersion is lowered to 4, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
@@ -2152,7 +2152,7 @@ func TestAppDowngrade(t *testing.T) {
 
 		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion was lowered)
 		update.ClearStateProgram = four.Program
-		if ver <= 32 {
+		if ver <= 33 {
 			dl.fullBlock(update.Noted("actually a repeat of first upgrade"))
 		} else {
 			dl.txn(update.Noted("actually a repeat of first upgrade"), "clearstate program version downgrade")
@@ -3146,7 +3146,7 @@ itxn_submit
 		}
 
 		dl.beginBlock()
-		if ver <= 32 {
+		if ver <= 33 {
 			dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
 			dl.endBlock()
 			return

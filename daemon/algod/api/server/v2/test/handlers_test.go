@@ -1030,7 +1030,7 @@ func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	for i := 0; i < numRounds; i++ {
 		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
 		blk = addStateProofIfNeeded(blk)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 		lastBlk = blk
 	}

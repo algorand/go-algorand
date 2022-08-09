@@ -1150,37 +1150,59 @@ func initConsensusProtocols() {
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
 	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
 
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v32
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v33 := v32
+	v33.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// Make the accounts snapshot for round X at X-CatchpointLookback
-	vFuture.CatchpointLookback = 320
+	// order to guarantee all nodes produce catchpoint at the same round.
+	v33.CatchpointLookback = 320
 
 	// Require MaxTxnLife + X blocks and headers preserved by a node
-	vFuture.DeeperBlockHeaderHistory = 1
+	v33.DeeperBlockHeaderHistory = 1
+
+	v33.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+
+	Consensus[protocol.ConsensusV33] = v33
+
+	// v32 can be upgraded to v33, with an update delay of 7 days ( see calculation above )
+	v32.ApprovedUpgrades[protocol.ConsensusV33] = 140000
+
+	v34 := v33
+	v34.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// Enable state proofs.
-	vFuture.StateProofInterval = 256
-	vFuture.StateProofTopVoters = 1024
-	vFuture.StateProofVotersLookback = 16
-	vFuture.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.StateProofStrengthTarget = 256
-	vFuture.StateProofMaxRecoveryIntervals = 10
+	v34.StateProofInterval = 256
+	v34.StateProofTopVoters = 1024
+	v34.StateProofVotersLookback = 16
+	v34.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	v34.StateProofStrengthTarget = 256
+	v34.StateProofMaxRecoveryIntervals = 10
 
-	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.MinInnerApplVersion = 4
+	v34.LogicSigVersion = 7
+	v34.MinInnerApplVersion = 4
 
-	vFuture.UnifyInnerTxIDs = true
+	v34.UnifyInnerTxIDs = true
 
-	vFuture.EnableSHA256TxnCommitmentHeader = true
-	vFuture.EnableOnlineAccountCatchpoints = true
+	v34.EnableSHA256TxnCommitmentHeader = true
+	v34.EnableOnlineAccountCatchpoints = true
 
-	vFuture.UnfundedSenders = true
+	v34.UnfundedSenders = true
 
-	vFuture.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
-	vFuture.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+	v34.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
+
+	Consensus[protocol.ConsensusV34] = v34
+
+	// v33 can be upgraded to v34, with an update delay of 12h:
+	// 10046 = (12 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down a bit :
+	v33.ApprovedUpgrades[protocol.ConsensusV34] = 10000
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v34
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
