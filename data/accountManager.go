@@ -77,10 +77,10 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 }
 
 // StateProofKeys returns a list of Participation accounts, and their stateproof secrets
-func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
 	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
-			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
+			partRndSecrets, err := manager.registry.GetStateProofSecretsForRound(part.ParticipationID, rnd)
 			if err != nil {
 				manager.log.Errorf("error while loading round secrets from participation registry: %w", err)
 				continue

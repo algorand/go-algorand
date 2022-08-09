@@ -936,14 +936,14 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	_, err = registry.GetStateProofForRound(id, basics.Round(1))
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(1))
 	a.Error(err)
-	_, err = registry.GetStateProofForRound(id, basics.Round(2))
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(2))
 	a.Error(err)
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(3); i < max; i++ {
-		r, err := registry.GetStateProofForRound(id, basics.Round(i))
+		r, err := registry.GetStateProofSecretsForRound(id, basics.Round(i))
 		a.NoError(err)
 
 		if r.StateProofSecrets != nil {
@@ -1037,10 +1037,10 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err := registry.GetStateProofForRound(id, 1)
+	partPerRound, err := registry.GetStateProofSecretsForRound(id, 1)
 	a.Error(err)
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
 	a.Error(err)
 
 	// Append key
@@ -1052,10 +1052,10 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests)-1)
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
 	a.Error(err)
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
 
@@ -1099,7 +1099,7 @@ func TestDeleteStateProofKeys(t *testing.T) {
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(4); i < maxRound; i += 4 {
-		r, err := registry.GetStateProofForRound(id, basics.Round(i))
+		r, err := registry.GetStateProofSecretsForRound(id, basics.Round(i))
 		a.NoError(err)
 
 		a.Equal(keys.findPairForSpecificRound(i).Key, r.StateProofSecrets.SigningKey)
@@ -1238,7 +1238,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 			time.Sleep(time.Second)
 			goto repeat
 		}
-		_, err = registry.GetStateProofForRound(id2, basics.Round(256))
+		_, err = registry.GetStateProofSecretsForRound(id2, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while the main thread is updating the Rolling table.
 		a.NoError(err)
@@ -1295,7 +1295,7 @@ func TestParticipationDBInstallWhileReading(t *testing.T) {
 
 	<-appendedKeys // Makes sure we start fetching keys after the append keys operation has already started
 	for i := 0; i < 50; i++ {
-		_, err = registry.GetStateProofForRound(sampledPartID, basics.Round(256))
+		_, err = registry.GetStateProofSecretsForRound(sampledPartID, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while a different go routine is installing new keys.
 		a.NoError(err)

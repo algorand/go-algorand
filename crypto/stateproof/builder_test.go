@@ -50,6 +50,8 @@ type paramsForTest struct {
 	partCommitment       crypto.GenericDigest
 	numberOfParticipnets uint64
 	data                 MessageHash
+	builder              *Builder
+	sig                  merklesignature.Signature
 }
 
 const stateProofIntervalForTests = 256
@@ -122,7 +124,7 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	for i := uint64(0); i < uint64(npart); i++ {
+	for i := uint64(0); i < uint64(npart)/2+10; i++ { // leave some signature to be added later in the test (if needed)
 		a.False(b.Present(i))
 		a.NoError(b.IsValid(i, &sigs[i], !doLargeTest))
 		b.Add(i, sigs[i])
@@ -142,6 +144,8 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 		partCommitment:       partcom.Root(),
 		numberOfParticipnets: uint64(npart),
 		data:                 data,
+		builder:              b,
+		sig:                  sig,
 	}
 	return p
 }
@@ -603,6 +607,28 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 	_, err := MakeBuilder(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
+}
+
+func TestBuilder_BuildStateProofCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	p := generateProofForTesting(a, true)
+	sp1 := &p.sp
+	sp2, err := p.builder.Build()
+	a.NoError(err)
+	a.Equal(sp1, sp2) // already built, no signatures added
+
+	err = p.builder.Add(p.numberOfParticipnets-1, p.sig)
+	a.NoError(err)
+	sp3, err := p.builder.Build()
+	a.NoError(err)
+	a.NotEqual(sp1, sp3) // better StateProof with added signature should have been built
+
+	sp4, err := p.builder.Build()
+	a.NoError(err)
+	a.Equal(sp3, sp4)
+
+	return
 }
 
 func BenchmarkBuildVerify(b *testing.B) {

@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -59,6 +60,14 @@ type votersTracker struct {
 	// the vector commitment to online accounts from the previous such block.
 	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
+	//
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3
+	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
+	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
+	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
+	// to verify R-StateProofMaxRecoveryIntervals
+	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
+	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
 	l                     ledgerForTracker
@@ -71,7 +80,7 @@ type votersTracker struct {
 
 // votersRoundForStateProofRound computes the round number whose voting participants
 // will be used to sign the state proof for stateProofRnd.
-func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.ConsensusParams) basics.Round {
+func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.ConsensusParams) basics.Round {
 	// To form a state proof on period that ends on stateProofRnd,
 	// we need a commitment to the voters StateProofInterval rounds
 	// before that, and the voters information from
@@ -84,7 +93,8 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 	vt.onlineAccountsFetcher = fetcher
 
-	hdr, err := l.BlockHdr(latestDbRound)
+	latestRoundInLedger := l.Latest()
+	hdr, err := l.BlockHdr(latestRoundInLedger)
 	if err != nil {
 		return err
 	}
@@ -95,7 +105,8 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return nil
 	}
 
-	startR := votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
+	startR := stateproof.GetOldestExpectedStateProof(&hdr)
+	startR = votersRoundForStateProofRound(startR, &proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
@@ -103,11 +114,12 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
+	// we recreate the trees for old rounds. we stop at latestDbRound (where latestDbRound <= latestRoundInLedger) since
+	// future blocks would be given as part of the replay
 	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
-			vt.l.trackerLog().Errorf("votersTracker: loadFromDisk: cannot load tree for round %v, err : %v", r, err)
-			continue
+			return err
 		}
 
 		vt.loadTree(hdr)
@@ -192,18 +204,14 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
-	proto := config.Consensus[hdr.CurrentProtocol]
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
 
 		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
-		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
-			stateProofRound <= oldestRoundOnRecoveryPeriod {
+		if stateProofRound < lowestStateProofRound {
 			delete(vt.votersForRoundCache, r)
 		}
 	}

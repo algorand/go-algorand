@@ -46,6 +46,7 @@ type Builder struct {
 	lnProvenWeight uint64
 	provenWeight   uint64
 	strengthTarget uint64
+	cachedProof    *StateProof
 }
 
 // MakeBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
@@ -66,6 +67,7 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 		lnProvenWeight: lnProvenWt,
 		provenWeight:   provenWeight,
 		strengthTarget: strengthTarget,
+		cachedProof:    nil,
 	}
 
 	return b, nil
@@ -122,12 +124,13 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 	b.sigs[pos].Weight = p.Weight
 	b.sigs[pos].Sig = sig
 	b.signedWeight += p.Weight
+	b.cachedProof = nil // can rebuild a more optimized state proof
 	return nil
 }
 
 // Ready returns whether the state proof is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight > b.provenWeight
+	return b.cachedProof != nil || b.signedWeight > b.provenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -167,6 +170,10 @@ again:
 // Build returns a state proof, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*StateProof, error) {
+	if b.cachedProof != nil {
+		return b.cachedProof, nil
+	}
+
 	if !b.Ready() {
 		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
@@ -248,6 +255,6 @@ func (b *Builder) Build() (*StateProof, error) {
 	s.SigProofs = *sigProofs
 	s.PartProofs = *partProofs
 	s.PositionsToReveal = revealsSequence
-
+	b.cachedProof = s
 	return s, nil
 }

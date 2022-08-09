@@ -69,9 +69,9 @@ func (m *MockParticipationRegistry) GetForRound(id account.ParticipationID, roun
 	return account.ParticipationRecordForRound{}, nil
 }
 
-// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
-func (m *MockParticipationRegistry) GetStateProofForRound(id account.ParticipationID, round basics.Round) (account.StateProofRecordForRound, error) {
-	return account.StateProofRecordForRound{}, nil
+// GetStateProofSecretsForRound fetches a record with stateproof secrets for a particular round.
+func (m *MockParticipationRegistry) GetStateProofSecretsForRound(id account.ParticipationID, round basics.Round) (account.StateProofSecretsForRound, error) {
+	return account.StateProofSecretsForRound{}, nil
 }
 
 // HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds

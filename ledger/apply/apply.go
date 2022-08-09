@@ -25,8 +25,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// StateProofs allows fetching and updating state-proofs state on the ledger
-type StateProofs interface {
+// StateProofsApplier allows fetching and updating state-proofs state on the ledger
+type StateProofsApplier interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)

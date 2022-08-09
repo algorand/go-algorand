@@ -80,7 +80,6 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
-// but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	ledger    v2.LedgerForAPI

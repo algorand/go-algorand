@@ -53,7 +53,7 @@ type Network interface {
 // Accounts captures the aspects of the AccountManager that are used by
 // this package.
 type Accounts interface {
-	StateProofKeys(basics.Round) []account.StateProofRecordForRound
+	StateProofKeys(basics.Round) []account.StateProofSecretsForRound
 	DeleteStateProofKey(id account.ParticipationID, round basics.Round) error
 }
 

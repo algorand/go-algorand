@@ -19,6 +19,7 @@ package stateproof
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -113,7 +114,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
 	for _, part := range s.keys {
 		partRecord := account.ParticipationRecord{
 			ParticipationID:   part.ID(),
@@ -130,7 +131,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 			Voting:            part.Voting,
 		}
 		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-		partRecordForRound := account.StateProofRecordForRound{
+		partRecordForRound := account.StateProofSecretsForRound{
 			ParticipationRecord: partRecord,
 			StateProofSecrets:   signerInRound,
 		}
@@ -654,7 +655,6 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	a := require.New(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	expectedStateProofs := proto.StateProofMaxRecoveryIntervals + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -671,29 +671,55 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
-	for iter := uint64(0); iter < expectedStateProofs; iter++ {
+	for iter := uint64(0); iter < proto.StateProofMaxRecoveryIntervals+1; iter++ {
 		s.advanceLatest(proto.StateProofInterval)
 		tx := <-s.txmsg
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
+	// since this test involves go routine, we would like to make sure that when
+	// we sample the builder it already processed our current round.
+	// in order to that, we wait for singer and the builder to wait.
+	// then we push one more round so the builder could process it (since the builder might skip rounds)
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
-
 	s.mu.Lock()
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
 	s.mu.Unlock()
-
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
-	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(w.builders)))
+
+	// should not give up on rounds
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
 		return
 	})
-	a.Equal(proto.StateProofMaxRecoveryIntervals, uint64(len(roundSigs)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(roundSigs)))
+
+	s.advanceLatest(proto.StateProofInterval)
+	tx := <-s.txmsg
+	a.Equal(tx.Txn.Type, protocol.StateProofTx)
+
+	err = waitForBuilderAndSignerToWaitOnRound(s)
+	a.NoError(err)
+	s.mu.Lock()
+	s.addBlock(basics.Round(proto.StateProofInterval * 2))
+	s.mu.Unlock()
+	err = waitForBuilderAndSignerToWaitOnRound(s)
+	a.NoError(err)
+
+	// should not give up on rounds
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+
+	roundSigs = make(map[basics.Round][]pendingSig)
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(roundSigs)))
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {
@@ -728,10 +754,15 @@ const (
 	sigAlternateOrigin
 )
 
-// getSignaturesInDatabase sets up the db with signatures
+// getSignaturesInDatabase sets up the db with signatures. This function supports creating up to StateProofInterval/2 address.
 func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) (
 	signatureBcasted map[basics.Address]int, fromThisNode map[basics.Address]bool,
 	tns *testWorkerStubs, spw *Worker) {
+
+	// Some tests rely on having only one signature being broadcast at a single round.
+	// for that we need to make sure that addresses won't fall into the same broadcast round.
+	// For that same reason we can't have more than StateProofInterval / 2 address
+	require.LessOrEqual(t, uint64(numAddresses), config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
 
 	// Prepare the addresses and the keys
 	signatureBcasted = make(map[basics.Address]int)
@@ -739,7 +770,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	var keys []account.Participation
 	for i := 0; i < numAddresses; i++ {
 		var parent basics.Address
-		crypto.RandBytes(parent[:])
+		binary.LittleEndian.PutUint64(parent[:], uint64(i))
 		p := newPartKey(t, parent)
 		defer p.Close()
 		keys = append(keys, p.Participation)

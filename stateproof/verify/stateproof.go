@@ -30,13 +30,12 @@ import (
 )
 
 var (
-	errStateProofCrypto                 = errors.New("state proof crypto error")
-	errStateProofParamCreation          = errors.New("state proof param creation error")
-	errStateProofNotEnabled             = errors.New("state proofs are not enabled")
-	errNotAtRightMultiple               = errors.New("state proof is not in a valid round multiple")
-	errInvalidVotersRound               = errors.New("invalid voters round")
-	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
-	errInsufficientWeight               = errors.New("insufficient state proof weight")
+	errStateProofCrypto        = errors.New("state proof crypto error")
+	errStateProofParamCreation = errors.New("state proof param creation error")
+	errStateProofNotEnabled    = errors.New("state proofs are not enabled")
+	errNotAtRightMultiple      = errors.New("state proof is not in a valid round multiple")
+	errInvalidVotersRound      = errors.New("invalid voters round")
+	errInsufficientWeight      = errors.New("insufficient state proof weight")
 )
 
 // AcceptableStateProofWeight computes the acceptable signed weight
@@ -47,7 +46,7 @@ var (
 // (votersHdr.Round(), votersHdr.Round()+StateProofInterval].
 //
 // logger must not be nil; use at least logging.Base()
-func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
+func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
 	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
@@ -106,7 +105,7 @@ func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid ba
 
 // GetProvenWeight computes the parameters for building or verifying
 // a state proof for the interval (votersHdr, latestRoundInProofHdr], using voters from block votersHdr.
-func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bookkeeping.BlockHeader) (uint64, error) {
+func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -137,7 +136,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg *stateproofmsg.Message) error {
+func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, atRound basics.Round, msg *stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -154,18 +153,13 @@ func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, state
 			latestRoundInIntervalHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
 	}
 
-	if nextStateProofRnd == 0 || nextStateProofRnd != latestRoundInIntervalHdr.Round {
-		return fmt.Errorf("expecting state proof for %d, but new state proof is for %d (voters %d):%w",
-			nextStateProofRnd, latestRoundInIntervalHdr.Round, votersRound, errExpectedDifferentStateProofRound)
-	}
-
-	acceptableWeight := AcceptableStateProofWeight(*votersHdr, atRound, logging.Base())
+	acceptableWeight := AcceptableStateProofWeight(votersHdr, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	provenWeight, err := GetProvenWeight(*votersHdr, *latestRoundInIntervalHdr)
+	provenWeight, err := GetProvenWeight(votersHdr, latestRoundInIntervalHdr)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
 	}

@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"sort"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -65,7 +66,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	provenWeight, err := verify.GetProvenWeight(votersHdr, hdr)
+	provenWeight, err := verify.GetProvenWeight(&votersHdr, &hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -174,8 +175,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		latest := spw.ledger.Latest()
 		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
-			// The latest block in the ledger should never disappear, so this should never happen
-			return network.Disconnect, err
+			return network.Ignore, err
 		}
 
 		if sfa.Round < latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
@@ -273,8 +273,8 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		}
 
-		spw.deleteOldSigs(hdr)
-		spw.deleteOldBuilders(hdr)
+		spw.deleteOldSigs(&hdr)
+		spw.deleteOldBuilders(&hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -357,29 +357,8 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	if proto.StateProofInterval == 0 {
-		return nextStateProofRnd
-	}
-
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofMaxRecoveryIntervals))
-	// we add +1 to this number since we want exactly StateProofMaxRecoveryIntervals elements in the history
-	oldestRoundOnRecoveryPeriod++
-
-	var oldestRoundToRemove basics.Round
-	if oldestRoundOnRecoveryPeriod > nextStateProofRnd {
-		oldestRoundToRemove = oldestRoundOnRecoveryPeriod
-	} else {
-		oldestRoundToRemove = nextStateProofRnd
-	}
-	return oldestRoundToRemove
-}
-
-func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
-	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
+	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
@@ -389,8 +368,8 @@ func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
 	}
 }
 
-func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
-	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
+	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
@@ -406,9 +385,16 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	for rnd, b := range spw.builders {
+	sortedRounds := make([]basics.Round, 0, len(spw.builders))
+	for rnd := range spw.builders {
+		sortedRounds = append(sortedRounds, rnd)
+	}
+	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
+
+	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
+		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := verify.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(&b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue
@@ -438,6 +424,9 @@ func (spw *Worker) tryBroadcast() {
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: broadcasting state proof txn for %d: %v", rnd, err)
+			// if this StateProofTxn was rejected, the next one would be rejected as well since state proof should be added in
+			// a sequential order
+			break
 		}
 	}
 }

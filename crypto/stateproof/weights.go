@@ -79,7 +79,7 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 	//        /\
 	//        ||
 	//        \/
-	// numReveals * (x + w * y >= ((strengthTarget) * T + numReveals * P) * y
+	// numReveals * (x + w * y) >= ((strengthTarget) * T + numReveals * P) * y
 	y, x, w := getSubExpressions(signedWeight)
 	lhs := &big.Int{}
 	lhs.Set(w).

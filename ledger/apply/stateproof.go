@@ -17,7 +17,9 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -25,36 +27,45 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
+// Errors for apply stateproof
+var (
+	ErrStateProofTypeNotSupported       = errors.New("state proof type not supported")
+	ErrExpectedDifferentStateProofRound = errors.New("expected different state proof round")
+)
+
 // StateProof applies the StateProof transaction and setting the next StateProof round
-func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofs, validate bool) error {
+func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {
-		return fmt.Errorf("applyStateProof type %d not supported", spType)
+		return fmt.Errorf("applyStateProof: %w - type %d ", ErrStateProofTypeNotSupported, spType)
 	}
 
-	nextStateProofRnd := sp.GetStateProofNextRound()
-
-	latestRoundInInterval := basics.Round(tx.Message.LastAttestedRound)
-	latestRoundHdr, err := sp.BlockHdr(latestRoundInInterval)
+	lastRoundInInterval := basics.Round(tx.Message.LastAttestedRound)
+	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return err
 	}
 
-	proto := config.Consensus[latestRoundHdr.CurrentProtocol]
+	nextStateProofRnd := sp.GetStateProofNextRound()
+	if nextStateProofRnd == 0 || nextStateProofRnd != lastRoundInInterval {
+		return fmt.Errorf("applyStateProof: %w - expecting state proof for %d, but new state proof is for %d",
+			ErrExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
+	}
 
+	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 	if validate {
-		votersRnd := latestRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
+		votersRnd := lastRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
 		votersHdr, err := sp.BlockHdr(votersRnd)
 		if err != nil {
 			return err
 		}
 
-		err = verify.ValidateStateProof(&latestRoundHdr, &tx.StateProof, &votersHdr, nextStateProofRnd, atRound, &tx.Message)
+		err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
 		if err != nil {
 			return err
 		}
 	}
 
-	sp.SetStateProofNextRound(latestRoundInInterval + basics.Round(proto.StateProofInterval))
+	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(proto.StateProofInterval))
 	return nil
 }

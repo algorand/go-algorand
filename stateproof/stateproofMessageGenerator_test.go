@@ -45,7 +45,7 @@ type workerForStateProofMessageTests struct {
 	w *testWorkerStubs
 }
 
-func (s *workerForStateProofMessageTests) StateProofKeys(round basics.Round) []account.StateProofRecordForRound {
+func (s *workerForStateProofMessageTests) StateProofKeys(round basics.Round) []account.StateProofSecretsForRound {
 	return s.w.StateProofKeys(round)
 }
 
