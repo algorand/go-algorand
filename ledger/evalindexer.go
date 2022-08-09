@@ -197,10 +197,10 @@ func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgerc
 	return
 }
 
-// CompactCertVoters is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.VotersForRound, error) {
+// VotersForStateProof is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore.VotersForRound, error) {
 	// This function is not used by evaluator.
-	return nil, errors.New("CompactCertVoters() not implemented")
+	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {

@@ -344,50 +344,53 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with which compact
-	// certificates are generated.  Every round that is a multiple
-	// of CompactCertRounds, the block header will include a Merkle
+	// StateProofInterval defines the frequency with which state
+	// proofs are generated.  Every round that is a multiple
+	// of StateProofInterval, the block header will include a vector
 	// commitment to the set of online accounts (that can vote after
-	// another CompactCertRounds rounds), and that block will be signed
-	// (forming a compact certificate) by the voters from the previous
-	// such Merkle tree commitment.  A value of zero means no compact
-	// certificates.
-	CompactCertRounds uint64
+	// another StateProofInterval rounds), and that block will be signed
+	// (forming a state proof) by the voters from the previous
+	// such vector commitment.  A value of zero means no state proof.
+	StateProofInterval uint64
 
-	// CompactCertTopVoters is a bound on how many online accounts get to
-	// participate in forming the compact certificate, by including the
-	// top CompactCertTopVoters accounts (by normalized balance) into the
-	// Merkle commitment.
-	CompactCertTopVoters uint64
+	// StateProofTopVoters is a bound on how many online accounts get to
+	// participate in forming the state proof, by including the
+	// top StateProofTopVoters accounts (by normalized balance) into the
+	// vector commitment.
+	StateProofTopVoters uint64
 
-	// CompactCertVotersLookback is the number of blocks we skip before
-	// publishing a Merkle commitment to the online accounts.  Namely,
-	// if block number N contains a Merkle commitment to the online
-	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// StateProofVotersLookback is the number of blocks we skip before
+	// publishing a vector commitment to the online accounts.  Namely,
+	// if block number N contains a vector commitment to the online
+	// accounts (which, incidentally, means N%StateProofInterval=0),
 	// then the balances reflected in that commitment must come from
-	// block N-CompactCertVotersLookback.  This gives each node some
-	// time (CompactCertVotersLookback blocks worth of time) to
-	// construct this Merkle tree, so as to avoid placing the
-	// construction of this Merkle tree (and obtaining the requisite
+	// block N-StateProofVotersLookback.  This gives each node some
+	// time (StateProofVotersLookback blocks worth of time) to
+	// construct this vector commitment, so as to avoid placing the
+	// construction of this vector commitment (and obtaining the requisite
 	// accounts and balances) in the critical path.
-	CompactCertVotersLookback uint64
+	StateProofVotersLookback uint64
 
-	// CompactCertWeightThreshold specifies the fraction of top voters weight
-	// that must sign the message (block header) for security.  The compact
-	// certificate ensures this threshold holds; however, forming a valid
-	// compact certificate requires a somewhat higher number of signatures,
-	// and the more signatures are collected, the smaller the compact cert
+	// StateProofWeightThreshold specifies the fraction of top voters weight
+	// that must sign the message (block header) for security.  The state
+	// proof ensures this threshold holds; however, forming a valid
+	// state proof requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the state proof
 	// can be.
 	//
 	// This threshold can be thought of as the maximum fraction of
-	// malicious weight that compact certificates defend against.
+	// malicious weight that state proofs defend against.
 	//
-	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
-	CompactCertWeightThreshold uint32
+	// The threshold is computed as StateProofWeightThreshold/(1<<32).
+	StateProofWeightThreshold uint32
 
-	// CompactCertSecKQ is the security parameter (k+q) for the compact
-	// certificate scheme.
-	CompactCertSecKQ uint64
+	// StateProofStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
+	StateProofStrengthTarget uint64
+
+	// StateProofMaxRecoveryIntervals represents the number of state proof intervals that the network will try to catch-up with.
+	// When the difference between the latest state proof and the current round will be greater than value, Nodes will
+	// release resources allocated for creating state proofs.
+	StateProofMaxRecoveryIntervals uint64
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
@@ -1158,12 +1161,13 @@ func initConsensusProtocols() {
 	// Require MaxTxnLife + X blocks and headers preserved by a node
 	vFuture.DeeperBlockHeaderHistory = 1
 
-	// Enable compact certificates.
-	vFuture.CompactCertRounds = 256
-	vFuture.CompactCertTopVoters = 1024 * 1024
-	vFuture.CompactCertVotersLookback = 16
-	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.CompactCertSecKQ = 128
+	// Enable state proofs.
+	vFuture.StateProofInterval = 256
+	vFuture.StateProofTopVoters = 1024
+	vFuture.StateProofVotersLookback = 16
+	vFuture.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	vFuture.StateProofStrengthTarget = 256
+	vFuture.StateProofMaxRecoveryIntervals = 10
 
 	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4

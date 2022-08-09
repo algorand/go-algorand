@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -99,28 +98,11 @@ func TestTxnMerkleProof(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
+	proofresp, proof, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
-	proofrespSHA256, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
+	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
-
-	generateProof := func(h crypto.HashType, prfRsp generated.ProofResponse) (p merklearray.Proof) {
-		p.HashFactory = crypto.HashFactory{HashType: h}
-		p.TreeDepth = uint8(prfRsp.Treedepth)
-		a.NotEqual(p.TreeDepth, 0)
-		proofconcat := prfRsp.Proof
-		for len(proofconcat) > 0 {
-			var d crypto.Digest
-			copy(d[:], proofconcat)
-			p.Path = append(p.Path, d[:])
-			proofconcat = proofconcat[len(d):]
-		}
-		return
-	}
-
-	proof := generateProof(crypto.Sha512_256, proofresp)
-	proofSHA256 := generateProof(crypto.Sha256, proofrespSHA256)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], proofresp.Stibhash[:])
@@ -128,7 +110,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems := make(map[uint64]crypto.Hashable)
 
 	elems[proofresp.Idx] = &element
-	err = merklearray.Verify(blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, proof.ToProof())
 	if err != nil {
 		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
 		a.NoError(err)
@@ -140,7 +122,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems = make(map[uint64]crypto.Hashable)
 
 	elems[proofrespSHA256.Idx] = &element
-	err = merklearray.VerifyVectorCommitment(blk.TxnCommitments.Sha256Commitment.ToSlice(), elems, &proofSHA256)
+	err = merklearray.VerifyVectorCommitment(blk.TxnCommitments.Sha256Commitment.ToSlice(), elems, proofSHA256.ToProof())
 	if err != nil {
 		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.Sha256Commitment.ToSlice(), proofSHA256.Path, proofSHA256.TreeDepth, proofrespSHA256.Stibhash, proofrespSHA256.Idx)
 		a.NoError(err)

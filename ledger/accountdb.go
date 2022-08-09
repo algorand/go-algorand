@@ -56,6 +56,7 @@ type accountsDbQueries struct {
 type onlineAccountsDbQueries struct {
 	lookupOnlineStmt        *sql.Stmt
 	lookupOnlineHistoryStmt *sql.Stmt
+	lookupOnlineTotalsStmt  *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -1360,7 +1361,7 @@ type baseVotingData struct {
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
-	StateProofID    merklesignature.Verifier        `codec:"F"`
+	StateProofID    merklesignature.Commitment      `codec:"F"`
 }
 
 type baseOnlineAccountData struct {
@@ -2302,7 +2303,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
 			// store old data for account hash update
 			state := acctState{old: ba, oldEnc: encodedAcctData}
-			ba.StateProofID = merklesignature.Verifier{}
+			ba.StateProofID = merklesignature.Commitment{}
 			encodedOnlineAcctData := protocol.Encode(&ba)
 			copy(addr[:], addrbuf)
 			state.new = ba
@@ -2515,6 +2516,11 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 	if err != nil {
 		return nil, err
 	}
+
+	qs.lookupOnlineTotalsStmt, err = r.Prepare("SELECT data FROM onlineroundparamstail WHERE rnd=?")
+	if err != nil {
+		return nil, err
+	}
 	return qs, nil
 }
 
@@ -2713,6 +2719,24 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 		return err
 	})
 	return
+}
+
+func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
+	data := ledgercore.OnlineRoundParamsData{}
+	err := db.Retry(func() error {
+		row := qs.lookupOnlineTotalsStmt.QueryRow(round)
+		var buf []byte
+		err := row.Scan(&buf)
+		if err != nil {
+			return err
+		}
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
 func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {
@@ -3657,7 +3681,7 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
-			var chunkSize int = sqliteMaxVariableNumber
+			chunkSize := sqliteMaxVariableNumber
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}
