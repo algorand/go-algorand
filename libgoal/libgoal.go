@@ -1211,7 +1211,7 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.TransactionProof(txid, round, hashType)

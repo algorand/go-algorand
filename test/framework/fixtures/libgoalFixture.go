@@ -504,15 +504,15 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 }
 
 // TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.ProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (generatedV2.TransactionProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
 	if err != nil {
-		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
+		return generatedV2.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
 	proof, err := merklearray.ProofDataToSingleLeafProof(proofResp.Hashtype, proofResp.Treedepth, proofResp.Proof)
 	if err != nil {
-		return generatedV2.ProofResponse{}, merklearray.SingleLeafProof{}, err
+		return generatedV2.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
 	return proofResp, proof, nil

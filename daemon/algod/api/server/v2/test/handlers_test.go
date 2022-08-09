@@ -934,10 +934,10 @@ func TestGetProofDefault(t *testing.T) {
 	defer releasefunc()
 
 	txid := stx.ID()
-	err := handler.GetProof(c, 1, txid.String(), generated.GetProofParams{})
+	err := handler.GetTransactionProof(c, 1, txid.String(), generated.GetTransactionProofParams{})
 	a.NoError(err)
 
-	var resp generatedV2.ProofResponse
+	var resp generatedV2.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
 	a.Equal("sha512_256", resp.Hashtype)

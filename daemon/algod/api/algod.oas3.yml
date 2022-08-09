@@ -630,53 +630,6 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "ProofResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                  "enum": [
-                    "sha512_256",
-                    "sha256"
-                  ],
-                  "type": "string"
-                },
-                "idx": {
-                  "description": "Index of the transaction in the block's payset.",
-                  "type": "integer"
-                },
-                "proof": {
-                  "description": "Merkle proof of transaction membership.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "stibhash": {
-                  "description": "Hash of SignedTxnInBlock for verifying proof.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "treedepth": {
-                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "hashtype",
-                "idx",
-                "proof",
-                "stibhash",
-                "treedepth"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Proof of transaction in a block."
-      },
       "StateProofResponse": {
         "content": {
           "application/json": {
@@ -764,6 +717,53 @@
           }
         },
         "description": "TransactionParams contains the parameters that help a client construct a new transaction."
+      },
+      "TransactionProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hashtype": {
+                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+                  "enum": [
+                    "sha512_256",
+                    "sha256"
+                  ],
+                  "type": "string"
+                },
+                "idx": {
+                  "description": "Index of the transaction in the block's payset.",
+                  "type": "integer"
+                },
+                "proof": {
+                  "description": "Merkle proof of transaction membership.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                },
+                "stibhash": {
+                  "description": "Hash of SignedTxnInBlock for verifying proof.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                },
+                "treedepth": {
+                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "hashtype",
+                "idx",
+                "proof",
+                "stibhash",
+                "treedepth"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Proof of transaction in a block."
       },
       "VersionsResponse": {
         "content": {
@@ -2740,7 +2740,7 @@
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
-        "operationId": "GetProof",
+        "operationId": "GetTransactionProof",
         "parameters": [
           {
             "description": "The round in which the transaction appears.",

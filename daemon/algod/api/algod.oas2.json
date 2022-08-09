@@ -532,7 +532,7 @@
           "http"
         ],
         "summary": "Get a Merkle proof for a transaction in a block.",
-        "operationId": "GetProof",
+        "operationId": "GetTransactionProof",
         "parameters": [
           {
             "type": "integer",
@@ -566,7 +566,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/ProofResponse"
+            "$ref": "#/responses/TransactionProofResponse"
           },
           "400": {
             "description": "Malformed round number or transaction ID",
@@ -2976,7 +2976,7 @@
         }
       }
     },
-    "ProofResponse": {
+    "TransactionProofResponse": {
       "description": "Proof of transaction in a block.",
       "schema": {
         "type": "object",

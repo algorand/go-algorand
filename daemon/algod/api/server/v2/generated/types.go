@@ -742,27 +742,6 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// ProofResponse defines model for ProofResponse.
-type ProofResponse struct {
-
-	// The type of hash function used to create the proof, must be one of:
-	// * sha512_256
-	// * sha256
-	Hashtype string `json:"hashtype"`
-
-	// Index of the transaction in the block's payset.
-	Idx uint64 `json:"idx"`
-
-	// Merkle proof of transaction membership.
-	Proof []byte `json:"proof"`
-
-	// Hash of SignedTxnInBlock for verifying proof.
-	Stibhash []byte `json:"stibhash"`
-
-	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
-	Treedepth uint64 `json:"treedepth"`
-}
-
 // StateProofResponse defines model for StateProofResponse.
 type StateProofResponse StateProof
 
@@ -804,6 +783,27 @@ type TransactionParametersResponse struct {
 	// The minimum transaction fee (not per byte) required for the
 	// txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
+}
+
+// TransactionProofResponse defines model for TransactionProofResponse.
+type TransactionProofResponse struct {
+
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype string `json:"hashtype"`
+
+	// Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Merkle proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // VersionsResponse defines model for VersionsResponse.
@@ -850,8 +850,8 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
-// GetProofParams defines parameters for GetProof.
-type GetProofParams struct {
+// GetTransactionProofParams defines parameters for GetTransactionProof.
+type GetTransactionProofParams struct {
 
 	// The type of hash function used to create the proof, must be one of:
 	// * sha512_256
