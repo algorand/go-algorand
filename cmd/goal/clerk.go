@@ -384,7 +384,7 @@ var sendCmd = &cobra.Command{
 			}
 		}
 		client := ensureFullClient(dataDir)
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
