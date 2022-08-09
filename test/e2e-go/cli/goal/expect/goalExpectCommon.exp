@@ -52,7 +52,7 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
         log_user 1
-        set NODE_DATA_DIR $GLOBAL_TEST_ROOT_DIR/Primary
+        set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Primary
         if { [info exists ::NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
             puts "$NODE_DATA_DIR/algod-out.log :\r\n$outLog"
@@ -61,7 +61,7 @@ proc ::AlgorandGoal::Abort { ERROR } {
             set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
             puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
         }
-        set NODE_DATA_DIR $GLOBAL_TEST_ROOT_DIR/Node
+        set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Node
         if { [info exists ::NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
             puts "$NODE_DATA_DIR/algod-out.log :\r\n$outLog"
@@ -78,12 +78,12 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
 
         log_user 1
-        set outLog [exec cat $GLOBAL_TEST_ALGO_DIR/algod-out.log]
-        puts "$GLOBAL_TEST_ALGO_DIR/algod-out.log :\r\n$outLog"
-        set errLog [exec cat $GLOBAL_TEST_ALGO_DIR/algod-err.log]
+        set outLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-out.log]
+        puts "$::GLOBAL_TEST_ALGO_DIR/algod-out.log :\r\n$outLog"
+        set errLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-err.log]
         puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
-        set nodeLog [exec -- tail -n 30 $GLOBAL_TEST_ALGO_DIR/node.log]
-        puts "$GLOBAL_TEST_ALGO_DIR/node.log :\r\n$nodeLog"
+        set nodeLog [exec -- tail -n 30 $::GLOBAL_TEST_ALGO_DIR/node.log]
+        puts "$::GLOBAL_TEST_ALGO_DIR/node.log :\r\n$nodeLog"
 
         ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
     }
