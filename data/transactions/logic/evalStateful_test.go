@@ -2373,7 +2373,7 @@ func TestReturnTypes(t *testing.T) {
 		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 
-		"block": ": int 4294967200; block BlkSeed",
+		"block": "block BlkSeed",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
