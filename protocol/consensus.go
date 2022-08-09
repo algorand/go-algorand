@@ -184,7 +184,7 @@ const ConsensusV33 = ConsensusVersion(
 
 // ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda.
 const ConsensusV34 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/a9f61645fb2c2068c24dce976e8bde2a86584d43",
+	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
