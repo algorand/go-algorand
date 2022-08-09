@@ -934,10 +934,10 @@ func TestGetProofDefault(t *testing.T) {
 	defer releasefunc()
 
 	txid := stx.ID()
-	err := handler.GetProof(c, 1, txid.String(), generated.GetProofParams{})
+	err := handler.GetTransactionProof(c, 1, txid.String(), generated.GetTransactionProofParams{})
 	a.NoError(err)
 
-	var resp generatedV2.ProofResponse
+	var resp generatedV2.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
 	a.Equal("sha512_256", resp.Hashtype)
@@ -1075,9 +1075,7 @@ func TestStateProof200(t *testing.T) {
 	stprfResp := generated.StateProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
 
-	msg := stateproofmsg.Message{}
-	a.NoError(protocol.Decode(stprfResp.Message, &msg))
-	a.Equal([]byte{0x0, 0x1, 0x2}, msg.BlockHeadersCommitment)
+	a.Equal([]byte{0x0, 0x1, 0x2}, stprfResp.Message.BlockHeadersCommitment)
 }
 
 func TestHeaderProofRoundTooHigh(t *testing.T) {
@@ -1087,7 +1085,7 @@ func TestHeaderProofRoundTooHigh(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, 2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1100,7 +1098,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 
 	insertRounds(a, handler, 700)
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, 650))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1113,7 +1111,7 @@ func TestGetBlockProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
 	a.Equal(200, responseRecorder.Code)
 
 	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))

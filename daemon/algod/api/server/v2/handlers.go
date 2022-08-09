@@ -593,9 +593,9 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
-// GetProof generates a Merkle proof for a transaction in a block.
+// GetTransactionProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
-func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
+func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid string, params generated.GetTransactionProofParams) error {
 	var txID transactions.Txid
 	err := txID.UnmarshalText([]byte(txid))
 	if err != nil {
@@ -660,7 +660,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			return internalError(ctx, err, "generating proof", v2.Log)
 		}
 
-		response := generated.ProofResponse{
+		response := generated.TransactionProofResponse{
 			Proof:     proof.GetConcatenatedProof(),
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
@@ -1254,16 +1254,21 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	}
 
 	response := generated.StateProofResponse{
-		Message:    protocol.Encode(&tx.Message),
 		StateProof: protocol.Encode(&tx.StateProof),
 	}
+
+	response.Message.BlockHeadersCommitment = tx.Message.BlockHeadersCommitment
+	response.Message.VotersCommitment = tx.Message.VotersCommitment
+	response.Message.LnProvenWeight = tx.Message.LnProvenWeight
+	response.Message.FirstAttestedRound = tx.Message.FirstAttestedRound
+	response.Message.LastAttestedRound = tx.Message.LastAttestedRound
 
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// GetProofForLightBlockHeader Gets a proof of a light block header for a given round
+// GetLightBlockHeaderProof Gets a proof of a light block header for a given round
 // (GET /v2/blocks/{round}/lightheader/proof)
-func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
