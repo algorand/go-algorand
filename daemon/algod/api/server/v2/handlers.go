@@ -1254,9 +1254,14 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	}
 
 	response := generated.StateProofResponse{
-		Message:    protocol.Encode(&tx.Message),
 		StateProof: protocol.Encode(&tx.StateProof),
 	}
+
+	response.Message.BlockHeadersCommitment = tx.Message.BlockHeadersCommitment
+	response.Message.VotersCommitment = tx.Message.VotersCommitment
+	response.Message.LnProvenWeight = tx.Message.LnProvenWeight
+	response.Message.FirstAttestedRound = tx.Message.FirstAttestedRound
+	response.Message.LastAttestedRound = tx.Message.LastAttestedRound
 
 	return ctx.JSON(http.StatusOK, response)
 }

@@ -1075,9 +1075,7 @@ func TestStateProof200(t *testing.T) {
 	stprfResp := generated.StateProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
 
-	msg := stateproofmsg.Message{}
-	a.NoError(protocol.Decode(stprfResp.Message, &msg))
-	a.Equal([]byte{0x0, 0x1, 0x2}, msg.BlockHeadersCommitment)
+	a.Equal([]byte{0x0, 0x1, 0x2}, stprfResp.Message.BlockHeadersCommitment)
 }
 
 func TestHeaderProofRoundTooHigh(t *testing.T) {

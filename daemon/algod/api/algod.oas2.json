@@ -2683,9 +2683,42 @@
       ],
       "properties": {
         "Message": {
-          "description": "The encoded message.",
-          "type": "string",
-          "format": "byte"
+          "description": "Represents the message that the state proofs are attesting to.",
+          "type": "object",
+          "required": [
+            "BlockHeadersCommitment",
+            "VotersCommitment",
+            "LnProvenWeight",
+            "FirstAttestedRound",
+            "LastAttestedRound"
+          ],
+          "properties": {
+            "BlockHeadersCommitment": {
+              "description": "The vector commitment on all light block headers within a state proof interval.",
+              "type": "string",
+              "format": "byte"
+            },
+            "VotersCommitment": {
+              "description": "The vector commitment of the top N accounts to sign the next StateProof.",
+              "type": "string",
+              "format": "byte"
+            },
+            "LnProvenWeight": {
+              "description": "The result of the invoking ln function on the proven weight.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "FirstAttestedRound": {
+              "description": "The first round the message attests to.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "LastAttestedRound": {
+              "description": "The last round the message attests to.",
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            }
+          }
         },
         "StateProof": {
           "description": "The encoded StateProof for the message.",
