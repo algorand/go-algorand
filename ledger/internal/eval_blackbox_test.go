@@ -533,6 +533,8 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
+	rndBQ := ledger.Latest()
+	ledger.WaitForCommit(rndBQ)
 	return validatedBlock
 }
 
