@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -41,18 +40,13 @@ func (sp StateProofTxnFields) Empty() bool {
 		sp.Message.MsgIsZero()
 }
 
-//msgp:ignore specialAddr
-// specialAddr is used to form a unique address that will send out state proofs.
-type specialAddr string
-
-// ToBeHashed implements the crypto.Hashable interface
-func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.SpecialAddr, []byte(a)
-}
-
 // StateProofSender is the computed address for sending out state proofs.
 var StateProofSender basics.Address
 
 func init() {
-	StateProofSender = basics.Address(crypto.HashObj(specialAddr("StateProofSender")))
+	var err error
+	StateProofSender, err = basics.UnmarshalChecksumAddress("STATEPROOF7777777BJVASCJJZMDX3567PX3JEYBGEHUJY4FAAAN6DXNRU")
+	if err != nil {
+		panic(err)
+	}
 }

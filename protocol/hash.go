@@ -58,7 +58,6 @@ const (
 	ProposerSeed                     HashID = "PS"
 	ParticipationKeys                HashID = "PK"
 	Seed                             HashID = "SD"
-	SpecialAddr                      HashID = "SpecialAddr"
 	SignedTxnInBlock                 HashID = "STIB"
 
 	StateProofCoin    HashID = "spc"

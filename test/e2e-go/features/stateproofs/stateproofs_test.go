@@ -965,12 +965,6 @@ func TestAtMostOneSPFullPool(t *testing.T) {
 	require.Less(t, round, consensusParams.StateProofInterval*10)
 }
 
-type specialAddr string
-
-func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.SpecialAddr, []byte(a)
-}
-
 // TestSPWithCounterReset tests if the state proof transaction is getting into the pool and eventually
 // at most one SP is getting into the block when the transaction pool is full.
 // Bad SP and payment transaction traffic is added to increase the odds of getting SP txn into the pool
