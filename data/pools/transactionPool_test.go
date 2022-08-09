@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1355,8 +1356,18 @@ func TestSepculativeBlockAssembly(t *testing.T) {
 
 	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
 	<-transactionPool.specAsmDone
-	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
+
+	// add the block
+	mockLedger.AddBlock(block.Block(), agreement.Certificate{})
+
+	// empty tx pool
+	transactionPool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	transactionPool.pendingTxGroups = nil
+
+	// check that we still assemble the block
+	specBlock, err := transactionPool.AssembleBlock(block.Block().Round()+1, time.Now().Add(10*time.Millisecond))
 	require.NoError(t, err)
+	require.Equal(t, specBlock.Block().Branch, block.Block().Hash())
 	require.NotNil(t, specBlock)
 	require.Len(t, specBlock.Block().Payset, savedTransactions)
 }
