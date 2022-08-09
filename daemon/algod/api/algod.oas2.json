@@ -3094,7 +3094,7 @@
             "type": "string"
           },
           "missing-signatures": {
-            "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
             "type": "boolean"
           }
         }
