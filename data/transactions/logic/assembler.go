@@ -1563,16 +1563,16 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
+		if strings.HasPrefix(line, "//") {
+			ops.trace("%3d: comment\n", ops.sourceLine)
+			continue
+		}
 		fields := fieldsFromLine(line)
 		for current, next := processFields(fields); len(current) > 0 || len(next) > 0; current, next = processFields(next) {
 			if len(current) == 0 {
 				continue
 			}
 			opstring := current[0]
-			if strings.HasPrefix(opstring, "//") {
-				ops.trace("%3d: comment\n", ops.sourceLine)
-				break
-			}
 			if opstring == "#pragma" {
 				ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				// pragma get the rest of the tokens
