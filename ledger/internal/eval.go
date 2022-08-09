@@ -1569,8 +1569,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
 		txvalidator.verificationPool = executionPool
-		// FIND A TEST THAT FAILS BECAUSE OF THIS COMMENT!
-		// txvalidator.ledger = l
+		txvalidator.ledger = l
 
 		txvalidator.ctx = validationCtx
 		txvalidator.txgroups = paysetgroups
