@@ -3056,7 +3056,7 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
-// ecdsaVerify cheks a signature,
+// ecdsaVerify checks a signature,
 func (cx *EvalContext) ecdsaVerify(curve EcdsaCurve, pkX, pkY []byte, msg []byte, sigR, sigS []byte) (result bool) {
 	// Go 1.19 panics on bad inputs. Catch it so that re can return false cleanly.
 	defer func() {
