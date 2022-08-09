@@ -531,7 +531,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get a Merkle proof for a transaction in a block.",
+        "summary": "Get a proof for a transaction in a block.",
         "operationId": "GetTransactionProof",
         "parameters": [
           {
@@ -587,7 +587,7 @@
             }
           },
           "500": {
-            "description": "Internal error, including protocol not supporting Merkle proofs.",
+            "description": "Internal error, including protocol not supporting proofs.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -3022,7 +3022,7 @@
         ],
         "properties": {
           "proof": {
-            "description": "Merkle proof of transaction membership.",
+            "description": "Proof of transaction membership.",
             "type": "string",
             "format": "byte"
           },

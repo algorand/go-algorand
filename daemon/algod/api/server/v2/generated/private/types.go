@@ -812,7 +812,7 @@ type TransactionProofResponse struct {
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
-	// Merkle proof of transaction membership.
+	// Proof of transaction membership.
 	Proof []byte `json:"proof"`
 
 	// Hash of SignedTxnInBlock for verifying proof.
