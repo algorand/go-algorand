@@ -47,7 +47,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-var proto = config.Consensus[protocol.ConsensusFuture]
+var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed

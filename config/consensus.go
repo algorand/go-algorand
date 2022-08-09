@@ -1170,7 +1170,7 @@ func initConsensusProtocols() {
 	v34 := v33
 	v34.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable compact certificates.
+	// Enable state proofs.
 	v34.StateProofInterval = 256
 	v34.StateProofTopVoters = 1024
 	v34.StateProofVotersLookback = 16
