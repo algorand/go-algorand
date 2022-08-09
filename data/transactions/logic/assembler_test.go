@@ -2778,6 +2778,6 @@ func TestSemiColon(t *testing.T) {
 	checkSame(t,
 		`byte "test;this"; pop;`,
 		`byte "test;this"; ; pop;`,
-		`byte "test;this";;pop;`,
+		`byte "test;this";;;pop;`,
 	)
 }
