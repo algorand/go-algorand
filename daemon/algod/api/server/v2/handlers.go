@@ -1261,9 +1261,9 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// GetProofForLightBlockHeader Gets a proof of a light block header for a given round
+// GetLightBlockHeaderProof Gets a proof of a light block header for a given round
 // (GET /v2/blocks/{round}/lightheader/proof)
-func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)

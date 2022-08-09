@@ -1087,7 +1087,7 @@ func TestHeaderProofRoundTooHigh(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, 2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1100,7 +1100,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 
 	insertRounds(a, handler, 700)
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, 650))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1113,7 +1113,7 @@ func TestGetBlockProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetProofForLightBlockHeader(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
 	a.Equal(200, responseRecorder.Code)
 
 	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))

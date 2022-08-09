@@ -1317,7 +1317,7 @@
           "http"
         ],
         "summary": "Gets a proof for a given light block header inside a state proof commitment",
-        "operationId": "GetProofForLightBlockHeader",
+        "operationId": "GetLightBlockHeaderProof",
         "parameters": [
           {
             "type": "integer",

@@ -2666,7 +2666,7 @@
     },
     "/v2/blocks/{round}/lightheader/proof": {
       "get": {
-        "operationId": "GetProofForLightBlockHeader",
+        "operationId": "GetLightBlockHeaderProof",
         "parameters": [
           {
             "description": "The round to which the light block header belongs.",
