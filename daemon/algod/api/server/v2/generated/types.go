@@ -440,16 +440,6 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// SimulationResult defines model for SimulationResult.
-type SimulationResult struct {
-
-	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage string `json:"failure-message"`
-
-	// \[sfm\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
-	MissingSignatures bool `json:"missing-signatures"`
-}
-
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -748,7 +738,14 @@ type ProofResponse struct {
 }
 
 // SimulationResponse defines model for SimulationResponse.
-type SimulationResponse SimulationResult
+type SimulationResponse struct {
+
+	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage string `json:"failure-message"`
+
+	// \[sfm\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
+	MissingSignatures bool `json:"missing-signatures"`
+}
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {

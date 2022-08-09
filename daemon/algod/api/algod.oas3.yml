@@ -670,11 +670,25 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/SimulationResult"
+              "properties": {
+                "failure-message": {
+                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                  "type": "string"
+                },
+                "missing-signatures": {
+                  "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "failure-message",
+                "missing-signatures"
+              ],
+              "type": "object"
             }
           }
         },
-        "description": "Simulation results."
+        "description": "Result of a transaction group simulation."
       },
       "SupplyResponse": {
         "content": {
@@ -1573,24 +1587,6 @@
         "required": [
           "pool-error",
           "txn"
-        ],
-        "type": "object"
-      },
-      "SimulationResult": {
-        "description": "Result of a transaction group simulation",
-        "properties": {
-          "failure-message": {
-            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-            "type": "string"
-          },
-          "missing-signatures": {
-            "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "failure-message",
-          "missing-signatures"
         ],
         "type": "object"
       },
@@ -4381,11 +4377,25 @@
             "content": {
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/SimulationResult"
+                  "properties": {
+                    "failure-message": {
+                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                      "type": "string"
+                    },
+                    "missing-signatures": {
+                      "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "failure-message",
+                    "missing-signatures"
+                  ],
+                  "type": "object"
                 }
               }
             },
-            "description": "Simulation results."
+            "description": "Result of a transaction group simulation."
           },
           "400": {
             "content": {

@@ -2258,24 +2258,6 @@
         }
       }
     },
-    "SimulationResult": {
-      "description": "Result of a transaction group simulation",
-      "type": "object",
-      "required": [
-        "failure-message",
-        "missing-signatures"
-      ],
-      "properties": {
-        "failure-message": {
-          "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-          "type": "string"
-        },
-        "missing-signatures": {
-          "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
-          "type": "boolean"
-        }
-      }
-    },
     "DryrunState": {
       "description": "Stores the TEAL eval step data",
       "type": "object",
@@ -3099,9 +3081,23 @@
       }
     },
     "SimulationResponse": {
-      "description": "Simulation results.",
+      "description": "Result of a transaction group simulation.",
       "schema": {
-        "$ref": "#/definitions/SimulationResult"
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[sfm\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
+          }
+        }
       }
     },
     "SupplyResponse": {
