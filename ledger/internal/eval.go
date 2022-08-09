@@ -1157,7 +1157,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.Round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
 
 	case protocol.AssetConfigTx:
 		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)

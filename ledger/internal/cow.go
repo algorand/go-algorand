@@ -133,7 +133,7 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.Hdr.RewardsLevel
 }
 
-func (cb *roundCowState) Round() basics.Round {
+func (cb *roundCowState) round() basics.Round {
 	return cb.mods.Hdr.Round
 }
 

@@ -133,7 +133,7 @@ func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex
 	return nil
 }
 
-func (c *mockCowForLogicLedger) Round() basics.Round {
+func (c *mockCowForLogicLedger) round() basics.Round {
 	return c.rnd
 }
 

@@ -1067,7 +1067,7 @@ func TestCowGetters(t *testing.T) {
 	ts := int64(11223344)
 	c.mods.PrevTimestamp = ts
 
-	a.Equal(round, c.Round())
+	a.Equal(round, c.round())
 	a.Equal(ts, c.prevTimestamp())
 }
 

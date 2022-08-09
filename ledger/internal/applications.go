@@ -44,7 +44,7 @@ type cowForLogicLedger interface {
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
-	Round() basics.Round
+	round() basics.Round
 	prevTimestamp() int64
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	txnCounter() uint64
@@ -150,7 +150,7 @@ func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basi
 }
 
 func (al *logicLedger) Round() basics.Round {
-	return al.cow.Round()
+	return al.cow.round()
 }
 
 func (al *logicLedger) LatestTimestamp() int64 {
