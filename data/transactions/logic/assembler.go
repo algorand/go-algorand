@@ -1407,6 +1407,9 @@ func tokensFromLine(line string) []string {
 
 	i := 0
 	for i < len(line) && spaces[line[i]] {
+		if line[i] == ';' {
+			tokens = append(tokens, ";")
+		}
 		i++
 	}
 
@@ -1562,38 +1565,30 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if len(line) == 0 {
-			ops.trace("%3d: empty line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			ops.trace("%3d: comment\n", ops.sourceLine)
-			continue
-		}
 		tokens := tokensFromLine(line)
-		first := tokens[0]
-		if strings.HasPrefix(first, "#") {
-			directive := first[1:]
-			switch directive {
-			case "pragma":
-				ops.pragma(tokens)
-				ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			default:
-				ops.errorf("Unknown directive: %s", directive)
+		if len(tokens) > 0 {
+			if first := tokens[0]; first[0] == '#' {
+				directive := first[1:]
+				switch directive {
+				case "pragma":
+					ops.pragma(tokens)
+					ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				default:
+					ops.errorf("Unknown directive: %s", directive)
+				}
+				continue
 			}
-			continue
-		}
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 		}
 		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
 			if len(current) == 0 {
 				continue
+			}
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 			}
 			opstring := current[0]
 			if opstring[len(opstring)-1] == ':' {
