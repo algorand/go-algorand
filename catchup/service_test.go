@@ -834,7 +834,7 @@ func TestCreatePeerSelector(t *testing.T) {
 
 	cfg.NetAddress = "someAddress"
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps := s.createPeerSelector(true)
+	ps := createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
 	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
@@ -850,7 +850,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
 	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
@@ -864,7 +864,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -881,7 +881,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -896,7 +896,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -911,7 +911,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 2, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -924,7 +924,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -939,7 +939,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 2, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
