@@ -15,6 +15,9 @@ parameters:
   result_path:
     type: string
     default: "/tmp/build_test_results"
+  valid_nightly_branch:
+    type: string
+    default: /hotfix\/.*/
 
 executors:
   amd64_medium:
@@ -35,16 +38,27 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 12.0.1
+      xcode: 13.4.1
     resource_class: medium
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 12.0.1
+      xcode: 13.4.1
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
+  mac_arm64: &executor-mac-arm64
+    machine: true
+    resource_class: algorand/macstadium-m1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+  # these are required b/c jobs explicitly assign sizes to the executors
+  # for `mac_arm64` there is only one size
+  mac_arm64_medium:
+    <<: *executor-mac-arm64
+  mac_arm64_large:
+    <<: *executor-mac-arm64
 
 workflows:
   version: 2
@@ -57,6 +71,23 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64", "mac_amd64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+
+      - build_nightly:
+          name: << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
 
       - test:
           name: << matrix.platform >>_test
@@ -64,23 +95,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - /hotfix\/.*/
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - /hotfix\/.*/
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - integration:
@@ -89,17 +110,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_expect:
@@ -108,17 +125,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_subs:
@@ -127,17 +140,13 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_build
-          filters:
-            <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
+            - << matrix.platform >>_build_nightly
           context:
             - slack-secrets
             - aws-secrets
@@ -147,14 +156,24 @@ workflows:
           matrix:
             parameters:
               platform: ["amd64", "arm64", "mac_amd64"]
-              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+              job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+
+      - tests_verification_job_nightly:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
           matrix:
-            <<: *matrix-default
+            <<: *matrix-nightly
           requires:
             - << matrix.platform >>_test_nightly_verification
             - << matrix.platform >>_integration_nightly_verification
@@ -168,6 +187,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+
       #- windows_x64_build
 
 commands:
@@ -187,6 +207,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
 
@@ -378,6 +399,7 @@ commands:
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
+            export CI_E2E_FILENAME="${CIRCLE_BRANCH/\//-}"
             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
             export GOPATH="<< parameters.build_dir >>/go"
@@ -483,6 +505,21 @@ jobs:
       - prepare_go
       - generic_build
 
+  build_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
+      - generic_build
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
+
   test:
     parameters:
       platform:
@@ -514,9 +551,8 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+      - slack/notify:
+          <<: *slack-fail-event
 
   integration:
     parameters:
@@ -614,7 +650,10 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      E2E_PLATFORM: << parameters.platform >>
+      CI_PLATFORM: << parameters.platform >>
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
       - prepare_build_dir
       - prepare_go
@@ -658,6 +697,23 @@ jobs:
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  tests_verification_job_nightly:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+        type: string
+      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+      - slack/notify:
+          <<: *slack-fail-event
 
   upload_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project

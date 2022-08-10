@@ -67,10 +67,7 @@ func TestAssetValidRounds(t *testing.T) {
 	client := fixture.LibGoalClient
 
 	// First, test valid rounds to last valid conversion
-	var firstValid, lastValid, validRounds uint64
-	firstValid = 0
-	lastValid = 0
-	validRounds = 0
+	var firstValid, lastValid, lastRound, validRounds uint64
 
 	params, err := client.SuggestedParams()
 	a.NoError(err)
@@ -80,29 +77,29 @@ func TestAssetValidRounds(t *testing.T) {
 	firstValid = 0
 	lastValid = 0
 	validRounds = cparams.MaxTxnLife + 1
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	firstValid, lastValid, lastRound, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(params.LastRound+1, firstValid)
+	a.Equal(lastRound+1, firstValid)
 	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
 
 	firstValid = 0
 	lastValid = 0
 	validRounds = cparams.MaxTxnLife + 2
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	_, _, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "cannot construct transaction: txn validity period"))
 
 	firstValid = 0
 	lastValid = 0
 	validRounds = 1
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
 	a.Equal(firstValid, lastValid)
 
 	firstValid = 1
 	lastValid = 0
 	validRounds = 1
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
 	a.Equal(uint64(1), firstValid)
 	a.Equal(firstValid, lastValid)
@@ -110,7 +107,7 @@ func TestAssetValidRounds(t *testing.T) {
 	firstValid = 1
 	lastValid = 0
 	validRounds = cparams.MaxTxnLife
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
 	a.Equal(uint64(1), firstValid)
 	a.Equal(cparams.MaxTxnLife, lastValid)
@@ -118,7 +115,7 @@ func TestAssetValidRounds(t *testing.T) {
 	firstValid = 100
 	lastValid = 0
 	validRounds = cparams.MaxTxnLife
-	firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
+	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
 	a.Equal(uint64(100), firstValid)
 	a.Equal(firstValid+cparams.MaxTxnLife-1, lastValid)
@@ -255,7 +252,6 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	confirmed := fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
-	txids = make(map[string]string)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
@@ -265,7 +261,7 @@ func TestAssetConfig(t *testing.T) {
 	var tx transactions.Transaction
 	if config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount != 0 {
 		// Creating more assets should return an error
-		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
+		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, "toomany", "toomany", assetURL, assetMetadataHash, 0)
 		_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.Error(err)
 		a.True(strings.Contains(err.Error(), "too many assets in account:"))
@@ -336,7 +332,6 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "changing keys")
-	txids = make(map[string]string)
 
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
@@ -672,7 +667,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.Error(err)
 	// sending it should fail
 	txSend, err = client1.MakeUnsignedAssetSendTx(assetID3, 0, account1, "", "")
-	txid, err = helperFillSignBroadcast(client1, wh1, account1, txSend, err)
+	_, err = helperFillSignBroadcast(client1, wh1, account1, txSend, err)
 	a.Error(err)
 }
 
@@ -750,11 +745,11 @@ func TestAssetSend(t *testing.T) {
 
 	// An account with no algos should not be able to accept assets
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
-	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
 	a.NoError(err)
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
-	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
 	a.True(strings.Contains(err.Error(), "overspend"))
 	a.True(strings.Contains(err.Error(), "tried to spend"))
@@ -977,6 +972,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
+	a.NoError(err)
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
@@ -986,6 +982,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
 }
@@ -1047,6 +1044,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	_, curRound := fixture.GetBalanceAndRound(account0)
 	nodeStatus, _ := client.Status()
 	consParams, err := client.ConsensusParams(nodeStatus.LastRound)
+	a.NoError(err)
 	err = fixture.WaitForRoundWithTimeout(curRound + consParams.MaxBalLookback + 1)
 	a.NoError(err)
 
@@ -1063,6 +1061,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
+	a.NoError(err)
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
@@ -1072,6 +1071,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
 	a.NoError(err)
 }
@@ -1084,7 +1084,7 @@ func setupTestAndNetwork(t *testing.T, networkTemplate string, consensus config.
 
 	t.Parallel()
 	asser := require.New(fixtures.SynchronizedTest(t))
-	if 0 == len(networkTemplate) {
+	if len(networkTemplate) == 0 {
 		// If the  networkTemplate is not specified, used the default one
 		networkTemplate = "TwoNodes50Each.json"
 	}
@@ -1113,6 +1113,7 @@ func createAsset(assetName, account0, manager, reserve, freeze, clawback string,
 	// Create two assets: one with default-freeze, and one without default-freeze
 	txids := make(map[string]string)
 	wh, err := client.GetUnencryptedWalletHandle()
+	asser.NoError(err)
 	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, assetName, "testunit", assetURL, assetMetadataHash, 0)
 	txid, err := helperFillSignBroadcast(*client, wh, account0, tx, err)
 	asser.NoError(err)
@@ -1128,6 +1129,7 @@ func setupActors(account0 string, client *libgoal.Client, asser *require.Asserti
 	// Setup the actors
 
 	wh, err := client.GetUnencryptedWalletHandle()
+	asser.NoError(err)
 	manager, err = client.GenerateAddress(wh)
 	asser.NoError(err)
 	reserve, err = client.GenerateAddress(wh)

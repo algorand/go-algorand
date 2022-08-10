@@ -123,6 +123,8 @@ var loggingSendCmd = &cobra.Command{
 
 		modifier := ""
 		counter := uint(1)
+		errcount := 0
+		var firsterr error = nil
 		onDataDirs(func(dataDir string) {
 			cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 			if err != nil {
@@ -138,9 +140,16 @@ var loggingSendCmd = &cobra.Command{
 
 			for err := range logging.CollectAndUploadData(dataDir, name, targetFolder) {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
+				if firsterr == nil {
+					firsterr = err
+				}
+				errcount++
 			}
 			modifier = fmt.Sprintf("-%d", counter)
 			counter++
 		})
+		if errcount != 0 {
+			reportErrorf("had %d errors, first: %v", errcount, firsterr)
+		}
 	},
 }

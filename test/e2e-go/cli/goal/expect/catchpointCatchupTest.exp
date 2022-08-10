@@ -64,12 +64,12 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Update the Primary Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchpointInterval": 4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
     exec rm $TEST_ROOT_DIR/Primary/config.json
     exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
 
     # Update the Second Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
     exec rm $TEST_ROOT_DIR/Node/config.json
     exec mv $TEST_ROOT_DIR/Node/config.json.new $TEST_ROOT_DIR/Node/config.json
 
@@ -83,6 +83,11 @@ if { [catch {
 
 
     # Wait until the primary node reaches round 37. At that point, the catchpoint for round 36 is already done.
+    # The rationale is the following:
+    # 1. MaxTxnLife = 33 so catchup would load blocks 3..36
+    # 2. Loading block 2 is blocked by the catchpoint proxy
+    # 3. Next block is 37 that would require balances from round 37-MaxBalLookback = 5 to be accessed, and this is
+    # within the expected range of 3...36
     ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
 
     # Get primary node listening address:

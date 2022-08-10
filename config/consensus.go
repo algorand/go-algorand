@@ -344,50 +344,53 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with which compact
-	// certificates are generated.  Every round that is a multiple
-	// of CompactCertRounds, the block header will include a Merkle
+	// StateProofInterval defines the frequency with which state
+	// proofs are generated.  Every round that is a multiple
+	// of StateProofInterval, the block header will include a vector
 	// commitment to the set of online accounts (that can vote after
-	// another CompactCertRounds rounds), and that block will be signed
-	// (forming a compact certificate) by the voters from the previous
-	// such Merkle tree commitment.  A value of zero means no compact
-	// certificates.
-	CompactCertRounds uint64
+	// another StateProofInterval rounds), and that block will be signed
+	// (forming a state proof) by the voters from the previous
+	// such vector commitment.  A value of zero means no state proof.
+	StateProofInterval uint64
 
-	// CompactCertTopVoters is a bound on how many online accounts get to
-	// participate in forming the compact certificate, by including the
-	// top CompactCertTopVoters accounts (by normalized balance) into the
-	// Merkle commitment.
-	CompactCertTopVoters uint64
+	// StateProofTopVoters is a bound on how many online accounts get to
+	// participate in forming the state proof, by including the
+	// top StateProofTopVoters accounts (by normalized balance) into the
+	// vector commitment.
+	StateProofTopVoters uint64
 
-	// CompactCertVotersLookback is the number of blocks we skip before
-	// publishing a Merkle commitment to the online accounts.  Namely,
-	// if block number N contains a Merkle commitment to the online
-	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// StateProofVotersLookback is the number of blocks we skip before
+	// publishing a vector commitment to the online accounts.  Namely,
+	// if block number N contains a vector commitment to the online
+	// accounts (which, incidentally, means N%StateProofInterval=0),
 	// then the balances reflected in that commitment must come from
-	// block N-CompactCertVotersLookback.  This gives each node some
-	// time (CompactCertVotersLookback blocks worth of time) to
-	// construct this Merkle tree, so as to avoid placing the
-	// construction of this Merkle tree (and obtaining the requisite
+	// block N-StateProofVotersLookback.  This gives each node some
+	// time (StateProofVotersLookback blocks worth of time) to
+	// construct this vector commitment, so as to avoid placing the
+	// construction of this vector commitment (and obtaining the requisite
 	// accounts and balances) in the critical path.
-	CompactCertVotersLookback uint64
+	StateProofVotersLookback uint64
 
-	// CompactCertWeightThreshold specifies the fraction of top voters weight
-	// that must sign the message (block header) for security.  The compact
-	// certificate ensures this threshold holds; however, forming a valid
-	// compact certificate requires a somewhat higher number of signatures,
-	// and the more signatures are collected, the smaller the compact cert
+	// StateProofWeightThreshold specifies the fraction of top voters weight
+	// that must sign the message (block header) for security.  The state
+	// proof ensures this threshold holds; however, forming a valid
+	// state proof requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the state proof
 	// can be.
 	//
 	// This threshold can be thought of as the maximum fraction of
-	// malicious weight that compact certificates defend against.
+	// malicious weight that state proofs defend against.
 	//
-	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
-	CompactCertWeightThreshold uint32
+	// The threshold is computed as StateProofWeightThreshold/(1<<32).
+	StateProofWeightThreshold uint32
 
-	// CompactCertSecKQ is the security parameter (k+q) for the compact
-	// certificate scheme.
-	CompactCertSecKQ uint64
+	// StateProofStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
+	StateProofStrengthTarget uint64
+
+	// StateProofMaxRecoveryIntervals represents the number of state proof intervals that the network will try to catch-up with.
+	// When the difference between the latest state proof and the current round will be greater than value, Nodes will
+	// release resources allocated for creating state proofs.
+	StateProofMaxRecoveryIntervals uint64
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
@@ -418,9 +421,6 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
-	//EnableBatchVerification enable the use of the batch verification algorithm.
-	EnableBatchVerification bool
-
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 
@@ -440,6 +440,26 @@ type ConsensusParams struct {
 	// This new header is in addition to the existing SHA512_256 merkle root.
 	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
 	EnableSHA256TxnCommitmentHeader bool
+
+	// CatchpointLookback specifies a round lookback to take catchpoints at.
+	// Accounts snapshot for round X will be taken at X-CatchpointLookback
+	CatchpointLookback uint64
+
+	// DeeperBlockHeaderHistory defines number of rounds in addition to MaxTxnLife
+	// available for lookup for smart contracts and smart signatures.
+	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
+	DeeperBlockHeaderHistory uint64
+
+	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
+	EnableOnlineAccountCatchpoints bool
+
+	// UnfundedSenders ensures that accounts with no balance (so they don't even
+	// "exist") can still be a transaction sender by avoiding updates to rewards
+	// state for accounts with no algos. The actual change implemented to allow
+	// this is to avoid updating an account if the only change would have been
+	// the rewardsLevel, but the rewardsLevel has no meaning because the account
+	// has fewer than RewardUnit algos.
+	UnfundedSenders bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -455,7 +475,7 @@ const (
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
 
-	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	// PaysetCommitMerkle uses merkle array to commit to the payset.
 	PaysetCommitMerkle
 )
 
@@ -596,7 +616,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	return staticConsensus
 }
 
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// Merge merges a configurable consensus on top of the existing consensus protocol and return
 // a new consensus protocol without modify any of the incoming structures.
 func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
 	staticConsensus := cp.DeepCopy()
@@ -1085,7 +1105,6 @@ func initConsensusProtocols() {
 
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v31.EnableBatchVerification = true
 	v31.RewardsCalculationFix = true
 	v31.MaxProposedExpiredOnlineAccounts = 32
 
@@ -1131,27 +1150,59 @@ func initConsensusProtocols() {
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
 	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
 
+	v33 := v32
+	v33.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	// order to guarantee all nodes produce catchpoint at the same round.
+	v33.CatchpointLookback = 320
+
+	// Require MaxTxnLife + X blocks and headers preserved by a node
+	v33.DeeperBlockHeaderHistory = 1
+
+	v33.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+
+	Consensus[protocol.ConsensusV33] = v33
+
+	// v32 can be upgraded to v33, with an update delay of 7 days ( see calculation above )
+	v32.ApprovedUpgrades[protocol.ConsensusV33] = 140000
+
+	v34 := v33
+	v34.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable state proofs.
+	v34.StateProofInterval = 256
+	v34.StateProofTopVoters = 1024
+	v34.StateProofVotersLookback = 16
+	v34.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	v34.StateProofStrengthTarget = 256
+	v34.StateProofMaxRecoveryIntervals = 10
+
+	v34.LogicSigVersion = 7
+	v34.MinInnerApplVersion = 4
+
+	v34.UnifyInnerTxIDs = true
+
+	v34.EnableSHA256TxnCommitmentHeader = true
+	v34.EnableOnlineAccountCatchpoints = true
+
+	v34.UnfundedSenders = true
+
+	v34.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
+
+	Consensus[protocol.ConsensusV34] = v34
+
+	// v33 can be upgraded to v34, with an update delay of 12h:
+	// 10046 = (12 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down a bit :
+	v33.ApprovedUpgrades[protocol.ConsensusV34] = 10000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v32
+	vFuture := v34
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
-	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
-
-	// Enable compact certificates.
-	vFuture.CompactCertRounds = 256
-	vFuture.CompactCertTopVoters = 1024 * 1024
-	vFuture.CompactCertVotersLookback = 16
-	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.CompactCertSecKQ = 128
-
-	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.MinInnerApplVersion = 4
-
-	vFuture.UnifyInnerTxIDs = true
-
-	vFuture.EnableSHA256TxnCommitmentHeader = true
+	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

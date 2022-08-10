@@ -366,6 +366,19 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// LightBlockHeaderProof defines model for LightBlockHeaderProof.
+type LightBlockHeaderProof struct {
+
+	// The index of the light block header in the vector commitment tree
+	Index uint64 `json:"index"`
+
+	// The encoded proof.
+	Proof []byte `json:"proof"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
+}
+
 // ParticipationKey defines model for ParticipationKey.
 type ParticipationKey struct {
 
@@ -442,6 +455,32 @@ type PendingTransactionResponse struct {
 
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
+
+// StateProof defines model for StateProof.
+type StateProof struct {
+
+	// Represents the message that the state proofs are attesting to.
+	Message struct {
+
+		// The vector commitment root on all light block headers within a state proof interval.
+		BlockHeadersCommitment []byte `json:"BlockHeadersCommitment"`
+
+		// The first round the message attests to.
+		FirstAttestedRound uint64 `json:"FirstAttestedRound"`
+
+		// The last round the message attests to.
+		LastAttestedRound uint64 `json:"LastAttestedRound"`
+
+		// An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.
+		LnProvenWeight uint64 `json:"LnProvenWeight"`
+
+		// The vector commitment root of the top N accounts to sign the next StateProof.
+		VotersCommitment []byte `json:"VotersCommitment"`
+	} `json:"Message"`
+
+	// The encoded StateProof for the message.
+	StateProof []byte `json:"StateProof"`
+}
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
@@ -637,6 +676,9 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// LightBlockHeaderProofResponse defines model for LightBlockHeaderProofResponse.
+type LightBlockHeaderProofResponse LightBlockHeaderProof
+
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {
 
@@ -716,26 +758,8 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// ProofResponse defines model for ProofResponse.
-type ProofResponse struct {
-
-	// The type of hash function used to create the proof, must be one of:
-	// * sha512_256
-	// * sha256
-	Hashtype string `json:"hashtype"`
-
-	// Index of the transaction in the block's payset.
-	Idx uint64 `json:"idx"`
-
-	// Merkle proof of transaction membership.
-	Proof []byte `json:"proof"`
-
-	// Hash of SignedTxnInBlock for verifying proof.
-	Stibhash []byte `json:"stibhash"`
-
-	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
-	Treedepth uint64 `json:"treedepth"`
-}
+// StateProofResponse defines model for StateProofResponse.
+type StateProofResponse StateProof
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
@@ -775,6 +799,27 @@ type TransactionParametersResponse struct {
 	// The minimum transaction fee (not per byte) required for the
 	// txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
+}
+
+// TransactionProofResponse defines model for TransactionProofResponse.
+type TransactionProofResponse struct {
+
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype string `json:"hashtype"`
+
+	// Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // VersionsResponse defines model for VersionsResponse.

@@ -1,0 +1,63 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "test-fast-stateproofs",
+        "LastPartKeyRound": 3000,
+        "Wallets": [
+            { "Name": "Wallet0", "Stake": 5, "Online": true },
+            { "Name": "Wallet1", "Stake": 5, "Online": true },
+            { "Name": "Wallet2", "Stake": 5, "Online": true },
+            { "Name": "Wallet3", "Stake": 5, "Online": true },
+            { "Name": "Wallet4", "Stake": 5, "Online": true },
+            { "Name": "Wallet5", "Stake": 5, "Online": true },
+            { "Name": "Wallet6", "Stake": 5, "Online": true },
+            { "Name": "Wallet7", "Stake": 5, "Online": true },
+            { "Name": "Wallet8", "Stake": 5, "Online": true },
+            { "Name": "Wallet9", "Stake": 5, "Online": true },
+            { "Name": "Wallet10", "Stake": 5, "Online": true },
+            { "Name": "Wallet11", "Stake": 5, "Online": true },
+            { "Name": "Wallet12", "Stake": 5, "Online": true },
+            { "Name": "Wallet13", "Stake": 5, "Online": true },
+            { "Name": "Wallet14", "Stake": 5, "Online": true },
+            { "Name": "Wallet15", "Stake": 5, "Online": true },
+            { "Name": "Wallet16", "Stake": 5, "Online": true },
+            { "Name": "Wallet17", "Stake": 5, "Online": true },
+            { "Name": "Wallet18", "Stake": 5, "Online": true },
+            { "Name": "Wallet19", "Stake": 5, "Online": true }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Relay0",
+            "IsRelay": true,
+            "Wallets": []
+        },
+        {
+            "Name": "Relay1",
+            "IsRelay": true,
+            "Wallets": []
+        },
+        { "Name": "Node0", "Wallets": [
+            { "Name": "Wallet0", "ParticipationOnly": false },
+            { "Name": "Wallet1", "ParticipationOnly": false },
+            { "Name": "Wallet2", "ParticipationOnly": false },
+            { "Name": "Wallet3", "ParticipationOnly": false },
+            { "Name": "Wallet4", "ParticipationOnly": false },
+            { "Name": "Wallet5", "ParticipationOnly": false },
+            { "Name": "Wallet6", "ParticipationOnly": false },
+            { "Name": "Wallet7", "ParticipationOnly": false },
+            { "Name": "Wallet8", "ParticipationOnly": false },
+            { "Name": "Wallet9", "ParticipationOnly": false }  ] },
+        { "Name": "Node1", "Wallets": [
+            { "Name": "Wallet10", "ParticipationOnly": false },
+            { "Name": "Wallet11", "ParticipationOnly": false },
+            { "Name": "Wallet12", "ParticipationOnly": false },
+            { "Name": "Wallet13", "ParticipationOnly": false },
+            { "Name": "Wallet14", "ParticipationOnly": false },
+            { "Name": "Wallet15", "ParticipationOnly": false },
+            { "Name": "Wallet16", "ParticipationOnly": false },
+            { "Name": "Wallet17", "ParticipationOnly": false },
+            { "Name": "Wallet18", "ParticipationOnly": false },
+            { "Name": "Wallet19", "ParticipationOnly": false }] }
+    ]
+}
