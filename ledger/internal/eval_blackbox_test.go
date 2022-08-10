@@ -533,6 +533,16 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
+	// `rndBQ` gives the latest known block round added to the ledger
+	// we should wait until `rndBQ` block to be committed to blockQueue,
+	// in case there is a data race, noted in
+	// https://github.com/algorand/go-algorand/issues/4349
+	// where writing to `callTxnGroup` after `dl.fullBlock` caused data race,
+	// because the underlying async goroutine `go bq.syncer()` is reading `callTxnGroup`.
+	// A solution here would be wait until all new added blocks are committed,
+	// then we return the result and continue the execution.
+	rndBQ := ledger.Latest()
+	ledger.WaitForCommit(rndBQ)
 	return validatedBlock
 }
 
