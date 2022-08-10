@@ -1576,7 +1576,13 @@ func (ops *OpStream) assemble(text string) error {
 			if opstring == "#pragma" {
 				ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				// pragma get the rest of the tokens
-				pragmaFields := current[:cap(current)]
+				pragmaFields := make([]string, len(current)+len(next)+1)
+				if copy(pragmaFields, current) < len(pragmaFields)-1 {
+					pragmaFields[len(current)] = ";"
+					copy(pragmaFields[len(current)+1:], next)
+				} else {
+					pragmaFields = pragmaFields[0:len(current)]
+				}
 				ops.pragma(pragmaFields)
 				break
 			}
