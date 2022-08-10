@@ -291,8 +291,8 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 
 	// we try to register online with a period in which we don't have stateproof keys
 	partKeyFirstValid := uint64(1)
-	// TODO: Change consensus version when compact certs are deployed
-	partKeyLastValid := config.Consensus[protocol.ConsensusFuture].CompactCertRounds - 1
+	// TODO: Change consensus version when state proofs are deployed
+	partKeyLastValid := config.Consensus[protocol.ConsensusFuture].StateProofInterval - 1
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 1000)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")

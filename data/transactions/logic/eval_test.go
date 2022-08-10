@@ -131,6 +131,7 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 		Specials:  &transactions.SpecialAddresses{},
 		Trace:     &strings.Builder{},
 		FeeCredit: &zero,
+		SigLedger: MakeLedger(nil),
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
@@ -252,15 +253,17 @@ func TestTxnFirstValidTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
-	// since it looks at the past of the blockchain, it is "stateless", in the
-	// sense that the value can not change, so it is available in logicsigs
-
 	ep, tx, ledger := makeSampleEnv()
 
 	// By default, test ledger uses an oddball round, ask it what round it's
 	// going to use and prep fv, lv accordingly.
 	current := ledger.Round()
+
+	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
+	// since it looks at the past of the blockchain, it is "stateless"
+
+	// Kill off ep.Ledger, to confirm it's not being used
+	ep.Ledger = nil
 
 	tx.FirstValid = current - 10
 	tx.LastValid = current + 10
@@ -1061,6 +1064,10 @@ const globalV7TestProgram = globalV6TestProgram + `
 // No new globals in v7
 `
 
+const globalV8TestProgram = globalV7TestProgram + `
+// No new globals in v7
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1079,6 +1086,7 @@ func TestGlobal(t *testing.T) {
 		5: {GroupID, globalV5TestProgram},
 		6: {CallerApplicationAddress, globalV6TestProgram},
 		7: {CallerApplicationAddress, globalV7TestProgram},
+		8: {CallerApplicationAddress, globalV8TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1555,6 +1563,8 @@ assert
 int 1
 `
 
+const testTxnProgramTextV8 = testTxnProgramTextV7
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1657,6 +1667,7 @@ func TestTxn(t *testing.T) {
 		5: testTxnProgramTextV5,
 		6: testTxnProgramTextV6,
 		7: testTxnProgramTextV7,
+		8: testTxnProgramTextV8,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -2689,6 +2700,7 @@ int 1`,
 				Proto:       makeTestProto(),
 				TxnGroup:    txgroup,
 				pastScratch: make([]*scratchSpace, 2),
+				SigLedger:   MakeLedger(nil),
 			}
 
 			switch failCase.runMode {

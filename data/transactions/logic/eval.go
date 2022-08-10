@@ -195,6 +195,23 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	return minVersion
 }
 
+// LedgerForSignature represents the parts of Ledger that LogicSigs can see. It
+// only exposes things that consensus has already agreed upon, so it is
+// "stateless" for signature purposes.
+type LedgerForSignature interface {
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+// NoHeaderLedger is intended for debugging situations in which it is reasonable
+// to preclude the use of `block` and `txn LastValidTime`
+type NoHeaderLedger struct {
+}
+
+// BlockHdrCached always errors
+func (NoHeaderLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
+}
+
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
@@ -239,7 +256,8 @@ type EvalParams struct {
 
 	logger logging.Logger
 
-	Ledger LedgerForLogic
+	SigLedger LedgerForSignature
+	Ledger    LedgerForLogic
 
 	// optional debugger
 	Debugger DebuggerHook
@@ -346,7 +364,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for _, stxn := range txgroup {
-		if stxn.Txn.Type != protocol.CompactCertTx {
+		if stxn.Txn.Type != protocol.StateProofTx {
 			minFeeCount++
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
@@ -387,6 +405,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
+		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		created:                 caller.created,
 		appAddrCache:            caller.appAddrCache,
@@ -610,6 +629,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
 	}
+	if params.SigLedger == nil {
+		params.SigLedger = params.Ledger
+	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
@@ -652,6 +674,9 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 // EvalSignature evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	if params.SigLedger == nil {
+		return false, errors.New("no sig ledger in signature eval")
+	}
 	cx := EvalContext{
 		EvalParams:   params,
 		runModeFlags: modeSig,
@@ -2304,7 +2329,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.Ledger.BlockHdrCached(rnd)
+		hdr, err := cx.SigLedger.BlockHdrCached(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -4848,10 +4873,13 @@ func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 	if firstAvail > cx.txn.Txn.LastValid || firstAvail == 0 { // early in chain's life
 		firstAvail = 1
 	}
-	current := cx.Ledger.Round()
+	lastAvail := cx.txn.Txn.FirstValid - 1
+	if lastAvail > cx.txn.Txn.FirstValid { // txn had a 0 in FirstValid
+		lastAvail = 0 // So nothing will be available
+	}
 	round := basics.Round(r)
-	if round < firstAvail || round >= current {
-		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, current-1)
+	if firstAvail > round || round > lastAvail {
+		return 0, fmt.Errorf("round %d is not available. It's outside [%d-%d]", r, firstAvail, lastAvail)
 	}
 	return round, nil
 }
@@ -4868,7 +4896,7 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.Ledger.BlockHdrCached(round)
+	hdr, err := cx.SigLedger.BlockHdrCached(round)
 	if err != nil {
 		return err
 	}
