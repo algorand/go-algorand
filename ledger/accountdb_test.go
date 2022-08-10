@@ -311,7 +311,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
-		updatedAccts, updatesResources, updatedBoxes, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		numResUpdates := 0
@@ -319,7 +319,7 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
-		require.Empty(t, updatedBoxes)
+		require.Empty(t, updatedKVs)
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -449,7 +449,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			updatedAccts, updatesResources, updatedBoxes, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
+			updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
 			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
 			require.Equal(t,
@@ -463,7 +463,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 				updatesResources[addr][0],
 			)
 
-			require.Empty(t, updatedBoxes)
+			require.Empty(t, updatedKVs)
 		})
 	}
 }
@@ -2888,13 +2888,13 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
-				updatedAccounts, updatedResources, updatedBoxes, err := accountsNewRoundImpl(
+				updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
 					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
 				a.Len(updatedAccounts, 3)
 				a.Len(updatedResources, 3)
-				a.Empty(updatedBoxes)
+				a.Empty(updatedKVs)
 			})
 		}
 	}
@@ -2971,13 +2971,13 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
-	updatedAccounts, updatedResources, updatedBoxes, err := accountsNewRoundImpl(
+	updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
 		&mock, acctDeltas, resDeltas, nil, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))
 	a.Equal(2, len(updatedResources))
-	a.Equal(0, len(updatedBoxes))
+	a.Equal(0, len(updatedKVs))
 
 	// one deletion entry for pre-existing account addr1, and one entry for in-memory account addr2
 	// in base accounts updates and in resources updates
