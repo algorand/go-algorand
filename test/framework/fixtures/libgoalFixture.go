@@ -17,6 +17,7 @@
 package fixtures
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -311,9 +312,13 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
-		f.dumpLogs(f.PrimaryDataDir())
+		f.dumpLogs(f.PrimaryDataDir() + "/node.log")
+		f.dumpLogs(f.PrimaryDataDir() + "/algod-err.log")
+		f.dumpLogs(f.PrimaryDataDir() + "/algod-out.log")
 		for _, nodeDir := range f.NodeDataDirs() {
-			f.dumpLogs(nodeDir)
+			f.dumpLogs(nodeDir + "/node.log")
+			f.dumpLogs(nodeDir + "/algod-err.log")
+			f.dumpLogs(nodeDir + "/algod-out.log")
 		}
 	} else {
 		f.network.Delete(f.binDir)
@@ -329,19 +334,24 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 }
 
 // dumpLogs prints out node.log files for the running nodes
-func (f *LibGoalFixture) dumpLogs(dataDir string) {
-	file, err := os.Open(dataDir + "/node.log")
+func (f *LibGoalFixture) dumpLogs(filePath string) {
+	file, err := os.Open(filePath)
 	if err != nil {
-		f.t.Logf("could not open %s node.log", dataDir)
+		f.t.Logf("could not open %s node.log", filePath)
 		return
 	}
-	b, err := ioutil.ReadAll(file)
-	if err != nil {
-		f.t.Logf("could not read %s node.log", dataDir)
-		return
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
 	}
-	fmt.Println("node.log for ", dataDir)
-	fmt.Print(string(b))
+	if len(lines) > 100 {
+		lines = lines[len(lines)-100:]
+	}
+	f.t.Logf("contents of ", filePath)
+	for _, line := range lines {
+		f.t.Logf(line)
+	}
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive
