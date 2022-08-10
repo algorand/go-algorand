@@ -17,6 +17,8 @@
 package simulation
 
 import (
+	"errors"
+
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -46,7 +48,8 @@ func (l simulatorLedger) Latest() basics.Round {
 // should never be called, as the REST API is the only code using this function,
 // and the REST API should never have access to a simulatorLedger.
 func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
-	panic("unexpected call to LookupLatest")
+	err := errors.New("unexpected call to LookupLatest")
+	return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 }
 
 // ==============================
