@@ -19,9 +19,10 @@ package catchup
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 	"time"
+
+	"github.com/algorand/go-algorand/stateproof"
 
 	"github.com/algorand/go-deadlock"
 
@@ -497,6 +498,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	if lookback < lookbackForStateProofSupport {
 		lookback = lookbackForStateProofSupport
 	}
+
 	// in case the effective lookback is going before our rounds count, trim it there.
 	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
 	if lookback >= uint64(topBlock.Round()) {
@@ -586,9 +588,12 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
 		}
 
-		cs.updateBlockRetrievalStatistics(0, 1)
-		peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		if psp != nil {
+			// the block might have been retrieved from the local ledger, nothing to rank
+			cs.updateBlockRetrievalStatistics(0, 1)
+			peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		}
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
