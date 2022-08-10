@@ -1112,7 +1112,7 @@ func TestFieldsFromLine(t *testing.T) {
 
 	check := func(line string, tokens ...string) {
 		t.Helper()
-		assert.Equal(t, fieldsFromLine(line), tokens)
+		assert.Equal(t, tokensFromLine(line), tokens)
 	}
 
 	check("op arg", "op", "arg")
@@ -2554,12 +2554,15 @@ func TestReplacePseudo(t *testing.T) {
 	}
 }
 
-func checkSame(t *testing.T, first string, compares ...string) {
+func checkSame(t *testing.T, version uint64, first string, compares ...string) {
 	t.Helper()
-	ops, err := AssembleStringWithVersion(first, 7)
+	if version == 0 {
+		version = assemblerNoVersion
+	}
+	ops, err := AssembleStringWithVersion(first, version)
 	require.NoError(t, err, first)
 	for _, compare := range compares {
-		other, err := AssembleStringWithVersion(compare, 7)
+		other, err := AssembleStringWithVersion(compare, version)
 		assert.NoError(t, err, compare)
 		assert.Equal(t, other.Program, ops.Program, "%s unlike %s", first, compare)
 	}
@@ -2569,20 +2572,20 @@ func TestSemiColon(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	checkSame(t,
+	checkSame(t, AssemblerMaxVersion,
 		"pushint 0 ; pushint 1 ; +; int 3 ; *",
 		"pushint 0\npushint 1\n+\nint 3\n*",
 		"pushint 0; pushint 1; +; int 3; *; // comment; int 2",
 		"pushint 0; ; ; pushint 1 ; +; int 3 ; *//check",
 	)
 
-	checkSame(t,
+	checkSame(t, 0,
 		"#pragma version 7\nint 1",
 		"// junk;\n#pragma version 7\nint 1",
 		"// junk;\n #pragma version 7\nint 1",
 	)
 
-	checkSame(t,
+	checkSame(t, AssemblerMaxVersion,
 		`byte "test;this"; pop;`,
 		`byte "test;this"; ; pop;`,
 		`byte "test;this";;;pop;`,
