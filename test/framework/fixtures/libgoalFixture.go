@@ -311,6 +311,10 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
+		f.dumpLogs(f.PrimaryDataDir())
+		for _, nodeDir := range f.NodeDataDirs() {
+			f.dumpLogs(nodeDir)
+		}
 	} else {
 		f.network.Delete(f.binDir)
 
@@ -322,6 +326,22 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 			os.Remove(f.testDir)
 		}
 	}
+}
+
+// dumpLogs prints out node.log files for the running nodes
+func (f *LibGoalFixture) dumpLogs(dataDir string) {
+	file, err := os.Open(dataDir + "/node.log")
+	if err != nil {
+		f.t.Logf("could not open %s node.log", dataDir)
+		return
+	}
+	b, err := ioutil.ReadAll(file)
+	if err != nil {
+		f.t.Logf("could not read %s node.log", dataDir)
+		return
+	}
+	fmt.Println("node.log for ", dataDir)
+	fmt.Print(string(b))
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive
