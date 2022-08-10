@@ -1110,241 +1110,48 @@ func TestFieldsFromLine(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	line := "op arg"
-	fields := fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "arg", fields[1])
+	check := func(line string, tokens ...string) {
+		t.Helper()
+		assert.Equal(t, fieldsFromLine(line), tokens)
+	}
 
-	line = "op arg // test"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "arg", fields[1])
-
-	line = "op base64 ABC//=="
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
-
-	line = "op base64 base64"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "base64", fields[2])
-
-	line = "op base64 base64 //comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "base64", fields[2])
-
-	line = "op base64 base64; op2 //done"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 5, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "base64", fields[2])
-	require.Equal(t, ";", fields[3])
-	require.Equal(t, "op2", fields[4])
-
-	line = "op base64 ABC/=="
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
-
-	line = "op base64 ABC/== /"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 4, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
-	require.Equal(t, "/", fields[3])
-
-	line = "op base64 ABC/== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
-
-	line = "op base64 ABC//== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
-
-	line = "op b64 ABC//== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
-
-	line = "op b64(ABC//==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64(ABC//==)", fields[1])
-
-	line = "op base64(ABC//==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64(ABC//==)", fields[1])
-
-	line = "op b64(ABC/==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64(ABC/==)", fields[1])
-
-	line = "op base64(ABC/==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64(ABC/==)", fields[1])
-
-	line = "base64(ABC//==)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "base64(ABC//==)", fields[0])
-
-	line = "b(ABC//==)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-
-	line = "b(ABC//==) //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-
-	line = "b(ABC ==) //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-	require.Equal(t, "==)", fields[1])
-
-	line = "op base64 ABC)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC)", fields[2])
-
-	line = "op base64 ABC) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC)", fields[2])
-
-	line = "op base64 ABC//) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//)", fields[2])
-
-	line = `op "test"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test"`, fields[1])
-
-	line = `op "test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2 // not a comment"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2 // not a comment" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2 // not a comment" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2" //`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2"//`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2` // non-terminated string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2`, fields[1])
-
-	line = `op "test1 test2\"` // non-terminated string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2\"`, fields[1])
-
-	line = `op \"test1 test2\"` // not a string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `\"test1`, fields[1])
-	require.Equal(t, `test2\"`, fields[2])
-
-	line = `"test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, `"test1 test2"`, fields[0])
-
-	line = `\"test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, `\"test1`, fields[0])
-	require.Equal(t, `test2"`, fields[1])
-
-	line = `"" // test`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, `""`, fields[0])
-
-	line = "int 1; int 2"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 5, len(fields))
-	require.Equal(t, "int", fields[0])
-	require.Equal(t, "1", fields[1])
-	require.Equal(t, ";", fields[2])
-	require.Equal(t, "int", fields[3])
-	require.Equal(t, "2", fields[4])
+	check("op arg", "op", "arg")
+	check("op arg // test", "op", "arg")
+	check("op base64 ABC//==", "op", "base64", "ABC//==")
+	check("op base64 base64", "op", "base64", "base64")
+	check("op base64 base64 //comment", "op", "base64", "base64")
+	check("op base64 base64; op2 //done", "op", "base64", "base64", ";", "op2")
+	check("op base64 ABC/==", "op", "base64", "ABC/==")
+	check("op base64 ABC/== /", "op", "base64", "ABC/==", "/")
+	check("op base64 ABC/== //", "op", "base64", "ABC/==")
+	check("op base64 ABC//== //", "op", "base64", "ABC//==")
+	check("op b64 ABC//== //", "op", "b64", "ABC//==")
+	check("op b64(ABC//==) // comment", "op", "b64(ABC//==)")
+	check("op base64(ABC//==) // comment", "op", "base64(ABC//==)")
+	check("op b64(ABC/==) // comment", "op", "b64(ABC/==)")
+	check("op base64(ABC/==) // comment", "op", "base64(ABC/==)")
+	check("base64(ABC//==)", "base64(ABC//==)")
+	check("b(ABC//==)", "b(ABC")
+	check("b(ABC//==) //", "b(ABC")
+	check("b(ABC ==) //", "b(ABC", "==)")
+	check("op base64 ABC)", "op", "base64", "ABC)")
+	check("op base64 ABC) // comment", "op", "base64", "ABC)")
+	check("op base64 ABC//) // comment", "op", "base64", "ABC//)")
+	check(`op "test"`, "op", `"test"`)
+	check(`op "test1 test2"`, "op", `"test1 test2"`)
+	check(`op "test1 test2" // comment`, "op", `"test1 test2"`)
+	check(`op "test1 test2 // not a comment"`, "op", `"test1 test2 // not a comment"`)
+	check(`op "test1 test2 // not a comment" // comment`, "op", `"test1 test2 // not a comment"`)
+	check(`op "test1 test2" //`, "op", `"test1 test2"`)
+	check(`op "test1 test2"//`, "op", `"test1 test2"`)
+	check(`op "test1 test2`, "op", `"test1 test2`)          // non-terminated string literal
+	check(`op "test1 test2\"`, "op", `"test1 test2\"`)      // non-terminated string literal
+	check(`op \"test1 test2\"`, "op", `\"test1`, `test2\"`) // not a string literal
+	check(`"test1 test2"`, `"test1 test2"`)
+	check(`\"test1 test2"`, `\"test1`, `test2"`)
+	check(`"" // test`, `""`)
+	check("int 1; int 2", "int", "1", ";", "int", "2")
+	check("int 1;;;int 2", "int", "1", ";", ";", ";", "int", "2")
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
