@@ -140,7 +140,7 @@ func uint64ToBytes(num uint64) []byte {
 // We want to be careful that the Algod ledger does not move on to another round
 // so we confirm here that all ledger methods which implicitly access the current round
 // are overriden within the `simulatorLedger`.
-func TestNonOverridenDataLedgerMethodsUseRoundParamter(t *testing.T) {
+func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	l, _, _ := prepareSimulatorTest(t)
 
 	// methods overriden by `simulatorLedger``
