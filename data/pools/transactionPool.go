@@ -241,6 +241,13 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
 	pool.recomputeBlockEvaluator(nil, 0, false)
+
+	// cancel speculative assembly and clear its result
+	if pool.cancelSpeculativeAssembly != nil {
+		pool.cancelSpeculativeAssembly()
+		<-pool.specAsmDone
+	}
+	pool.specBlockCh = nil
 }
 
 // NumExpired returns the number of transactions that expired at the
