@@ -313,12 +313,8 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	if preserveData {
 		f.network.Stop(f.binDir)
 		f.dumpLogs(f.PrimaryDataDir() + "/node.log")
-		f.dumpLogs(f.PrimaryDataDir() + "/algod-err.log")
-		f.dumpLogs(f.PrimaryDataDir() + "/algod-out.log")
 		for _, nodeDir := range f.NodeDataDirs() {
 			f.dumpLogs(nodeDir + "/node.log")
-			f.dumpLogs(nodeDir + "/algod-err.log")
-			f.dumpLogs(nodeDir + "/algod-out.log")
 		}
 	} else {
 		f.network.Delete(f.binDir)
@@ -333,11 +329,11 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	}
 }
 
-// dumpLogs prints out node.log files for the running nodes
+// dumpLogs prints out log files for the running nodes
 func (f *LibGoalFixture) dumpLogs(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		f.t.Logf("could not open %s node.log", filePath)
+		f.t.Logf("could not open %s", filePath)
 		return
 	}
 	var lines []string
