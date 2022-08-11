@@ -193,7 +193,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	const restrictedBlock = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
 	// calculate the target round: this is the next round after catchpoint that is greater than expectedBlocksToDownload before the restrictedBlock block number
 	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+restrictedBlock)/catchpointInterval + 1) * catchpointInterval
-	targetRound := uint64(targetCatchpointRound) + 1
+	targetRound := uint64(targetCatchpointRound) + 1 // 21
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
@@ -206,30 +206,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		currentRound++
 	}
 	log.Infof("done building!\n")
-
-	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(10 * time.Second)
-outer:
-	for {
-		status, err := primaryNodeRestClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if round >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
 
 	primaryListeningAddress, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
@@ -276,8 +252,30 @@ outer:
 	}
 	log.Infof(" - done catching up!\n")
 
-	status, err := awaitCatchpointCreation(primaryNodeRestClient, &fixture, 3)
-	a.NoError(err)
+	// ensure the catchpoint is created for targetCatchpointRound
+	var status generatedV2.NodeStatusResponse
+	timer := time.NewTimer(10 * time.Second)
+outer:
+	for {
+		status, err = primaryNodeRestClient.Status()
+		a.NoError(err)
+
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			a.NoError(err)
+			if round >= targetCatchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			break outer
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
 
 	log.Infof("primary node latest catchpoint - %s!\n", *status.LastCatchpoint)
 	_, err = secondNodeRestClient.Catchup(*status.LastCatchpoint)
