@@ -67,11 +67,11 @@ func (netFetcher *networkFetcherImpl) FetchBlock(ctx context.Context, round basi
 	peer := psp.Peer
 	httpPeer, ok := peer.(network.HTTPPeer)
 	if !ok {
-		netFetcher.log.Warnf("NetworkFetcher: non-HTTP peer was provided by the peer selector")
+		netFetcher.log.Warnf("FetchBlock: non-HTTP peer was provided by the peer selector")
 	}
 	blk, cert, _, err = fetch.fetchBlock(ctx, round, httpPeer)
 	if err != nil {
-		netFetcher.log.Debugf("NetworkFetcher(%v): Could not fetch: %v", round, err)
+		netFetcher.log.Debugf("FetchBlock(%v): Could not fetch: %v", round, err)
 		netFetcher.peerSelector.rankPeer(psp, peerRankDownloadFailed)
 		return
 	}
@@ -82,9 +82,9 @@ func (netFetcher *networkFetcherImpl) FetchBlock(ctx context.Context, round basi
 		netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 		// Check if this mismatch is due to an unsupported protocol version
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
-			netFetcher.log.Errorf("NetworkFetcher(%v): unsupported protocol version detected: '%v'", round, blk.BlockHeader.CurrentProtocol)
+			netFetcher.log.Errorf("FetchBlock(%v): unsupported protocol version detected: '%v'", round, blk.BlockHeader.CurrentProtocol)
 		}
-		netFetcher.log.Warnf("NetworkFetcher(%v): block contents do not match header", round)
+		netFetcher.log.Warnf("FetchBlock(%v): block contents do not match header", round)
 		err = errors.New("invalid block download")
 	}
 	return
