@@ -100,13 +100,21 @@ func TestWebDebuggerManual(t *testing.T) {
 }
 
 type testDbgHook struct {
+	beforeTxnCalls      int
 	beforeAppEvalCalls  int
 	beforeTealOpCalls   int
 	beforeInnerTxnCalls int
 	afterInnerTxnCalls  int
 	afterTealOpCalls    int
 	afterAppEvalCalls   int
+	afterTxnCalls       int
 	state               *DebugState
+}
+
+func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
+	d.beforeTxnCalls++
+	d.state = ep.caller.debugState
+	return nil
 }
 
 func (d *testDbgHook) BeforeAppEval(state *DebugState) error {
@@ -145,6 +153,12 @@ func (d *testDbgHook) AfterAppEval(state *DebugState) error {
 	return nil
 }
 
+func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int) error {
+	d.afterTxnCalls++
+	d.state = ep.caller.debugState
+	return nil
+}
+
 func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -153,6 +167,11 @@ func TestDebuggerHook(t *testing.T) {
 	ep := defaultEvalParams(nil)
 	ep.Debugger = &testDbg
 	testLogic(t, testProgram, AssemblerMaxVersion, ep)
+
+	// these should not be called because beforeTxn and afterTxn hooks
+	// are called within ledger evaluation, not logic.
+	require.Equal(t, 0, testDbg.beforeTxnCalls)
+	require.Equal(t, 0, testDbg.afterTxnCalls)
 
 	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
 	require.Equal(t, 1, testDbg.afterAppEvalCalls)

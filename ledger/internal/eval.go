@@ -978,7 +978,17 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err := logic.CallBeforeTxnHookIfItExists(debugger, evalParams, gi)
+		if err != nil {
+			return err
+		}
+
+		err = eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		if err != nil {
+			return err
+		}
+
+		err = logic.CallAfterTxnHookIfItExists(debugger, evalParams, gi)
 		if err != nil {
 			return err
 		}

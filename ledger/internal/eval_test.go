@@ -294,6 +294,11 @@ type testDbgHook struct {
 	log []string
 }
 
+func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.log = append(d.log, "beforeTxn")
+	return nil
+}
+
 func (d *testDbgHook) BeforeAppEval(state *logic.DebugState) error {
 	d.log = append(d.log, "beforeAppEval")
 	return nil
@@ -321,6 +326,11 @@ func (d *testDbgHook) AfterTealOp(state *logic.DebugState) error {
 
 func (d *testDbgHook) AfterAppEval(state *logic.DebugState) error {
 	d.log = append(d.log, "afterAppEval")
+	return nil
+}
+
+func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.log = append(d.log, "afterTxn")
 	return nil
 }
 
@@ -423,7 +433,8 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedLog := flatten([][]string{
-		{"beforeAppEval"},
+		{"beforeTxn",
+			"beforeAppEval"},
 		tealOpLogs(9),
 		{"beforeTealOp",
 			"beforeInnerTxn",
@@ -433,7 +444,8 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 			"afterInnerTxn",
 			"afterTealOp"},
 		tealOpLogs(1),
-		{"afterAppEval"},
+		{"afterAppEval",
+			"afterTxn"},
 	})
 	require.Equal(t, expectedLog, testDbg.log)
 }

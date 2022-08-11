@@ -94,7 +94,7 @@ type debuggerBeforeTxnHook interface {
 	BeforeTxn(ep *EvalParams, groupIndex int) error
 }
 
-func callBeforeTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
+func CallBeforeTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
 	if dhWithBeforeTxnHook, ok := dh.(debuggerBeforeTxnHook); ok {
 		return dhWithBeforeTxnHook.BeforeTxn(ep, groupIndex)
 	}
@@ -107,7 +107,7 @@ type debuggerAfterTxnHook interface {
 	AfterTxn(ep *EvalParams, groupIndex int) error
 }
 
-func callAfterTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
+func CallAfterTxnHookIfItExists(dh DebuggerHook, ep *EvalParams, groupIndex int) error {
 	if dhWithAfterTxnHook, ok := dh.(debuggerAfterTxnHook); ok {
 		return dhWithAfterTxnHook.AfterTxn(ep, groupIndex)
 	}
