@@ -1153,6 +1153,10 @@ func TestFieldsFromLine(t *testing.T) {
 	check("int 1; int 2", "int", "1", ";", "int", "2")
 	check("int 1;;;int 2", "int", "1", ";", ";", ";", "int", "2")
 	check("int 1; ;int 2;; ; ;; ", "int", "1", ";", ";", "int", "2", ";", ";", ";", ";", ";")
+	check(";", ";")
+	check("; ; ;;;;", ";", ";", ";", ";", ";", ";")
+	check(" ;", ";")
+	check(" ; ", ";")
 }
 
 func TestSplitTokens(t *testing.T) {
