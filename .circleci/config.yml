@@ -50,7 +50,7 @@ executors:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1
+    resource_class: algorand/macstadium-m1-macos11
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
@@ -70,7 +70,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["mac_amd64"] # TESTONLY["amd64", "arm64", "mac_amd64"]
+              platform: ["mac_arm64"] # TESTONLY["amd64", "arm64", "mac_amd64"]
           filters: &filters-default
             branches:
               ignore:
@@ -155,7 +155,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["mac_amd64"] # TESTONLY ["amd64", "arm64", "mac_amd64"]
+              platform: ["mac_arm64"] # TESTONLY ["amd64", "arm64", "mac_amd64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
