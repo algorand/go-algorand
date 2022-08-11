@@ -341,10 +341,10 @@ func (f *LibGoalFixture) dumpLogs(filePath string) {
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-	if len(lines) > 100 {
-		lines = lines[len(lines)-100:]
-	}
-	f.t.Logln("=================================")
+	//if len(lines) > 100 {
+	//	lines = lines[len(lines)-100:]
+	//}
+	f.t.Log("=================================")
 	parts := strings.Split(filePath, "/")
 	f.t.Logf("%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
 	for _, line := range lines {
