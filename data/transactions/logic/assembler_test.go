@@ -479,6 +479,9 @@ var experiments = []uint64{pairingVersion}
 // intended to release the opcodes, they should have been removed from
 // `experiments`.
 func TestExperimental(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
 	for _, v := range experiments {
 		// Allows less, so we can push something out, even before vFuture has been updated.

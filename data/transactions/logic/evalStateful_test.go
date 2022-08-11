@@ -2536,6 +2536,9 @@ func TestLatestTimestamp(t *testing.T) {
 }
 
 func TestBlockSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	ep, txn, l := makeSampleEnv()
 
 	// makeSampleEnv creates txns with fv, lv that don't actually fit the round
