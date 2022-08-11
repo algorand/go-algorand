@@ -314,7 +314,7 @@ func TestBalance(t *testing.T) {
 
 	text = `txn Accounts 1; balance; int 177; ==;`
 	// won't assemble in old version teal
-	testProg(t, text, directRefEnabledVersion-1, Expect{2, "balance arg 0 wanted type uint64..."})
+	testProg(t, text, directRefEnabledVersion-1, Expect{1, "balance arg 0 wanted type uint64..."})
 	// but legal after that
 	testApp(t, text, ep)
 
@@ -475,7 +475,7 @@ func TestMinBalance(t *testing.T) {
 
 	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion-1,
-		Expect{2, "min_balance arg 0 wanted type uint64..."})
+		Expect{1, "min_balance arg 0 wanted type uint64..."})
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion)
 	testApp(t, "txn Accounts 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	// Receiver opts in
@@ -528,7 +528,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
 	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
 	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
-		Expect{3, "app_opted_in arg 0 wanted type uint64..."})
+		Expect{1, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Receiver opts into 888, the current app in testApp
 	ledger.NewLocals(txn.Txn.Receiver, 888)
@@ -939,7 +939,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, Expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
+		directRefEnabledVersion-1, Expect{1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
