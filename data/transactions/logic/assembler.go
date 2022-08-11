@@ -1399,14 +1399,14 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-// semi-colon is quite space-like, so include it
-var spaces = [256]bool{'\t': true, ' ': true, ';': true}
+// newline not included since handled in scanner
+var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
 func tokensFromLine(line string) []string {
 	var tokens []string
 
 	i := 0
-	for i < len(line) && spaces[line[i]] {
+	for i < len(line) && tokenSeparators[line[i]] {
 		if line[i] == ';' {
 			tokens = append(tokens, ";")
 		}
@@ -1417,11 +1417,11 @@ func tokensFromLine(line string) []string {
 	inString := false // tracked to allow spaces and comments inside
 	inBase64 := false // tracked to allow '//' inside
 	for i < len(line) {
-		if !spaces[line[i]] { // if not space
+		if !tokenSeparators[line[i]] { // if not space
 			switch line[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && spaces[line[i-1]] {
+					if i == 0 || i > 0 && tokenSeparators[line[i-1]] {
 						inString = true
 					}
 				} else {
@@ -1469,7 +1469,7 @@ func tokensFromLine(line string) []string {
 
 		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && spaces[line[i]] {
+			for i < len(line) && tokenSeparators[line[i]] {
 				if line[i] == ';' {
 					tokens = append(tokens, ";")
 				}
