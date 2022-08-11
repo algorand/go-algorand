@@ -37,10 +37,15 @@ import (
 // if provided. The interface is empty because none of the hooks are required by default.
 //
 // See `debuggerBeforeTxnHook`, `debuggerBeforeAppEvalHook`, etc. for supported
-// interface methods.
+// interface methods and refer to the lifecycle graph within the DebuggerHook interface definition for
+// the sequence in which hooks are called.
 //
-// Refer to the lifecycle graph within the DebuggerHook interface definition for
-// the sequence of hooks called.
+// NOTE: Debugger hooks are passed by reference to DebugState and EvalParams and are not copies.
+// It is therefore the responsibility of the debugger hooks to not modify the state of the structs
+// passed to them. Additionally, hooks are responsible for copying the information
+// they need from the state and params structs. No guarantees are made that the referenced state
+// will not change between hook calls. This decision was made in an effort to reduce the performance
+// impact of the debugger hooks.
 type DebuggerHook interface {
 
 	// LIFECYCLE GRAPH

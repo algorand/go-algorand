@@ -63,8 +63,23 @@ bytec 4
 &&
 `
 
+// byte 0x068101 is `#pragma version 6; int 1;`
+var innerTxnTestProgram string = `itxn_begin
+int appl
+itxn_field TypeEnum
+int NoOp
+itxn_field OnCompletion
+byte 0x068101
+dup
+itxn_field ApprovalProgram
+itxn_field ClearStateProgram
+itxn_submit
+int 1
+`
+
 func TestWebDebuggerManual(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if len(debugURL) == 0 {
@@ -85,46 +100,104 @@ func TestWebDebuggerManual(t *testing.T) {
 }
 
 type testDbgHook struct {
-	register int
-	update   int
-	complete int
-	state    *DebugState
+	beforeAppEvalCalls  int
+	beforeTealOpCalls   int
+	beforeInnerTxnCalls int
+	afterInnerTxnCalls  int
+	afterTealOpCalls    int
+	afterAppEvalCalls   int
+	state               *DebugState
 }
 
 func (d *testDbgHook) BeforeAppEval(state *DebugState) error {
-	d.register++
+	d.beforeAppEvalCalls++
 	d.state = state
 	return nil
 }
 
 func (d *testDbgHook) BeforeTealOp(state *DebugState) error {
-	d.update++
+	d.beforeTealOpCalls++
+	d.state = state
+	return nil
+}
+
+func (d *testDbgHook) BeforeInnerTxn(ep *EvalParams) error {
+	d.beforeInnerTxnCalls++
+	d.state = ep.caller.debugState
+	return nil
+}
+
+func (d *testDbgHook) AfterInnerTxn(ep *EvalParams) error {
+	d.afterInnerTxnCalls++
+	d.state = ep.caller.debugState
+	return nil
+}
+
+func (d *testDbgHook) AfterTealOp(state *DebugState) error {
+	d.afterTealOpCalls++
 	d.state = state
 	return nil
 }
 
 func (d *testDbgHook) AfterAppEval(state *DebugState) error {
-	d.complete++
+	d.afterAppEvalCalls++
 	d.state = state
 	return nil
 }
 
 func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testDbg := testDbgHook{}
 	ep := defaultEvalParams(nil)
 	ep.Debugger = &testDbg
 	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 
-	require.Equal(t, 1, testDbg.register)
-	require.Equal(t, 1, testDbg.complete)
-	require.Greater(t, testDbg.update, 1)
+	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
+	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+
+	require.Greater(t, testDbg.beforeTealOpCalls, 1)
+	require.Greater(t, testDbg.afterTealOpCalls, 1)
+	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+
+	require.Zero(t, testDbg.beforeInnerTxnCalls)
+	require.Zero(t, testDbg.afterInnerTxnCalls)
+
+	require.Len(t, testDbg.state.Stack, 1)
+}
+
+func TestDebuggerHookInnerTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testDbg := testDbgHook{}
+	ep, tx, ledger := MakeSampleEnv()
+
+	// Establish 888 as the app id, and fund it.
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+
+	ep.Debugger = &testDbg
+	testApp(t, innerTxnTestProgram, ep)
+
+	require.Equal(t, testDbg.beforeAppEvalCalls, 2)
+	require.Equal(t, testDbg.afterAppEvalCalls, 2)
+
+	appCallTealOps := 11
+	innerAppCallTealOps := 1
+	require.Equal(t, testDbg.beforeTealOpCalls, appCallTealOps+innerAppCallTealOps)
+	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+
+	require.Equal(t, 1, testDbg.beforeInnerTxnCalls)
+	require.Equal(t, 1, testDbg.afterInnerTxnCalls)
+
 	require.Len(t, testDbg.state.Stack, 1)
 }
 
 func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	dState := DebugState{
 		Disassembly: "abc\ndef\nghi",
@@ -162,6 +235,7 @@ func TestLineToPC(t *testing.T) {
 
 func TestValueDeltaToValueDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	vDelta := basics.ValueDelta{
 		Action: basics.SetUintAction,
@@ -186,6 +260,7 @@ intc_0
 
 func TestParseCallstack(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	expectedCallFrames := []CallFrame{
 		{
@@ -210,6 +285,7 @@ func TestParseCallstack(t *testing.T) {
 
 func TestCallStackUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	expectedCallFrames := []CallFrame{
 		{
@@ -227,9 +303,9 @@ func TestCallStackUpdate(t *testing.T) {
 	ep.Debugger = &testDbg
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 
-	require.Equal(t, 1, testDbg.register)
-	require.Equal(t, 1, testDbg.complete)
-	require.Greater(t, testDbg.update, 1)
+	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
+	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+	require.Greater(t, testDbg.beforeTealOpCalls, 1)
 	require.Len(t, testDbg.state.Stack, 1)
 	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
 }

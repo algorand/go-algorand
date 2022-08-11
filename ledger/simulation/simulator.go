@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -47,6 +48,16 @@ func (l simulatorLedger) Latest() basics.Round {
 // and the REST API should never have access to a simulatorLedger.
 func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	panic("unexpected call to LookupLatest")
+}
+
+// ==============================
+// > Simulator Debugger
+// ==============================
+
+type debuggerHook struct{}
+
+func makeDebuggerHook() logic.DebuggerHook {
+	return debuggerHook{}
 }
 
 // ==============================
@@ -131,7 +142,8 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	err = eval.TransactionGroup(group)
+	simulatorDebugger := makeDebuggerHook()
+	err = eval.TransactionGroupWithDebugger(group, simulatorDebugger)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}

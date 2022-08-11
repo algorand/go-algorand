@@ -290,6 +290,154 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	require.Error(t, err) // too many
 }
 
+type testDbgHook struct {
+	log []string
+}
+
+func (d *testDbgHook) BeforeAppEval(state *logic.DebugState) error {
+	d.log = append(d.log, "beforeAppEval")
+	return nil
+}
+
+func (d *testDbgHook) BeforeTealOp(state *logic.DebugState) error {
+	d.log = append(d.log, "beforeTealOp")
+	return nil
+}
+
+func (d *testDbgHook) BeforeInnerTxn(ep *logic.EvalParams) error {
+	d.log = append(d.log, "beforeInnerTxn")
+	return nil
+}
+
+func (d *testDbgHook) AfterInnerTxn(ep *logic.EvalParams) error {
+	d.log = append(d.log, "afterInnerTxn")
+	return nil
+}
+
+func (d *testDbgHook) AfterTealOp(state *logic.DebugState) error {
+	d.log = append(d.log, "afterTealOp")
+	return nil
+}
+
+func (d *testDbgHook) AfterAppEval(state *logic.DebugState) error {
+	d.log = append(d.log, "afterAppEval")
+	return nil
+}
+
+func tealOpLogs(count int) []string {
+	var log []string
+
+	for i := 0; i < count; i++ {
+		log = append(log, "beforeTealOp", "afterTealOp")
+	}
+
+	return log
+}
+
+func flatten(rows [][]string) []string {
+	var out []string
+	for _, row := range rows {
+		out = append(out, row...)
+	}
+	return out
+}
+
+// byte 0x068101 is `#pragma version 6; int 1;`
+var innerTxnTestProgram string = `itxn_begin
+int appl
+itxn_field TypeEnum
+int NoOp
+itxn_field OnCompletion
+byte 0x068101
+dup
+itxn_field ApprovalProgram
+itxn_field ClearStateProgram
+itxn_submit
+int 1
+`
+
+func TestTransactionGroupWithDebugger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+
+	innerAppID := 1
+	innerAppAddress := basics.AppIndex(innerAppID).Address()
+	balances := genesisInitState.Accounts
+	balances[innerAppAddress] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
+
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = true
+
+	ops, err := logic.AssembleStringWithVersion(innerTxnTestProgram, uint64(6))
+	require.NoError(t, err, ops.Errors)
+	prog := ops.Program
+
+	genHash := l.GenesisHash()
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+
+	// Call an inner transaction app
+	appCallTxn := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID:     0,
+			ApprovalProgram:   prog,
+			ClearStateProgram: prog,
+			LocalStateSchema: basics.StateSchema{
+				NumUint:      0,
+				NumByteSlice: 0,
+			},
+			GlobalStateSchema: basics.StateSchema{
+				NumUint:      0,
+				NumByteSlice: 0,
+			},
+		},
+	}
+
+	stxn := appCallTxn.Sign(keys[0])
+	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{stxn})
+
+	testDbg := &testDbgHook{}
+	err = eval.TransactionGroupWithDebugger(txgroup, testDbg)
+	require.NoError(t, err)
+
+	expectedLog := flatten([][]string{
+		{"beforeAppEval"},
+		tealOpLogs(9),
+		{"beforeTealOp",
+			"beforeInnerTxn",
+			"beforeAppEval"},
+		tealOpLogs(1),
+		{"afterAppEval",
+			"afterInnerTxn",
+			"afterTealOp"},
+		tealOpLogs(1),
+		{"afterAppEval"},
+	})
+	require.Equal(t, expectedLog, testDbg.log)
+}
+
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
 // This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
 func TestTestnetFixup(t *testing.T) {

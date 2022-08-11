@@ -391,6 +391,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		created:                 caller.created,
 		appAddrCache:            caller.appAddrCache,
 		caller:                  caller,
+		Debugger:                caller.Debugger,
 	}
 	return ep
 }
@@ -4776,6 +4777,12 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
+
+	err := callBeforeInnerTxnHookIfItExists(ep.Debugger, ep)
+	if err != nil {
+		return err
+	}
+
 	for i := range ep.TxnGroup {
 		err := cx.Ledger.Perform(i, ep)
 		if err != nil {
@@ -4789,6 +4796,12 @@ func opItxnSubmit(cx *EvalContext) error {
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
+
+	err = callAfterInnerTxnHookIfItExists(ep.Debugger, ep)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

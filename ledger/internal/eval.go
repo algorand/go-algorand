@@ -941,13 +941,21 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
+	return eval.transactionGroup(txads, nil)
+}
+
+// TransactionGroupWithDebugger tentatively adds a new transaction group as part of this block evaluation,
+// calling relevant debugger hooks along the way.
+// If the transaction group cannot be added to the block without violating some constraints,
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) TransactionGroupWithDebugger(txads []transactions.SignedTxnWithAD, debugger logic.DebuggerHook) error {
+	return eval.transactionGroup(txads, debugger)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, debugger logic.DebuggerHook) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -963,6 +971,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child(len(txgroup))
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams.Debugger = debugger
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
