@@ -473,8 +473,10 @@ func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 		return 0
 	}
 	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&topBlock.BlockHeader)
-	// in order to be able to confirm lowestStateProofRound we need to have round number: (lowestStateProofRound - stateproofInterval)
+	// in order to be able to confirm/build lowestStateProofRound we would need to reconstruct
+	// the corresponding voterForRound which is (lowestStateProofRound - stateproofInterval - VotersLookback)
 	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))
 	return uint64(topBlock.Round().SubSaturate(lowestStateProofRound))
 }
 
