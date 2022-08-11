@@ -26,13 +26,14 @@ import (
 	"testing"
 	"time"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
@@ -191,7 +192,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
 	const restrictedBlock = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
 	// calculate the target round: this is the next round after catchpoint that is greater than expectedBlocksToDownload before the restrictedBlock block number
-	targetRound := (uint64(expectedBlocksToDownload+restrictedBlock)/catchpointInterval+1)*catchpointInterval + 1 // 21
+	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+restrictedBlock)/catchpointInterval + 1) * catchpointInterval
+	targetRound := uint64(targetCatchpointRound) + 1
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
@@ -202,9 +204,33 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 			break
 		}
 		currentRound++
-
 	}
 	log.Infof("done building!\n")
+
+	// ensure the catchpoint is created for targetCatchpointRound
+	timer := time.NewTimer(10 * time.Second)
+outer:
+	for {
+		status, err := primaryNodeRestClient.Status()
+		a.NoError(err)
+
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			a.NoError(err)
+			if round >= targetCatchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			break outer
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
 	primaryListeningAddress, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
@@ -302,9 +328,9 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 			// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 			catchpointCatchupProtocol.SeedLookback = 2
-			catchpointCatchupProtocol.SeedRefreshInterval = 8
-			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
-			catchpointCatchupProtocol.MaxTxnLife = 33
+			catchpointCatchupProtocol.SeedRefreshInterval = 2
+			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
+			catchpointCatchupProtocol.MaxTxnLife = 13
 			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
@@ -345,10 +371,11 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 				ExitErrorCallback: errorsCollector.nodeExitWithError,
 			})
 			a.NoError(err)
+			defer primaryNode.StopAlgod()
 
 			// Let the network make some progress
 			currentRound := uint64(1)
-			targetRound := uint64(41)
+			targetRound := uint64(21)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 			log.Infof("Building ledger history..")
@@ -371,7 +398,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			} else {
 				a.Empty(*primaryNodeStatus.LastCatchpoint)
 			}
-			primaryNode.StopAlgod()
 		})
 	}
 }
