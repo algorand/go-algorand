@@ -312,9 +312,9 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
-		f.dumpLogs(f.PrimaryDataDir() + "/node.log")
+		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "node.log"))
 		for _, nodeDir := range f.NodeDataDirs() {
-			f.dumpLogs(nodeDir + "/node.log")
+			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
 		}
 	} else {
 		f.network.Delete(f.binDir)
