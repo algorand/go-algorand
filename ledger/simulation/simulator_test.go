@@ -141,6 +141,9 @@ func uint64ToBytes(num uint64) []byte {
 // so we confirm here that all ledger methods which implicitly access the current round
 // are overriden within the `simulatorLedger`.
 func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	l, _, _ := prepareSimulatorTest(t)
 
 	// methods overriden by `simulatorLedger``
