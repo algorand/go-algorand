@@ -38,19 +38,19 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: medium
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1
+    resource_class: algorand/macstadium-m1-macos11
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
@@ -64,13 +64,13 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      - codegen_verification
+      # - codegen_verification
 
       - build:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["mac_arm64"] # TESTONLY["amd64", "arm64", "mac_amd64"]
           filters: &filters-default
             branches:
               ignore:
@@ -155,7 +155,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["mac_arm64"] # TESTONLY ["amd64", "arm64", "mac_amd64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -179,7 +179,7 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
+            # - codegen_verification
           filters:
             branches:
               only:
@@ -188,7 +188,7 @@ workflows:
             - slack-secrets
             - aws-secrets
 
-      #- windows_x64_build
+      # - windows_x64_build
 
 commands:
   prepare_go:
@@ -674,7 +674,7 @@ jobs:
       - run:
           no_output_timeout: 45m
           command: |
-            #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export SKIP_GO_INSTALLATION=True
@@ -689,9 +689,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout
@@ -704,9 +704,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout
