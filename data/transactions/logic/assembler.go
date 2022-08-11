@@ -1467,7 +1467,7 @@ func tokensFromLine(line string) []string {
 		}
 		i++
 
-		// gooble up consecutive whitespace (but notice semis)
+		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
 			for i < len(line) && spaces[line[i]] {
 				if line[i] == ';' {

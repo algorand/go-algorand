@@ -1152,6 +1152,45 @@ func TestFieldsFromLine(t *testing.T) {
 	check(`"" // test`, `""`)
 	check("int 1; int 2", "int", "1", ";", "int", "2")
 	check("int 1;;;int 2", "int", "1", ";", ";", ";", "int", "2")
+	check("int 1; ;int 2;; ; ;; ", "int", "1", ";", ";", "int", "2", ";", ";", ";", ";", ";")
+}
+
+func TestSplitTokens(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	check := func(tokens []string, left []string, right []string) {
+		t.Helper()
+		current, next := splitTokens(tokens)
+		assert.Equal(t, left, current)
+		assert.Equal(t, right, next)
+	}
+
+	check([]string{"hey,", "how's", ";", ";", "it", "going", ";"},
+		[]string{"hey,", "how's"},
+		[]string{";", "it", "going", ";"},
+	)
+
+	check([]string{";"},
+		[]string{},
+		[]string{},
+	)
+
+	check([]string{";", "it", "going"},
+		[]string{},
+		[]string{"it", "going"},
+	)
+
+	check([]string{"hey,", "how's"},
+		[]string{"hey,", "how's"},
+		nil,
+	)
+
+	check([]string{`"hey in quotes;"`, "getting", `";"`, ";", "tricky"},
+		[]string{`"hey in quotes;"`, "getting", `";"`},
+		[]string{"tricky"},
+	)
+
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
