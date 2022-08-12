@@ -615,7 +615,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
-| `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive) |
+| `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 
 ### Inner Transactions
 

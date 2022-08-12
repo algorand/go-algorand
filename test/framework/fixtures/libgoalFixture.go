@@ -17,6 +17,7 @@
 package fixtures
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -311,6 +312,10 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
+		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "node.log"))
+		for _, nodeDir := range f.NodeDataDirs() {
+			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
+		}
 	} else {
 		f.network.Delete(f.binDir)
 
@@ -321,6 +326,24 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 		if f.testDirTmp {
 			os.Remove(f.testDir)
 		}
+	}
+}
+
+// dumpLogs prints out log files for the running nodes
+func (f *LibGoalFixture) dumpLogs(filePath string) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		f.t.Logf("could not open %s", filePath)
+		return
+	}
+	defer file.Close()
+
+	f.t.Log("=================================\n")
+	parts := strings.Split(filePath, "/")
+	f.t.Logf("%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		f.t.Logf(scanner.Text())
 	}
 }
 

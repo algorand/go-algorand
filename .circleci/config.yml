@@ -70,7 +70,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64"]
           filters: &filters-default
             branches:
               ignore:
@@ -155,7 +155,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
