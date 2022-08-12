@@ -454,7 +454,7 @@ func TestSignatureCheck(t *testing.T) {
 		},
 	}
 
-	// should error without a signature
+	// should catch missing signature
 	_, missingSignatures, err := s.Simulate(txgroup)
 	require.NoError(t, err)
 	require.True(t, missingSignatures)
