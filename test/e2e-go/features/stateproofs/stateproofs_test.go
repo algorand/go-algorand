@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -111,7 +112,11 @@ func TestStateProofs(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
+	} else {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	}
 	defer fixture.Shutdown()
 
 	verifyStateProofsCreation(t, &fixture, consensusParams)
@@ -219,27 +224,33 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
+	pNodes := 5
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
+		pNodes = 2
+	} else {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	}
 	defer fixture.Shutdown()
 
 	// Get node libgoal clients in order to update their participation keys
-	var libgoalNodeClients [5]libgoal.Client
-	for i := 0; i < 5; i++ {
+	libgoalNodeClients := make([]libgoal.Client, pNodes, pNodes)
+	for i := 0; i < pNodes; i++ {
 		nodeName := fmt.Sprintf("Node%d", i)
 		c := fixture.GetLibGoalClientForNamedNode(nodeName)
 		libgoalNodeClients[i] = c
 	}
 
 	// Get account address of each participating node
-	var accounts [5]string
+	accounts := make([]string, pNodes, pNodes)
 	for i, c := range libgoalNodeClients {
 		parts, err := c.GetParticipationKeys() // should have 1 participation per node
 		r.NoError(err)
 		accounts[i] = parts[0].Address
 	}
 
-	var participations [5]account.Participation
+	participations := make([]account.Participation, pNodes, pNodes)
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoalClient := fixture.LibGoalClient
@@ -251,14 +262,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == voteLastValid-64 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
 			// Generate participation keys (for the same accounts)
-			for i := 0; i < 5; i++ {
+			for i := 0; i < pNodes; i++ {
 				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
 				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 200)
 				r.NoError(err)
 				participations[i] = part
 			}
 			// Register overlapping participation keys
-			for i := 0; i < 5; i++ {
+			for i := 0; i < pNodes; i++ {
 				registerParticipationAndWait(t, libgoalNodeClients[i], participations[i])
 			}
 		}
@@ -315,7 +326,11 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
+	} else {
+		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+	}
 	defer fixture.Shutdown()
 
 	libgoalClient := fixture.LibGoalClient
@@ -439,6 +454,10 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is difficult for ARM")
+	}
+
 	r := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)
@@ -532,6 +551,10 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is difficult for ARM")
+	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -649,6 +672,10 @@ func TestAttestorsChangeTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is difficult for ARM")
+	}
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
@@ -765,7 +792,11 @@ func TestTotalWeightChanges(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProofSmall.json"))
+	} else {
+		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
+	}
 	defer fixture.Shutdown()
 
 	var lastStateProofBlock bookkeeping.Block
