@@ -500,7 +500,8 @@ def finish_test_results(jsonfile, jsonpath, junitpath):
     # block that opens the jsonfile, and registers this atexit. So we
     # assume jsonfile is open, and gotestsum available.
     jsonfile.close()
-    xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+    raise Exception('error: cmd')
+    # xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
 
 
 if __name__ == '__main__':
