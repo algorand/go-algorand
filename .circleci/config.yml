@@ -70,7 +70,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64"] # ["amd64", "arm64", "mac_amd64"] UNDO
+              platform: ["amd64", "arm64"] # ["amd64", "arm64", "mac_amd64"] UNDO
           filters: &filters-default
             branches:
               ignore:
