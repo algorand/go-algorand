@@ -250,6 +250,8 @@ type OpStream struct {
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
+
+	macros map[string][]string
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -260,6 +262,7 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
+		macros:       make(map[string][]string),
 	}
 
 	for i := range o.known.scratchSpace {
@@ -1545,9 +1548,16 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// splitTokens breaks tokens into two slices at the first semicolon.
-func splitTokens(tokens []string) (current, rest []string) {
-	for i, token := range tokens {
+// splitTokens breaks tokens into two slices at the first semicolon and expands macros along the way.
+func splitTokens(ops *OpStream, tokens []string) (current, rest []string) {
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
+		replacement, ok := ops.macros[token]
+		if ok {
+			tokens = append(tokens[0:i], append(replacement, tokens[i+1:]...)...)
+			i--
+			continue
+		}
 		if token == ";" {
 			return tokens[:i], tokens[i+1:]
 		}
@@ -1573,13 +1583,16 @@ func (ops *OpStream) assemble(text string) error {
 				case "pragma":
 					ops.pragma(tokens)
 					ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				case "define":
+					ops.define(tokens)
+					ops.trace("%3d: #define line\n", ops.sourceLine)
 				default:
 					ops.errorf("Unknown directive: %s", directive)
 				}
 				continue
 			}
 		}
-		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
+		for current, next := splitTokens(ops, tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(ops, next) {
 			if len(current) == 0 {
 				continue
 			}
@@ -1663,6 +1676,43 @@ func (ops *OpStream) assemble(text string) error {
 		return fmt.Errorf("%d errors", l)
 	}
 	ops.Program = program
+	return nil
+}
+
+func (ops *OpStream) cycle(macro string, previous ...string) bool {
+	replacement, ok := ops.macros[macro]
+	if !ok {
+		return false
+	}
+	if len(previous) > 0 && macro == previous[0] {
+		ops.errorf("Macro cycle discovered: %s", strings.Join(append(previous, macro), " -> "))
+		return true
+	}
+	for _, token := range replacement {
+		if ops.cycle(token, append(previous, macro)...) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ops *OpStream) define(tokens []string) error {
+	if tokens[0] != "#define" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
+	}
+	if len(tokens) < 3 {
+		return ops.errorf("define directive requires a name and body")
+	}
+	saved, ok := ops.macros[tokens[1]]
+	ops.macros[tokens[1]] = make([]string, len(tokens[2:]))
+	copy(ops.macros[tokens[1]], tokens[2:])
+	if ops.cycle(tokens[1]) {
+		if ok {
+			ops.macros[tokens[1]] = saved
+		} else {
+			delete(ops.macros, tokens[1])
+		}
+	}
 	return nil
 }
 
