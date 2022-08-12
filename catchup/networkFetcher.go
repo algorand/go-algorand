@@ -52,7 +52,7 @@ func MakeNetworkFetcher(log logging.Logger, net network.GossipNode, cfg config.L
 	return netFetcher
 }
 
-func (netFetcher *NetworkFetcher) getHttpPeer() (network.HTTPPeer, *peerSelectorPeer, error) {
+func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelectorPeer, error) {
 	for ; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		psp, err := netFetcher.peerSelector.getNextPeer()
 		if err != nil {
@@ -82,7 +82,7 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 	retryCount = 0
 	for ; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		// keep retrying until a valid http peer is selected by the peerSelector
-		httpPeer, psp, err := netFetcher.getHttpPeer()
+		httpPeer, psp, err := netFetcher.getHTTPPeer()
 		if err != nil {
 			return nil, nil, time.Duration(0), err
 		}
