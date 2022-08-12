@@ -265,6 +265,22 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 	for txid, addr := range txidsAndAddresses {
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
+			f.t.Logf("txn failed to confirm: ", addr, txid)
+			pendingTxns, err := f.AlgodClient.GetPendingTransactions(0)
+			if err == nil {
+				pendingTxids := make([]string, 0, pendingTxns.TotalTxns)
+				for _, txn := range pendingTxns.TruncatedTxns.Transactions {
+					pendingTxids = append(pendingTxids, txn.TxID)
+				}
+				f.t.Logf("pending txids: ", pendingTxids)
+			} else {
+				f.t.Logf("unable to log pending txns, ", err)
+			}
+			allTxids := make([]string, 0, len(txidsAndAddresses))
+			for txID := range txidsAndAddresses {
+				allTxids = append(allTxids, txID)
+			}
+			f.t.Logf("all txids: ", allTxids)
 			return false
 		}
 	}
