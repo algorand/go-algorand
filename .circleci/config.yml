@@ -398,7 +398,7 @@ commands:
           name: Run integration tests
           no_output_timeout: << parameters.no_output_timeout >>
           command: |
-            set -x
+            set -ex
             export CI_E2E_FILENAME="${CIRCLE_BRANCH/\//-}"
             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
             export KMD_NOUSB=True
