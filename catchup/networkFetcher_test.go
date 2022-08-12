@@ -56,7 +56,7 @@ func TestFetchBlock(t *testing.T) {
 
 	net.addPeer(rootURL)
 
-	fetcher := NewNetworkFetcher(logging.TestingLog(t), net, cfg, false)
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, false)
 
 	var block *bookkeeping.Block
 	var cert *agreement.Certificate
@@ -70,7 +70,7 @@ func TestFetchBlock(t *testing.T) {
 	block, _, duration, err = fetcher.FetchBlock(context.Background(), next+1)
 
 	require.Error(t, errNoBlockForRound, err)
-	require.Contains(t, err.Error(), "No block available for given round")
+	require.Contains(t, err.Error(), "FetchBlock failed after multiple blocks download attempts")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
