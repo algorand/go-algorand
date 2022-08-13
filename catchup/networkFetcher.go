@@ -30,9 +30,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-// retryCount keeps count of attempts made to fetch a block from peers
-var retryCount int
-
 // NetworkFetcher is the struct used to export fetchBlock function from universalFetcher
 type NetworkFetcher struct {
 	log          logging.Logger
@@ -52,37 +49,37 @@ func MakeNetworkFetcher(log logging.Logger, net network.GossipNode, cfg config.L
 	return netFetcher
 }
 
-func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelectorPeer, error) {
-	for ; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+func (netFetcher *NetworkFetcher) getHTTPPeer(count int) (network.HTTPPeer, *peerSelectorPeer, int, error) {
+	for retryCount := count; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		psp, err := netFetcher.peerSelector.getNextPeer()
 		if err != nil {
-			if err == errPeerSelectorNoPeerPoolsAvailable {
-				netFetcher.log.Infof("FetchBlock: unable to obtain a list of peers to download the block from; will retry shortly.")
-				// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
-				time.Sleep(noPeersAvailableSleepInterval)
+			if err != errPeerSelectorNoPeerPoolsAvailable {
+				err = fmt.Errorf("FetchBlock: unable to obtain a list of peers to download the block from : %w", err)
+				return nil, nil, retryCount, err
 			}
-			err = fmt.Errorf("FetchBlock: unable to obtain a list of peers to download the block from : %w", err)
-			return nil, nil, err
+			// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
+			netFetcher.log.Infof("FetchBlock: unable to obtain a list of peers to download the block from; will retry shortly.")
+			time.Sleep(noPeersAvailableSleepInterval)
+		} else {
+			peer := psp.Peer
+			httpPeer, ok := peer.(network.HTTPPeer)
+			if ok {
+				return httpPeer, psp, retryCount, nil
+			}
+			netFetcher.log.Warnf("FetchBlock: non-HTTP peer was provided by the peer selector")
+			netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 		}
-		peer := psp.Peer
-		httpPeer, ok := peer.(network.HTTPPeer)
-		if ok {
-			return httpPeer, psp, nil
-		}
-		netFetcher.log.Warnf("FetchBlock: non-HTTP peer was provided by the peer selector")
-		netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 	}
-	return nil, nil, errors.New("FetchBlock: recurring non-HTTP peer was provided by the peer selector")
+	return nil, nil, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, errors.New("FetchBlock: recurring non-HTTP peer was provided by the peer selector")
 }
 
 // FetchBlock function given a round number returns a block from a http peer
 func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block,
 	*agreement.Certificate, time.Duration, error) {
 	// internal retry attempt to fetch the block
-	retryCount = 0
-	for ; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+	for retryCount := 0; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		// keep retrying until a valid http peer is selected by the peerSelector
-		httpPeer, psp, err := netFetcher.getHTTPPeer()
+		httpPeer, psp, retryCount, err := netFetcher.getHTTPPeer(retryCount)
 		if err != nil {
 			return nil, nil, time.Duration(0), err
 		}
@@ -110,5 +107,6 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 			return blk, cert, downloadDuration, err
 		}
 	}
-	return nil, nil, time.Duration(0), errors.New("FetchBlock failed after multiple blocks download attempts")
+	err := fmt.Errorf("FetchBlock failed after multiple blocks download attempts: %v unsuccessful attempts", netFetcher.cfg.CatchupBlockDownloadRetryAttempts)
+	return nil, nil, time.Duration(0), err
 }
