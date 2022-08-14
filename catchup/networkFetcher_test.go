@@ -56,7 +56,9 @@ func TestFetchBlock(t *testing.T) {
 
 	net.addPeer(rootURL)
 
-	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, false)
+	// Disable block authentication
+	cfg.CatchupBlockValidateMode = 1
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, nil, false)
 
 	var block *bookkeeping.Block
 	var cert *agreement.Certificate
