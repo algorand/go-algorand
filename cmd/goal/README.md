@@ -52,6 +52,8 @@ echo $ACCOUNT
 goal clerk send --to ${ACCOUNT} --from ${ACCOUNT} --amount 10
 ```
 
+## Creating Applications
+
 ### Q: How do I use goal to create an app?
 
 ### A:
@@ -80,6 +82,8 @@ Transaction SZK3U7AARMPQSZUICZIGYRLC7UDXJCVPV34JCBN5LIBXMF635UKA committed in ro
 Created app with app index 2
 ```
 
+## Funding App-Accounts
+
 ### Q: How do I fund the app account so that it can satisfy its boxes min-balance requirement and allow for box creation?
 
 ### A:
@@ -100,6 +104,8 @@ goal clerk send --to ${APP_ACCOUNT} --from ${ACCOUNT} --amount 10000000
 # verify the balance of the app's account
 goal account balance --address ${APP_ACCOUNT}
 ```
+
+## Application Boxes in `goal`
 
 ### Q: How do I use boxes in goal? In particular, I'd like to make a goal app call which:
 * accesses a particular box for a particular app
