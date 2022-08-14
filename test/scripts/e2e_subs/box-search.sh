@@ -79,4 +79,40 @@ BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
 # shellcheck disable=SC2143
 [ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
 
+# Create and set a box in an atommic txn group:
+
+# Create:
+BOX_NAME="str:great box"
+${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --box "$BOX_NAME" --app-arg "str:create" --app-arg "$BOX_NAME" -o box_create.txn
+
+# Set:
+BOX_VALUE="str:I'm a wonderful box"
+${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --box "$BOX_NAME" --app-arg "str:set" --app-arg "$BOX_NAME" --app-arg "str:$BOX_VALUE" -o box_set.txn
+
+# Group them, sign and broadcast:
+cat box_create.txn box_set.txn > create_n_set.txn
+${gcmd} clerk group -i create_n_set.txn -o group.txn
+${gcmd} clerk sign -i group.txn -o group.stx
+${gcmd} clerk rawsend -f group.stx
+
+# Confirm that we can get this last individual box info
+${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME"
+NAME=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Name | tr -s ' ' | cut -d" " -f2-)
+[ "$NAME" = "$BOX_NAME" ]
+
+VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | tr -s ' ' | cut -d" " -f2-)
+[ "$VALUE" = "$B64_BOX_VALUE" ]
+
+# Confirm that we can still get the list of boxes
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
+EXPECTED="str:box1
+str:with spaces
+str:base64
+b64:AQIDBA==
+str:great box"
+
+# shellcheck disable=SC2059
+[ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
+
+
 date "+${scriptname} OK %Y%m%d_%H%M%S"
