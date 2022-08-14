@@ -90,10 +90,10 @@ BOX_VALUE="str:I'm a wonderful box"
 ${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --box "$BOX_NAME" --app-arg "str:set" --app-arg "$BOX_NAME" --app-arg "str:$BOX_VALUE" -o box_set.txn
 
 # Group them, sign and broadcast:
-cat box_create.txn box_set.txn > create_n_set.txn
-${gcmd} clerk group -i create_n_set.txn -o group.txn
-${gcmd} clerk sign -i group.txn -o group.stx
-${gcmd} clerk rawsend -f group.stx
+cat box_create.txn box_set.txn > box_create_n_set.txn
+${gcmd} clerk group -i box_create_n_set.txn -o box_group.txn
+${gcmd} clerk sign -i box_group.txn -o box_group.stx
+${gcmd} clerk rawsend -f box_group.stx
 
 # Confirm that we can get this last individual box info
 ${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME"
