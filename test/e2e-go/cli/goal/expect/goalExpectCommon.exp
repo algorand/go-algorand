@@ -45,6 +45,7 @@ package require Tcl 8.0
 # Utility method to abort out of this script
 proc ::AlgorandGoal::Abort { ERROR } {
     puts "Aborting with Error: $ERROR"
+    set LOGS_COLLECTED 0
 
     if { [info exists ::GLOBAL_TEST_ROOT_DIR] } {
         # terminate child algod processes, if there are active child processes the test will hang on a test failure
@@ -53,22 +54,25 @@ proc ::AlgorandGoal::Abort { ERROR } {
 
         log_user 1
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Primary
-        if { [info exists ::NODE_DATA_DIR] } {
+        if { [file exists $NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
-            puts "$NODE_DATA_DIR/algod-out.log :\r\n$outLog"
+            puts "\n$NODE_DATA_DIR/algod-out.log:\r\n$outLog"
             set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
-            puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
-            set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
-            puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
+            puts "\n$NODE_DATA_DIR/algod-err.log:\r\n$errLog"
+            set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
+            puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
+            set LOGS_COLLECTED 1
         }
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Node
-        if { [info exists ::NODE_DATA_DIR] } {
+        puts "Node path $NODE_DATA_DIR"
+        if { [file exists $NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
-            puts "$NODE_DATA_DIR/algod-out.log :\r\n$outLog"
+            puts "\n$NODE_DATA_DIR/algod-out.log:\r\n$outLog"
             set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
-            puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
-            set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
-            puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
+            puts "\n$NODE_DATA_DIR/algod-err.log:\r\n$errLog"
+            set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
+            puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
+            set LOGS_COLLECTED 1
         }
 
         ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
@@ -77,13 +81,15 @@ proc ::AlgorandGoal::Abort { ERROR } {
     if { [info exists ::GLOBAL_TEST_ALGO_DIR] } {
         puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
 
-        log_user 1
-        set outLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-out.log]
-        puts "$::GLOBAL_TEST_ALGO_DIR/algod-out.log :\r\n$outLog"
-        set errLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-err.log]
-        puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
-        set nodeLog [exec -- tail -n 30 $::GLOBAL_TEST_ALGO_DIR/node.log]
-        puts "$::GLOBAL_TEST_ALGO_DIR/node.log :\r\n$nodeLog"
+        if { $LOGS_COLLECTED == 0 } {
+            log_user 1
+            set outLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-out.log]
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-out.log:\r\n$outLog"
+            set errLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-err.log]
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-err.log:\r\n$errLog"
+            set nodeLog [exec -- tail -n 50 $::GLOBAL_TEST_ALGO_DIR/node.log]
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/node.log:\r\n$nodeLog"
+        }
 
         ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
     }
@@ -967,7 +973,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                 eof {
                     catch wait result;
                     if { [lindex $result 3] != 0 } {
-                        ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"
+                        ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3], output: $expect_out(buffer)"
                     }
                 }
             }
