@@ -33,20 +33,20 @@ import (
 // NetworkFetcher is the struct used to export fetchBlock function from universalFetcher
 type NetworkFetcher struct {
 	log          logging.Logger
-	net          network.GossipNode
 	cfg          config.Local
 	auth         BlockAuthenticator
 	peerSelector *peerSelector
+	fetcher      *universalBlockFetcher
 }
 
 // MakeNetworkFetcher initializes a NetworkFetcher service
 func MakeNetworkFetcher(log logging.Logger, net network.GossipNode, cfg config.Local, auth BlockAuthenticator, pipelineFetch bool) *NetworkFetcher {
 	netFetcher := &NetworkFetcher{
 		log:          log,
-		net:          net,
 		cfg:          cfg,
 		auth:         auth,
 		peerSelector: createPeerSelector(net, cfg, pipelineFetch),
+		fetcher:      makeUniversalBlockFetcher(log, net, cfg),
 	}
 	return netFetcher
 }
@@ -85,14 +85,14 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 			return nil, nil, time.Duration(0), err
 		}
 
-		fetcher := makeUniversalBlockFetcher(netFetcher.log, netFetcher.net, netFetcher.cfg)
-		blk, cert, downloadDuration, err := fetcher.fetchBlock(ctx, round, httpPeer)
+		blk, cert, downloadDuration, err := netFetcher.fetcher.fetchBlock(ctx, round, httpPeer)
 		if err != nil {
 			if ctx.Err() != nil {
 				// caller of the function decided to cancel the download
 				return nil, nil, time.Duration(0), err
 			}
-			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v", round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v",
+				round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 			netFetcher.peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			continue // retry the fetch
 		}
@@ -102,10 +102,12 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 			netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 			// Check if this mismatch is due to an unsupported protocol version
 			if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
-				netFetcher.log.Errorf("FetchBlock: downloaded block(%v) unsupported protocol version detected: '%v'", round, blk.BlockHeader.CurrentProtocol)
+				netFetcher.log.Errorf("FetchBlock: downloaded block(%v) unsupported protocol version detected: '%v'",
+					round, blk.BlockHeader.CurrentProtocol)
 			}
 			netFetcher.log.Warnf("FetchBlock: downloaded block(%v) contents do not match header", round)
-			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v", round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v",
+				round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 			continue // retry the fetch
 		}
 
@@ -113,7 +115,8 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 		if netFetcher.cfg.CatchupVerifyCertificate() {
 			err = netFetcher.auth.Authenticate(blk, cert)
 			if err != nil {
-				netFetcher.log.Warnf("FetchBlock: cert did not authenticate block %d on attempt %d out of %d. %v", round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+				netFetcher.log.Warnf("FetchBlock: cert authenticatation failed for block %d on attempt %d out of %d. %v",
+					round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 				netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
@@ -125,6 +128,7 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 		return blk, cert, downloadDuration, err
 
 	}
-	err := fmt.Errorf("FetchBlock failed after multiple blocks download attempts: %v unsuccessful attempts", netFetcher.cfg.CatchupBlockDownloadRetryAttempts)
+	err := fmt.Errorf("FetchBlock failed after multiple blocks download attempts: %v unsuccessful attempts",
+		netFetcher.cfg.CatchupBlockDownloadRetryAttempts)
 	return nil, nil, time.Duration(0), err
 }

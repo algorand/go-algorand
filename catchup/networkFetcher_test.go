@@ -18,10 +18,9 @@ package catchup
 
 import (
 	"context"
+	"sync"
 	"testing"
-	"time"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -32,8 +31,6 @@ import (
 
 func TestFetchBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	cfg := config.GetDefaultLocal()
 
 	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
@@ -57,23 +54,70 @@ func TestFetchBlock(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Disable block authentication
+	cfg := config.GetDefaultLocal()
 	cfg.CatchupBlockValidateMode = 1
 	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, nil, false)
 
-	var block *bookkeeping.Block
-	var cert *agreement.Certificate
-	var duration time.Duration
-	block, _, duration, err = fetcher.FetchBlock(context.Background(), next)
+	block, _, duration, err := fetcher.FetchBlock(context.Background(), next)
 
 	require.NoError(t, err)
 	require.Equal(t, &b, block)
 	require.GreaterOrEqual(t, int64(duration), int64(0))
 
-	block, _, duration, err = fetcher.FetchBlock(context.Background(), next+1)
+	block, cert, duration, err := fetcher.FetchBlock(context.Background(), next+1)
 
 	require.Error(t, errNoBlockForRound, err)
 	require.Contains(t, err.Error(), "FetchBlock failed after multiple blocks download attempts")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
+}
+
+func TestConcurrentAttemptsToFetchBlockSuccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+
+	blockServiceConfig := config.GetDefaultLocal()
+	blockServiceConfig.EnableBlockService = true
+	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
+
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+
+	net.addPeer(rootURL)
+
+	// Disable block authentication
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupBlockValidateMode = 1
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, nil, false)
+
+	// start is used to synchronize concurrent fetchBlock attempts
+	// parallelRequests represents number of concurrent attempts
+	start := make(chan struct{})
+	parallelRequests := int(cfg.CatchupParallelBlocks)
+	var wg sync.WaitGroup
+	wg.Add(parallelRequests)
+	for i := 0; i < parallelRequests; i++ {
+		go func() {
+			<-start
+			block, _, duration, err := fetcher.FetchBlock(context.Background(), next)
+			require.NoError(t, err)
+			require.Equal(t, &b, block)
+			require.GreaterOrEqual(t, int64(duration), int64(0))
+			wg.Done()
+		}()
+	}
+	close(start)
+	wg.Wait()
 }
