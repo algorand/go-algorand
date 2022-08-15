@@ -1548,13 +1548,14 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// splitTokens breaks tokens into two slices at the first semicolon and expands macros along the way.
-func splitTokens(ops *OpStream, tokens []string) (current, rest []string) {
+// nextStatement breaks tokens into two slices at the first semicolon and expands macros along the way.
+func nextStatement(ops *OpStream, tokens []string) (current, rest []string) {
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 		replacement, ok := ops.macros[token]
 		if ok {
 			tokens = append(tokens[0:i], append(replacement, tokens[i+1:]...)...)
+			// backup to handle any expansions in replacement
 			i--
 			continue
 		}
@@ -1592,7 +1593,7 @@ func (ops *OpStream) assemble(text string) error {
 				continue
 			}
 		}
-		for current, next := splitTokens(ops, tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(ops, next) {
+		for current, next := nextStatement(ops, tokens); len(current) > 0 || len(next) > 0; current, next = nextStatement(ops, next) {
 			if len(current) == 0 {
 				continue
 			}
@@ -1704,8 +1705,7 @@ func (ops *OpStream) define(tokens []string) error {
 		return ops.errorf("define directive requires a name and body")
 	}
 	saved, ok := ops.macros[tokens[1]]
-	ops.macros[tokens[1]] = make([]string, len(tokens[2:]))
-	copy(ops.macros[tokens[1]], tokens[2:])
+	ops.macros[tokens[1]] = tokens[2:len(tokens):len(tokens)]
 	if ops.cycle(tokens[1]) {
 		if ok {
 			ops.macros[tokens[1]] = saved

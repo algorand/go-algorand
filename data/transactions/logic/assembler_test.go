@@ -1162,14 +1162,16 @@ func TestFieldsFromLine(t *testing.T) {
 	check(" ; ", ";")
 }
 
-func TestSplitTokens(t *testing.T) {
+func TestNextStatement(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// this test ensures nextStatement splits tokens on semicolons properly
+	// macro testing should be handled in TestMacros
 	ops := newOpStream(AssemblerMaxVersion)
 	check := func(tokens []string, left []string, right []string) {
 		t.Helper()
-		current, next := splitTokens(&ops, tokens)
+		current, next := nextStatement(&ops, tokens)
 		assert.Equal(t, left, current)
 		assert.Equal(t, right, next)
 	}
@@ -2713,6 +2715,12 @@ func TestMacros(t *testing.T) {
 		int 1
 		c`,
 		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> b -> x -> c"}, Expect{7, "+ expects..."},
+	)
+
+	testProg(t, `
+		#define X X
+		int 3`,
+		AssemblerMaxVersion, Expect{2, "Macro cycle discovered: X -> X"},
 	)
 
 }
