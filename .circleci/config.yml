@@ -64,8 +64,6 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      - codegen_verification
-
       - build:
           name: << matrix.platform >>_build
           matrix: &matrix-default
@@ -179,7 +177,6 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
           filters:
             branches:
               only:
@@ -483,16 +480,6 @@ commands:
                     scripts/travis/test_release.sh
 
 jobs:
-  codegen_verification:
-    executor: amd64_medium
-    steps:
-      - checkout
-      - prepare_go
-      - run: |
-          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-          export GOPATH="/home/circleci/go"
-          scripts/travis/codegen_verification.sh
-
   build:
     parameters:
       platform:
