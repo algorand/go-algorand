@@ -1,0 +1,20 @@
+name: "codegen verification"
+on:
+  pull_request:
+jobs:
+  codegen_verification:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          path: go-algorand
+      - name: Install libraries
+        run: sudo apt-get -y -q install libboost-math-dev
+      - name: Uninstall existing go installation
+        run: sudo apt-get -y -q purge golang-go
+      - name: Run codegen_verification.sh
+        run: |
+          export GOPATH="${GITHUB_WORKSPACE}/go"
+          cd go-algorand
+          scripts/travis/codegen_verification.sh
