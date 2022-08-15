@@ -8,6 +8,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
         with:
+          fetch-depth: 0
           path: go-algorand
       - name: Install libraries
         run: sudo apt-get -y -q install libboost-math-dev
