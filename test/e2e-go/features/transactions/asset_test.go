@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -970,6 +971,13 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
 
+	// Ensure manager is funded before submitting any transactions
+	currentRound, err := client.CurrentRound()
+	a.NoError(err)
+
+	err = fixture.WaitForAccountFunded(currentRound+5, manager)
+	a.NoError(err)
+
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
 	a.NoError(err)
@@ -1009,6 +1017,8 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	consensusParams.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
+	consensusParams.AgreementFilterTimeout = 400 * time.Millisecond
 
 	configurableConsensus[consensusVersion] = consensusParams
 
@@ -1058,6 +1068,13 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
+
+	// Ensure manager is funded before submitting any transactions
+	currentRound, err := client.CurrentRound()
+	a.NoError(err)
+
+	err = fixture.WaitForAccountFunded(currentRound+5, manager)
+	a.NoError(err)
 
 	// Destroy the asset
 	tx, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
@@ -1169,8 +1186,8 @@ func verifyAssetParameters(asset v1.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 
-	asser.Equal(asset.UnitName, "test")
-	asser.Equal(asset.AssetName, "testunit")
+	asser.Equal(asset.UnitName, unitName)
+	asser.Equal(asset.AssetName, assetName)
 	asser.Equal(asset.ManagerAddr, manager)
 	asser.Equal(asset.ReserveAddr, reserve)
 	asser.Equal(asset.FreezeAddr, freeze)

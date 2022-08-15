@@ -977,23 +977,24 @@ func TestSynchronizingTime(t *testing.T) {
 
 func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
 	// make sure we download enough blocks to verify state proof 512
 	topBlk := bookkeeping.Block{}
 	topBlk.BlockHeader.Round = 1500
-	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
 	trackingData := bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
 	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
 
 	lookback := lookbackForStateproofsSupport(&topBlk)
 	oldestRound := topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
-	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusFuture].StateProofInterval-config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback)
 
 	// the network has made progress and now it is on round 8000. in this case we would not download blocks to cover 512.
 	// instead, we will download blocks to confirm only the recovery period lookback.
 	topBlk = bookkeeping.Block{}
 	topBlk.BlockHeader.Round = 8000
-	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
 	trackingData = bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
 	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
@@ -1001,7 +1002,9 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	lookback = lookbackForStateproofsSupport(&topBlk)
 	oldestRound = topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
 
-	lowestRoundToRetain := 8000 - (8000 % 256) - (config.Consensus[protocol.ConsensusFuture].StateProofInterval * (config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 1))
+	lowestRoundToRetain := 8000 - (8000 % config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval) -
+		config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*(config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals+1) - config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+
 	assert.Equal(t, uint64(oldestRound), lowestRoundToRetain)
 
 	topBlk = bookkeeping.Block{}

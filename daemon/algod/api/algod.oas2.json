@@ -531,8 +531,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get a Merkle proof for a transaction in a block.",
-        "operationId": "GetProof",
+        "summary": "Get a proof for a transaction in a block.",
+        "operationId": "GetTransactionProof",
         "parameters": [
           {
             "type": "integer",
@@ -566,7 +566,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/ProofResponse"
+            "$ref": "#/responses/TransactionProofResponse"
           },
           "400": {
             "description": "Malformed round number or transaction ID",
@@ -587,7 +587,7 @@
             }
           },
           "500": {
-            "description": "Internal error, including protocol not supporting Merkle proofs.",
+            "description": "Internal error, including protocol not supporting proofs.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1317,7 +1317,7 @@
           "http"
         ],
         "summary": "Gets a proof for a given light block header inside a state proof commitment",
-        "operationId": "GetProofForLightBlockHeader",
+        "operationId": "GetLightBlockHeaderProof",
         "parameters": [
           {
             "type": "integer",
@@ -2683,9 +2683,7 @@
       ],
       "properties": {
         "Message": {
-          "description": "The encoded message.",
-          "type": "string",
-          "format": "byte"
+          "$ref": "#/definitions/StateProofMessage"
         },
         "StateProof": {
           "description": "The encoded StateProof for the message.",
@@ -2715,6 +2713,44 @@
           "description": "The encoded proof.",
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "StateProofMessage": {
+      "description": "Represents the message that the state proofs are attesting to.",
+      "type": "object",
+      "required": [
+        "BlockHeadersCommitment",
+        "VotersCommitment",
+        "LnProvenWeight",
+        "FirstAttestedRound",
+        "LastAttestedRound"
+      ],
+      "properties": {
+        "BlockHeadersCommitment": {
+          "description": "The vector commitment root on all light block headers within a state proof interval.",
+          "type": "string",
+          "format": "byte"
+        },
+        "VotersCommitment": {
+          "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
+          "type": "string",
+          "format": "byte"
+        },
+        "LnProvenWeight": {
+          "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "FirstAttestedRound": {
+          "description": "The first round the message attests to.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "LastAttestedRound": {
+          "description": "The last round the message attests to.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
         }
       }
     }
@@ -2976,7 +3012,7 @@
         }
       }
     },
-    "ProofResponse": {
+    "TransactionProofResponse": {
       "description": "Proof of transaction in a block.",
       "schema": {
         "type": "object",
@@ -2989,7 +3025,7 @@
         ],
         "properties": {
           "proof": {
-            "description": "Merkle proof of transaction membership.",
+            "description": "Proof of transaction membership.",
             "type": "string",
             "format": "byte"
           },
