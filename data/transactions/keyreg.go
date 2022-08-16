@@ -28,7 +28,7 @@ type KeyregTxnFields struct {
 
 	VotePK           crypto.OneTimeSignatureVerifier `codec:"votekey"`
 	SelectionPK      crypto.VRFVerifier              `codec:"selkey"`
-	StateProofPK     merklesignature.Verifier        `codec:"sprfkey"`
+	StateProofPK     merklesignature.Commitment      `codec:"sprfkey"`
 	VoteFirst        basics.Round                    `codec:"votefst"`
 	VoteLast         basics.Round                    `codec:"votelst"`
 	VoteKeyDilution  uint64                          `codec:"votekd"`

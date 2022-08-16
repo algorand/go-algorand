@@ -140,7 +140,7 @@ func setDumpHandlers(n network.GossipNode) {
 
 	h := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: &dh},
-		{Tag: protocol.CompactCertSigTag, MessageHandler: &dh},
+		{Tag: protocol.StateProofSigTag, MessageHandler: &dh},
 		{Tag: protocol.MsgOfInterestTag, MessageHandler: &dh},
 		{Tag: protocol.MsgDigestSkipTag, MessageHandler: &dh},
 		{Tag: protocol.NetPrioResponseTag, MessageHandler: &dh},
