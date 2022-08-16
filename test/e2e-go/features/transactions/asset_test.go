@@ -1186,8 +1186,8 @@ func verifyAssetParameters(asset v1.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 
-	asser.Equal(asset.UnitName, "test")
-	asser.Equal(asset.AssetName, "testunit")
+	asser.Equal(asset.UnitName, unitName)
+	asser.Equal(asset.AssetName, assetName)
 	asser.Equal(asset.ManagerAddr, manager)
 	asser.Equal(asset.ReserveAddr, reserve)
 	asser.Equal(asset.FreezeAddr, freeze)
