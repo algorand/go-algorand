@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"strings"
 )
@@ -52,6 +53,40 @@ type insertOp struct {
 type appendKeysOp struct {
 	id   ParticipationID
 	keys StateProofKeys
+}
+type deleteStateProofKeysOp struct {
+	ParticipationID ParticipationID
+	round           basics.Round
+}
+
+func (d deleteStateProofKeysOp) apply(db *participationDB) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectPK, d.ParticipationID[:])
+		err := row.Scan(&pk)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
+		if err != nil {
+			return fmt.Errorf("unable to prepare state proof delete: %w", err)
+		}
+		defer stmt.Close()
+
+		_, err = stmt.Exec(pk, d.round)
+		if err != nil {
+			return fmt.Errorf("unable to exec state proof delete (pk,rnd) == (%d,%d): %w", pk, d.round, err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		db.log.Warnf("participationDB unable to delete stateProof key: %w", err)
+	}
+	return err
 }
 
 func makeOpRequest(operation dbOp) opRequest {
@@ -164,6 +199,11 @@ func (d *deleteOp) apply(db *participationDB) error {
 
 		result, err = tx.Exec(deleteRolling, pk)
 		if err = verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(deleteStateProofByPK, pk)
+		if err != nil {
 			return err
 		}
 

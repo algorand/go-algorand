@@ -295,7 +295,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			case protocol.AssetTransferTx:
 			case protocol.AssetFreezeTx:
 			case protocol.ApplicationCallTx:
-			case protocol.CompactCertTx:
+			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx:
 			}
 			// If you add new addresses here, also add them in getTxnAddresses().

@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -49,7 +50,8 @@ func main() {
 		return
 	}
 	var mu deadlock.Mutex
-	wp, err := fixtures.MakeWebProxy(*webProxyDestination, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+	log := logging.Base()
+	wp, err := fixtures.MakeWebProxy(*webProxyDestination, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
 		mu.Lock()
 		time.Sleep(time.Duration(*webProxyRequestDelay) * time.Millisecond)
 		mu.Unlock()

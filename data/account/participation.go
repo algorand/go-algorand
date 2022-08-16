@@ -48,7 +48,7 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// StateProofSecrets is used to sign compact certificates.
+	// StateProofSecrets is used to sign state proofs.
 	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
@@ -141,7 +141,7 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
-// StateProofSigner returns the key used to sign on Compact Certificates.
+// StateProofSigner returns the key used to sign on State Proofs.
 // might return nil!
 func (part Participation) StateProofSigner() *merklesignature.Secrets {
 	return part.StateProofSecrets
@@ -168,9 +168,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if cert := part.StateProofSigner(); cert != nil {
+	if stateProofSigner := part.StateProofSigner(); stateProofSigner != nil {
 		if includeStateProofKeys { // TODO: remove this check and parameter after the network had enough time to upgrade
-			t.KeyregTxnFields.StateProofPK = *(cert.GetVerifier())
+			t.KeyregTxnFields.StateProofPK = stateProofSigner.GetVerifier().Commitment
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
@@ -220,10 +220,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		return
 	}
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
-
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
 		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
 	}
@@ -239,8 +236,8 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval)
+	// Generate a new key which signs the state proof
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), merklesignature.KeyLifetimeDefault)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
