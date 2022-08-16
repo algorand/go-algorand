@@ -1206,30 +1206,30 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
+	// vAlphaX versions are an separate series of consensus parameters and versions for alphanet
 	vAlpha1 := v32
 	vAlpha1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
 	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
 	vAlpha1.MaxTxnBytesPerBlock = 5000000
-
 	Consensus[protocol.ConsensusVAlpha1] = vAlpha1
 
 	vAlpha2 := vAlpha1
+	vAlpha2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vAlpha2.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
 	vAlpha2.MaxTxnBytesPerBlock = 5 * 1024 * 1024
-
 	Consensus[protocol.ConsensusVAlpha2] = vAlpha2
-
-	// vAlpha1 can be upgraded to vAlpha2, with a short update delay of a few hours
 	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
 
-	vAlpha3 := vAlpha2
-	vAlpha3.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
-
+	// vAlpha3 and vAlpha4 use the same parameters as v33 and v34
+	vAlpha3 := v33
+	vAlpha3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha3] = vAlpha3
-
-	// vAlpha2 can be upgraded to vAlpha3, with a short update delay of a few hours
 	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
+
+	vAlpha4 := v34
+	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
+	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
