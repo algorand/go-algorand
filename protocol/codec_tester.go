@@ -229,7 +229,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if strings.HasSuffix(datapath, "HashFactory/HashType") {
+		if strings.HasSuffix(datapath, "/HashType") {
 			// generate random value that will avoid protocol.ErrInvalidObject from HashType.Validate()
 			v.SetUint(rand.Uint64() % 3)
 		} else {
