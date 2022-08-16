@@ -819,7 +819,7 @@ var changeOnlineCmd = &cobra.Command{
 			}
 		}
 
-		firstTxRound, lastTxRound, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -1430,7 +1430,7 @@ var markNonparticipatingCmd = &cobra.Command{
 
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		firstTxRound, lastTxRound, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}

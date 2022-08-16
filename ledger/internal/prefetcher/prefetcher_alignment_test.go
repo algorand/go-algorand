@@ -170,7 +170,7 @@ func (l *prefetcherAlignmentTestLedger) GenesisProto() config.ConsensusParams {
 func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return 0, ledgercore.AccountTotals{}, nil
 }
-func (l *prefetcherAlignmentTestLedger) CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error) {
+func (l *prefetcherAlignmentTestLedger) VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
 
@@ -749,7 +749,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 	var selectionPK crypto.VRFVerifier
 	selectionPK[0] = 2
 	var stateProofPK merklesignature.Verifier
-	stateProofPK[0] = 3
+	stateProofPK.Commitment[0] = 3
 
 	txn := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
@@ -760,7 +760,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:          votePK,
 			SelectionPK:     selectionPK,
-			StateProofPK:    stateProofPK,
+			StateProofPK:    stateProofPK.Commitment,
 			VoteLast:        9,
 			VoteKeyDilution: 10,
 		},
@@ -1264,7 +1264,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 	require.Equal(t, requested, prefetched)
 }
 
-func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
+func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)
@@ -1284,12 +1284,12 @@ func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
 	}
 
 	txn := transactions.Transaction{
-		Type: protocol.CompactCertTx,
+		Type: protocol.StateProofTx,
 		Header: transactions.Header{
 			Sender:      addr,
 			GenesisHash: genesisHash(),
 		},
-		CompactCertTxnFields: transactions.CompactCertTxnFields{},
+		StateProofTxnFields: transactions.StateProofTxnFields{},
 	}
 
 	requested, prefetched := run(t, l, txn)

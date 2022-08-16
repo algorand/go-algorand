@@ -137,7 +137,7 @@ func main() {
 		}
 	} else if len(algodDir) > 0 {
 		// get test cluster local unlocked wallet
-		privateKeys := findRootKeys(algodDir)
+		privateKeys = findRootKeys(algodDir)
 		if len(privateKeys) == 0 {
 			fmt.Fprintf(os.Stderr, "%s: found no root keys\n", algodDir)
 			os.Exit(1)

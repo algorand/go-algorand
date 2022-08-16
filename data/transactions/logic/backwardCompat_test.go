@@ -467,15 +467,15 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	source := "int 1; int 1; bnz done; done:"
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, assemblerNoVersion, Expect{4, "label \"done\" is too far away"})
+		testProg(t, source, assemblerNoVersion, Expect{1, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 0, Expect{4, "label \"done\" is too far away"})
+		testProg(t, source, 0, Expect{1, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 1, Expect{4, "label \"done\" is too far away"})
+		testProg(t, source, 1, Expect{1, "label \"done\" is too far away"})
 	})
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {

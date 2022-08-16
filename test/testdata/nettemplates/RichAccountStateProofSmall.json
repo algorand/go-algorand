@@ -1,0 +1,20 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "test-fast-stateproofs",
+        "LastPartKeyRound": 100,
+        "Wallets": [
+            { "Name": "richWallet", "Stake": 99, "Online": true },
+            { "Name": "poorWallet", "Stake": 1, "Online": true }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Relay0",
+            "IsRelay": true,
+            "Wallets": []
+        },
+        { "Name": "richNode", "Wallets": [ { "Name": "richWallet", "ParticipationOnly": false } ] },
+        { "Name": "poorNode", "Wallets": [ { "Name": "poorWallet", "ParticipationOnly": false } ] }
+    ]
+}
