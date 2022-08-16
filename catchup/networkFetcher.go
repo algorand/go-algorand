@@ -52,7 +52,7 @@ func MakeNetworkFetcher(log logging.Logger, net network.GossipNode, cfg config.L
 }
 
 func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelectorPeer, error) {
-	for retryCount := 0; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+	for retryCount := 1; retryCount <= netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		psp, err := netFetcher.peerSelector.getNextPeer()
 		if err != nil {
 			if err != errPeerSelectorNoPeerPoolsAvailable {
@@ -79,7 +79,7 @@ func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelector
 func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block,
 	*agreement.Certificate, time.Duration, error) {
 	// internal retry attempt to fetch the block
-	for retryCount := 0; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+	for retryCount := 1; retryCount <= netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		httpPeer, psp, err := netFetcher.getHTTPPeer()
 		if err != nil {
 			return nil, nil, time.Duration(0), err

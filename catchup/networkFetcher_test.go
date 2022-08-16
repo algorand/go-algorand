@@ -45,11 +45,11 @@ func TestFetchBlock(t *testing.T) {
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
-	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
-	nodeA.start()
-	defer nodeA.stop()
-	rootURL := nodeA.rootURL()
+	node := basicRPCNode{}
+	node.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	node.start()
+	defer node.stop()
+	rootURL := node.rootURL()
 
 	net.addPeer(rootURL)
 
@@ -89,11 +89,11 @@ func TestConcurrentAttemptsToFetchBlockSuccess(t *testing.T) {
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
-	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
-	nodeA.start()
-	defer nodeA.stop()
-	rootURL := nodeA.rootURL()
+	node := basicRPCNode{}
+	node.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	node.start()
+	defer node.stop()
+	rootURL := node.rootURL()
 
 	net.addPeer(rootURL)
 
@@ -120,4 +120,71 @@ func TestConcurrentAttemptsToFetchBlockSuccess(t *testing.T) {
 	}
 	close(start)
 	wg.Wait()
+}
+
+func TestHTTPPeerNotAvailable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	net := &httpTestPeerSource{}
+
+	// Disable block authentication
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupBlockValidateMode = 1
+	cfg.CatchupBlockDownloadRetryAttempts = 1
+
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, nil, false)
+
+	_, _, _, err := fetcher.FetchBlock(context.Background(), 1)
+	require.Contains(t, err.Error(), "recurring non-HTTP peer was provided by the peer selector")
+}
+
+func TestFetchBlockFailed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	net := &httpTestPeerSource{}
+	wsPeer := makeTestUnicastPeer(net, t)
+	net.addPeer(wsPeer.GetAddress())
+
+	// Disable block authentication
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupBlockValidateMode = 1
+	cfg.CatchupBlockDownloadRetryAttempts = 1
+
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, nil, false)
+
+	_, _, _, err := fetcher.FetchBlock(context.Background(), 1)
+	require.Contains(t, err.Error(), "FetchBlock failed after multiple blocks download attempts")
+}
+
+func TestFetchBlockAuthenticationFailed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ledger, next, _, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+
+	blockServiceConfig := config.GetDefaultLocal()
+	blockServiceConfig.EnableBlockService = true
+	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
+
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
+
+	node := basicRPCNode{}
+	node.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	node.start()
+	defer node.stop()
+	rootURL := node.rootURL()
+
+	net.addPeer(rootURL)
+
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupBlockDownloadRetryAttempts = 1
+
+	fetcher := MakeNetworkFetcher(logging.TestingLog(t), net, cfg, &mockedAuthenticator{errorRound: int(next)}, false)
+
+	_, _, _, err = fetcher.FetchBlock(context.Background(), next)
+	require.Contains(t, err.Error(), "FetchBlock failed after multiple blocks download attempts")
 }
