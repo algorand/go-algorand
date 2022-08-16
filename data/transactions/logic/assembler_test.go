@@ -2698,29 +2698,83 @@ func TestMacros(t *testing.T) {
 	)
 
 	testProg(t, `
-		#define x a b
-		#define b c a
+		#define x a d
+		#define d c a
 		#define hey wat's up x
 		#define c woah hey
 		int 1
 		c`,
-		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> hey -> x -> b -> c"}, Expect{7, "unknown opcode: c"},
+		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> hey -> x -> d -> c"}, Expect{7, "unknown opcode: c"},
 	)
 
 	testProg(t, `
 		#define c +
 		#define x a c
-		#define b x
-		#define c b
+		#define d x
+		#define c d
 		int 1
 		c`,
-		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> b -> x -> c"}, Expect{7, "+ expects..."},
+		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> d -> x -> c"}, Expect{7, "+ expects..."},
 	)
 
 	testProg(t, `
 		#define X X
 		int 3`,
 		AssemblerMaxVersion, Expect{2, "Macro cycle discovered: X -> X"},
+	)
+
+	testProg(t, `
+		#define return random
+		#define pay randomm
+		#define NoOp randommm
+		#define + randommmm
+		#pragma version 1
+		#define return hi
+		#define + hey
+		int 1`,
+		assemblerNoVersion,
+		Expect{3, "Named constants..."},
+		Expect{4, "Named constants..."},
+		Expect{6, "+ is defined as a macro but is an opcode..."},
+		Expect{8, "Macro names cannot be opcodes: +"},
+	)
+
+	testProg(t, `
+		#define return random
+		#define pay randomm
+		#define NoOp randommm
+		#define + randommmm
+		int 1
+		#define return hi
+		#define + hey`,
+		assemblerNoVersion,
+		Expect{3, "Named constants..."},
+		Expect{4, "Named constants..."},
+		Expect{6, "+ is defined as a macro but is an opcode..."},
+		Expect{8, "Macro names cannot be opcodes: +"},
+	)
+
+	testProg(t, `
+		#define Sender hello
+		#define ApplicationArgs hiya
+		#pragma version 1
+		#define Sender helllooooo
+		#define ApplicationArgs heyyyyy
+		int 1`,
+		assemblerNoVersion,
+		Expect{4, "Sender is defined as a macro but is a field name..."},
+		Expect{5, "Macro names cannot be field names: Sender"},
+	)
+
+	testProg(t, `
+		#define Sender hello
+		#define ApplicationArgs hiya
+		int 1
+		#define Sender helllooooo
+		#define ApplicationArgs heyyyyy`,
+		assemblerNoVersion,
+		Expect{4, "Sender is defined as a macro but is a field name..."},
+		Expect{5, "Macro names cannot be field names: Sender"},
 	)
 
 }

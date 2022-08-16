@@ -1600,6 +1600,7 @@ func (ops *OpStream) assemble(text string) error {
 			// we're about to begin processing opcodes, so settle the Version
 			if ops.Version == assemblerNoVersion {
 				ops.Version = AssemblerDefaultVersion
+				ops.versionedMacroFilter()
 			}
 			if ops.versionedPseudoOps == nil {
 				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
@@ -1697,6 +1698,44 @@ func (ops *OpStream) cycle(macro string, previous ...string) bool {
 	return false
 }
 
+// Once a version is obtained, versionedMacroFilter goes through previously defined macros
+// and ensures they don't use opcodes/fields from the obtained version
+func (ops *OpStream) versionedMacroFilter() error {
+	var err error = nil
+	for macroName := range ops.macros {
+		if fieldNames[ops.Version][macroName] {
+			err = fmt.Errorf("%s is defined as a macro but is a field name in version %d", macroName, ops.Version)
+		} else if _, ok := OpsByName[ops.Version][macroName]; ok {
+			err = fmt.Errorf("%s is defined as a macro but is an opcode in version %d", macroName, ops.Version)
+		} else {
+			continue
+		}
+		ops.error(err)
+		delete(ops.macros, macroName)
+	}
+	if err != nil {
+		err = errors.New("version is incompatible with defined macros")
+	}
+	return err
+}
+
+func (ops *OpStream) filterMacro(macroName string) error {
+	_, isTxnType := txnTypeMap[macroName]
+	_, isOnCompletion := onCompletionMap[macroName]
+	if isTxnType || isOnCompletion {
+		return ops.errorf("Named constants cannot be used as macro names: %s", macroName)
+	}
+	if ops.Version != assemblerNoVersion {
+		if _, ok := OpsByName[ops.Version][macroName]; ok {
+			return ops.errorf("Macro names cannot be opcodes: %s", macroName)
+		}
+		if fieldNames[ops.Version][macroName] {
+			return ops.errorf("Macro names cannot be field names: %s", macroName)
+		}
+	}
+	return nil
+}
+
 func (ops *OpStream) define(tokens []string) error {
 	if tokens[0] != "#define" {
 		return ops.errorf("invalid syntax: %s", tokens[0])
@@ -1706,7 +1745,7 @@ func (ops *OpStream) define(tokens []string) error {
 	}
 	saved, ok := ops.macros[tokens[1]]
 	ops.macros[tokens[1]] = tokens[2:len(tokens):len(tokens)]
-	if ops.cycle(tokens[1]) {
+	if ops.cycle(tokens[1]) || ops.filterMacro(tokens[1]) != nil {
 		if ok {
 			ops.macros[tokens[1]] = saved
 		} else {
@@ -1747,11 +1786,12 @@ func (ops *OpStream) pragma(tokens []string) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-		} else if ops.Version != ver {
-			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
-		} else {
-			// ops.Version is already correct, or needed to be upped.
+			return ops.versionedMacroFilter()
 		}
+		if ops.Version != ver {
+			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
+		}
+		// ops.Version is already correct, or needed to be upped.
 		return nil
 	case "typetrack":
 		if len(tokens) < 3 {
