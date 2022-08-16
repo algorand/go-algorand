@@ -1571,10 +1571,10 @@ func (ops *OpStream) assemble(text string) error {
 				directive := first[1:]
 				switch directive {
 				case "pragma":
-					ops.pragma(tokens)
+					ops.pragma(tokens) //nolint:errcheck
 					ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				default:
-					ops.errorf("Unknown directive: %s", directive)
+					ops.errorf("Unknown directive: %s", directive) //nolint:errcheck
 				}
 				continue
 			}
@@ -1618,8 +1618,8 @@ func (ops *OpStream) assemble(text string) error {
 					}
 				}
 				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
-				spec.asm(ops, &spec, current[1:])
-				if spec.deadens() { // An unconditional branch deadens the following code
+				spec.asm(ops, &spec, current[1:]) //nolint:errcheck
+				if spec.deadens() {               // An unconditional branch deadens the following code
 					ops.known.deaden()
 				}
 				if spec.Name == "callsub" {
@@ -1636,7 +1636,7 @@ func (ops *OpStream) assemble(text string) error {
 		if errors.Is(err, bufio.ErrTooLong) {
 			err = errors.New("line too long")
 		}
-		ops.error(err)
+		ops.error(err) //nolint:errcheck
 	}
 
 	// backward compatibility: do not allow jumps behind last instruction in v1
