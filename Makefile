@@ -100,7 +100,7 @@ fix: build
 	$(GOPATH1)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golint ./...
+	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml 
 
 vet:
 	go vet ./...
