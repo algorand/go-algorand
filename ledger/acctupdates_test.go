@@ -1371,7 +1371,7 @@ func TestKVCache(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
