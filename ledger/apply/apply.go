@@ -19,10 +19,18 @@ package apply
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+// StateProofsApplier allows fetching and updating state-proofs state on the ledger
+type StateProofsApplier interface {
+	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
+	GetStateProofNextRound() basics.Round
+	SetStateProofNextRound(rnd basics.Round)
+}
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)

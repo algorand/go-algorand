@@ -119,10 +119,10 @@ type (
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
 
-		// CompactCert tracks the state of compact certs, potentially
-		// for multiple types of certs.
-		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
-		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
+		// StateProofTracking tracks the status of the state proofs, potentially
+		// for multiple types of ASPs (Algorand's State Proofs).
+		//msgp:sort protocol.StateProofType protocol.SortStateProofType
+		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
 
 		// ParticipationUpdates contains the information needed to mark
 		// certain accounts offline because their participation keys expired
@@ -214,27 +214,26 @@ type (
 		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
-	// CompactCertState tracks the state of compact certificates.
-	CompactCertState struct {
+	// StateProofTrackingData tracks the status of state proofs.
+	StateProofTrackingData struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		// CompactCertVoters is the root of a Merkle tree containing the
-		// online accounts that will help sign a compact certificate.  The
-		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
-		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// StateProofVotersCommitment is the root of a vector commitment containing the
+		// online accounts that will help sign a state proof.  The
+		// VC root, and the state proof, happen on blocks that
+		// are a multiple of ConsensusParams.StateProofRounds.  For blocks
+		// that are not a multiple of ConsensusParams.StateProofRounds,
 		// this value is zero.
-		CompactCertVoters crypto.GenericDigest `codec:"v"`
+		StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
 
-		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters (or zero, if the merkle root is
-		// zero).  This is intended for computing the threshold of votes to
-		// expect from CompactCertVoters.
-		CompactCertVotersTotal basics.MicroAlgos `codec:"t"`
+		// StateProofOnlineTotalWeight is the total number of microalgos held by the online accounts
+		// during the StateProof round (or zero, if the merkle root is zero - no commitment for StateProof voters).
+		// This is intended for computing the threshold of votes to expect from StateProofVotersCommitment.
+		StateProofOnlineTotalWeight basics.MicroAlgos `codec:"t"`
 
-		// CompactCertNextRound is the next round for which we will accept
-		// a CompactCert transaction.
-		CompactCertNextRound basics.Round `codec:"n"`
+		// StateProofNextRound is the next round for which we will accept
+		// a StateProof transaction.
+		StateProofNextRound basics.Round `codec:"n"`
 	}
 
 	// A Block contains the Payset and metadata corresponding to a given Round.

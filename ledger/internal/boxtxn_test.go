@@ -91,8 +91,8 @@ func TestBoxCreate(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
@@ -150,8 +150,8 @@ func TestBoxCreateAvailability(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
@@ -254,8 +254,8 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 

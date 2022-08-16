@@ -1,6 +1,6 @@
 {
-  "EvalMaxVersion": 8,
-  "LogicSigVersion": 6,
+  "EvalMaxVersion": 7,
+  "LogicSigVersion": 7,
   "Ops": [
     {
       "Opcode": 0,
@@ -1285,7 +1285,7 @@
       "Returns": "B",
       "Size": 2,
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
-      "DocExtra": "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See \u003ca href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\"\u003eRFC 4648\u003c/a\u003e (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.\tThis opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
       "ImmediateNote": "{uint8 encoding index}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1297,8 +1297,8 @@
       "Args": "BB",
       "Returns": ".",
       "Size": 2,
-      "Doc": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
-      "DocExtra": "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+      "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
+      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
       "ImmediateNote": "{string return type}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1673,42 +1673,6 @@
       "Returns": "B",
       "Size": 1,
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 153,
-      "Name": "bn256_add",
-      "Args": "BB",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "for (curve points A and B) return the curve point A + B",
-      "DocExtra": "A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 154,
-      "Name": "bn256_scalar_mul",
-      "Args": "BB",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "for (curve point A, scalar K) return the curve point KA",
-      "DocExtra": "A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
-      "Groups": [
-        "Arithmetic"
-      ]
-    },
-    {
-      "Opcode": 155,
-      "Name": "bn256_pairing",
-      "Args": "BB",
-      "Returns": "U",
-      "Size": 1,
-      "Doc": "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired =\u003e {0 or 1}",
-      "DocExtra": "G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
       "Groups": [
         "Arithmetic"
       ]
@@ -2203,84 +2167,6 @@
       ]
     },
     {
-      "Opcode": 185,
-      "Name": "box_create",
-      "Args": "BU",
-      "Returns": "U",
-      "Size": 1,
-      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
-      "DocExtra": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 186,
-      "Name": "box_extract",
-      "Args": "BUU",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 187,
-      "Name": "box_replace",
-      "Args": "BUB",
-      "Size": 1,
-      "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 188,
-      "Name": "box_del",
-      "Args": "B",
-      "Returns": "U",
-      "Size": 1,
-      "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 189,
-      "Name": "box_len",
-      "Args": "B",
-      "Returns": "UU",
-      "Size": 1,
-      "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 190,
-      "Name": "box_get",
-      "Args": "B",
-      "Returns": "BU",
-      "Size": 1,
-      "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
-      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
-      "Opcode": 191,
-      "Name": "box_put",
-      "Args": "BB",
-      "Size": 1,
-      "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist.",
-      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
-      "Groups": [
-        "State Access"
-      ]
-    },
-    {
       "Opcode": 192,
       "Name": "txnas",
       "Args": "U",
@@ -2399,6 +2285,7 @@
       "Returns": "BU",
       "Size": 2,
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+      "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
       "ImmediateNote": "{uint8 parameters index}",
       "Groups": [
         "Arithmetic"
@@ -2410,7 +2297,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
       "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"

@@ -28,11 +28,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+var docVersion = 7
+
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
 | - | -- |
 `)
-	opSpecs := logic.OpsByName[logic.LogicVersion]
+	opSpecs := logic.OpsByName[docVersion]
 	for _, opname := range names {
 		spec, ok := opSpecs[opname]
 		if !ok {
@@ -184,7 +186,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 			if cost.From == cost.To {
 				fmt.Fprintf(out, "    - %s (v%d)\n", cost.Cost, cost.To)
 			} else {
-				if cost.To < logic.LogicVersion {
+				if cost.To < docVersion {
 					fmt.Fprintf(out, "    - %s (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
 				} else {
 					fmt.Fprintf(out, "    - %s (since v%d)\n", cost.Cost, cost.From)
@@ -221,7 +223,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	written := make(map[string]bool)
 	for _, spec := range opSpecs {
 		err = opToMarkdown(out, &spec, written)
@@ -317,7 +319,7 @@ func argEnums(name string) ([]string, string) {
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
@@ -332,7 +334,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Groups = opGroups[spec.Name]
 	}
 	return &LanguageSpec{
-		EvalMaxVersion:  logic.LogicVersion,
+		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		Ops:             records,
 	}
@@ -367,7 +369,7 @@ func main() {
 	constants.Close()
 
 	written := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {

@@ -435,7 +435,7 @@ func BenchmarkFillDB(b *testing.B) {
 
 	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
-	cpy.CompactCertRounds = 256
+	cpy.StateProofInterval = 256
 	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
 

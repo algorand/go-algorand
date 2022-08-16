@@ -117,7 +117,7 @@ var opDocByName = map[string]string{
 	"gaid":    "ID of the asset or application created in the Tth transaction of the current group",
 	"gaids":   "ID of the asset or application created in the Ath transaction of the current group",
 
-	"json_ref": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
+	"json_ref": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
 
 	"bnz":     "branch to TARGET if value A is not zero",
 	"bz":      "branch to TARGET if value A is zero",
@@ -192,7 +192,7 @@ var opDocByName = map[string]string{
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
-	"block":      "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
 	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
@@ -200,7 +200,7 @@ var opDocByName = map[string]string{
 	"box_del":     "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
 	"box_len":     "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
 	"box_get":     "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
-	"box_put":     "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist.",
+	"box_put":     "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
 }
 
 // OpDoc returns a description of the op
@@ -278,6 +278,7 @@ func OpImmediateNote(opName string) string {
 
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
+	"vrf_verify":          "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
 	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
 	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
@@ -328,8 +329,9 @@ var opDocExtras = map[string]string{
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
 	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
-	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
-	"json_ref":            "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+
+	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
 
 	"box_create": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
 	"box_get":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
