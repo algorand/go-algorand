@@ -719,7 +719,7 @@ byte "message"
 log
 int 1`
 
-func TestSimulationResultLogs(t *testing.T) {
+func TestDetailedSimulateResultLogs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -771,4 +771,107 @@ func TestSimulationResultLogs(t *testing.T) {
 	require.NotEmpty(t, actualTxnWithAD.ApplyData)
 	require.Len(t, actualTxnWithAD.ApplyData.EvalDelta.Logs, 1)
 	require.Equal(t, "message", actualTxnWithAD.ApplyData.EvalDelta.Logs[0])
+}
+
+const plannedFailureProgram = `#pragma version 6
+int 3                           // [index(3)]
+prepare_txn:
+	itxn_begin                    // [index]
+	int appl                      // [index, appl]
+	itxn_field TypeEnum           // [index]
+	int NoOp                      // [index, NoOp]
+	itxn_field OnCompletion       // [index]
+	byte 0x068101                 // [index, 0x068101]
+	itxn_field ClearStateProgram  // [index]
+app_arg_check:
+	dup													  // [index, index]
+	txn ApplicationArgs 0         // [index, index, args[0]]
+	btoi                          // [index, index, btoi(args[0])]
+	==                            // [index, index=?=btoi(args[0])]
+	bnz reject_approval_program   // [index]
+pass_approval_program:
+	byte 0x068101                 // [index, 0x068101]. 0x068101 is #pragma version 6; int 1;
+	b submit_and_loop             // [index, 0x068101]
+reject_approval_program:
+	byte 0x068100                 // [index, 0x068100]. 0x068100 is #pragma version 6; int 0;
+	b submit_and_loop             // [index, 0x068100]
+submit_and_loop:
+	itxn_field ApprovalProgram    // [index]
+	itxn_submit                   // [index]
+decrement_and_loop:
+	int 1                         // [index, 1]
+	-                             // [index - 1]
+	dup                           // [index - 1, index - 1]
+	bnz prepare_txn               // [index - 1]
+pop                             // []
+int 1                           // [1]
+`
+
+func TestDetailedSimulateFailureInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Set up simulator
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+
+	// Compile approval program
+	ops, err := logic.AssembleString(plannedFailureProgram)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	// Test FailedAt for each program failure
+	for i := 0; i < 3; i++ {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			txgroup := []transactions.SignedTxn{
+				// fund app
+				{
+					Txn: transactions.Transaction{
+						Type:   protocol.PaymentTx,
+						Header: makeTxnHeader(sender),
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: basics.AppIndex(2).Address(),
+							Amount:   basics.MicroAlgos{Raw: 403000}, // 400000 min balance plus 3000 for 3 txns
+						},
+					},
+				},
+				// create app
+				{
+					Txn: transactions.Transaction{
+						Type:   protocol.ApplicationCallTx,
+						Header: makeTxnHeader(sender),
+						ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+							ApplicationID:     0,
+							ApplicationArgs:   [][]byte{uint64ToBytes(uint64(3 - i))},
+							ApprovalProgram:   approvalProg,
+							ClearStateProgram: clearStateProg,
+							LocalStateSchema: basics.StateSchema{
+								NumUint:      0,
+								NumByteSlice: 0,
+							},
+							GlobalStateSchema: basics.StateSchema{
+								NumUint:      0,
+								NumByteSlice: 0,
+							},
+						},
+					},
+				},
+			}
+
+			err = attachGroupID(txgroup)
+			require.NoError(t, err)
+
+			result, err := s.DetailedSimulate(txgroup)
+			require.NoError(t, err)
+			require.Contains(t, result.TxnGroups[0].FailureMessage, "rejected by ApprovalProgram")
+			require.Equal(t, simulation.TxnPath{1, uint64(i)}, result.TxnGroups[0].FailedAt)
+		})
+	}
 }

@@ -26,16 +26,46 @@ import (
 // ==============================
 
 type debuggerHook struct {
-	result *SimulationResult
+	result        *SimulationResult
+	cursor        TxnPath
+	innerTxnIndex int
 }
 
 func makeDebuggerHook(txgroup []transactions.SignedTxn) debuggerHook {
 	result := MakeSimulationResult([][]transactions.SignedTxn{txgroup})
-	return debuggerHook{&result}
+	return debuggerHook{result: &result, cursor: make(TxnPath, 0)}
+}
+
+func (dh *debuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	// Add this transaction to the cursor
+	dh.cursor = append(dh.cursor, uint64(groupIndex))
+	return nil
 }
 
 func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	// Remove this transaction from the cursor
+	dh.cursor = dh.cursor[:len(dh.cursor)-1]
+
+	// Reset the inner txn index
+	dh.innerTxnIndex = 0
+
 	// Set result ApplyData for this transaction
 	dh.result.TxnGroups[0].Txns[groupIndex].Txn.ApplyData = ep.TxnGroup[groupIndex].ApplyData
+	return nil
+}
+
+func (dh *debuggerHook) BeforeInnerTxn(ep *logic.EvalParams) error {
+	// Add this inner transaction to the cursor
+	dh.cursor = append(dh.cursor, uint64(dh.innerTxnIndex))
+
+	// Increment the inner txn index
+	dh.innerTxnIndex++
+
+	return nil
+}
+
+func (dh *debuggerHook) AfterInnerTxn(ep *logic.EvalParams) error {
+	// Remove this inner transaction from the cursor
+	dh.cursor = dh.cursor[:len(dh.cursor)-1]
 	return nil
 }

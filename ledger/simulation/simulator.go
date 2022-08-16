@@ -17,6 +17,8 @@
 package simulation
 
 import (
+	"errors"
+
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -172,5 +174,17 @@ func (s Simulator) SimulateWithDebugger(txgroup []transactions.SignedTxn, debugg
 func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (SimulationResult, error) {
 	simulatorDebugger := makeDebuggerHook(txgroup)
 	_, _, err := s.SimulateWithDebugger(txgroup, &simulatorDebugger)
+	if err != nil {
+		// if there was a non-evaluation error, return it
+		if !errors.As(err, &EvalFailureError{}) {
+			return SimulationResult{}, err
+		}
+
+		// otherwise add the failure message and location to the result
+		simulatorDebugger.result.TxnGroups[0].FailureMessage = err.Error()
+		simulatorDebugger.result.TxnGroups[0].FailedAt = simulatorDebugger.cursor
+		err = nil
+	}
+
 	return *simulatorDebugger.result, err
 }
