@@ -10,8 +10,6 @@ jobs:
         with:
           fetch-depth: 0
           path: go-algorand
-      - name: Install libraries
-        run: sudo apt-get -y -q install libboost-math-dev
       - name: Uninstall existing go installation
         run: sudo apt-get -y -q purge golang-go
       - name: Run codegen_verification.sh
