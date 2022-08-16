@@ -220,11 +220,11 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 		return transactions.Transaction{}, fmt.Errorf("state proof key pointer is nil")
 	}
 
-	if len(*part.Key.StateProofKey) != len(merklesignature.Verifier{}) {
-		return transactions.Transaction{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Verifier{}), len(*part.Key.StateProofKey))
+	if len(*part.Key.StateProofKey) != len(merklesignature.Commitment{}) {
+		return transactions.Transaction{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Commitment{}), len(*part.Key.StateProofKey))
 	}
 
-	var stateProofPk merklesignature.Verifier
+	var stateProofPk merklesignature.Commitment
 	copy(stateProofPk[:], (*part.Key.StateProofKey)[:])
 
 	t := transactions.Transaction{

@@ -513,17 +513,18 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // 		 M     |     0     | first + validRounds - 1
 // 		 M     |     M     | error
 //
-func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.SuggestedParams()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
+		return 0, 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 
-	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	first, last, err = computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	return first, last, params.LastRound, err
 }
 
 func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
@@ -1210,11 +1211,20 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 	return
 }
 
-// TxnProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TxnProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
+// TransactionProof returns a Merkle proof for a transaction in a block.
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		return algod.Proof(txid, round, hashType)
+		return algod.TransactionProof(txid, round, hashType)
+	}
+	return
+}
+
+// LightBlockHeaderProof returns a Merkle proof for a block.
+func (c *Client) LightBlockHeaderProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.LightBlockHeaderProof(round)
 	}
 	return
 }

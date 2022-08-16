@@ -1247,30 +1247,9 @@
         "round",
         "period",
         "txnRoot",
-        "timestamp",
-        "compactCertVoters",
-        "compactCertVotersTotal",
-        "compactCertNextRound"
+        "timestamp"
       ],
       "properties": {
-        "compactCertNextRound": {
-          "description": "CompactCertNextRound is the next round for which a compact certificate is\nexpected.",
-          "type": "integer",
-          "format": "uint64",
-          "x-go-name": "CompactCertNextRound"
-        },
-        "compactCertVoters": {
-          "description": "CompactCertVoters is the root of the merkle tree of voters for compact certs.",
-          "type": "string",
-          "format": "byte",
-          "x-go-name": "CompactCertVoters"
-        },
-        "compactCertVotersTotal": {
-          "description": "CompactCertVotersTotal is the total amount of microalgos held by the voters in\nthe CompactCertVoters merkle tree.",
-          "type": "integer",
-          "format": "uint64",
-          "x-go-name": "CompactCertVotersTotal"
-        },
         "currentProtocol": {
           "description": "CurrentProtocol is a string that represents the current protocol",
           "type": "string",
@@ -1417,29 +1396,6 @@
         }
       },
       "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-    },
-    "CompactCertTransactionType": {
-      "description": "CompactCertTransactionType contains the additional fields for a compact cert transaction",
-      "type": "object",
-      "required": [
-        "rnd",
-        "cert"
-      ],
-      "properties": {
-        "cert": {
-          "description": "Cert is the msgpack encoding of the compact cert.",
-          "type": "string",
-          "format": "byte",
-          "x-go-name": "Cert"
-        },
-        "rnd": {
-          "description": "CertRound is the round whose block this compact cert refers to.",
-          "type": "integer",
-          "format": "uint64",
-          "x-go-name": "CertRound"
-        }
-      },
-      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
     },
     "KeyregTransactionType": {
       "description": "KeyregTransactionType contains the additional fields for a keyreg Transaction",
@@ -1654,6 +1610,29 @@
       },
       "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
     },
+    "StateProofTransactionType": {
+      "description": "StateProofTransactionType contains the additional fields for a state proof transaction",
+      "type": "object",
+      "required": [
+        "sp",
+        "spmsg"
+      ],
+      "properties": {
+        "sp": {
+          "description": "StateProof is the msgpack encoding of the state proof.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "StateProof"
+        },
+        "spmsg": {
+          "description": "StateProofMessage is the msgpack encoding of the state proof message.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "StateProofMessage"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
     "StateSchema": {
       "description": "swagger: model StateSchema",
       "type": "object",
@@ -1719,16 +1698,13 @@
         "first-round",
         "last-round",
         "app",
-        "compactcert",
+        "sp",
         "genesisID",
         "genesishashb64"
       ],
       "properties": {
         "app": {
           "$ref": "#/definitions/ApplicationCallTransactionType"
-        },
-        "compactcert": {
-          "$ref": "#/definitions/CompactCertTransactionType"
         },
         "curcfg": {
           "$ref": "#/definitions/AssetConfigTransactionType"
@@ -1813,6 +1789,9 @@
           "type": "integer",
           "format": "uint64",
           "x-go-name": "ConfirmedRound"
+        },
+        "sp": {
+          "$ref": "#/definitions/StateProofTransactionType"
         },
         "tx": {
           "description": "TxID is the transaction ID",
