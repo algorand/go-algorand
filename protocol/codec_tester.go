@@ -17,7 +17,6 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -230,7 +229,12 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v.SetUint(rand.Uint64())
+		if strings.HasSuffix(datapath, "HashFactory/HashType") {
+			// generate random value that will avoid protocol.ErrInvalidObject from HashType.Validate()
+			v.SetUint(rand.Uint64() % 3)
+		} else {
+			v.SetUint(rand.Uint64())
+		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
@@ -431,11 +435,6 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			continue
 		}
 
-		// some objects might appen to the original error additional info.
-		// we ensure that invalidObject error is not failing the test.
-		if errors.Is(err, ErrInvalidObject) {
-			continue
-		}
 		require.NoError(t, err)
 	}
 }
