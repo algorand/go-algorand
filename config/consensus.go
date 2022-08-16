@@ -1196,7 +1196,7 @@ func initConsensusProtocols() {
 	vFuture.BoxFlatMinBalance = 2500
 	vFuture.BoxByteMinBalance = 400
 	vFuture.MaxAppBoxReferences = 8
-	vFuture.BytesPerBoxReference = 8096
+	vFuture.BytesPerBoxReference = 1024
 
 	vFuture.UnfundedSenders = true
 
