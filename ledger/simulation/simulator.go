@@ -183,7 +183,18 @@ func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (Simulatio
 		// otherwise add the failure message and location to the result
 		simulatorDebugger.result.TxnGroups[0].FailureMessage = err.Error()
 		simulatorDebugger.result.TxnGroups[0].FailedAt = simulatorDebugger.cursor
+
+		// and set WouldSucceed to false
+		simulatorDebugger.result.WouldSucceed = false
 		err = nil
+	}
+
+	// mark whether signatures are missing
+	for i, tx := range txgroup {
+		if verify.TxnIsMissingSig(&tx) {
+			simulatorDebugger.result.TxnGroups[0].Txns[i].MissingSignature = true
+			simulatorDebugger.result.WouldSucceed = false
+		}
 	}
 
 	return *simulatorDebugger.result, err

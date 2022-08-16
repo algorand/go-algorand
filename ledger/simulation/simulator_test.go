@@ -763,6 +763,7 @@ func TestDetailedSimulateResultLogs(t *testing.T) {
 
 	result, err := s.DetailedSimulate(txgroup)
 	require.NoError(t, err)
+	require.True(t, result.WouldSucceed)
 	require.Equal(t, 1, len(result.TxnGroups))
 	require.Equal(t, 1, len(result.TxnGroups[0].Txns))
 
@@ -870,8 +871,57 @@ func TestDetailedSimulateFailureInformation(t *testing.T) {
 
 			result, err := s.DetailedSimulate(txgroup)
 			require.NoError(t, err)
+			require.False(t, result.WouldSucceed)
 			require.Contains(t, result.TxnGroups[0].FailureMessage, "rejected by ApprovalProgram")
 			require.Equal(t, simulation.TxnPath{1, uint64(i)}, result.TxnGroups[0].FailedAt)
 		})
 	}
+}
+
+func TestDetailedSimulateMissingSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+	senderBalance := accounts[0].acctData.MicroAlgos
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender,
+					Amount:   basics.MicroAlgos{Raw: senderBalance.Raw - 1000},
+				},
+			},
+		},
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender,
+					Amount:   basics.MicroAlgos{Raw: senderBalance.Raw - 2000},
+				},
+			},
+		},
+	}
+
+	err := attachGroupID(txgroup)
+	require.NoError(t, err)
+
+	// add signature to second transaction
+	signatureSecrets := accounts[0].sk
+	txgroup[1] = txgroup[1].Txn.Sign(signatureSecrets)
+
+	result, err := s.DetailedSimulate(txgroup)
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.False(t, result.WouldSucceed)
+	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
+	require.False(t, result.TxnGroups[0].Txns[1].MissingSignature)
 }
