@@ -202,6 +202,8 @@ func TestNonOverridenDataLedgerMethodsUseRoundParamter(t *testing.T) {
 // > Simulation Tests
 // ==============================
 
+// > Simulate Without Debugger
+
 func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -325,9 +327,9 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 }
 
-const trivialAVMProgram = `#pragma version 2
+const trivialAVMProgram = `#pragma version 6
 int 1`
-const rejectAVMProgram = `#pragma version 2
+const rejectAVMProgram = `#pragma version 6
 int 0`
 
 func TestSimpleAppCall(t *testing.T) {
@@ -503,7 +505,7 @@ func TestInvalidTxGroup(t *testing.T) {
 	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
 }
 
-const accountBalanceCheckProgram = `#pragma version 4
+const accountBalanceCheckProgram = `#pragma version 6
   txn ApplicationID      // [appId]
 	bz end                 // []
   int 1                  // [1]
@@ -659,4 +661,114 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 
 	_, _, err = s.Simulate(txgroup)
 	require.NoError(t, err)
+}
+
+// > Simulate With Debugger
+
+type simpleDebugger struct {
+	beforeTxnCalls int
+	afterTxnCalls  int
+}
+
+func (d *simpleDebugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.beforeTxnCalls++
+	return nil
+}
+func (d *simpleDebugger) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.afterTxnCalls++
+	return nil
+}
+
+// TestSimulateWithDebugger is a simple test to ensure that the debugger hooks are called. More
+// complicated tests are in the logic/debugger_test.go file.
+func TestSimulateWithDebugger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+	senderBalance := accounts[0].acctData.MicroAlgos
+	amount := senderBalance.Raw - 10000
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: sender,
+					Amount:   basics.MicroAlgos{Raw: amount},
+				},
+			},
+		},
+	}
+
+	debugger := simpleDebugger{0, 0}
+	_, _, err := s.SimulateWithDebugger(txgroup, &debugger)
+	require.NoError(t, err)
+	require.Equal(t, 1, debugger.beforeTxnCalls)
+	require.Equal(t, 1, debugger.afterTxnCalls)
+}
+
+// > Detailed Simulate
+
+const logProgram = `#pragma version 6
+byte "message"
+log
+int 1`
+
+func TestSimulationResultLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+
+	// Compile approval program
+	ops, err := logic.AssembleString(logProgram)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	txgroup := []transactions.SignedTxn{
+		// create app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+	}
+
+	result, err := s.DetailedSimulate(txgroup)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.TxnGroups))
+	require.Equal(t, 1, len(result.TxnGroups[0].Txns))
+
+	actualTxnWithAD := result.TxnGroups[0].Txns[0].Txn
+	require.Equal(t, protocol.ApplicationCallTx, actualTxnWithAD.Txn.Type)
+	require.NotEmpty(t, actualTxnWithAD.ApplyData)
+	require.Len(t, actualTxnWithAD.ApplyData.EvalDelta.Logs, 1)
+	require.Equal(t, "message", actualTxnWithAD.ApplyData.EvalDelta.Logs[0])
 }

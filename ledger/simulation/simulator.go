@@ -51,16 +51,6 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 }
 
 // ==============================
-// > Simulator Debugger
-// ==============================
-
-type debuggerHook struct{}
-
-func makeDebuggerHook() logic.DebuggerHook {
-	return debuggerHook{}
-}
-
-// ==============================
 // > Simulator Errors
 // ==============================
 
@@ -158,20 +148,29 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+	return s.SimulateWithDebugger(txgroup, nil)
+}
+
+func (s Simulator) SimulateWithDebugger(txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
-	simulatorDebugger := makeDebuggerHook()
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err = s.check(hdr, txgroup, simulatorDebugger)
+	missingSignatures, err = s.check(hdr, txgroup, debugger)
 	if err != nil {
 		return
 	}
 
-	vb, err = s.evaluate(hdr, txgroup, simulatorDebugger)
+	vb, err = s.evaluate(hdr, txgroup, debugger)
 	return
+}
+
+func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (SimulationResult, error) {
+	simulatorDebugger := makeDebuggerHook(txgroup)
+	_, _, err := s.SimulateWithDebugger(txgroup, &simulatorDebugger)
+	return *simulatorDebugger.result, err
 }
