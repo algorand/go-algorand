@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestIsWritingCatchpointFile(t *testing.T) {
+func TestCatchpoint_IsWritingDataFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ct := &catchpointTracker{}
@@ -75,7 +76,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	return ct
 }
 
-func TestGetCatchpointStream(t *testing.T) {
+func TestCatchpoint_GetStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -146,12 +147,12 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// TestCatchpoint_DeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
 // It does so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
 // ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test calls the function
 // and ensures that it did not error, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
 // entries.
-func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+func TestCatchpoint_DeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -203,7 +204,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 // The test validate that when algod boots up it cleans empty catchpoint directories.
 // It is done by creating empty directories in the catchpoint root directory.
 // When algod boots up it should remove those directories.
-func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
+func TestCatchpoint_SchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// we don't want to run this test before the binary is compiled against the latest database upgrade schema.
@@ -269,7 +270,7 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 // If algod needs to create a new catchpoint file it will delete the oldest.
 // In addition, when deleting old catchpoint files an empty directory should be deleted
 // as well.
-func TestRecordCatchpointFile(t *testing.T) {
+func TestCatchpoint_RecordCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	temporaryDirectory := t.TempDir()
@@ -315,7 +316,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	require.Equalf(t, onlyCatchpointDirEmpty, true, "Directories: %v", emptyDirs)
 }
 
-func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
+func BenchmarkCatchpoint_LargeDataWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
@@ -378,7 +379,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
 
-func TestReproducibleCatchpointLabels(t *testing.T) {
+func TestCatchpoint_ReproducibleLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
@@ -604,7 +605,7 @@ func (bt *blockingTracker) handleUnorderedCommit(*deferredCommitContext) {
 func (bt *blockingTracker) close() {
 }
 
-func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
+func TestCatchpoint_NonblockingCatchpointWriting(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
@@ -750,7 +751,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	}
 }
 
-func TestCalculateFirstStageRounds(t *testing.T) {
+func TestCatchpoint_CalculateFirstStageRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	type TestCase struct {
@@ -804,7 +805,7 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 	}
 }
 
-func TestCalculateCatchpointRounds(t *testing.T) {
+func TestCatchpoint_CalculateCatchpointRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	type TestCase struct {
@@ -837,7 +838,7 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 
 // Test that pruning first stage catchpoint database records and catchpoint data files
 // works.
-func TestFirstStageInfoPruning(t *testing.T) {
+func TestCatchpoint_FirstStageInfoPruning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -932,7 +933,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 
 // Test that on startup the catchpoint tracker restarts catchpoint's first stage if
 // there is an unfinished first stage record in the database.
-func TestFirstStagePersistence(t *testing.T) {
+func TestCatchpoint_FirstStagePersistence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1034,7 +1035,7 @@ func TestFirstStagePersistence(t *testing.T) {
 
 // Test that on startup the catchpoint tracker restarts catchpoint's second stage if
 // there is an unfinished catchpoint record in the database.
-func TestSecondStagePersistence(t *testing.T) {
+func TestCatchpoint_SecondStagePersistence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1170,7 +1171,7 @@ func TestSecondStagePersistence(t *testing.T) {
 // Test that when catchpoint's first stage record is unavailable
 // (e.g. catchpoints were disabled at first stage), the unfinished catchpoint
 // database record is deleted.
-func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
+func TestCatchpoint_SecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1259,7 +1260,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 // Test that on startup the catchpoint tracker deletes the unfinished catchpoint
 // database record when the first stage database record is missing.
-func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) {
+func TestCatchpoint_SecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1339,4 +1340,99 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 		context.Background(), ml2.dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
+}
+
+// TestCatchpoint_FastUpdates tests catchpoint label writing datarace
+func TestCatchpoint_FastUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.CatchpointTracking = 1
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := newCatchpointTracker(t, ml, conf, ".")
+	au := ml.trackers.accts
+	ao := ml.trackers.acctsOnline
+
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	trackers := make([]ledgerTracker, 0, len(ml.trackers.trackers))
+	for _, tracker := range ml.trackers.trackers {
+		if _, ok := tracker.(*txTail); !ok {
+			trackers = append(trackers, tracker)
+		}
+	}
+	ml.trackers.trackers = trackers
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < initialBlocksCount; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
+
+	wg := sync.WaitGroup{}
+
+	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(accts[i-1], updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		wg.Add(1)
+		go func(round basics.Round) {
+			defer wg.Done()
+			ml.trackers.committedUpTo(round)
+		}(i)
+	}
+	ml.trackers.waitAccountsWriting()
+	wg.Wait()
+
+	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
