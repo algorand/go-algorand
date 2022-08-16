@@ -303,11 +303,7 @@ func deleteLedgerFiles(deleteTracker bool) error {
 
 func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
 	// delete current ledger files.
-	err := deleteLedgerFiles(true)
-	if err != nil {
-		reportErrorf("Unable to delete ledger files : %v", err)
-		return err
-	}
+	deleteLedgerFiles(true) //nolint:errcheck
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
@@ -315,12 +311,7 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 		return err
 	}
 
-	defer func() {
-		err := deleteLedgerFiles(!loadOnly)
-		if err != nil {
-			reportErrorf("Unable to delete ledger files : %v", err)
-		}
-	}()
+	defer deleteLedgerFiles(!loadOnly) //nolint:errcheck
 	defer l.Close()
 
 	catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
