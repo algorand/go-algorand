@@ -243,6 +243,10 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
@@ -418,6 +422,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
+			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat

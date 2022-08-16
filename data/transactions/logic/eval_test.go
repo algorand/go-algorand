@@ -40,7 +40,7 @@ import (
 )
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
-// we check that TEAL v1 and v2 programs are compatible with the latest evaluator
+// we check that v1 and v2 programs are compatible with the latest evaluator
 func makeTestProto() *config.ConsensusParams {
 	return makeTestProtoV(LogicVersion)
 }
@@ -121,7 +121,7 @@ func benchmarkEvalParams(txn transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParams(txn)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := 2 * 1000 * 1000 // Allow long run times
+	bigBudget := 1000 * 1000 * 1000 // Allow long run times
 	clone.LogicSigMaxCost = uint64(bigBudget)
 	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
@@ -137,10 +137,11 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	}
 	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Trace = &strings.Builder{}
+	ep.SigLedger = NewLedger(nil)
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
 		ep.TxnGroup[0].Txn.Type = "" // set it back
-		ep.MinTealVersion = nil      // will recalculate in eval()
+		ep.MinAvmVersion = nil       // will recalculate in eval()
 	}
 	return ep
 }
@@ -206,16 +207,16 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, defaultEvalParams(), "invalid", "invalid program (empty)")
 }
 
-// TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
-func TestMinTealVersionParamEvalCheckSignature(t *testing.T) {
+// TestMinAvmVersionParamEval tests eval/check reading the MinAvmVersion from the param
+func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	params := defaultEvalParams()
 	version2 := uint64(rekeyingEnabledVersion)
-	params.MinTealVersion = &version2
+	params.MinAvmVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
-	// set the teal program version to 1
+	// set the program version to 1
 	binary.PutUvarint(program, 1)
 
 	verErr := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
@@ -269,6 +270,64 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	require.Equal(t, "", tealValue.Bytes)
 }
 
+func TestTxnFirstValidTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := makeSampleEnv()
+
+	// By default, test ledger uses an oddball round, ask it what round it's
+	// going to use and prep fv, lv accordingly.
+	current := ledger.Round()
+
+	// txn FirstValidTime is unusual.  It's not really a field of a txn, but
+	// since it looks at the past of the blockchain, it is "stateless"
+
+	// Kill off ep.Ledger, to confirm it's not being used
+	ep.Ledger = nil
+
+	tx.FirstValid = current - 10
+	tx.LastValid = current + 10
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	tx.FirstValid = current
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	tx.FirstValid = current - basics.Round(ep.Proto.MaxTxnLife)
+	tx.LastValid = current
+	testLogic(t, "txn FirstValidTime", 7, ep)
+
+	// This test isn't really even possible because lifetime is too big. But
+	// nothing here checks that, so we can write this imposible test.
+	tx.FirstValid = current - basics.Round(ep.Proto.MaxTxnLife)
+	tx.LastValid = current + 1
+	testLogic(t, "txn FirstValidTime", 7, ep, "is not available")
+
+	// But also test behavior at the beginning of chain's life by setting the
+	// fake ledger round to a low number.
+	ledger.rnd = 10
+	tx.FirstValid = 2
+	tx.LastValid = 100
+	testLogic(t, "txn FirstValidTime; int 104; ==", 7, ep)
+
+	tx.FirstValid = 3
+	testLogic(t, "txn FirstValidTime; int 109; ==", 7, ep)
+
+	// This ensure 0 is not available, even though it "should" be allowed by the
+	// range check. round 0 doesn't exist!
+	tx.FirstValid = 1
+	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
+
+	// glassbox test - we know available range depends on LastValid - Lifetime - 1
+	tx.FirstValid = 1
+	tx.LastValid = tx.FirstValid + basics.Round(ep.Proto.MaxTxnLife)
+	testLogic(t, "txn FirstValidTime", 7, ep, "round 0 is not available")
+
+	// Same, for even weirder case of asking for a wraparound, high round
+	tx.FirstValid = 0 // I *guess* this is a legal txn early in chain's life
+	testLogic(t, "txn FirstValidTime; int 4; ==", 7, ep, "round 18446744073709551615 is not available")
+}
+
 func TestWrongProtoVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -302,12 +361,12 @@ func TestSimpleMath(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testAccepts(t, "int  2; int 3; + ;int  5;==", 1)
-	testAccepts(t, "int 22; int 3; - ;int 19;==", 1)
-	testAccepts(t, "int  8; int 7; * ;int 56;==", 1)
-	testAccepts(t, "int 21; int 7; / ;int  3;==", 1)
+	testAccepts(t, "int  2; int 3; + ; int  5; ==", 1)
+	testAccepts(t, "int 22; int 3; - ; int 19; ==", 1)
+	testAccepts(t, "int  8; int 7; * ; int 56; ==", 1)
+	testAccepts(t, "int 21; int 7; / ; int  3; ==", 1)
 
-	testPanics(t, "int 1; int 2; - ;int 0; ==", 1)
+	testPanics(t, "int 1; int 2; - ; int 0; ==", 1)
 }
 
 func TestSha256EqArg(t *testing.T) {
@@ -876,7 +935,7 @@ func TestTxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(), fmt.Sprintf("invalid txn field %s", field))
 	}
 }
 
@@ -894,7 +953,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 127}
 	// TODO: Check should know the type stack was wrong
-	testLogicBytes(t, program, defaultEvalParams(), "invalid txn field 127")
+	testLogicBytes(t, program, defaultEvalParams(), "invalid txn field TxnField(127)")
 
 	// test gtxn does not accept ApplicationArgs and Accounts
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
@@ -906,7 +965,7 @@ func TestGtxnBadField(t *testing.T) {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
-		testLogicBytes(t, ops.Program, defaultEvalParams(), fmt.Sprintf("invalid txn field %d", field))
+		testLogicBytes(t, ops.Program, defaultEvalParams(), fmt.Sprintf("invalid txn field %s", field))
 	}
 }
 
@@ -924,7 +983,7 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&;"
+			source := "arg 0; arg 1; ==; arg 2; arg 3; !=; &&; arg 4; len; int 9; <; &&; "
 			if v >= 5 {
 				source += "int 0; args; int 1; args; ==; assert; int 2; args; int 3; args; !=; assert"
 			}
@@ -1026,6 +1085,10 @@ const globalV7TestProgram = globalV6TestProgram + `
 // No new globals in v7
 `
 
+const globalV8TestProgram = globalV7TestProgram + `
+// No new globals in v7
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1044,6 +1107,7 @@ func TestGlobal(t *testing.T) {
 		5: {GroupID, globalV5TestProgram},
 		6: {CallerApplicationAddress, globalV6TestProgram},
 		7: {CallerApplicationAddress, globalV7TestProgram},
+		8: {CallerApplicationAddress, globalV8TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1528,6 +1592,17 @@ txn ClearStateProgram
 ==
 assert
 
+txn FirstValidTime
+int 0
+>
+assert
+
+int 1
+`
+
+const testTxnProgramTextV8 = testTxnProgramTextV7 + `
+assert
+// no new txn fields in v8
 int 1
 `
 
@@ -1641,6 +1716,7 @@ func TestTxn(t *testing.T) {
 		5: testTxnProgramTextV5,
 		6: testTxnProgramTextV6,
 		7: testTxnProgramTextV7,
+		8: testTxnProgramTextV8,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -1651,9 +1727,6 @@ func TestTxn(t *testing.T) {
 				continue
 			}
 			if !strings.Contains(tests[v], txnField) {
-				if txnField == FirstValidTime.String() {
-					continue
-				}
 				// fields were introduced for itxn before they became available for txn
 				if v < txnEffectsVersion && fs.effects {
 					continue
@@ -1676,7 +1749,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
 			txn.Txn.ExtraProgramPages = 2
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -1931,7 +2004,7 @@ gtxn 0 Sender
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			txn := makeSampleTxn()
-			// RekeyTo not allowed in TEAL v1
+			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
@@ -2042,7 +2115,7 @@ txna ApplicationArgs 0
 
 	// modify txn field to unknown one
 	ops.Program[2] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify txn array index
 	ops.Program[2] = saved
@@ -2089,7 +2162,7 @@ txna ApplicationArgs 0
 
 	// modify gtxn field to unknown one
 	ops.Program[3] = 99
-	testLogicBytes(t, ops.Program, ep, "invalid txn field 99")
+	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify gtxn array index
 	ops.Program[3] = saved
@@ -2366,7 +2439,7 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abcaa; extract 0 6; byte 0x123456789abcaa; !=", 5)
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
-
+	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract; byte 0xbc; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint16; int 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract_uint32; int 0x3456789a; ==", 5)
 	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract_uint64; int 0x123456789abcdef0; ==", 5)
@@ -2374,6 +2447,7 @@ func TestExtractOp(t *testing.T) {
 
 	testAccepts(t, `byte "hello"; extract 5 0; byte ""; ==`, 5)
 	testAccepts(t, `byte "hello"; int 5; int 0; extract3; byte ""; ==`, 5)
+	testAccepts(t, `byte "hello"; int 5; int 0; extract; byte ""; ==`, 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2382,11 +2456,17 @@ func TestExtractFlop(t *testing.T) {
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract without immediates expects 3 stack arguments but stack height is 1"})
 
 	testProg(t, `byte 0xf000000000000000
 	extract 1
-	len`, 5, Expect{2, "extract expects 2 immediate arguments"})
+	len`, 5, Expect{2, "extract expects 0 or 2 immediate arguments"})
+
+	testProg(t, `byte 0xf000000000000000
+	int 0
+	int 5
+	extract3 1 2
+	len`, 5, Expect{4, "extract3 expects 0 immediate arguments"})
 
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
@@ -2631,6 +2711,7 @@ func TestGload(t *testing.T) {
 			}
 
 			ep := defaultEvalParams(failCase.firstTxn, appcall)
+			ep.SigLedger = NewLedger(nil)
 
 			program := testProg(t, "gload 0 0", AssemblerMaxVersion).Program
 			switch failCase.runMode {
@@ -2766,16 +2847,16 @@ func TestSlowLogic(t *testing.T) {
 
 	t.Parallel()
 	fragment := `byte 0x666E6F7264; keccak256
-                     byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567; ==;`
+                     byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567; ==; `
 
 	// Sanity check. Running a short sequence of these fragments passes in all versions.
-	source := fragment + strings.Repeat(fragment+"&&;", 5)
+	source := fragment + strings.Repeat(fragment+"&&; ", 5)
 	testAccepts(t, source, 1)
 
 	// in v1, each repeat costs 30
-	v1overspend := fragment + strings.Repeat(fragment+"&&;", 20000/30)
+	v1overspend := fragment + strings.Repeat(fragment+"&&; ", 20000/30)
 	// in v2,v3 each repeat costs 134
-	v2overspend := fragment + strings.Repeat(fragment+"&&;", 20000/134)
+	v2overspend := fragment + strings.Repeat(fragment+"&&; ", 20000/134)
 
 	// v1overspend fails (on v1)
 	ops := testProg(t, v1overspend, 1)
@@ -3438,6 +3519,7 @@ int 142791994204213819
 `
 
 func evalLoop(b *testing.B, runs int, program []byte) {
+	b.Helper()
 	b.ResetTimer()
 	for i := 0; i < runs; i++ {
 		var txn transactions.SignedTxn
@@ -3472,10 +3554,10 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
+	b.Helper()
 	runs := 1 + b.N/2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
-	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
-	source = strings.ReplaceAll(source, ";", "\n")
+	source := prefix + ";" + strings.Repeat(operation+"\n", 2000) + ";" + suffix
 	ops := testProg(b, source, AssemblerMaxVersion)
 	evalLoop(b, runs, ops.Program)
 	b.ReportMetric(float64(inst), "extra/op")
@@ -3788,9 +3870,9 @@ func TestStackOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	source := "int 1; int 2;"
+	source := "int 1; int 2; "
 	for i := 1; i < maxStackDepth/2; i++ {
-		source += "dup2;"
+		source += "dup2; "
 	}
 	testAccepts(t, source+"return", 2)
 	testPanics(t, source+"dup2; return", 2)
@@ -3897,7 +3979,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
+func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -3941,8 +4023,8 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
 			ep := defaultEvalParams(cse.group...)
 
-			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(ep.TxnGroup)
+			// Computed MinAvmVersion should be == validFromVersion
+			calc := ComputeMinAvmVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
@@ -4101,7 +4183,7 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1`, v)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
 			ep := defaultEvalParams(txn)
@@ -4196,11 +4278,11 @@ func TestAssert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testAccepts(t, "int 1;assert;int 1", 3)
-	testRejects(t, "int 1;assert;int 0", 3)
-	testPanics(t, "int 0;assert;int 1", 3)
-	testPanics(t, notrack("assert;int 1"), 3)
-	testPanics(t, notrack(`byte "john";assert;int 1`), 3)
+	testAccepts(t, "int 1; assert; int 1", 3)
+	testRejects(t, "int 1; assert; int 0", 3)
+	testPanics(t, "int 0; assert; int 1", 3)
+	testPanics(t, notrack("assert; int 1"), 3)
+	testPanics(t, notrack(`byte "john"; assert; int 1`), 3)
 }
 
 func TestBits(t *testing.T) {
@@ -4696,7 +4778,7 @@ func TestLog(t *testing.T) {
 			loglen: 2,
 		},
 		{
-			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, maxLogCalls)),
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log; `, maxLogCalls)),
 			loglen: maxLogCalls,
 		},
 		{
@@ -4741,7 +4823,7 @@ func TestLog(t *testing.T) {
 			runMode:     modeApp,
 		},
 		{
-			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, maxLogCalls+1)),
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log; `, maxLogCalls+1)),
 			errContains: "too many log calls",
 			runMode:     modeApp,
 		},
@@ -5050,7 +5132,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 0;
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }";
@@ -5058,7 +5140,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 18446744073709551615; //max uint64 value
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }";
@@ -5066,7 +5148,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte "algo";
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"\\u0061\\u006C\\u0067\\u006F\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }";
@@ -5074,7 +5156,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte "algo";
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }";
@@ -5086,7 +5168,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			int 10
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }";
@@ -5096,7 +5178,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte "teal"
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"\\"teal\\"\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }";
@@ -5106,7 +5188,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte ""teal"" // quotes match
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \" teal \", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }";
@@ -5116,7 +5198,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte " teal " // spaces match
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"10\"}}, \"key5\": 18446744073709551615 }";
@@ -5127,7 +5209,7 @@ func TestOpJSONRef(t *testing.T) {
 			byte "{\"key40\": 10, \"key40\": \"10\"}"
 			==
 			`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}";
@@ -5135,7 +5217,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONObject;
 			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}";
@@ -5143,7 +5225,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONObject;
 			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}";
@@ -5153,7 +5235,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte " based64url_encoded_client_data";
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"\\u0072\\u0061\\u0077\\u0049\\u0044\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}";
@@ -5161,7 +5243,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString;
 			byte "responseId"
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		// JavaScript MAX_SAFE_INTEGER
 		{
@@ -5170,7 +5252,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 9007199254740991;
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		// maximum uint64
 		{
@@ -5179,7 +5261,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 18446744073709551615;
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		// larger-than-uint64s are allowed if not requested
 		{
@@ -5188,7 +5270,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 0;
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 	}
 
@@ -5198,7 +5280,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
@@ -5228,52 +5310,52 @@ func TestOpJSONRef(t *testing.T) {
 		{
 			source:             `byte  "{\"key0\": 1 }"; byte "key0"; json_ref JSONString;`,
 			error:              "json: cannot unmarshal number into Go value of type string",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": [1] }"; byte "key0"; json_ref JSONString;`,
 			error:              "json: cannot unmarshal array into Go value of type string",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONString;`,
 			error:              "json: cannot unmarshal object into Go value of type string",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": \"1\" }"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal string into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": [\"1\"] }"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal array into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal object into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
 			error:              "json: cannot unmarshal array into Go value of type map[string]json.RawMessage",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
 			error:              "json: cannot unmarshal number into Go value of type map[string]json.RawMessage",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
 			error:              "json: cannot unmarshal string into Go value of type map[string]json.RawMessage",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
 			error:              "key key3 not found in JSON text",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]}}";
@@ -5283,52 +5365,52 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString
 			`,
 			error:              "key key5 not found in JSON text",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": -0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number -0 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1e10,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number 1e10 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 0.2e-2,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number 0.2e-2 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number 1.0 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key1"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number 2.5 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key2"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number -3 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 18446744073709551616}"; byte "key0"; json_ref JSONUint64;`,
 			error:              "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1,}"; byte "key0"; json_ref JSONString;`,
 			error:              "error while parsing JSON text, invalid json text",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source:             `byte  "{\"key0\": 1, \"key0\": \"3\"}"; byte "key0"; json_ref JSONString;`,
 			error:              "error while parsing JSON text, invalid json text, duplicate keys not allowed",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{1, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"should fail!\"}}}";
@@ -5340,7 +5422,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString
 			`,
 			error:              "error while parsing JSON text, invalid json text, duplicate keys not allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {13, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}, {5, "unknown opcode: json_ref"}, {7, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "[1,2,3]";
@@ -5348,7 +5430,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "2";
@@ -5356,7 +5438,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "null";
@@ -5364,7 +5446,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "true";
@@ -5372,7 +5454,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "\"sometext\"";
@@ -5380,7 +5462,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte "{noquotes: \"shouldn't work\"}";
@@ -5389,7 +5471,7 @@ func TestOpJSONRef(t *testing.T) {
 			byte "shouldn't work";
 			==`,
 			error:              "error while parsing JSON text, invalid json text",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 		// max uint64 + 1 should fail
 		{
@@ -5399,7 +5481,7 @@ func TestOpJSONRef(t *testing.T) {
 			int 1;
 			return`,
 			error:              "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
 	}
 
@@ -5409,7 +5491,7 @@ func TestOpJSONRef(t *testing.T) {
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in v%d", fidoVersion)
 					}
 				}
 			}
@@ -5437,6 +5519,9 @@ func TestOpJSONRef(t *testing.T) {
 }
 
 func TestTypeComplaints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }

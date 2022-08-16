@@ -99,7 +99,7 @@ type onlineAccounts struct {
 	accountsReadCond *sync.Cond
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters *votersTracker
+	voters votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
@@ -136,9 +136,7 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 		return err
 	}
 
-	// the votes have a special dependency on the online accounts, so we need to initialize these separately.
-	ao.voters = &votersTracker{}
-	err = ao.voters.loadFromDisk(l, ao)
+	err = ao.voters.loadFromDisk(l, ao, lastBalancesRound)
 	if err != nil {
 		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
 	}
@@ -198,10 +196,8 @@ func (ao *onlineAccounts) close() {
 		ao.accountsq.close()
 		ao.accountsq = nil
 	}
-	if ao.voters != nil {
-		ao.voters.close()
-		ao.voters = nil
-	}
+
+	ao.voters.close()
 
 	ao.baseOnlineAccounts.prune(0)
 }
@@ -251,9 +247,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	ao.baseOnlineAccounts.prune(newBaseAccountSize)
 
-	if ao.voters != nil {
-		ao.voters.newBlock(blk.BlockHeader)
-	}
+	ao.voters.newBlock(blk.BlockHeader)
+
 }
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
@@ -306,10 +301,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
-	var lowestRound basics.Round
-	if ao.voters != nil {
-		lowestRound = ao.voters.lowestRound(newBase)
-	}
+	lowestRound := ao.voters.lowestRound(newBase)
 
 	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)
@@ -512,17 +504,37 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// OnlineTotals return the total online balance for the given round.
-func (ao *onlineAccounts) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// onlineTotals return the total online balance for the given round.
+func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
 	return ao.onlineTotalsImpl(rnd)
+}
+
+// onlineTotalsEx return the total online balance for the given round for extended rounds range
+// by looking into DB
+func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, error) {
+	ao.accountsMu.RLock()
+	totalsOnline, err := ao.onlineTotalsImpl(rnd)
+	ao.accountsMu.RUnlock()
+	if err == nil {
+		return totalsOnline, err
+	}
+
+	var roundOffsetError *RoundOffsetError
+	if !errors.As(err, &roundOffsetError) {
+		ao.log.Errorf("onlineTotalsImpl error:  %w", err)
+	}
+
+	totalsOnline, err = ao.accountsq.lookupOnlineTotalsHistory(rnd)
+	return totalsOnline, err
 }
 
 // onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
 func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := ao.roundParamsOffset(rnd)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online totals for rnd: %d", rnd)
 		return basics.MicroAlgos{}, err
 	}
 
@@ -534,6 +546,7 @@ func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	oad, err := ao.lookupOnlineAccountData(rnd, addr)
 	if err != nil {
+		ao.log.Warnf("onlineAccounts failed to fetch online account data for rnd: %d, addr: %v", rnd, addr)
 		return
 	}
 
@@ -590,8 +603,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
 func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
-	ao.accountsMu.RLock()
-	needUnlock := true
+	needUnlock := false
 	defer func() {
 		if needUnlock {
 			ao.accountsMu.RUnlock()
@@ -609,6 +621,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	// the function was analyzing deltas or caches.
 	// a similar approach is used in other lookup- methods in acctupdates as well.
 	for {
+		ao.accountsMu.RLock()
+		needUnlock = true
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		inHistory := false
@@ -697,7 +711,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if validThrough == currentDbRound || currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
 			// not advanced or postCommit not called yet, write to the cache and return the value
 			ao.onlineAccountsCache.clear(addr)
-			if !ao.onlineAccountsCache.full() {
+			if ao.onlineAccountsCache.full() {
+				ao.log.Info("onlineAccountsCache full, cannot insert")
+			} else {
 				for _, data := range persistedDataHistory {
 					written := ao.onlineAccountsCache.writeFront(
 						data.addr,
@@ -711,6 +727,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 						return ledgercore.OnlineAccountData{}, err
 					}
 				}
+				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
 			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
@@ -725,10 +742,13 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-// onlineTop returns the top n online accounts, sorted by their normalized
-// balance and address, whose voting keys are valid in voteRnd.  See the
-// normalization description in AccountData.NormalizedOnlineBalance().
-func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
+// balance and address, whose voting keys are valid in voteRnd.
+// The second return value represents the total stake that is online for round == rnd, but will
+// not participate in round == voteRnd.
+// See the normalization description in AccountData.NormalizedOnlineBalance().
+// The return value of totalOnlineStake represents the total stake that is online for voteRnd: it is an approximation since voteRnd did not yet occur.
+func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) (topOnlineAccounts []*ledgercore.OnlineAccount, totalOnlineStake basics.MicroAlgos, err error) {
 	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {
@@ -740,7 +760,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
 				ao.accountsMu.RUnlock()
-				return nil, err
+				return nil, basics.MicroAlgos{}, err
 			}
 			// the round number cannot be found in deltas, it is in history
 			inMemory = false
@@ -748,6 +768,9 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		}
 
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
+		// Online accounts that will not be valid in voteRnd. Used to calculate their total stake,
+		// to be removed from the total online stake if required (lower the upper bound of total online stake in voteRnd).
+		invalidOnlineAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 		if inMemory {
 			// Determine how many accounts have been modified in-memory,
 			// so that we obtain enough top accounts from disk (accountdb).
@@ -766,6 +789,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 					if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
 						modifiedAccounts[addr] = nil
+						invalidOnlineAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
 						continue
 					}
 
@@ -802,7 +826,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
 			if err != nil {
-				return nil, err
+				return nil, basics.MicroAlgos{}, err
 			}
 
 			if dbRound != currentDbRound {
@@ -811,6 +835,10 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 			for addr, data := range accts {
 				if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+					// If already exists it originated from the deltas, meaning its data is more recent
+					if _, ok := invalidOnlineAccounts[addr]; !ok {
+						invalidOnlineAccounts[addr] = data
+					}
 					continue
 				}
 				candidates[addr] = data
@@ -838,7 +866,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		}
 		if dbRound < currentDbRound && dbRound != basics.Round(0) {
 			ao.log.Errorf("onlineAccounts.onlineTop: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return nil, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			return nil, basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 
 		// Now update the candidates based on the in-memory deltas.
@@ -861,13 +889,24 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			heap.Push(topHeap, data)
 		}
 
-		var res []*ledgercore.OnlineAccount
-		for topHeap.Len() > 0 && uint64(len(res)) < n {
+		for topHeap.Len() > 0 && uint64(len(topOnlineAccounts)) < n {
 			acct := heap.Pop(topHeap).(*ledgercore.OnlineAccount)
-			res = append(res, acct)
+			topOnlineAccounts = append(topOnlineAccounts, acct)
 		}
 
-		return res, nil
+		totalOnlineStake, err = ao.onlineTotalsEx(rnd)
+		if err != nil {
+			return nil, basics.MicroAlgos{}, err
+		}
+		ot := basics.OverflowTracker{}
+		for _, oa := range invalidOnlineAccounts {
+			totalOnlineStake = ot.SubA(totalOnlineStake, oa.MicroAlgos)
+			if ot.Overflowed {
+				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
+			}
+		}
+
+		return topOnlineAccounts, totalOnlineStake, nil
 	}
 }
 

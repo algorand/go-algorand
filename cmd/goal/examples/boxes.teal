@@ -1,6 +1,6 @@
 // WARNING: THIS IS NOT A PRODUCTION QUALITY PROGRAM - FOR TEST PURPOSES ONLY
 
-#pragma version 7
+#pragma version 8
     txn ApplicationID
     bz end
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists
@@ -17,7 +17,9 @@
     btoi                    // [btoi(arg[2])]
 default:                    // [24] // NumAppArgs >= 3
     txn ApplicationArgs 1   // [24, arg[1]]
+    swap                   // [arg[1], 24]
     box_create              // [] // boxes: arg[1] -> [24]byte
+    assert
     b end
 del:						// delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
@@ -26,6 +28,7 @@ del:						// delete box arg[1]
     bz set                  // "delete" ? continue : goto set
     txn ApplicationArgs 1   // [arg[1]]
     box_del                 // del boxes[arg[1]]
+    assert
     b end
 set:						// put arg[1] at start of box arg[0] ... so actually a _partial_ "set"
     txn ApplicationArgs 0   // [arg[0]]

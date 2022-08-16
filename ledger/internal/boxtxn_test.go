@@ -35,6 +35,7 @@ var appSource = main(`
         byte "create"			// create box named arg[1]
         ==
         bz del
+		txn ApplicationArgs 1
 		int 24
         txn NumAppArgs
         int 2
@@ -44,8 +45,8 @@ var appSource = main(`
         txn ApplicationArgs 2
         btoi
      default:
-		txn ApplicationArgs 1
 		box_create
+        assert
         b end
      del:						// delete box arg[1]
 		txn ApplicationArgs 0
@@ -54,6 +55,7 @@ var appSource = main(`
         bz set
 		txn ApplicationArgs 1
 		box_del
+        assert
         b end
      set:						// put arg[1] at start of box arg[0]
 		txn ApplicationArgs 0
@@ -89,8 +91,8 @@ func TestBoxCreate(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
@@ -110,27 +112,27 @@ func TestBoxCreate(t *testing.T) {
 		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
 		dl.txn(adam)
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
-		dl.txgroup("exists", adam.Noted("one"), adam.Noted("two"))
+		dl.txgroup("box_create\nassert", adam.Noted("one"), adam.Noted("two"))
 		bobo := call.Args("create", "bobo")
 		dl.txn(bobo, "invalid Box reference bobo")
 		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
 		dl.txn(bobo)
-		dl.txgroup("exists", bobo.Noted("one"), bobo.Noted("two"))
+		dl.txgroup("box_create\nassert", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
 		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("chaz")}}
 		dl.txn(chaz)
-		dl.txn(chaz.Noted("again"), "exists")
+		dl.txn(chaz.Noted("again"), "box_create\nassert")
 		dl.endBlock()
 
 		// new block
-		dl.txn(chaz.Noted("again"), "exists")
+		dl.txn(chaz.Noted("again"), "box_create\nassert")
 		dogg := call.Args("create", "dogg")
 		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("dogg")}}
 		dl.txn(dogg, "below min")
 		dl.txn(chaz.Args("delete", "chaz"))
-		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "does not exist")
+		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del\nassert")
 		dl.txn(dogg)
 		dl.txn(bobo.Args("delete", "bobo"))
 
@@ -148,8 +150,8 @@ func TestBoxCreateAvailability(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
@@ -159,10 +161,9 @@ func TestBoxCreateAvailability(t *testing.T) {
 			ApplicationID: 0, // This is a create
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("hello")}},
 			ApprovalProgram: `
-              int 10
               byte "hello"
+              int 10
               box_create
-              int 1
 `,
 		}
 
@@ -195,9 +196,10 @@ func TestBoxCreateAvailability(t *testing.T) {
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("hello")}},
 			// Note that main() wraps the program so it does not run at creation time.
 			ApprovalProgram: main(`
-              int 10
               byte "hello"
+              int 10
               box_create
+              assert
               byte "we did it"
               log
 `),
@@ -252,8 +254,8 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 33
-	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+	// boxes begin in 35
+	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 

@@ -262,7 +262,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) (*accountUpdates, *onlineAccounts) {
+func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local) (*accountUpdates, *onlineAccounts) {
 	au := &accountUpdates{}
 	au.initialize(conf)
 	ao := &onlineAccounts{}
@@ -271,7 +271,8 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(l, []ledgerTracker{au, ao}, conf)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ao, &txTail{}}, conf)
+	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 
@@ -282,7 +283,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
-	_, err := ao.OnlineTotals(latest + 1)
+	_, err := ao.onlineTotals(latest + 1)
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -291,7 +292,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
-		_, err := ao.OnlineTotals(base - basics.Round(ao.maxBalLookback()))
+		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -354,7 +355,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := ao.OnlineTotals(rnd)
+			totals, err := ao.onlineTotals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
@@ -457,6 +458,11 @@ func TestAcctUpdates(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	conf := config.GetDefaultLocal()
@@ -482,7 +488,7 @@ func TestAcctUpdates(t *testing.T) {
 			ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 			defer ml.Close()
 
-			au, ao := newAcctUpdates(t, ml, conf, ".")
+			au, ao := newAcctUpdates(t, ml, conf)
 			defer au.close()
 			defer ao.close()
 
@@ -605,9 +611,14 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
-	au, ao := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
+
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	ml.trackers.trackers = ml.trackers.trackers[:2]
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -654,6 +665,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 			ml.trackers.committedUpTo(round)
 		}(i)
 	}
+	ml.trackers.waitAccountsWriting()
 	wg.Wait()
 }
 
@@ -687,7 +699,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	conf := config.GetDefaultLocal()
 	maxAcctLookback := conf.MaxAcctLookback
-	au, ao := newAcctUpdates(b, ml, conf, ".")
+	au, ao := newAcctUpdates(b, ml, conf)
 	defer au.close()
 	defer ao.close()
 
@@ -754,7 +766,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
-
 }
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
@@ -787,6 +798,7 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
@@ -828,7 +840,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -932,7 +944,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		}
 
 		conf := config.GetDefaultLocal()
-		au, _ := newAcctUpdates(t, ml, conf, ".")
+		au, _ := newAcctUpdates(t, ml, conf)
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -1230,31 +1242,24 @@ func TestListCreatables(t *testing.T) {
 
 func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	initialBlocksCount := 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 8
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
 
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
 		[]map[basics.Address]basics.AccountData{accts},
 	)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
 
 	testingBoxNames := []string{
 		` `,
@@ -1321,13 +1326,13 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		// ensure rounds
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
-		if uint64(currentRound) > protoParams.MaxBalLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-protoParams.MaxBalLookback), au.cachedDBRound)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
-		// check input, see all valid keys are all still there
+		// check input, see all present keys are all still there
 		for _, storedBoxName := range testingBoxNames[:i+1] {
 			res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[storedBoxName], ""), 10000)
 			require.NoError(t, err)
@@ -1345,7 +1350,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): nil})
 		auCommitSync(t, currentRound, au, ml)
 
-		// ensure recently removed key is not valid and it is not part of the result
+		// ensure recently removed key is not present, and it is not part of the result
 		res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[boxName], ""), 10000)
 		require.NoError(t, err)
 		require.Len(t, res, 0)
@@ -1592,7 +1597,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	au, _ := newAcctUpdates(b, ml, cfg, ".")
+	au, _ := newAcctUpdates(b, ml, cfg)
 	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
@@ -1932,7 +1937,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1990,7 +1995,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	ml2.deltas = ml.deltas
 
 	conf = config.GetDefaultLocal()
-	au, _ = newAcctUpdates(t, ml2, conf, ".")
+	au, _ = newAcctUpdates(t, ml2, conf)
 	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
@@ -2028,7 +2033,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -2146,7 +2151,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -2294,7 +2299,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	var addr1 basics.Address
@@ -2497,7 +2502,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	for addr, acct := range accts {
 		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
@@ -2543,7 +2548,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	ml := makeMockLedgerForTracker(t, false, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
-	au, ao := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
 
@@ -2791,7 +2796,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	var addr1 basics.Address
@@ -2929,7 +2934,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	defer au.close()
 
 	var addr1 basics.Address

@@ -806,6 +806,8 @@ type accountUpdatesLedgerEvaluator struct {
 	au *accountUpdates
 	// ao is onlineAccounts for voters access
 	ao *onlineAccounts
+	// txtail allows implementation of BlockHdrCached
+	tail *txTail
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
@@ -821,8 +823,8 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 	return aul.au.ledger.GenesisProto()
 }
 
-// CompactCertVoters returns the top online accounts at round rnd.
-func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
+// VotersForStateProof returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.ao.voters.getVoters(rnd)
 }
 
@@ -833,6 +835,16 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 		return aul.prevHeader, nil
 	}
 	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
+}
+
+// BlockHdrCached returns the header of the given round. We use the txTail
+// tracker directly to avoid the tracker registry lock.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr, ok := aul.tail.blockHeader(r)
+	if !ok {
+		return bookkeeping.BlockHeader{}, fmt.Errorf("no cached header data for round %d", r)
+	}
+	return hdr, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
@@ -846,7 +858,7 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
 	if err != nil {
@@ -867,7 +879,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
-	panic("not implemented")
+	return aul.au.lookupKv(rnd, key, false /* don't sync */)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round

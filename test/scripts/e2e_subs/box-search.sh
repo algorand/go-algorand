@@ -17,8 +17,8 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
-# Version 7 clear program
-printf '#pragma version 7\nint 1' > "${TEMPDIR}/clear.teal"
+# Version 8 clear program
+printf '#pragma version 8\nint 1' > "${TEMPDIR}/clear.teal"
 
 APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
@@ -78,5 +78,41 @@ BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
 [ "$(echo "$BOX_LIST" | wc -l)" -eq 1 ] # only one line
 # shellcheck disable=SC2143
 [ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
+
+# Create and set a box in an atommic txn group:
+
+BOX_NAME="str:great box"
+echo "Create $BOX_NAME"
+${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --box "$BOX_NAME" --app-arg "str:create" --app-arg "$BOX_NAME" -o box_create.txn
+
+echo "Set $BOX_NAME using $BOX_VALUE"
+${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --app-arg "str:set" --app-arg "$BOX_NAME" --app-arg "str:$BOX_VALUE" -o box_set.txn
+
+# Group them, sign and broadcast:
+cat box_create.txn box_set.txn > box_create_n_set.txn
+${gcmd} clerk group -i box_create_n_set.txn -o box_group.txn
+${gcmd} clerk sign -i box_group.txn -o box_group.stx
+${gcmd} clerk rawsend -f box_group.stx
+
+echo "Confirm that NAME $BOX_NAME as expected"
+${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME"
+NAME=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Name | tr -s ' ' | cut -d" " -f2-)
+[ "$NAME" = "$BOX_NAME" ]
+
+echo "Confirm that VALUE $BOX_VALUE i.e. ($B64_BOX_VALUE) as expected"
+VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | tr -s ' ' | cut -d" " -f2-)
+[ "$VALUE" = "$B64_BOX_VALUE" ]
+
+# Confirm that we can still get the list of boxes
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
+EXPECTED="str:box1
+str:with spaces
+str:base64
+b64:AQIDBA==
+str:great box"
+
+# shellcheck disable=SC2059
+[ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
+
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"

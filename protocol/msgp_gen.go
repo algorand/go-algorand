@@ -7,14 +7,6 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// CompactCertType
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//
 // ConsensusVersion
 //         |-----> MarshalMsg
 //         |-----> CanMarshalMsg
@@ -47,6 +39,14 @@ import (
 //     |-----> Msgsize
 //     |-----> MsgIsZero
 //
+// StateProofType
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
 // Tag
 //  |-----> MarshalMsg
 //  |-----> CanMarshalMsg
@@ -63,52 +63,6 @@ import (
 //    |-----> Msgsize
 //    |-----> MsgIsZero
 //
-
-// MarshalMsg implements msgp.Marshaler
-func (z CompactCertType) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-func (_ CompactCertType) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(CompactCertType)
-	if !ok {
-		_, ok = (z).(*CompactCertType)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *CompactCertType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = CompactCertType(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *CompactCertType) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*CompactCertType)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z CompactCertType) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z CompactCertType) MsgIsZero() bool {
-	return z == 0
-}
 
 // MarshalMsg implements msgp.Marshaler
 func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte) {
@@ -292,6 +246,52 @@ func (z NetworkID) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z NetworkID) MsgIsZero() bool {
 	return z == ""
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z StateProofType) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint64(o, uint64(z))
+	return
+}
+
+func (_ StateProofType) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(StateProofType)
+	if !ok {
+		_, ok = (z).(*StateProofType)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint64
+		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = StateProofType(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofType) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofType)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z StateProofType) Msgsize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z StateProofType) MsgIsZero() bool {
+	return z == 0
 }
 
 // MarshalMsg implements msgp.Marshaler

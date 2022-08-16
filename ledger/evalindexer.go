@@ -43,6 +43,9 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+	LookupKv(basics.Round, string) (*string, error)
+
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -85,6 +88,11 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 			round, l.latestRound)
 	}
 	return l.il.LatestBlockHdr()
+}
+
+// BlockHdrCached is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.il.BlockHdrCached(round)
 }
 
 // CheckDup is part of LedgerForEvaluator interface.
@@ -142,8 +150,13 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
+// LookupKv delegates to the Ledger and marks the box key as touched for post-processing
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
-	panic("not implemented")
+	value, err := l.il.LookupKv(rnd, key)
+	if err != nil {
+		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
+	}
+	return value, nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
@@ -194,10 +207,10 @@ func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgerc
 	return
 }
 
-// CompactCertVoters is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.VotersForRound, error) {
+// VotersForStateProof is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore.VotersForRound, error) {
 	// This function is not used by evaluator.
-	return nil, errors.New("CompactCertVoters() not implemented")
+	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {

@@ -47,6 +47,10 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 	return il.l.BlockHdr(il.latestRound)
 }
 
+func (il indexerLedgerForEvalImpl) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdrCached(round)
+}
+
 // The value of the returned map is nil iff the account was not found.
 func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error) {
 	res := make(map[basics.Address]*ledgercore.AccountData)
@@ -101,6 +105,11 @@ func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{
 func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAppCreator() not implemented")
+}
+
+func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) (*string, error) {
+	// This function is unused.
+	return nil, errors.New("LookupKv() not implemented")
 }
 
 func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTotals, err error) {
