@@ -229,9 +229,9 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if strings.HasSuffix(datapath, "/HashType") {
-			// generate random value that will avoid protocol.ErrInvalidObject from HashType.Validate()
-			v.SetUint(rand.Uint64() % 3)
+		if typ := v.Type(); strings.HasSuffix(typ.PkgPath(), "go-algorand/crypto") && typ.Name() == "HashType" {
+			// generate value that will avoid protocol.ErrInvalidObject from HashType.Validate()
+			v.SetUint(rand.Uint64() % 3) // 3 is crypto.MaxHashType
 		} else {
 			v.SetUint(rand.Uint64())
 		}
