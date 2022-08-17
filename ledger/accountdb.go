@@ -1593,7 +1593,7 @@ func (bo *baseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) 
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding    resourceFlags = 0 //nolint:deadcode,varcheck
+	resourceFlagsHolding    resourceFlags = 0
 	resourceFlagsNotHolding resourceFlags = 1
 	resourceFlagsOwnership  resourceFlags = 2
 	resourceFlagsEmptyAsset resourceFlags = 4
