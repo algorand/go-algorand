@@ -796,6 +796,23 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
+type encodedTxnResult struct {
+	Txn              preEncodedTxInfo
+	MissingSignature *bool `codec:"nosig,omitempty"`
+}
+
+type encodedTxnGroupResult struct {
+	Txns           []encodedTxnResult
+	FailureMessage *string   `codec:"failmsg,omitempty"`
+	FailedAt       *[]uint64 `codec:"failedat,omitempty"`
+}
+
+type encodedSimulationResult struct {
+	Version      uint64                   `codec:"v"`
+	TxnGroups    *[]encodedTxnGroupResult `codec:"txns,omitempty"`
+	WouldSucceed *bool                    `codec:"s,omitempty"`
+}
+
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {

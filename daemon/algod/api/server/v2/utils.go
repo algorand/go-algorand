@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -331,6 +332,62 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.Logs = convertLogs(withStatus)
 	response.Inners = convertInners(&withStatus)
 	return response
+}
+
+func convertTxnResult(txnResult simulation.TxnResult) encodedTxnResult {
+	encoded := encodedTxnResult{
+		Txn: convertInnerTxn(&txnResult.Txn),
+	}
+
+	if txnResult.MissingSignature {
+		encoded.MissingSignature = &txnResult.MissingSignature
+	}
+
+	return encoded
+}
+
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnGroupResult {
+	txnResults := make([]encodedTxnResult, len(txnGroupResult.Txns))
+	for i, txnResult := range txnGroupResult.Txns {
+		txnResults[i] = convertTxnResult(txnResult)
+	}
+
+	encoded := encodedTxnGroupResult{
+		Txns: txnResults,
+	}
+
+	if txnGroupResult.FailureMessage != "" {
+		encoded.FailureMessage = &txnGroupResult.FailureMessage
+	}
+
+	if len(txnGroupResult.FailedAt) > 0 {
+		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
+		for _, txn := range txnGroupResult.FailedAt {
+			failedAt = append(failedAt, uint64(txn))
+		}
+		encoded.FailedAt = &failedAt
+	}
+
+	return encoded
+}
+
+func convertSimulationResult(result *simulation.SimulationResult) encodedSimulationResult {
+	var encodedSimulationResult encodedSimulationResult
+	encodedSimulationResult.Version = result.Version
+
+	if result.TxnGroups != nil {
+		txnGroups := make([]encodedTxnGroupResult, len(result.TxnGroups))
+		for i, txnGroup := range result.TxnGroups {
+			txnGroups[i] = convertTxnGroupResult(txnGroup)
+		}
+		encodedSimulationResult.TxnGroups = &txnGroups
+	}
+
+	if result.WouldSucceed {
+		encodedSimulationResult.WouldSucceed = &result.WouldSucceed
+	}
+
+	return encodedSimulationResult
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
