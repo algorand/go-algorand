@@ -837,8 +837,6 @@ func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInt
 		res = append(res, round)
 	}
 
-	fmt.Printf("calculateCatchpointRounds: %d (min=%d) <= %d (max=%d): %v\n", l, min, r, max, res)
-
 	return res
 }
 

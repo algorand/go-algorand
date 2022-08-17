@@ -1416,8 +1416,8 @@ func TestCatchpoint_FastUpdates(t *testing.T) {
 func TestCatchpoint_LargeAccountCountCatchpointGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("This test is too slow on CI executors: cannot repack catchpoint")
 	}
 
 	// The next operations are heavy on the memory.
