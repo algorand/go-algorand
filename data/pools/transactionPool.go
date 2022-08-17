@@ -155,8 +155,8 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 	copyPoolctx, cancel := context.WithCancel(ctx)
 
 	copy := TransactionPool{
-		pendingTxids:         pool.pendingTxids, // it is safe to shallow copy pendingTxids since this map is only (atomically) swapped and never directly changed
-		pendingTxGroups:      pool.pendingTxGroups,
+		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn), // pendingTxIds is only used for stats and hints
+		pendingTxGroups:      pool.pendingTxGroups[:],
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               specLedger,
