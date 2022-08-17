@@ -723,7 +723,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error()) // nolint:errcheck
+			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error())
 		}
 		hash := sha512.Sum512_256(methodSig)
 		ops.ByteLiteral(hash[0:4])
@@ -1230,7 +1230,7 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 		immediateCounts[i] = numImms
 		i++
 	}
-	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...)) //nolint:errcheck
+	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...))
 }
 
 // getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
@@ -1255,7 +1255,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 		}
 		pseudo.Name = name
 		if pseudo.Version > ops.Version {
-			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version) //nolint:errcheck
+			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
 		}
 		if len(args) == 0 {
 			return pseudo, pseudo.Name + " without immediates", true
@@ -1266,9 +1266,9 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	if !ok {
 		spec, ok = OpsByName[AssemblerMaxVersion][name]
 		if ok {
-			ops.errorf("%s opcode was introduced in v%d", name, spec.Version) //nolint:errcheck
+			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
 		} else {
-			ops.errorf("unknown opcode: %s", name) //nolint:errcheck
+			ops.errorf("unknown opcode: %s", name)
 		}
 	}
 	return spec, spec.Name, ok
@@ -1496,7 +1496,7 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 
 func (ops *OpStream) typeError(err error) {
 	if ops.typeTracking {
-		ops.error(err) //nolint:errcheck
+		ops.error(err)
 	}
 }
 
@@ -1571,10 +1571,10 @@ func (ops *OpStream) assemble(text string) error {
 				directive := first[1:]
 				switch directive {
 				case "pragma":
-					ops.pragma(tokens) //nolint:errcheck
+					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
 					ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				default:
-					ops.errorf("Unknown directive: %s", directive) //nolint:errcheck
+					ops.errorf("Unknown directive: %s", directive)
 				}
 				continue
 			}
@@ -1618,8 +1618,9 @@ func (ops *OpStream) assemble(text string) error {
 					}
 				}
 				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
-				spec.asm(ops, &spec, current[1:]) //nolint:errcheck
-				if spec.deadens() {               // An unconditional branch deadens the following code
+				spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+
+				if spec.deadens() { // An unconditional branch deadens the following code
 					ops.known.deaden()
 				}
 				if spec.Name == "callsub" {
@@ -1636,7 +1637,7 @@ func (ops *OpStream) assemble(text string) error {
 		if errors.Is(err, bufio.ErrTooLong) {
 			err = errors.New("line too long")
 		}
-		ops.error(err) //nolint:errcheck
+		ops.error(err)
 	}
 
 	// backward compatibility: do not allow jumps behind last instruction in v1
@@ -1741,12 +1742,12 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label) //nolint:errcheck
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
 		if jump > 0x7fff {
-			ops.errorf("label %#v is too far away", lr.label) //nolint:errcheck
+			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
 		raw[lr.position+1] = uint8(jump >> 8)

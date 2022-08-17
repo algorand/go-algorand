@@ -189,9 +189,15 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
+	panicIfErr(methodAppCmd.MarkFlagRequired("method"))
+	panicIfErr(methodAppCmd.MarkFlagRequired("from"))
+	panicIfErr(methodAppCmd.Flags().MarkHidden("app-arg"))
+}
+
+func panicIfErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 type appCallArg struct {
