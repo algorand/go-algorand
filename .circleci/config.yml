@@ -445,7 +445,13 @@ commands:
           name: Check if all tests were run
           command: |
             cat << parameters.result_path >>/<< parameters.result_subdir >>/**/testresults.json > << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
-            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
+            python3 scripts/buildtools/check_tests.py \
+              --tests-results-filepath << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json \
+              --ignored-tests \
+                TestAlgodWithExpect \
+                TestAlgohWithExpect \
+                TestGoalWithExpect \
+                TestTealdbgWithExpect
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
