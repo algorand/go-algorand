@@ -199,3 +199,24 @@ func TestEncodeJSON(t *testing.T) {
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
 }
+
+func TestRandomizeObjectWithPtrField(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testObjA struct {
+		U64 uint64
+	}
+	type testObjB struct {
+		U16  uint16
+		ObjA *testObjA
+	}
+
+	obj, err := RandomizeObject(&testObjB{})
+	require.NoError(t, err)
+	objB, ok := obj.(*testObjB)
+	require.True(t, ok)
+	t.Logf("%+v %+v", objB, objB.ObjA)
+	require.NotZero(t, objB.U16)
+	require.NotZero(t, objB.ObjA)
+	require.NotZero(t, objB.ObjA.U64)
+}

@@ -247,6 +247,12 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
+	case reflect.Ptr:
+		v.Set(reflect.New(v.Type().Elem()))
+		err := randomizeValue(reflect.Indirect(v), datapath, tag, remainingChanges, seenTypes)
+		if err != nil {
+			return err
+		}
 	case reflect.Struct:
 		st := v.Type()
 		if !seenTypes[st] {
@@ -430,9 +436,6 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			// we want to skip the serilization test in this case.
 			t.Skip()
 			return
-		}
-		if err == nil {
-			continue
 		}
 
 		require.NoError(t, err)
