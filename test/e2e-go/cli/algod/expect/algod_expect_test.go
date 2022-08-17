@@ -23,7 +23,8 @@ import (
 
 // TestAlgodWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
 func TestAlgodWithExpect(t *testing.T) {
-	// partitiontest.PartitionTest(t) Since each expect test is assigned a partition in `et.Run`, avoid partitioning here.  Creates double partitioning.
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	et := fixtures.MakeExpectTest(t)
