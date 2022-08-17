@@ -537,6 +537,11 @@ func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (vb *le
 	return simulator.Simulate(txgroup)
 }
 
+func (node *AlgorandFullNode) DetailedSimulate(txgroup []transactions.SignedTxn) (result simulation.SimulationResult, err error) {
+	simulator := simulation.MakeSimulator(node.ledger)
+	return simulator.DetailedSimulate(txgroup)
+}
+
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
 // TxnWithStatus returns the round in which a particular transaction appeared,
 // since that information is not part of the SignedTxn itself.

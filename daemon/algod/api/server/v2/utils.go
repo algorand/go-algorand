@@ -371,7 +371,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 	return encoded
 }
 
-func convertSimulationResult(result *simulation.SimulationResult) encodedSimulationResult {
+func convertSimulationResult(result simulation.SimulationResult) encodedSimulationResult {
 	var encodedSimulationResult encodedSimulationResult
 	encodedSimulationResult.Version = result.Version
 

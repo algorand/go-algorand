@@ -85,6 +85,7 @@ type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error)
+	DetailedSimulate(txgroup []transactions.SignedTxn) (result simulation.SimulationResult, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -835,29 +836,26 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	var res generated.SimulationResponse
-
 	// Simulate transaction
-	_, missingSignatures, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.DetailedSimulate(txgroup)
 	if err != nil {
 		var invalidTxErr *simulation.InvalidTxGroupError
 		var scopedErr *simulation.ScopedSimulatorError
-		var evalErr *simulation.EvalFailureError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
 		case errors.As(err, &scopedErr):
 			return internalError(ctx, scopedErr, scopedErr.External, v2.Log)
-		case errors.As(err, &evalErr):
-			res.FailureMessage = evalErr.Error()
 		default:
 			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 	}
-	res.MissingSignatures = missingSignatures
+
+	// Encode simulation result
+	response := convertSimulationResult(simulationResult)
 
 	// Return msgpack response
-	msgpack, err := encode(protocol.CodecHandle, &res)
+	msgpack, err := encode(protocol.CodecHandle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}

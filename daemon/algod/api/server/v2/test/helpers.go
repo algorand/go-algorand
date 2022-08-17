@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/node/indexer"
@@ -142,6 +143,10 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 
 func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
 	return nil, false, m.err
+}
+
+func (m mockNode) DetailedSimulate(txgroup []transactions.SignedTxn) (simulation.SimulationResult, error) {
+	return simulation.SimulationResult{}, m.err
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
