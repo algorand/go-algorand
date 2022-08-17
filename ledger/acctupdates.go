@@ -1041,6 +1041,9 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
+		if err != nil {
+			return ledgercore.AccountResource{}, basics.Round(0), err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.addrid != 0 {
 				// if we read actual data return it
@@ -1140,6 +1143,9 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
+		if err != nil {
+			return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
@@ -1219,9 +1225,11 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 		}
 		// Check the database
 		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
-
+		if err != nil {
+			return basics.Address{}, false, err
+		}
 		if dbRound == currentDbRound {
-			return
+			return creator, ok, err
 		}
 		if synchronized {
 			if dbRound < currentDbRound {
