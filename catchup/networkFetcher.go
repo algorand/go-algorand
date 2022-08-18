@@ -52,7 +52,7 @@ func MakeNetworkFetcher(log logging.Logger, net network.GossipNode, cfg config.L
 }
 
 func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelectorPeer, error) {
-	for retryCount := 1; retryCount <= netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+	for retryCount := 0; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		psp, err := netFetcher.peerSelector.getNextPeer()
 		if err != nil {
 			if err != errPeerSelectorNoPeerPoolsAvailable {
@@ -79,7 +79,7 @@ func (netFetcher *NetworkFetcher) getHTTPPeer() (network.HTTPPeer, *peerSelector
 func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block,
 	*agreement.Certificate, time.Duration, error) {
 	// internal retry attempt to fetch the block
-	for retryCount := 1; retryCount <= netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
+	for retryCount := 0; retryCount < netFetcher.cfg.CatchupBlockDownloadRetryAttempts; retryCount++ {
 		httpPeer, psp, err := netFetcher.getHTTPPeer()
 		if err != nil {
 			return nil, nil, time.Duration(0), err
@@ -92,7 +92,7 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 				return nil, nil, time.Duration(0), err
 			}
 			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v",
-				round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+				round, retryCount+1, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 			netFetcher.peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			continue // retry the fetch
 		}
@@ -107,7 +107,7 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 			}
 			netFetcher.log.Warnf("FetchBlock: downloaded block(%v) contents do not match header", round)
 			netFetcher.log.Infof("FetchBlock: failed to download block %d on attempt %d out of %d. %v",
-				round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+				round, retryCount+1, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 			continue // retry the fetch
 		}
 
@@ -116,7 +116,7 @@ func (netFetcher *NetworkFetcher) FetchBlock(ctx context.Context, round basics.R
 			err = netFetcher.auth.Authenticate(blk, cert)
 			if err != nil {
 				netFetcher.log.Warnf("FetchBlock: cert authenticatation failed for block %d on attempt %d out of %d. %v",
-					round, retryCount, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
+					round, retryCount+1, netFetcher.cfg.CatchupBlockDownloadRetryAttempts, err)
 				netFetcher.peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
