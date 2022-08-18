@@ -47,11 +47,6 @@ type Decoder interface {
 	Decode(objptr interface{}) error
 }
 
-// MsgpDecoder is our interface for a thing that can msgp-decode objects.
-type MsgpDecoder interface {
-	Decode(objptr msgp.Unmarshaler) error
-}
-
 func init() {
 	CodecHandle = new(codec.MsgpackHandle)
 	CodecHandle.ErrorIfNoField = true
@@ -253,18 +248,18 @@ func NewDecoderBytes(b []byte) Decoder {
 
 // NewMsgpDecoderBytes returns a decoder object reading bytes from [b].
 // that works with msgp-serialized objects
-func NewMsgpDecoderBytes(b []byte) MsgpDecoder {
-	return &MsgpDecoderBytes{b: b, pos: 0}
+func NewMsgpDecoderBytes(b []byte) *msgpDecoderBytes {
+	return &msgpDecoderBytes{b: b, pos: 0}
 }
 
-// MsgpDecoderBytes is a []byte decoder into msgp-encoded objects
-type MsgpDecoderBytes struct {
+// msgpDecoderBytes is a []byte decoder into msgp-encoded objects
+type msgpDecoderBytes struct {
 	b   []byte
 	pos int
 }
 
 // Decode an objptr from from a byte stream
-func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
+func (d *msgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	if !objptr.CanUnmarshalMsg(objptr) {
 		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)
 	}
