@@ -414,7 +414,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			// where persistedData.value == nil to avoid unnecessary db lookups
 			// for deleted KVs.
 			au.baseKVs.writePending(persistedData, key)
-			return persistedData.value, err
+			return persistedData.value, nil
 		}
 
 		// The db round is unexpected...
