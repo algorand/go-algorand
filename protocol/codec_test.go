@@ -212,16 +212,21 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	}
 
 	// run a few and fail if all ints are zero
-	sawNonZeroInt := false
+	sawNonZeroU16 := false
+	sawNonZeroU64 := false
 	for i := 0; i < 10; i++ {
 		obj, err := RandomizeObject(&testObjB{})
 		require.NoError(t, err)
 		objB, ok := obj.(*testObjB)
 		require.True(t, ok)
 		require.NotNil(t, objB.ObjA)
-		if objB.U16 != 0 || objB.ObjA.U64 != 0 {
-			sawNonZeroInt = true
+		if objB.U16 != 0 {
+			sawNonZeroU16 = true
+		}
+		if objB.ObjA.U64 != 0 {
+			sawNonZeroU64 = true
 		}
 	}
-	require.True(t, sawNonZeroInt, "RandomizeObject made all zeroes for ints")
+	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
+	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
 }
