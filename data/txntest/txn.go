@@ -39,8 +39,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
@@ -100,9 +101,9 @@ type Txn struct {
 	ClearStateProgram interface{} // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
-	CertRound basics.Round
-	CertType  protocol.CompactCertType
-	Cert      compactcert.Cert
+	StateProofType protocol.StateProofType
+	StateProof     stateproof.StateProof
+	StateProofMsg  stateproofmsg.Message
 }
 
 // Noted returns a new Txn with the given note field.
@@ -240,10 +241,10 @@ func (tx Txn) Txn() transactions.Transaction {
 			ClearStateProgram: assemble(tx.ClearStateProgram),
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
-		CompactCertTxnFields: transactions.CompactCertTxnFields{
-			CertRound: tx.CertRound,
-			CertType:  tx.CertType,
-			Cert:      tx.Cert,
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProofType: tx.StateProofType,
+			StateProof:     tx.StateProof,
+			Message:        tx.StateProofMsg,
 		},
 	}
 }

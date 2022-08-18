@@ -46,7 +46,7 @@ type LedgerForEvaluator interface {
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
 	Latest() basics.Round
-	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
+	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
 	GenesisProto() config.ConsensusParams
 	BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error)
 }
@@ -136,19 +136,19 @@ func (v *validatedBlockAsLFE) LatestTotals() (basics.Round, ledgercore.AccountTo
 	return v.Latest(), v.vb.Delta().Totals, nil
 }
 
-// CompactCertVoters implements the ledgerForEvaluator interface.
-func (v *validatedBlockAsLFE) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
+// VotersForStateProof implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	if r >= v.vb.Block().Round() {
 		// We do not support computing the compact cert voters for rounds
 		// that have not been committed to the ledger yet.  This should not
-		// be a problem as long as the agreement pipeline depth does not
+		// be a problem as long as the speculation depth does not
 		// exceed CompactCertVotersLookback.
 		err := fmt.Errorf("validatedBlockAsLFE.CompactCertVoters(%d): validated block is for round %d, voters not available", r, v.vb.Block().Round())
 		logging.Base().Warn(err.Error())
 		return nil, err
 	}
 
-	return v.l.CompactCertVoters(r)
+	return v.l.VotersForStateProof(r)
 }
 
 // GetCreatorForRound implements the ledgerForEvaluator interface.
