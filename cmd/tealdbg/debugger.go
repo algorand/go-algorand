@@ -527,8 +527,8 @@ func (d *Debugger) SaveProgram(
 	}
 }
 
-// Register setups new session and notifies frontends if any
-func (d *Debugger) Register(state *logic.DebugState) error {
+// BeforeAppEval setups new session and notifies frontends if any (DebuggerHook interface)
+func (d *Debugger) BeforeAppEval(state *logic.DebugState) error {
 	sid := state.ExecID
 	pcOffset := make(map[int]int, len(state.PCOffset))
 	for _, pco := range state.PCOffset {
@@ -560,8 +560,8 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 	return nil
 }
 
-// Update process state update notifications: pauses or continues as needed
-func (d *Debugger) Update(state *logic.DebugState) error {
+// BeforeTealOp process state update notifications: pauses or continues as needed (DebuggerHook interface)
+func (d *Debugger) BeforeTealOp(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {
@@ -595,8 +595,8 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	return nil
 }
 
-// Complete terminates session and notifies frontends if any
-func (d *Debugger) Complete(state *logic.DebugState) error {
+// AfterAppEval terminates session and notifies frontends if any (DebuggerHook interface)
+func (d *Debugger) AfterAppEval(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {

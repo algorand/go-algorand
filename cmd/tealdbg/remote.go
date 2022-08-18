@@ -59,7 +59,7 @@ func (rha *RemoteHookAdapter) registerHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Register, and wait for user to acknowledge registration
-	err = rha.debugger.Register(&state)
+	err = rha.debugger.BeforeAppEval(&state)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -78,7 +78,7 @@ func (rha *RemoteHookAdapter) updateHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Ask debugger to process and wait to continue
-	err = rha.debugger.Update(&state)
+	err = rha.debugger.BeforeTealOp(&state)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -96,7 +96,7 @@ func (rha *RemoteHookAdapter) completeHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Ask debugger to process and wait to continue
-	err = rha.debugger.Complete(&state)
+	err = rha.debugger.AfterAppEval(&state)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
