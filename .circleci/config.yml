@@ -94,7 +94,6 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-          filters: &filters-default
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -109,7 +108,6 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-          filters: &filters-default
 #          requires:
 #            - << matrix.platform >>_build
 
@@ -126,7 +124,6 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-          filters: &filters-default
 #          requires:
 #            - << matrix.platform >>_build
 
@@ -143,7 +140,6 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-          filters: &filters-default
 #          requires:
 #            - << matrix.platform >>_build
 
