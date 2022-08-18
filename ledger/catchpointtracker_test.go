@@ -363,7 +363,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 				i++
 			}
 
-			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
+			_, _, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			if err != nil {
 				return
 			}

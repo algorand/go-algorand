@@ -314,7 +314,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
-		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		numResUpdates := 0
@@ -322,6 +322,7 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
+		require.Empty(t, updatedKVs)
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -451,7 +452,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
+			updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
 			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
 			require.Equal(t,
@@ -464,6 +465,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(0), round: basics.Round(lastRound)},
 				updatesResources[addr][0],
 			)
+
+			require.Empty(t, updatedKVs)
 		})
 	}
 }
@@ -2888,12 +2891,13 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
-				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
+				updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
 					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
-				a.Equal(3, len(updatedAccounts))
-				a.Equal(3, len(updatedResources))
+				a.Len(updatedAccounts, 3)
+				a.Len(updatedResources, 3)
+				a.Empty(updatedKVs)
 			})
 		}
 	}
@@ -2970,12 +2974,13 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
-	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
+	updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
 		&mock, acctDeltas, resDeltas, nil, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))
 	a.Equal(2, len(updatedResources))
+	a.Equal(0, len(updatedKVs))
 
 	// one deletion entry for pre-existing account addr1, and one entry for in-memory account addr2
 	// in base accounts updates and in resources updates
@@ -2996,6 +3001,155 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(int64(0), upd[0].addrid)
 		a.Equal(basics.CreatableIndex(aidx), upd[0].aidx)
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
+	}
+}
+
+func BenchmarkLRUResources(b *testing.B) {
+	var baseResources lruResources
+	baseResources.init(nil, 1000, 850)
+
+	var data persistedResourcesData
+	var has bool
+	addrs := make([]basics.Address, 850)
+	for i := 0; i < 850; i++ {
+		data.data.ApprovalProgram = make([]byte, 8096*4)
+		data.aidx = basics.CreatableIndex(1)
+		addrBytes := ([]byte(fmt.Sprintf("%d", i)))[:32]
+		var addr basics.Address
+		for i, b := range addrBytes {
+			addr[i] = b
+		}
+		addrs[i] = addr
+		baseResources.write(data, addr)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pos := i % 850
+		data, has = baseResources.read(addrs[pos], basics.CreatableIndex(1))
+		require.True(b, has)
+	}
+}
+
+func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), error) {
+	batchCount := 100
+	if batchCount > totalBoxes {
+		batchCount = 1
+	}
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	cleanup := func() {
+		cleanupTestDb(dbs, fn, false)
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(b, err)
+	_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
+	require.NoError(b, err)
+	err = tx.Commit()
+	require.NoError(b, err)
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+	require.NoError(b, err)
+
+	cnt := 0
+	for batch := 0; batch <= batchCount; batch++ {
+		tx, err = dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+		writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
+		require.NoError(b, err)
+		for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
+			err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), string(make([]byte, boxSize)))
+			require.NoError(b, err)
+			cnt++
+		}
+
+		err = tx.Commit()
+		require.NoError(b, err)
+		writer.close()
+	}
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+	return dbs, cleanup, err
+}
+
+func BenchmarkBoxDatabaseRead(b *testing.B) {
+	getBoxNamePermutation := func(totalBoxes int) []int {
+		rand.Seed(time.Now().UnixNano())
+		boxNames := make([]int, totalBoxes)
+		for i := 0; i < totalBoxes; i++ {
+			boxNames[i] = i
+		}
+		rand.Shuffle(len(boxNames), func(x, y int) { boxNames[x], boxNames[y] = boxNames[y], boxNames[x] })
+		return boxNames
+	}
+
+	boxCnt := []int{10, 1000, 100000}
+	boxSizes := []int{2, 2048, 4 * 8096}
+	for _, totalBoxes := range boxCnt {
+		for _, boxSize := range boxSizes {
+			b.Run(fmt.Sprintf("totalBoxes=%d/boxSize=%d", totalBoxes, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
+				var v sql.NullString
+				for i := 0; i < b.N; i++ {
+					var pv persistedKVData
+					boxName := boxNames[i%totalBoxes]
+					b.StartTimer()
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					b.StopTimer()
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+				}
+
+				cleanup()
+			})
+		}
+	}
+
+	// test caching performance
+	lookbacks := []int{1, 32, 256, 2048}
+	for _, lookback := range lookbacks {
+		for _, boxSize := range boxSizes {
+			totalBoxes := 100000
+
+			b.Run(fmt.Sprintf("lookback=%d/boxSize=%d", lookback, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
+				var v sql.NullString
+				for i := 0; i < b.N+lookback; i++ {
+					var pv persistedKVData
+					boxName := boxNames[i%totalBoxes]
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+
+					// benchmark reading the potentially cached value that was read lookback boxes ago
+					if i >= lookback {
+						boxName = boxNames[(i-lookback)%totalBoxes]
+						b.StartTimer()
+						err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+						b.StopTimer()
+						require.NoError(b, err)
+						require.True(b, v.Valid)
+					}
+				}
+
+				cleanup()
+			})
+		}
 	}
 }
 
@@ -3119,7 +3273,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
+		updatedAccts, _, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 

@@ -68,6 +68,15 @@ const baseResourcesPendingAccountsBufferSize = 100000
 // is being flushed into the main base resources cache.
 const baseResourcesPendingAccountsWarnThreshold = 85000
 
+// baseKVPendingBufferSize defines the size of the base KVs pending buffer size.
+// At the beginning of a new round, the entries from this buffer are being flushed into the base KVs map.
+const baseKVPendingBufferSize = 5000
+
+// baseKVPendingWarnThreshold defines the threshold at which the lruKV would generate a warning
+// after we've surpassed a given pending kv size. The warning is being generated when the pending kv data
+// is being flushed into the main base kv cache.
+const baseKVPendingWarnThreshold = 4250
+
 // initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
 // initializeCaches method before it can process and store the account changes to disk.
 const initializeCachesReadaheadBlocksStream = 4
@@ -206,6 +215,9 @@ type accountUpdates struct {
 	// baseResources stores the most recently used resources, at exactly dbRound
 	baseResources lruResources
 
+	// baseKVs stores the most recently used KV, at exactly dbRound
+	baseKVs lruKV
+
 	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
 	logAccountUpdatesMetrics bool
 
@@ -310,6 +322,7 @@ func (au *accountUpdates) close() {
 	}
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
+	au.baseKVs.prune(0)
 }
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
@@ -374,7 +387,13 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
-		// OTHER LOOKUPS USE "base" caches here.
+		// check the baseKV cache
+		if pbd, has := au.baseKVs.read(key); has {
+			// we don't technically need this, since it's already in the baseKV, however, writing this over
+			// would ensure that we promote this field.
+			au.baseKVs.writePending(pbd, key)
+			return pbd.value, nil
+		}
 
 		if synchronized {
 			au.accountsMu.RUnlock()
@@ -386,7 +405,15 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 		// on-disk DB.
 
 		persistedData, err := au.accountsq.lookupKeyValue(key)
+		if err != nil {
+			return nil, err
+		}
+
 		if persistedData.round == currentDbRound {
+			// if we read actual data return it. This includes deleted values
+			// where persistedData.value == nil to avoid unnecessary db lookups
+			// for deleted KVs.
+			au.baseKVs.writePending(persistedData, key)
 			return persistedData.value, nil
 		}
 
@@ -503,6 +530,10 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 			au.accountsMu.RUnlock()
 			needUnlock = false
 		}
+
+		// NOTE: the kv cache isn't used here because the data structure doesn't support range
+		// queries. It may be preferable to increase the SQLite cache size if these reads become
+		// too slow.
 
 		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
 		// to find the rest matching keys in DB.
@@ -923,6 +954,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+	au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
 	return
 }
 
@@ -947,6 +979,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 	au.baseAccounts.flushPendingWrites()
 	au.baseResources.flushPendingWrites()
+	au.baseKVs.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -1001,6 +1034,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.prune(newBaseAccountSize)
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
+	newBaseKVSize := (len(au.kvStore) + 1) + baseKVPendingBufferSize
+	au.baseKVs.prune(newBaseKVSize)
 }
 
 // lookupLatest returns the account data for a given address for the latest round.
@@ -1626,7 +1661,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedKVs, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -1715,6 +1750,10 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 			mval.ndeltas -= cnt
 			au.kvStore[key] = mval
 		}
+	}
+
+	for key, persistedKV := range dcc.updatedPersistedKVs {
+		au.baseKVs.write(persistedKV, key)
 	}
 
 	for cidx, modCrt := range dcc.compactCreatableDeltas {
@@ -1846,6 +1885,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	// rowid are flushed.
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
+	au.baseKVs.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

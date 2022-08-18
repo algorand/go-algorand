@@ -271,6 +271,15 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 	return ret
 }
 
+//msgp:ignore persistedKVData
+type persistedKVData struct {
+	// kv value
+	value *string
+	// the round number that is associated with the kv value. This field is the corresponding one to the round field
+	// in persistedAccountData, and serves the same purpose.
+	round basics.Round
+}
+
 // resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
 type resourceDelta struct {
 	oldResource persistedResourcesData
@@ -2596,12 +2605,7 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-type persistedValue struct {
-	value *string
-	round basics.Round
-}
-
-func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
+func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err error) {
 	err = db.Retry(func() error {
 		var v sql.NullString
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
@@ -3444,7 +3448,7 @@ func accountsNewRound(
 	tx *sql.Tx,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
 	hasKvPairs := len(kvPairs) > 0
@@ -3482,7 +3486,7 @@ func accountsNewRoundImpl(
 	writer accountsWriter,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
@@ -3680,11 +3684,14 @@ func accountsNewRoundImpl(
 		}
 	}
 
+	updatedKVs = make(map[string]persistedKVData, len(kvPairs))
 	for key, value := range kvPairs {
 		if value.data != nil {
 			err = writer.upsertKvPair(key, *value.data)
+			updatedKVs[key] = persistedKVData{value: value.data, round: lastUpdateRound}
 		} else {
 			err = writer.deleteKvPair(key)
+			updatedKVs[key] = persistedKVData{value: nil, round: lastUpdateRound}
 		}
 		if err != nil {
 			return
@@ -4806,6 +4813,12 @@ func (pac *persistedAccountData) before(other *persistedAccountData) bool {
 // before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
 func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
+	return prd.round < other.round
+}
+
+// before compares the round numbers of two persistedKVData and determines if the current persistedKVData
+// happened before the other.
+func (prd persistedKVData) before(other *persistedKVData) bool {
 	return prd.round < other.round
 }
 

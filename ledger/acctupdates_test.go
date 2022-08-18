@@ -1216,7 +1216,7 @@ func TestListCreatables(t *testing.T) {
 	// sync with the database
 	var updates compactAccountDeltas
 	var resUpdates compactResourcesDeltas
-	_, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
+	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1232,7 +1232,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
+	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1357,6 +1357,183 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	}
 }
 
+func TestKVCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	initialBlocksCount := 1
+	accts := make(map[basics.Address]basics.AccountData)
+
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
+		[]map[basics.Address]basics.AccountData{accts},
+	)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+	defer au.close()
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
+
+	kvCnt := 1000
+	kvsPerBlock := 100
+	curKV := 0
+	var currentRound basics.Round
+	currentDBRound := basics.Round(1)
+
+	kvMap := make(map[string]string)
+	for i := 0; i < kvCnt; i++ {
+		kvMap[fmt.Sprintf("%d", i)] = fmt.Sprintf("value%d", i)
+	}
+
+	// add kvsPerBlock KVs on each iteration. The first kvCnt/kvsPerBlock
+	// iterations produce a block with kvCnt kv manipulations. The last
+	// conf.MaxAcctLookback iterations are meant to verify the contents of the cache
+	// are correct after every kv containing block has been committed.
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
+		currentRound = currentRound + 1
+		kvMods := make(map[string]*string)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				curKV++
+				val := kvMap[name]
+				kvMods[name] = &val
+			}
+		}
+
+		auNewBlock(t, currentRound, au, accts, opts, kvMods)
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
+		}
+
+		// verify cache doesn't contain the new kvs until committed to DB.
+		for name := range kvMods {
+			_, has := au.baseKVs.read(name)
+			require.False(t, has)
+		}
+
+		// verify commited kvs appear in the kv cache
+		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
+			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKVs.read(name)
+				require.True(t, has)
+				require.Equal(t, kvMap[name], *persistedValue.value)
+			}
+		}
+	}
+
+	// updating inserted KVs
+	curKV = 0
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
+		currentRound = currentRound + 1
+
+		kvMods := make(map[string]*string)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				val := fmt.Sprintf("modified value%d", curKV)
+				kvMods[name] = &val
+				curKV++
+			}
+		}
+
+		auNewBlock(t, currentRound, au, accts, opts, kvMods)
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+
+		// verify cache doesn't contain updated kv values that haven't been committed to db
+		if i < kvCnt/kvsPerBlock {
+			for name := range kvMods {
+				persistedValue, has := au.baseKVs.read(name)
+				require.True(t, has)
+				require.Equal(t, kvMap[name], *persistedValue.value)
+			}
+		}
+
+		// verify commited updated kv values appear in the kv cache
+		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
+			lookback := basics.Round(kvCnt/kvsPerBlock + int(conf.MaxAcctLookback) + 1)
+			if currentDBRound < lookback {
+				continue
+			}
+
+			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKVs.read(name)
+				require.True(t, has)
+				expectedValue := fmt.Sprintf("modified value%s", name)
+				require.Equal(t, expectedValue, *persistedValue.value)
+			}
+		}
+	}
+
+	// deleting KVs
+	curKV = 0
+	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
+		currentRound = currentRound + 1
+
+		kvMods := make(map[string]*string)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				kvMods[name] = nil
+				curKV++
+			}
+		}
+
+		auNewBlock(t, currentRound, au, accts, opts, kvMods)
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+
+		// verify cache doesn't contain updated kv values that haven't been committed to db
+		if i < kvCnt/kvsPerBlock {
+			for name := range kvMods {
+				persistedValue, has := au.baseKVs.read(name)
+				require.True(t, has)
+				value := fmt.Sprintf("modified value%s", name)
+				require.Equal(t, value, *persistedValue.value)
+			}
+		}
+
+		// verify commited updated kv values appear in the kv cache
+		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
+			lookback := basics.Round(2*(kvCnt/kvsPerBlock+int(conf.MaxAcctLookback)) + 1)
+			if currentDBRound < lookback {
+				continue
+			}
+
+			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
+				persistedValue, has := au.baseKVs.read(name)
+				require.True(t, has)
+				require.True(t, persistedValue.value == nil)
+			}
+		}
+	}
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
@@ -1436,7 +1613,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
+			_, _, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
