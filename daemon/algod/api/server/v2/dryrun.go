@@ -181,14 +181,14 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
+// BeforeAppEval is fired on program creation (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) BeforeAppEval(state *logic.DebugState) error {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
 	return nil
 }
 
-// Update is fired on every step (DebuggerHook interface)
+// BeforeTealOp is fired on every step (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
@@ -196,9 +196,9 @@ func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
 	return nil
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
+// AfterAppEval is called when the program exits (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) AfterAppEval(state *logic.DebugState) error {
-	return ddr.AfterAppEval(state)
+	return ddr.BeforeTealOp(state)
 }
 
 type dryrunLedger struct {
