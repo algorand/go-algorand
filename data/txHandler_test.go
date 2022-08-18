@@ -35,13 +35,13 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
 func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
-	const numRounds = 10
 	const numUsers = 100
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
@@ -156,6 +156,8 @@ func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 }
 
 func TestTxHandlerProcessIncomingTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	const numTxns = 11
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 1),

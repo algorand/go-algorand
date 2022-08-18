@@ -204,6 +204,8 @@ func TestEncodeJSON(t *testing.T) {
 }
 
 func TestMsgpDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var tag Tag = "test"
 	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
 	err := dec.Decode(&tag)
