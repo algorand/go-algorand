@@ -440,9 +440,21 @@ commands:
           at: << parameters.result_path >>
       - run:
           name: Check if all tests were run
+          # Add to --ignored-tests when a test should _not_ be considered.
+          # * For example, E2E expect test runners (e.g. `TestAlgodWithExpect`)
+          # produce partitioned subtests.
+          # * The parent tests are deliberately _not_ partitioned.  By ignoring
+          # these tests, `check_tests.py` won't provide conflicting advice to
+          # partition the parent tests.
           command: |
             cat << parameters.result_path >>/<< parameters.result_subdir >>/**/testresults.json > << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
-            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
+            python3 scripts/buildtools/check_tests.py \
+              --tests-results-filepath << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json \
+              --ignored-tests \
+                TestAlgodWithExpect \
+                TestAlgohWithExpect \
+                TestGoalWithExpect \
+                TestTealdbgWithExpect
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
