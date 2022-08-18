@@ -64,9 +64,9 @@ type DebuggerHook interface {
 	// │  │  ├────────────────────────────────────┤  │  │
 	// │  │  │ > BeforeTealOp                     │  │  │
 	// │  │  │  ┌──────────────────────────────┐  │  │  │
-	// │  │  │  │ ? Inner Transaction          │  │  │  │
+	// │  │  │  │ ? Inner Transaction Group    │  │  │  │
 	// │  │  │  ├──────────────────────────────┤  │  │  │
-	// │  │  │  │ > BeforeInnerTxn             │  │  │  │
+	// │  │  │  │ > BeforeInnerTxnGroup        │  │  │  │
 	// │  │  │  │  ┌────────────────────────┐  │  │  │  │
 	// │  │  │  │  │ Transaction Evaluation │  │  │  │  │
 	// │  │  │  │  ├────────────────────────┤  │  │  │  │
@@ -74,7 +74,7 @@ type DebuggerHook interface {
 	// │  │  │  │  └────────────────────────┘  │  │  │  │
 	// │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │
 	// │  │  │  │                              │  │  │  │
-	// │  │  │  │ > AfterInnerTxn              │  │  │  │
+	// │  │  │  │ > AfterInnerTxnGroup         │  │  │  │
 	// │  │  │  └──────────────────────────────┘  │  │  │
 	// │  │  │ > AfterTealOp                      │  │  │
 	// │  │  └────────────────────────────────────┘  │  │
@@ -163,26 +163,28 @@ func callAfterTealOpHookIfItExists(dh DebuggerHook, state *DebugState) error {
 	return nil
 }
 
-type debuggerBeforeInnerTxnHook interface {
-	// BeforeInnerTxn is called before the inner transaction is executed
-	BeforeInnerTxn(ep *EvalParams) error
+type debuggerBeforeInnerTxnGroupHook interface {
+	// BeforeInnerTxnGroup is called before an inner transaction group is executed
+	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
+	// in the lifecycle diagram above.
+	BeforeInnerTxnGroup(ep *EvalParams) error
 }
 
-func callBeforeInnerTxnHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
-	if dhWithBeforeInnerTxnHook, ok := dh.(debuggerBeforeInnerTxnHook); ok {
-		return dhWithBeforeInnerTxnHook.BeforeInnerTxn(ep)
+func callBeforeInnerTxnGroupHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
+	if dhWithBeforeInnerTxnGroupHook, ok := dh.(debuggerBeforeInnerTxnGroupHook); ok {
+		return dhWithBeforeInnerTxnGroupHook.BeforeInnerTxnGroup(ep)
 	}
 	return nil
 }
 
-type debuggerAfterInnerTxnHook interface {
-	// AfterInnerTxn is called after the inner transaction has been executed
-	AfterInnerTxn(ep *EvalParams) error
+type debuggerAfterInnerTxnGroupHook interface {
+	// AfterInnerTxnGroup is called after an inner transaction group has been executed
+	AfterInnerTxnGroup(ep *EvalParams) error
 }
 
-func callAfterInnerTxnHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
-	if dhWithAfterInnerTxnHook, ok := dh.(debuggerAfterInnerTxnHook); ok {
-		return dhWithAfterInnerTxnHook.AfterInnerTxn(ep)
+func callAfterInnerTxnGroupHookIfItExists(dh DebuggerHook, ep *EvalParams) error {
+	if dhWithAfterInnerTxnGroupHook, ok := dh.(debuggerAfterInnerTxnGroupHook); ok {
+		return dhWithAfterInnerTxnGroupHook.AfterInnerTxnGroup(ep)
 	}
 	return nil
 }

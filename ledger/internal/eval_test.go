@@ -309,13 +309,13 @@ func (d *testDbgHook) BeforeTealOp(state *logic.DebugState) error {
 	return nil
 }
 
-func (d *testDbgHook) BeforeInnerTxn(ep *logic.EvalParams) error {
-	d.log = append(d.log, "beforeInnerTxn")
+func (d *testDbgHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	d.log = append(d.log, "beforeInnerTxnGroup")
 	return nil
 }
 
-func (d *testDbgHook) AfterInnerTxn(ep *logic.EvalParams) error {
-	d.log = append(d.log, "afterInnerTxn")
+func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	d.log = append(d.log, "afterInnerTxnGroup")
 	return nil
 }
 
@@ -437,13 +437,13 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 			"beforeAppEval"},
 		tealOpLogs(9),
 		{"beforeTealOp",
-			"beforeInnerTxn",
+			"beforeInnerTxnGroup",
 			"beforeTxn",
 			"beforeAppEval"},
 		tealOpLogs(1),
 		{"afterAppEval",
 			"afterTxn",
-			"afterInnerTxn",
+			"afterInnerTxnGroup",
 			"afterTealOp"},
 		tealOpLogs(1),
 		{"afterAppEval",

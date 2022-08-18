@@ -4778,7 +4778,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
 
-	err := callBeforeInnerTxnHookIfItExists(ep.Debugger, ep)
+	err := callBeforeInnerTxnGroupHookIfItExists(ep.Debugger, ep)
 	if err != nil {
 		return err
 	}
@@ -4807,7 +4807,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	err = callAfterInnerTxnHookIfItExists(ep.Debugger, ep)
+	err = callAfterInnerTxnGroupHookIfItExists(ep.Debugger, ep)
 	if err != nil {
 		return err
 	}

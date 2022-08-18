@@ -100,15 +100,15 @@ func TestWebDebuggerManual(t *testing.T) {
 }
 
 type testDbgHook struct {
-	beforeTxnCalls      int
-	beforeAppEvalCalls  int
-	beforeTealOpCalls   int
-	beforeInnerTxnCalls int
-	afterInnerTxnCalls  int
-	afterTealOpCalls    int
-	afterAppEvalCalls   int
-	afterTxnCalls       int
-	state               *DebugState
+	beforeTxnCalls           int
+	beforeAppEvalCalls       int
+	beforeTealOpCalls        int
+	beforeInnerTxnGroupCalls int
+	afterInnerTxnGroupCalls  int
+	afterTealOpCalls         int
+	afterAppEvalCalls        int
+	afterTxnCalls            int
+	state                    *DebugState
 }
 
 func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
@@ -129,14 +129,14 @@ func (d *testDbgHook) BeforeTealOp(state *DebugState) error {
 	return nil
 }
 
-func (d *testDbgHook) BeforeInnerTxn(ep *EvalParams) error {
-	d.beforeInnerTxnCalls++
+func (d *testDbgHook) BeforeInnerTxnGroup(ep *EvalParams) error {
+	d.beforeInnerTxnGroupCalls++
 	d.state = ep.caller.debugState
 	return nil
 }
 
-func (d *testDbgHook) AfterInnerTxn(ep *EvalParams) error {
-	d.afterInnerTxnCalls++
+func (d *testDbgHook) AfterInnerTxnGroup(ep *EvalParams) error {
+	d.afterInnerTxnGroupCalls++
 	d.state = ep.caller.debugState
 	return nil
 }
@@ -180,8 +180,8 @@ func TestDebuggerHook(t *testing.T) {
 	require.Greater(t, testDbg.afterTealOpCalls, 1)
 	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-	require.Zero(t, testDbg.beforeInnerTxnCalls)
-	require.Zero(t, testDbg.afterInnerTxnCalls)
+	require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
+	require.Zero(t, testDbg.afterInnerTxnGroupCalls)
 
 	require.Len(t, testDbg.state.Stack, 1)
 }
@@ -208,8 +208,8 @@ func TestDebuggerHookInnerTxns(t *testing.T) {
 	require.Equal(t, testDbg.beforeTealOpCalls, appCallTealOps+innerAppCallTealOps)
 	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-	require.Equal(t, 1, testDbg.beforeInnerTxnCalls)
-	require.Equal(t, 1, testDbg.afterInnerTxnCalls)
+	require.Equal(t, 1, testDbg.beforeInnerTxnGroupCalls)
+	require.Equal(t, 1, testDbg.afterInnerTxnGroupCalls)
 
 	require.Len(t, testDbg.state.Stack, 1)
 }
