@@ -47,6 +47,11 @@ type Decoder interface {
 	Decode(objptr interface{}) error
 }
 
+// MsgpDecoder is our interface for a thing that can msgp-decode objects.
+type MsgpDecoder interface {
+	Decode(objptr msgp.Unmarshaler) error
+}
+
 func init() {
 	CodecHandle = new(codec.MsgpackHandle)
 	CodecHandle.ErrorIfNoField = true
@@ -248,11 +253,7 @@ func NewDecoderBytes(b []byte) Decoder {
 
 // NewMsgpDecoderBytes returns a decoder object reading bytes from [b].
 // that works with msgp-serialized objects
-func NewMsgpDecoderBytes(b []byte) *MsgpDecoderBytes {
-	return newMsgpDecoderBytes(b, CodecHandle)
-}
-
-func newMsgpDecoderBytes(b []byte, h codec.Handle) *MsgpDecoderBytes {
+func NewMsgpDecoderBytes(b []byte) MsgpDecoder {
 	return &MsgpDecoderBytes{b: b, pos: 0}
 }
 

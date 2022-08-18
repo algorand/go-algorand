@@ -17,6 +17,9 @@
 package protocol
 
 import (
+	"fmt"
+	"io"
+	"math/rand"
 	"reflect"
 	"testing"
 
@@ -198,6 +201,38 @@ func TestEncodeJSON(t *testing.T) {
 
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
+}
+
+func TestMsgpDecode(t *testing.T) {
+	var tag Tag = "test"
+	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
+	err := dec.Decode(&tag)
+	require.Error(t, err)
+
+	data := EncodeMsgp(tag)
+	dec = NewMsgpDecoderBytes(data)
+	var tag2 Tag
+	err = dec.Decode(&tag2)
+	require.Equal(t, tag, tag2)
+	require.NoError(t, err)
+
+	limit := rand.Intn(30)
+	tags := make([]Tag, limit)
+	buf := make([]byte, 0, limit*10)
+	for i := 0; i < limit; i++ {
+		tags[i] = Tag(fmt.Sprintf("tag_%d", i))
+		buf = append(buf, EncodeMsgp(tags[i])...)
+	}
+
+	dec = NewMsgpDecoderBytes(buf)
+	for i := 0; i < limit; i++ {
+		err = dec.Decode(&tag2)
+		require.NoError(t, err)
+		require.Equal(t, tags[i], tag2)
+	}
+	err = dec.Decode(&tag2)
+	require.Error(t, err)
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestRandomizeObjectWithPtrField(t *testing.T) {
