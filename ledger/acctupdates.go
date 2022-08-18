@@ -215,8 +215,8 @@ type accountUpdates struct {
 	// baseResources stores the most recently used resources, at exactly dbRound
 	baseResources lruResources
 
-	// baseKV stores the most recently used KV, at exactly dbRound
-	baseKV lruKV
+	// baseKVs stores the most recently used KV, at exactly dbRound
+	baseKVs lruKV
 
 	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
 	logAccountUpdatesMetrics bool
@@ -322,7 +322,7 @@ func (au *accountUpdates) close() {
 	}
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
-	au.baseKV.prune(0)
+	au.baseKVs.prune(0)
 }
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
@@ -388,10 +388,10 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 		}
 
 		// check the baseKV cache
-		if pbd, has := au.baseKV.read(key); has {
+		if pbd, has := au.baseKVs.read(key); has {
 			// we don't technically need this, since it's already in the baseKV, however, writing this over
 			// would ensure that we promote this field.
-			au.baseKV.writePending(pbd, key)
+			au.baseKVs.writePending(pbd, key)
 			return pbd.value, nil
 		}
 
@@ -405,16 +405,16 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 		// on-disk DB.
 
 		persistedData, err := au.accountsq.lookupKeyValue(key)
-		if persistedData.round == currentDbRound {
-			if err == nil {
-				// if we read actual data return it. This includes deleted values
-				// where persistedData.value == nil to avoid unnecessary db lookups
-				// for deleted KVs.
-				au.baseKV.writePending(persistedData, key)
-				return persistedData.value, err
-			}
-			// otherwise return empty
+		if err != nil {
 			return nil, err
+		}
+
+		if persistedData.round == currentDbRound {
+			// if we read actual data return it. This includes deleted values
+			// where persistedData.value == nil to avoid unnecessary db lookups
+			// for deleted KVs.
+			au.baseKVs.writePending(persistedData, key)
+			return persistedData.value, err
 		}
 
 		// The db round is unexpected...
@@ -954,7 +954,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
-	au.baseKV.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
+	au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
 	return
 }
 
@@ -979,7 +979,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 	au.baseAccounts.flushPendingWrites()
 	au.baseResources.flushPendingWrites()
-	au.baseKV.flushPendingWrites()
+	au.baseKVs.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -1035,7 +1035,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
 	newBaseKVSize := (len(au.kvStore) + 1) + baseKVPendingBufferSize
-	au.baseKV.prune(newBaseKVSize)
+	au.baseKVs.prune(newBaseKVSize)
 }
 
 // lookupLatest returns the account data for a given address for the latest round.
@@ -1335,7 +1335,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
 		if persistedData.round == currentDbRound {
-			if err == nil {
+			if persistedData.addrid != 0 {
 				// if we read actual data return it
 				au.baseResources.writePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, err
@@ -1753,7 +1753,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 
 	for key, persistedKV := range dcc.updatedPersistedKVs {
-		au.baseKV.write(persistedKV, key)
+		au.baseKVs.write(persistedKV, key)
 	}
 
 	for cidx, modCrt := range dcc.compactCreatableDeltas {
@@ -1885,7 +1885,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	// rowid are flushed.
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
-	au.baseKV.prune(0)
+	au.baseKVs.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

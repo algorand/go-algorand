@@ -4818,7 +4818,7 @@ func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
 
 // before compares the round numbers of two persistedKVData and determines if the current persistedKVData
 // happened before the other.
-func (prd *persistedKVData) before(other *persistedKVData) bool {
+func (prd persistedKVData) before(other *persistedKVData) bool {
 	return prd.round < other.round
 }
 
