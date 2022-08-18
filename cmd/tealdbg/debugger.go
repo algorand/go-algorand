@@ -67,9 +67,10 @@ type Control interface {
 
 // Debugger is TEAL event-driven debugger
 type Debugger struct {
-	mus      deadlock.Mutex
-	sessions map[string]*session
-	programs map[string]*programMeta
+	mus           deadlock.Mutex
+	sessions      map[string]*session
+	programs      map[string]*programMeta
+	innerTxnDepth uint
 
 	mud deadlock.Mutex
 	das []DebugAdapter
@@ -527,8 +528,26 @@ func (d *Debugger) SaveProgram(
 	}
 }
 
+// BeforeInnerTxnGroup is fired immediately before beginning evaluation of a group of inner transactions (DebuggerHook interface)
+// We track the inner transaction depth so that the existing evaluation hooks do not execute for inner transactions,
+// in order to maintain backward compabitility.
+func (d *Debugger) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	d.innerTxnDepth++
+	return nil
+}
+
+// AfterInnerTxnGroup is fired immediately after evaluation of a group of inner transactions (DebuggerHook interface)
+func (d *Debugger) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	d.innerTxnDepth--
+	return nil
+}
+
 // BeforeAppEval setups new session and notifies frontends if any (DebuggerHook interface)
 func (d *Debugger) BeforeAppEval(state *logic.DebugState) error {
+	if d.innerTxnDepth > 0 {
+		return nil
+	}
+
 	sid := state.ExecID
 	pcOffset := make(map[int]int, len(state.PCOffset))
 	for _, pco := range state.PCOffset {
@@ -562,6 +581,10 @@ func (d *Debugger) BeforeAppEval(state *logic.DebugState) error {
 
 // BeforeTealOp process state update notifications: pauses or continues as needed (DebuggerHook interface)
 func (d *Debugger) BeforeTealOp(state *logic.DebugState) error {
+	if d.innerTxnDepth > 0 {
+		return nil
+	}
+
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {
@@ -597,6 +620,10 @@ func (d *Debugger) BeforeTealOp(state *logic.DebugState) error {
 
 // AfterAppEval terminates session and notifies frontends if any (DebuggerHook interface)
 func (d *Debugger) AfterAppEval(state *logic.DebugState) error {
+	if d.innerTxnDepth > 0 {
+		return nil
+	}
+
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {
