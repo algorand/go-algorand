@@ -170,8 +170,8 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 
 // txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
 // it is the caller's responsibility to call batchVerifier.verify()
-func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
+func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, ignoreMissingSigs bool) (*GroupContext, error) {
+	groupCtx, err := PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
 	}
@@ -184,10 +184,8 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && ignoreMissingSigs
 			if !isIgnoredMissingSigError {
 				err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
-				return
+				return nil, err
 			}
-			// clear error since we're ignoring it
-			err = nil
 		}
 		if stxn.Txn.Type != protocol.CompactCertTx {
 			minFeeCount++
@@ -197,7 +195,7 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
 		err = fmt.Errorf("txgroup fee requirement overflow")
-		return
+		return nil, err
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
@@ -205,13 +203,13 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
 			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
-		return
+		return nil, err
 	}
 
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}
-	return
+	return groupCtx, nil
 }
 
 func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig bool, hasLogicSig bool) {
