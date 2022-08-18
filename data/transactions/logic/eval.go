@@ -681,9 +681,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		errDbg := callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
-		if err == nil {
-			err = errDbg
+		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
+			errDbg := callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			if err == nil {
+				err = errDbg
+			}
 		}
 	}()
 
@@ -718,14 +720,18 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if derr := callBeforeTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-			return false, derr
+		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
+			if derr := callBeforeTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
+				return false, derr
+			}
 		}
 
 		err = cx.step()
 
-		if derr := callAfterTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-			return false, derr
+		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
+			if derr := callAfterTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
+				return false, derr
+			}
 		}
 	}
 	if err != nil {
