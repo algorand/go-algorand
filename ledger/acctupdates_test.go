@@ -1418,7 +1418,7 @@ func TestKVCache(t *testing.T) {
 
 		// verify cache doesn't contain the new kvs until committed to DB.
 		for name := range kvMods {
-			_, has := au.baseKV.read(name)
+			_, has := au.baseKVs.read(name)
 			require.False(t, has)
 		}
 
@@ -1427,7 +1427,7 @@ func TestKVCache(t *testing.T) {
 			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
-				persistedValue, has := au.baseKV.read(name)
+				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				require.Equal(t, kvMap[name], *persistedValue.value)
 			}
@@ -1460,7 +1460,7 @@ func TestKVCache(t *testing.T) {
 		// verify cache doesn't contain updated kv values that haven't been committed to db
 		if i < kvCnt/kvsPerBlock {
 			for name := range kvMods {
-				persistedValue, has := au.baseKV.read(name)
+				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				require.Equal(t, kvMap[name], *persistedValue.value)
 			}
@@ -1476,7 +1476,7 @@ func TestKVCache(t *testing.T) {
 			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
-				persistedValue, has := au.baseKV.read(name)
+				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				expectedValue := fmt.Sprintf("modified value%s", name)
 				require.Equal(t, expectedValue, *persistedValue.value)
@@ -1509,7 +1509,7 @@ func TestKVCache(t *testing.T) {
 		// verify cache doesn't contain updated kv values that haven't been committed to db
 		if i < kvCnt/kvsPerBlock {
 			for name := range kvMods {
-				persistedValue, has := au.baseKV.read(name)
+				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				value := fmt.Sprintf("modified value%s", name)
 				require.Equal(t, value, *persistedValue.value)
@@ -1526,7 +1526,7 @@ func TestKVCache(t *testing.T) {
 			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
-				persistedValue, has := au.baseKV.read(name)
+				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				require.True(t, persistedValue.value == nil)
 			}
