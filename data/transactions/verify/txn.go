@@ -52,6 +52,11 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
+type debuggerForVerifier struct {
+	debugger          logic.DebuggerHook
+	ignoreMissingSigs bool
+}
+
 // GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
@@ -66,11 +71,12 @@ type GroupContext struct {
 	consensusParams  config.ConsensusParams
 	minAvmVersion    uint64
 	signedGroupTxns  []transactions.SignedTxn
+	verifierDebugger *debuggerForVerifier
 }
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) (*GroupContext, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, verifierDebugger *debuggerForVerifier) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -87,6 +93,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		consensusParams:  consensusParams,
 		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
+		verifierDebugger: verifierDebugger,
 	}, nil
 }
 
@@ -135,19 +142,19 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, false)
+	return txnGroup(stxs, contextHdr, cache, nil)
 }
 
-// TxnGroupWithMissingSignatures verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
-func TxnGroupWithMissingSignatures(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, true)
+// TxnGroupForDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
+func TxnGroupForDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, &debuggerForVerifier{debugger, true})
 }
 
 // txnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
-func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
+func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifierDebugger *debuggerForVerifier) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier, ignoreMissingSigs); err != nil {
+	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier, verifierDebugger); err != nil {
 		return nil, err
 	}
 
@@ -165,13 +172,13 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller's responsibility to call batchVerifier.verify()
 func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
-	return txnGroupBatchVerify(stxs, contextHdr, cache, verifier, false)
+	return txnGroupBatchVerify(stxs, contextHdr, cache, verifier, nil)
 }
 
 // txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
 // it is the caller's responsibility to call batchVerifier.verify()
-func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
+func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, verifierDebugger *debuggerForVerifier) (groupCtx *GroupContext, err error) {
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr, verifierDebugger)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +188,7 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	for i, stxn := range stxs {
 		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
 		if err != nil {
-			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && ignoreMissingSigs
+			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && verifierDebugger.ignoreMissingSigs
 			if !isIgnoredMissingSigError {
 				err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 				return
@@ -388,6 +395,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		Proto:         &groupCtx.consensusParams,
 		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
 		MinAvmVersion: &groupCtx.minAvmVersion,
+		Debugger:      groupCtx.verifierDebugger.debugger,
 	}
 	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {

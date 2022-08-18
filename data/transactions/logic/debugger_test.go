@@ -100,6 +100,8 @@ func TestWebDebuggerManual(t *testing.T) {
 }
 
 type testDbgHook struct {
+	beforeLogicSigEvalCalls  int
+	afterLogicSigEvalCalls   int
 	beforeTxnCalls           int
 	beforeAppEvalCalls       int
 	beforeTealOpCalls        int
@@ -109,6 +111,18 @@ type testDbgHook struct {
 	afterAppEvalCalls        int
 	afterTxnCalls            int
 	state                    *DebugState
+}
+
+func (d *testDbgHook) BeforeLogicSigEval(state *DebugState) error {
+	d.beforeLogicSigEvalCalls++
+	d.state = state
+	return nil
+}
+
+func (d *testDbgHook) AfterLogicSigEval(state *DebugState) error {
+	d.afterLogicSigEvalCalls++
+	d.state = state
+	return nil
 }
 
 func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
@@ -166,6 +180,36 @@ func TestDebuggerHook(t *testing.T) {
 	testDbg := testDbgHook{}
 	ep := defaultEvalParams(nil)
 	ep.Debugger = &testDbg
+	testApp(t, testProgram, ep)
+
+	// these should not be called because beforeTxn and afterTxn hooks
+	// are called within ledger evaluation, not logic.
+	require.Equal(t, 0, testDbg.beforeTxnCalls)
+	require.Equal(t, 0, testDbg.afterTxnCalls)
+
+	require.Equal(t, 0, testDbg.beforeLogicSigEvalCalls)
+	require.Equal(t, 0, testDbg.afterLogicSigEvalCalls)
+
+	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
+	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+
+	require.Greater(t, testDbg.beforeTealOpCalls, 1)
+	require.Greater(t, testDbg.afterTealOpCalls, 1)
+	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+
+	require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
+	require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+
+	require.Len(t, testDbg.state.Stack, 1)
+}
+
+func TestDebuggerHooksLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testDbg := testDbgHook{}
+	ep := defaultEvalParams(nil)
+	ep.Debugger = &testDbg
 	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 
 	// these should not be called because beforeTxn and afterTxn hooks
@@ -173,8 +217,11 @@ func TestDebuggerHook(t *testing.T) {
 	require.Equal(t, 0, testDbg.beforeTxnCalls)
 	require.Equal(t, 0, testDbg.afterTxnCalls)
 
-	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
-	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
+	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
+
+	require.Equal(t, 0, testDbg.beforeAppEvalCalls)
+	require.Equal(t, 0, testDbg.afterAppEvalCalls)
 
 	require.Greater(t, testDbg.beforeTealOpCalls, 1)
 	require.Greater(t, testDbg.afterTealOpCalls, 1)
@@ -322,8 +369,8 @@ func TestCallStackUpdate(t *testing.T) {
 	ep.Debugger = &testDbg
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 
-	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
-	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
+	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
 	require.Greater(t, testDbg.beforeTealOpCalls, 1)
 	require.Len(t, testDbg.state.Stack, 1)
 	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)

@@ -114,7 +114,7 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	groupCtx, err := PrepareGroupContext(stxns, blockHeader)
+	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
 	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
 	require.NoError(t, Txn(&stxn, 0, groupCtx), "generateTestObjects generated a bad signedtxn")
@@ -135,7 +135,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
 		if Txn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -157,7 +157,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
 		if Txn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -202,7 +202,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 		},
 	}
 
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil)
 	require.NoError(t, err)
 
 	err = Txn(&stxn, 0, groupCtx)
@@ -256,7 +256,7 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil)
 		require.NoError(t, err)
 		Txn(&st, 0, groupCtx)
 	}
@@ -422,7 +422,7 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader)
+		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
 			err := Txn(&txn, i, groupCtx)

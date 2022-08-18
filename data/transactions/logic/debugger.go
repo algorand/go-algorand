@@ -48,7 +48,25 @@ import (
 // impact of the debugger hooks.
 type DebuggerHook interface {
 
-	// LIFECYCLE GRAPH
+	// LOGICSIG LIFECYCLE GRAPH
+	// ┌─────────────────────────┐
+	// │ LogicSig Evaluation     │
+	// ├─────────────────────────┤
+	// │ > BeforeLogicSigEval    │
+	// │                         │
+	// │  ┌───────────────────┐  │
+	// │  │ Teal Operation    │  │
+	// │  ├───────────────────┤  │
+	// │  │ > BeforeTealOp    │  │
+	// │  │                   │  │
+	// │  │ > AfterTealOp     │  │
+	// │  └───────────────────┘  │
+	// |   ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞   │
+	// │                         │
+	// │ > AfterLogicSigEval     │
+	// └─────────────────────────┘
+
+	// APP LIFECYCLE GRAPH
 	// ┌────────────────────────────────────────────────┐
 	// │ Transaction Evaluation                         │
 	// ├────────────────────────────────────────────────┤
@@ -135,6 +153,31 @@ type debuggerAfterAppEvalHook interface {
 func callAfterAppEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
 	if dhWithAfterAppEvalHook, ok := dh.(debuggerAfterAppEvalHook); ok {
 		return dhWithAfterAppEvalHook.AfterAppEval(state)
+	}
+	return nil
+}
+
+type debuggerBeforeLogicSigEvalHook interface {
+	// BeforeLogicSigEval is called before the LogicSig is evaluated.
+	// This hook is similar to BeforeAppEval, but indicates the start of a LogicSig's evaluation instead.
+	BeforeLogicSigEval(state *DebugState) error
+}
+
+func callBeforeLogicSigEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithBeforeLogicSigEvalHook, ok := dh.(debuggerBeforeLogicSigEvalHook); ok {
+		return dhWithBeforeLogicSigEvalHook.BeforeLogicSigEval(state)
+	}
+	return nil
+}
+
+type debuggerAfterLogicSigEvalHook interface {
+	// AfterLogicSigEval is called after the LogicSig is evaluated.
+	AfterLogicSigEval(state *DebugState) error
+}
+
+func callAfterLogicSigEvalHookIfItExists(dh DebuggerHook, state *DebugState) error {
+	if dhWithAfterLogicSigEvalHook, ok := dh.(debuggerAfterLogicSigEvalHook); ok {
+		return dhWithAfterLogicSigEvalHook.AfterLogicSigEval(state)
 	}
 	return nil
 }

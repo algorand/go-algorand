@@ -113,9 +113,9 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (isMissingSigs bool, err error) {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (isMissingSigs bool, err error) {
 	// verify the signed transactions are well-formed and have valid or missing signatures
-	_, err = verify.TxnGroupWithMissingSignatures(txgroup, hdr, nil)
+	_, err = verify.TxnGroupForDebugger(txgroup, hdr, nil, debugger)
 	if err != nil {
 		err = InvalidTxGroupError{SimulatorError{err}}
 		return
@@ -132,7 +132,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return
 }
 
-func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
 	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0)
@@ -142,8 +142,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	simulatorDebugger := makeDebuggerHook()
-	err = eval.TransactionGroupWithDebugger(group, simulatorDebugger)
+	err = eval.TransactionGroupWithDebugger(group, debugger)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
@@ -165,13 +164,14 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.Va
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
+	simulatorDebugger := makeDebuggerHook()
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err = s.check(hdr, txgroup)
+	missingSignatures, err = s.check(hdr, txgroup, simulatorDebugger)
 	if err != nil {
 		return
 	}
 
-	vb, err = s.evaluate(hdr, txgroup)
+	vb, err = s.evaluate(hdr, txgroup, simulatorDebugger)
 	return
 }

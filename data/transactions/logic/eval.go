@@ -682,9 +682,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	defer func() {
 		// Ensure we update the debugger before exiting
 		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			errDbg := callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			var derr error
+			if cx.runModeFlags == modeSig {
+				derr = callAfterLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			} else {
+				derr = callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			}
 			if err == nil {
-				err = errDbg
+				err = derr
 			}
 		}
 	}()
@@ -714,7 +719,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
-		if derr := callBeforeAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
+
+		var derr error
+		if cx.runModeFlags == modeSig {
+			derr = callBeforeLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+		} else {
+			derr = callBeforeAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+		}
+		if derr != nil {
 			return false, derr
 		}
 	}
