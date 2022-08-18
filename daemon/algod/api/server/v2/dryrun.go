@@ -116,6 +116,7 @@ type dryrunDebugReceiver struct {
 	lines         []string
 	history       []generated.DryrunState
 	scratchActive []bool
+	innerTxnDepth uint
 }
 
 func (ddr *dryrunDebugReceiver) updateScratch() {
@@ -181,8 +182,26 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 	return st
 }
 
+// BeforeInnerTxnGroup is fired immediately before beginning evaluation of a group of inner transactions (DebuggerHook interface)
+// We track the inner transaction depth so that the existing evaluation hooks do not execute for inner transactions,
+// in order to maintain backward compabitility.
+func (ddr *dryrunDebugReceiver) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	ddr.innerTxnDepth++
+	return nil
+}
+
+// AfterInnerTxnGroup is fired immediately after evaluation of a group of inner transactions (DebuggerHook interface)
+func (ddr *dryrunDebugReceiver) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	ddr.innerTxnDepth--
+	return nil
+}
+
 // BeforeAppEval is fired on program creation (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) BeforeAppEval(state *logic.DebugState) error {
+	if ddr.innerTxnDepth > 0 {
+		return nil
+	}
+
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
 	return nil
@@ -190,6 +209,10 @@ func (ddr *dryrunDebugReceiver) BeforeAppEval(state *logic.DebugState) error {
 
 // BeforeTealOp is fired on every step (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
+	if ddr.innerTxnDepth > 0 {
+		return nil
+	}
+
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
@@ -198,6 +221,10 @@ func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
 
 // AfterAppEval is called when the program exits (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) AfterAppEval(state *logic.DebugState) error {
+	if ddr.innerTxnDepth > 0 {
+		return nil
+	}
+
 	return ddr.BeforeTealOp(state)
 }
 
