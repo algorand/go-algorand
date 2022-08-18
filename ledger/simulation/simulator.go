@@ -79,13 +79,6 @@ type EvalFailureError struct {
 	SimulatorError
 }
 
-// ScopedSimulatorError is a simulator error that has 2 errors, one for internal use and one for
-// displaying publicly. THe external error is useful for API routes/etc.
-type ScopedSimulatorError struct {
-	SimulatorError        // the original error for internal use
-	External       string // the external error for public use
-}
-
 // ==============================
 // > Simulator
 // ==============================

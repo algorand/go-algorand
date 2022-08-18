@@ -824,13 +824,10 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	_, missingSignatures, err := v2.Node.Simulate(txgroup)
 	if err != nil {
 		var invalidTxErr *simulation.InvalidTxGroupError
-		var scopedErr *simulation.ScopedSimulatorError
 		var evalErr *simulation.EvalFailureError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
-		case errors.As(err, &scopedErr):
-			return internalError(ctx, scopedErr, scopedErr.External, v2.Log)
 		case errors.As(err, &evalErr):
 			res.FailureMessage = evalErr.Error()
 		default:
