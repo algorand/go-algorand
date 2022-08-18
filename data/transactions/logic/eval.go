@@ -4784,13 +4784,23 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 
 	for i := range ep.TxnGroup {
-		err := cx.Ledger.Perform(i, ep)
+		err := CallBeforeTxnHookIfItExists(ep.Debugger, ep, i)
+		if err != nil {
+			return err
+		}
+
+		err = cx.Ledger.Perform(i, ep)
 		if err != nil {
 			return err
 		}
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
+
+		err = CallAfterTxnHookIfItExists(ep.Debugger, ep, i)
+		if err != nil {
+			return err
+		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
