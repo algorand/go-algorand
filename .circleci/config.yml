@@ -66,16 +66,16 @@ workflows:
     jobs:
       - codegen_verification
 
-      - build:
-          name: << matrix.platform >>_build
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+#      - build:
+#          name: << matrix.platform >>_build
+#          matrix: &matrix-default
+#            parameters:
+#              platform: ["amd64", "arm64"]
+#          filters: &filters-default
+#            branches:
+#              ignore:
+#                - /rel\/.*/
+#                - << pipeline.parameters.valid_nightly_branch >>
 
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -91,10 +91,9 @@ workflows:
 
       - test:
           name: << matrix.platform >>_test
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -106,10 +105,11 @@ workflows:
 
       - integration:
           name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
+#          requires:
+#            - << matrix.platform >>_build
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -121,10 +121,11 @@ workflows:
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
+#          requires:
+#            - << matrix.platform >>_build
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -136,10 +137,11 @@ workflows:
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
+#          requires:
+#            - << matrix.platform >>_build
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -227,6 +229,42 @@ commands:
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
+
+  generic_build_consolidated:
+    description: TBD
+    parameters:
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    steps:
+      - restore_libsodium
+      - restore_cache:
+          keys:
+            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+      - restore_cache:
+          keys:
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
+            - 'go-cache-v3-{{ arch }}-'
+      - run:
+          name: scripts/travis/build.sh --make_debug
+          command: |
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.build_dir >>/go"
+            export ALGORAND_DEADLOCK=enable
+            export GIMME_INSTALL_DIR=<< parameters.build_dir >>
+            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
+            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
+            scripts/travis/build.sh --make_debug
+      - cache_libsodium
+      - save_cache:
+          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          paths:
+            - << parameters.build_dir >>/go/pkg/mod
+      - save_cache:
+          key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+          paths:
+            - tmp/go-cache
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -316,17 +354,17 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
-      - run: |
-          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
-          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
-          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
-      - restore_cache:
-          keys:
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v3-{{ arch }}-'
+#      - attach_workspace:
+#          at: << parameters.build_dir >>
+#      - run: |
+#          mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
+#          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
+#          touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
+#      - restore_cache:
+#          keys:
+#            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+#            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
+#            - 'go-cache-v3-{{ arch }}-'
       - run:
           name: Run build tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -388,8 +426,8 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
+#      - attach_workspace:
+#          at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
@@ -528,6 +566,7 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
+      - generic_build_consolidated
       - prepare_build_dir
       - prepare_go
       - generic_test:
@@ -564,6 +603,7 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
+      - generic_build_consolidated
       - prepare_build_dir
       - prepare_go
       - generic_integration:
