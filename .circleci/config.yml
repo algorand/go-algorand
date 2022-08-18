@@ -566,9 +566,10 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
-      - generic_build_consolidated
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build_consolidated
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
@@ -603,9 +604,10 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - generic_build_consolidated
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build_consolidated
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
@@ -641,7 +643,9 @@ jobs:
       E2E_TEST_FILTER: "EXPECT"
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build_consolidated
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
@@ -676,7 +680,9 @@ jobs:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build_consolidated
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs
