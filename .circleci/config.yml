@@ -89,71 +89,47 @@ workflows:
 
       - integration:
           name: << matrix.platform >>_integration
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
-          matrix: &matrix-nightly
-            parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-nightly
+          filters:
+            <<: *filters-nightly
           context: slack-secrets
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
-          matrix: &matrix-nightly
-            parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-nightly
+          filters:
+            <<: *filters-nightly
           context: slack-secrets
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
-          matrix: &matrix-nightly
-            parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-nightly
+          filters:
+            <<: *filters-nightly
           context:
             - slack-secrets
             - aws-secrets
