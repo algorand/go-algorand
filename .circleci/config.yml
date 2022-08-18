@@ -64,19 +64,19 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-#      - build:
-#          name: << matrix.platform >>_build
-#          matrix: &matrix-default
-#            parameters:
-#              platform: ["amd64", "arm64"]
-#          filters: &filters-default
-#            branches:
-#              ignore:
-#                - /rel\/.*/
-#                - << pipeline.parameters.valid_nightly_branch >>
+      - test:
+          name: << matrix.platform >>_test
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
-      - build_nightly:
-          name: << matrix.platform >>_build_nightly
+      - test_nightly:
+          name: << matrix.platform >>_test_nightly
           matrix: &matrix-nightly
             parameters:
               platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
@@ -87,34 +87,27 @@ workflows:
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
 
-      - test:
-          name: << matrix.platform >>_test
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-
-      - test_nightly:
-          name: << matrix.platform >>_test_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
-          context: slack-secrets
-
       - integration:
           name: << matrix.platform >>_integration
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-#          requires:
-#            - << matrix.platform >>_build
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
 
       - e2e_expect:
@@ -122,15 +115,22 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-#          requires:
-#            - << matrix.platform >>_build
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
 
       - e2e_subs:
@@ -138,15 +138,22 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-#          requires:
-#            - << matrix.platform >>_build
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
           context:
             - slack-secrets
             - aws-secrets
@@ -227,44 +234,8 @@ commands:
             export msys2+=" -msys2 -c "\"\$@"\" --"
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
 
-  generic_build_consolidated:
-    description: TBD
-    parameters:
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
-    steps:
-      - restore_libsodium
-      - restore_cache:
-          keys:
-            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-      - restore_cache:
-          keys:
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v3-{{ arch }}-'
-      - run:
-          name: scripts/travis/build.sh --make_debug
-          command: |
-            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="<< parameters.build_dir >>/go"
-            export ALGORAND_DEADLOCK=enable
-            export GIMME_INSTALL_DIR=<< parameters.build_dir >>
-            export GIMME_ENV_PREFIX=<< parameters.build_dir >>/.gimme/envs
-            export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
-            scripts/travis/build.sh --make_debug
-      - cache_libsodium
-      - save_cache:
-          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-          paths:
-            - << parameters.build_dir >>/go/pkg/mod
-      - save_cache:
-          key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-          paths:
-            - tmp/go-cache
-
   generic_build:
-    description: Run basic build and store in workspace for re-use by different architectures
+    description: Run basic build
     parameters:
       build_dir:
         type: string
@@ -298,13 +269,6 @@ commands:
           key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
           paths:
             - tmp/go-cache
-      - persist_to_workspace:
-          root: << parameters.build_dir >>
-          paths:
-            - project
-            - go
-            - gimme
-            - .gimme
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -530,33 +494,6 @@ commands:
                     scripts/travis/test_release.sh
 
 jobs:
-  build:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
-      - generic_build
-
-  build_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
-      - generic_build
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
-
   test:
     parameters:
       platform:
@@ -568,7 +505,7 @@ jobs:
       - prepare_build_dir
       - checkout
       - prepare_go
-      - generic_build_consolidated
+      - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
@@ -584,14 +521,17 @@ jobs:
     parallelism: 4
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify:
-          <<: *slack-fail-event
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
 
   integration:
     parameters:
@@ -606,7 +546,7 @@ jobs:
       - prepare_build_dir
       - checkout
       - prepare_go
-      - generic_build_consolidated
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
@@ -623,7 +563,9 @@ jobs:
       E2E_TEST_FILTER: "GO"
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration_nightly
@@ -644,7 +586,7 @@ jobs:
       - prepare_build_dir
       - checkout
       - prepare_go
-      - generic_build_consolidated
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
@@ -661,7 +603,9 @@ jobs:
       E2E_TEST_FILTER: "EXPECT"
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
@@ -681,7 +625,7 @@ jobs:
       - prepare_build_dir
       - checkout
       - prepare_go
-      - generic_build_consolidated
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs
@@ -701,7 +645,9 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
       - prepare_build_dir
+      - checkout
       - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs_nightly
