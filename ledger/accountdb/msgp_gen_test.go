@@ -14,6 +14,66 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func TestMarshalUnmarshalBaseAccountData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := BaseAccountData{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingBaseAccountData(t *testing.T) {
+	protocol.RunEncodingTest(t, &BaseAccountData{})
+}
+
+func BenchmarkMarshalMsgBaseAccountData(b *testing.B) {
+	v := BaseAccountData{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgBaseAccountData(b *testing.B) {
+	v := BaseAccountData{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalBaseAccountData(b *testing.B) {
+	v := BaseAccountData{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalBaseOnlineAccountData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := BaseOnlineAccountData{}
@@ -362,126 +422,6 @@ func BenchmarkAppendMsgTxTailRoundLease(b *testing.B) {
 
 func BenchmarkUnmarshalTxTailRoundLease(b *testing.B) {
 	v := TxTailRoundLease{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalbaseAccountData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := BaseAccountData{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingbaseAccountData(t *testing.T) {
-	protocol.RunEncodingTest(t, &BaseAccountData{})
-}
-
-func BenchmarkMarshalMsgbaseAccountData(b *testing.B) {
-	v := BaseAccountData{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgbaseAccountData(b *testing.B) {
-	v := BaseAccountData{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalbaseAccountData(b *testing.B) {
-	v := BaseAccountData{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalbaseAccountDataMigrate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := baseAccountDataMigrate{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingbaseAccountDataMigrate(t *testing.T) {
-	protocol.RunEncodingTest(t, &baseAccountDataMigrate{})
-}
-
-func BenchmarkMarshalMsgbaseAccountDataMigrate(b *testing.B) {
-	v := baseAccountDataMigrate{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgbaseAccountDataMigrate(b *testing.B) {
-	v := baseAccountDataMigrate{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalbaseAccountDataMigrate(b *testing.B) {
-	v := baseAccountDataMigrate{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

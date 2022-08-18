@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 
 	"github.com/algorand/go-deadlock"
 
@@ -90,15 +91,15 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
-	rdb := l.trackerDB().Rdb
-	t.log = l.trackerLog()
+	rdb := l.TrackerDB().Rdb
+	t.log = l.TrackerLog()
 
-	var roundData []*txTailRound
+	var roundData []*accountdb.TxTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
 		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, roundTailHashes, baseRound, err = loadTxTail(ctx, tx, dbRound)
+			roundData, roundTailHashes, baseRound, err = accountdb.LoadTxTail(ctx, tx, dbRound)
 			return
 		})
 		if err != nil {
@@ -192,7 +193,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
-	var tail txTailRound
+	var tail accountdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
 	tail.Hdr = blk.BlockHeader
@@ -202,14 +203,14 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
 		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
+			tail.Leases = append(tail.Leases, accountdb.TxTailRoundLease{
 				Sender: blk.Payset[txnInc.Intra].Txn.Sender,
 				Lease:  blk.Payset[txnInc.Intra].Txn.Lease,
 				TxnIdx: txnInc.Intra,
 			})
 		}
 	}
-	encodedTail, tailHash := tail.encode()
+	encodedTail, tailHash := tail.Encode()
 
 	t.tailMu.Lock()
 	defer t.tailMu.Unlock()
@@ -273,7 +274,7 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size
 	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
-	if err := txtailNewRound(ctx, tx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
+	if err := accountdb.TxtailNewRound(ctx, tx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil

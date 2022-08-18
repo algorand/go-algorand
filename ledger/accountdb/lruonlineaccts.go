@@ -21,10 +21,10 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-// lruAccounts provides a storage class for the most recently used accounts data.
+// LRUAccounts provides a storage class for the most recently used accounts data.
 // It doesn't have any synchronization primitive on its own and so is required to be
 // synchronized by the caller.
-type lruOnlineAccounts struct {
+type LRUOnlineAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	accountsList *persistedOnlineAccountDataList
@@ -32,7 +32,7 @@ type lruOnlineAccounts struct {
 	accounts map[basics.Address]*persistedOnlineAccountDataListNode
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
-	pendingAccounts chan persistedOnlineAccountData
+	pendingAccounts chan PersistedOnlineAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
@@ -41,34 +41,34 @@ type lruOnlineAccounts struct {
 
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
-func (m *lruOnlineAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
+func (m *LRUOnlineAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = newPersistedOnlineAccountList().allocateFreeNodes(pendingWrites)
 	m.accounts = make(map[basics.Address]*persistedOnlineAccountDataListNode, pendingWrites)
-	m.pendingAccounts = make(chan persistedOnlineAccountData, pendingWrites)
+	m.pendingAccounts = make(chan PersistedOnlineAccountData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
 // read the persistedAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
-func (m *lruOnlineAccounts) read(addr basics.Address) (data persistedOnlineAccountData, has bool) {
+func (m *LRUOnlineAccounts) read(addr basics.Address) (data PersistedOnlineAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
 	}
-	return persistedOnlineAccountData{}, false
+	return PersistedOnlineAccountData{}, false
 }
 
 // flushPendingWrites flushes the pending writes to the main lruAccounts cache.
 // thread locking semantics : write lock
-func (m *lruOnlineAccounts) flushPendingWrites() {
+func (m *LRUOnlineAccounts) FlushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
-		m.log.Warnf("lruOnlineAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+		m.log.Warnf("LRUOnlineAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingAccountData := <-m.pendingAccounts:
-			m.write(pendingAccountData)
+			m.Write(pendingAccountData)
 		default:
 			return
 		}
@@ -78,7 +78,7 @@ func (m *lruOnlineAccounts) flushPendingWrites() {
 // writePending write a single persistedOnlineAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruOnlineAccounts) writePending(acct persistedOnlineAccountData) {
+func (m *LRUOnlineAccounts) writePending(acct PersistedOnlineAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
 	default:
@@ -90,8 +90,8 @@ func (m *lruOnlineAccounts) writePending(acct persistedOnlineAccountData) {
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruOnlineAccounts) write(acctData persistedOnlineAccountData) {
-	if el := m.accounts[acctData.addr]; el != nil {
+func (m *LRUOnlineAccounts) Write(acctData PersistedOnlineAccountData) {
+	if el := m.accounts[acctData.Addr]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.before(&acctData) {
 			// we update with a newer version.
@@ -100,20 +100,20 @@ func (m *lruOnlineAccounts) write(acctData persistedOnlineAccountData) {
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.Addr] = m.accountsList.pushFront(&acctData)
 	}
 }
 
 // prune adjust the current size of the lruAccounts cache, by dropping the least
 // recently used entries.
 // thread locking semantics : write lock
-func (m *lruOnlineAccounts) prune(newSize int) (removed int) {
+func (m *LRUOnlineAccounts) Prune(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {
 			break
 		}
 		back := m.accountsList.back()
-		delete(m.accounts, back.Value.addr)
+		delete(m.accounts, back.Value.Addr)
 		m.accountsList.remove(back)
 		removed++
 	}

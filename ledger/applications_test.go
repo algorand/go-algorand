@@ -756,7 +756,7 @@ return`
 
 	pad, err := l.accts.accountsq.Lookup(userLocal)
 	a.NoError(err)
-	a.Equal(accountdb.baseAccountData{}, pad.accountData)
+	a.Equal(accountdb.BaseAccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
 	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)

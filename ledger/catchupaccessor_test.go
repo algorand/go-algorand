@@ -60,7 +60,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		balances.Balances = make([]accountdb.EncodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount accountdb.EncodedBalanceRecordV6
-			accountData := accountdb.baseAccountData{}
+			accountData := accountdb.BaseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])

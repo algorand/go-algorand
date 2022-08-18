@@ -88,7 +88,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 					}
 				}
 
-				return updateAccountsRound(tx, newBase)
+				return UpdateAccountsRound(tx, newBase)
 			})
 			require.NoError(t, err)
 		}()
@@ -204,7 +204,7 @@ func TestAcctOnline(t *testing.T) {
 		updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
 
 		base := genesisAccts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		genesisAccts = append(genesisAccts, newAccts)
 
 		// prepare block
@@ -397,7 +397,7 @@ func TestAcctOnline(t *testing.T) {
 		)
 
 		base := genesisAccts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		genesisAccts = append(genesisAccts, newAccts)
 
 		// prepare block
@@ -492,7 +492,7 @@ func TestAcctOnlineCache(t *testing.T) {
 				updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
 
 				base := genesisAccts[i-1]
-				newAccts := applyPartialDeltas(base, updates)
+				newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 				genesisAccts = append(genesisAccts, newAccts)
 
 				// prepare block
@@ -521,9 +521,9 @@ func TestAcctOnlineCache(t *testing.T) {
 					cachedData, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 					require.True(t, has)
 					if (rnd-1)%(numAccts*2) >= numAccts {
-						require.Empty(t, cachedData.baseOnlineAccountData)
+						require.Empty(t, cachedData.BaseOnlineAccountData)
 					} else {
-						require.NotEmpty(t, cachedData.baseOnlineAccountData)
+						require.NotEmpty(t, cachedData.BaseOnlineAccountData)
 					}
 
 					oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
@@ -555,9 +555,9 @@ func TestAcctOnlineCache(t *testing.T) {
 					cachedData, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 					require.True(t, has)
 					if (rnd-1)%(numAccts*2) >= numAccts {
-						require.Empty(t, cachedData.baseOnlineAccountData)
+						require.Empty(t, cachedData.BaseOnlineAccountData)
 					} else {
-						require.NotEmpty(t, cachedData.baseOnlineAccountData)
+						require.NotEmpty(t, cachedData.BaseOnlineAccountData)
 					}
 
 					// committed round i => dbRound = i - maxDeltaLookback
@@ -616,7 +616,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			cachedData, has := oa.onlineAccountsCache.read(bal.Addr, oldRound)
 			require.True(t, has)
 			require.Equal(t, expectedRound, cachedData.updRound)
-			require.NotEmpty(t, cachedData.baseOnlineAccountData)
+			require.NotEmpty(t, cachedData.BaseOnlineAccountData)
 
 			// cache should contain data for new rounds
 			// (the last entry should be offline)
@@ -625,7 +625,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			cachedData, has = oa.onlineAccountsCache.read(bal.Addr, newRound)
 			require.True(t, has)
 			require.Equal(t, newRound, cachedData.updRound)
-			require.Empty(t, cachedData.baseOnlineAccountData)
+			require.Empty(t, cachedData.BaseOnlineAccountData)
 
 		})
 	}
@@ -759,7 +759,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -882,7 +882,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
 		base := accounts[0]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		accounts = append(accounts, newAccts)
 
 		// prepare block
@@ -962,7 +962,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
 		base := accounts[0]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		accounts = append(accounts, newAccts)
 
 		// prepare block
@@ -1012,7 +1012,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
 		base := accounts[0]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		accounts = append(accounts, newAccts)
 
 		// prepare block
@@ -1161,7 +1161,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
 		base := genesisAccts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 		totals = newBlock(t, ml, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
 		genesisAccts = append(genesisAccts, newAccts)
 		commitSync(t, oa, ml, basics.Round(i))

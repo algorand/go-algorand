@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"container/list"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -34,17 +35,17 @@ type onlineAccountsCache struct {
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData, maxCacheSize int) {
+func (o *onlineAccountsCache) init(accts []accountdb.PersistedOnlineAccountData, maxCacheSize int) {
 	o.accounts = make(map[basics.Address]*list.List)
 	o.maxCacheSize = maxCacheSize
 
 	for _, acct := range accts {
 		// if cache full, stop writing
 		cachedAcct := cachedOnlineAccount{
-			baseOnlineAccountData: acct.accountData,
-			updRound:              acct.updRound,
+			BaseOnlineAccountData: acct.AccountData,
+			updRound:              acct.UpdRound,
 		}
-		if !o.writeFront(acct.addr, cachedAcct) {
+		if !o.writeFront(acct.Addr, cachedAcct) {
 			break
 		}
 	}

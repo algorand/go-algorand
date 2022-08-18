@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"strings"
 	"time"
 
@@ -193,7 +194,7 @@ type PersistedAccountData struct {
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	Addr basics.Address
 	// The underlaying account data
-	AccountData baseAccountData
+	AccountData BaseAccountData
 	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
 	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
 	Rowid int64
@@ -208,9 +209,9 @@ type PersistedAccountData struct {
 
 type PersistedOnlineAccountData struct {
 	Addr        basics.Address
-	AccountData baseOnlineAccountData
+	AccountData BaseOnlineAccountData
 	Rowid       int64
-	// the round number that is associated with the baseOnlineAccountData. This field is the corresponding one to the round field
+	// the round number that is associated with the BaseOnlineAccountData. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose. This value comes from account rounds table and correspond to
 	// the last trackers db commit round.
 	Round basics.Round
@@ -225,8 +226,8 @@ type PersistedResourcesData struct {
 	// resolution is a multi stage process:
 	// - baseResources cache might have valid entries
 	// - baseAccount cache might have an entry for the address with rowid set
-	// - when loading non-cached resources in resourcesLoadOld
-	// - when creating new accounts in accountsNewRound
+	// - when loading non-cached resources in ResourcesLoadOld
+	// - when creating new accounts in AccountsNewRound
 	Addrid int64
 	// creatable index
 	Aidx basics.CreatableIndex
@@ -359,7 +360,7 @@ type NormalizedAccountBalance struct {
 	// The public key address to which the account belongs.
 	address basics.Address
 	// accountData contains the BaseAccountData for that account.
-	accountData baseAccountData
+	accountData BaseAccountData
 	// Resources is a map, where the key is the creatable index, and the value is the resource data.
 	Resources map[basics.CreatableIndex]resourcesData
 	// encodedAccountData contains the BaseAccountData encoded bytes that are going to be written to the accountbase table.
@@ -412,8 +413,8 @@ func PrepareNormalizedBalancesV5(bals []EncodedBalanceRecordV5, proto config.Con
 	return
 }
 
-// prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []NormalizedAccountBalance, err error) {
+// PrepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
+func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
@@ -461,7 +462,7 @@ func prepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the ResourcesDeltas.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts, baseResources LRUResources) (outResourcesDeltas CompactResourcesDeltas) {
+func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts, baseResources LRUResources) (outResourcesDeltas CompactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -514,7 +515,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 					if pad, has := baseAccounts.Read(res.Addr); has {
 						newEntry.OldResource = PersistedResourcesData{Addrid: pad.Rowid}
 					}
-					newEntry.OldResource.aidx = basics.CreatableIndex(res.Aidx)
+					newEntry.OldResource.Aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
@@ -587,10 +588,10 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 	var ok bool
 	for _, missIdx := range a.misses {
 		delta := a.deltas[missIdx]
-		addr := delta.address
-		aidx = delta.oldResource.aidx
-		if delta.oldResource.addrid != 0 {
-			addrid = delta.oldResource.addrid
+		addr := delta.Address
+		aidx = delta.OldResource.Aidx
+		if delta.OldResource.Addrid != 0 {
+			addrid = delta.OldResource.Addrid
 		} else if addrid, ok = knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
@@ -600,7 +601,7 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 
 				}
 				// not having an account could be legit : the account might not have been created yet, which is why it won't
-				// have a rowid. We will be able to re-test that after all the baseAccountData would be written to disk.
+				// have a rowid. We will be able to re-test that after all the BaseAccountData would be written to disk.
 				err = nil
 				continue
 			}
@@ -610,8 +611,8 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
-				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx}
-				err = protocol.Decode(resDataBuf, &persistedResData.data)
+				persistedResData := PersistedResourcesData{Addrid: addrid, Aidx: aidx}
+				err = protocol.Decode(resDataBuf, &persistedResData.Data)
 				if err != nil {
 					return err
 				}
@@ -622,7 +623,7 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(missIdx, persistedResourcesData{addrid: addrid, aidx: aidx})
+			a.updateOld(missIdx, PersistedResourcesData{Addrid: addrid, Aidx: aidx})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -642,11 +643,11 @@ func (a *CompactResourcesDeltas) get(addr basics.Address, index basics.Creatable
 	return a.deltas[idx], idx
 }
 
-func (a *CompactResourcesDeltas) len() int {
+func (a *CompactResourcesDeltas) Len() int {
 	return len(a.deltas)
 }
 
-func (a *CompactResourcesDeltas) getByIdx(i int) ResourceDelta {
+func (a *CompactResourcesDeltas) GetByIdx(i int) ResourceDelta {
 	return a.deltas[i]
 }
 
@@ -662,7 +663,7 @@ func (a *CompactResourcesDeltas) insert(delta ResourceDelta) int {
 	if a.cache == nil {
 		a.cache = make(map[ledgercore.AccountCreatable]int)
 	}
-	a.cache[ledgercore.AccountCreatable{Address: delta.address, Index: delta.oldResource.aidx}] = last
+	a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx}] = last
 	return last
 }
 
@@ -671,15 +672,15 @@ func (a *CompactResourcesDeltas) insertMissing(delta ResourceDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *CompactResourcesDeltas) updateOld(idx int, old persistedResourcesData) {
-	a.deltas[idx].oldResource = old
+func (a *CompactResourcesDeltas) updateOld(idx int, old PersistedResourcesData) {
+	a.deltas[idx].OldResource = old
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
+// It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts) (outAccountDeltas CompactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -687,7 +688,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
-	outAccountDeltas.deltas = make([]accountDelta, 0, size)
+	outAccountDeltas.Deltas = make([]AccountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
 
 	deltaRound := uint64(baseRound)
@@ -703,26 +704,26 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
-				updEntry := accountDelta{
-					oldAcct:     prev.oldAcct,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
+				updEntry := AccountDelta{
+					OldAcct:     prev.OldAcct,
+					NAcctDeltas: prev.NAcctDeltas + 1,
+					Address:     prev.Address,
 				}
-				updEntry.newAcct.SetCoreAccountData(&acctDelta)
-				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
+				updEntry.NewAcct.SetCoreAccountData(&acctDelta)
+				updEntry.NewAcct.UpdateRound = deltaRound * updateRoundMultiplier
 				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := accountDelta{
-					nAcctDeltas: 1,
-					newAcct: baseAccountData{
+				newEntry := AccountDelta{
+					NAcctDeltas: 1,
+					NewAcct: BaseAccountData{
 						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
-					address: addr,
+					Address: addr,
 				}
-				newEntry.newAcct.SetCoreAccountData(&acctDelta)
-				if baseAccountData, has := baseAccounts.read(addr); has {
-					newEntry.oldAcct = baseAccountData
+				newEntry.NewAcct.SetCoreAccountData(&acctDelta)
+				if BaseAccountData, has := baseAccounts.Read(addr); has {
+					newEntry.OldAcct = BaseAccountData
 					outAccountDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
 					outAccountDeltas.insertMissing(newEntry)
@@ -733,10 +734,10 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	return
 }
 
-// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
+// AccountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *CompactAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -751,24 +752,24 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.deltas[idx].address
+		addr := a.Deltas[idx].Address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &persistedAccountData{addr: addr, rowid: rowid.Int64}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
+				persistedAcctData := &PersistedAccountData{Addr: addr, Rowid: rowid.Int64}
+				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
 				if err != nil {
 					return err
 				}
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// to retain backward compatibility, we will treat this condition as if we don't have the account.
-				a.updateOld(idx, persistedAccountData{addr: addr, rowid: rowid.Int64})
+				a.updateOld(idx, PersistedAccountData{Addr: addr, Rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, persistedAccountData{addr: addr})
+			a.updateOld(idx, PersistedAccountData{Addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -780,60 +781,60 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *compactAccountDeltas) get(addr basics.Address) (accountDelta, int) {
+func (a *CompactAccountDeltas) get(addr basics.Address) (AccountDelta, int) {
 	idx, ok := a.cache[addr]
 	if !ok {
-		return accountDelta{}, -1
+		return AccountDelta{}, -1
 	}
-	return a.deltas[idx], idx
+	return a.Deltas[idx], idx
 }
 
-func (a *compactAccountDeltas) len() int {
-	return len(a.deltas)
+func (a *CompactAccountDeltas) Len() int {
+	return len(a.Deltas)
 }
 
-func (a *compactAccountDeltas) getByIdx(i int) accountDelta {
-	return a.deltas[i]
+func (a *CompactAccountDeltas) GetByIdx(i int) AccountDelta {
+	return a.Deltas[i]
 }
 
 // update replaces specific entry by idx
-func (a *compactAccountDeltas) update(idx int, delta accountDelta) {
-	a.deltas[idx] = delta
+func (a *CompactAccountDeltas) update(idx int, delta AccountDelta) {
+	a.Deltas[idx] = delta
 }
 
-func (a *compactAccountDeltas) insert(delta accountDelta) int {
-	last := len(a.deltas)
-	a.deltas = append(a.deltas, delta)
+func (a *CompactAccountDeltas) insert(delta AccountDelta) int {
+	last := len(a.Deltas)
+	a.Deltas = append(a.Deltas, delta)
 
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[delta.address] = last
+	a.cache[delta.Address] = last
 	return last
 }
 
-func (a *compactAccountDeltas) insertMissing(delta accountDelta) {
+func (a *CompactAccountDeltas) insertMissing(delta AccountDelta) {
 	idx := a.insert(delta)
 	a.misses = append(a.misses, idx)
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
-	a.deltas[idx].oldAcct = old
+func (a *CompactAccountDeltas) updateOld(idx int, old PersistedAccountData) {
+	a.Deltas[idx].OldAcct = old
 }
 
-func (c *onlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
-	var baseEntry baseOnlineAccountData
+func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
+	var baseEntry BaseOnlineAccountData
 	baseEntry.SetCoreAccountData(&acctDelta)
 	c.newAcct = append(c.newAcct, baseEntry)
 	c.updRound = append(c.updRound, uint64(deltaRound))
 	c.newStatus = append(c.newStatus, acctDelta.Status)
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts lruOnlineAccounts) (outAccountDeltas compactOnlineAccountDeltas) {
+// It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
+func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts LRUOnlineAccounts) (outAccountDeltas CompactOnlineAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -841,7 +842,7 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
-	outAccountDeltas.deltas = make([]onlineAccountDelta, 0, size)
+	outAccountDeltas.deltas = make([]OnlineAccountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
 
 	deltaRound := baseRound
@@ -851,20 +852,20 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				updEntry := prev
-				updEntry.nOnlineAcctDeltas++
+				updEntry.NOnlineAcctDeltas++
 				updEntry.append(acctDelta, deltaRound)
 				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
-				newEntry := onlineAccountDelta{
-					nOnlineAcctDeltas: 1,
-					address:           addr,
+				newEntry := OnlineAccountDelta{
+					NOnlineAcctDeltas: 1,
+					Address:           addr,
 				}
 				newEntry.append(acctDelta, deltaRound)
 				// the cache always has the most recent data,
 				// including deleted/expired online accounts with empty voting data
-				if baseOnlineAccountData, has := baseOnlineAccounts.read(addr); has {
-					newEntry.oldAcct = baseOnlineAccountData
+				if BaseOnlineAccountData, has := baseOnlineAccounts.read(addr); has {
+					newEntry.oldAcct = BaseOnlineAccountData
 					outAccountDeltas.insert(newEntry)
 				} else {
 					outAccountDeltas.insertMissing(newEntry)
@@ -875,10 +876,10 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 	return
 }
 
-// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
+// AccountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactOnlineAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *CompactOnlineAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -894,24 +895,24 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.deltas[idx].address
+		addr := a.deltas[idx].Address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &persistedOnlineAccountData{addr: addr, rowid: rowid.Int64}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
+				persistedAcctData := &PersistedOnlineAccountData{Addr: addr, Rowid: rowid.Int64}
+				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
 				if err != nil {
 					return err
 				}
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// empty data means offline account
-				a.updateOld(idx, persistedOnlineAccountData{addr: addr, rowid: rowid.Int64})
+				a.updateOld(idx, PersistedOnlineAccountData{Addr: addr, Rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, persistedOnlineAccountData{addr: addr})
+			a.updateOld(idx, PersistedOnlineAccountData{Addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -923,50 +924,50 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *compactOnlineAccountDeltas) get(addr basics.Address) (onlineAccountDelta, int) {
+func (a *CompactOnlineAccountDeltas) get(addr basics.Address) (OnlineAccountDelta, int) {
 	idx, ok := a.cache[addr]
 	if !ok {
-		return onlineAccountDelta{}, -1
+		return OnlineAccountDelta{}, -1
 	}
 	return a.deltas[idx], idx
 }
 
-func (a *compactOnlineAccountDeltas) len() int {
+func (a *CompactOnlineAccountDeltas) Len() int {
 	return len(a.deltas)
 }
 
-func (a *compactOnlineAccountDeltas) getByIdx(i int) onlineAccountDelta {
+func (a *CompactOnlineAccountDeltas) GetByIdx(i int) OnlineAccountDelta {
 	return a.deltas[i]
 }
 
 // update replaces specific entry by idx
-func (a *compactOnlineAccountDeltas) update(idx int, delta onlineAccountDelta) {
+func (a *CompactOnlineAccountDeltas) update(idx int, delta OnlineAccountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *compactOnlineAccountDeltas) insert(delta onlineAccountDelta) int {
+func (a *CompactOnlineAccountDeltas) insert(delta OnlineAccountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
 
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[delta.address] = last
+	a.cache[delta.Address] = last
 	return last
 }
 
-func (a *compactOnlineAccountDeltas) insertMissing(delta onlineAccountDelta) {
+func (a *CompactOnlineAccountDeltas) insertMissing(delta OnlineAccountDelta) {
 	idx := a.insert(delta)
 	a.misses = append(a.misses, idx)
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccountData) {
+func (a *CompactOnlineAccountDeltas) updateOld(idx int, old PersistedOnlineAccountData) {
 	a.deltas[idx].oldAcct = old
 }
 
-// writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+// WriteCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
+func WriteCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []NormalizedAccountBalance) error {
 	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
@@ -997,7 +998,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			return err
 		}
 		// write resources
-		for aidx := range balance.resources {
+		for aidx := range balance.Resources {
 			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
 			if err != nil {
 				return err
@@ -1014,15 +1015,15 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	return nil
 }
 
-// writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+// WriteCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
+func WriteCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []NormalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		for _, hash := range balance.accountHashes {
+		for _, hash := range balance.AccountHashes {
 			result, err := insertStmt.ExecContext(ctx, hash[:])
 			if err != nil {
 				return err
@@ -1040,8 +1041,8 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
-// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
-func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
+// CreateCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
+func CreateCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
 	if err != nil {
 		return
@@ -1049,10 +1050,10 @@ func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err er
 	return
 }
 
-// writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
+// WriteCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
 // note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
 // writeCatchpointStagingBalances via a separate go-routine.
-func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+func WriteCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []NormalizedAccountBalance) error {
 	var insertCreatorsStmt *sql.Stmt
 	var err error
 	insertCreatorsStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
@@ -1062,7 +1063,7 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 	defer insertCreatorsStmt.Close()
 
 	for _, balance := range bals {
-		for aidx, resData := range balance.resources {
+		for aidx, resData := range balance.Resources {
 			if resData.IsOwning() {
 				// determine if it's an asset
 				if resData.IsAsset() {
@@ -1084,7 +1085,7 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 	return nil
 }
 
-func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
+func ResetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
 	s := []string{
 		"DROP TABLE IF EXISTS catchpointbalances",
 		"DROP TABLE IF EXISTS catchpointassetcreators",
@@ -1126,9 +1127,9 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 	return nil
 }
 
-// applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
+// ApplyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
-func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
+func ApplyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
 	stmts := []string{
 		"DROP TABLE IF EXISTS accountbase",
 		"DROP TABLE IF EXISTS assetcreators",
@@ -1161,7 +1162,7 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	return
 }
 
-func getCatchpoint(ctx context.Context, q db.Queryable, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
+func GetCatchpoint(ctx context.Context, q db.Queryable, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = q.QueryRowContext(ctx, "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
 }
@@ -1214,7 +1215,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return true, fmt.Errorf("overflow computing totals")
 		}
 
-		err = accountsPutTotals(tx, totals, false)
+		err = AccountsPutTotals(tx, totals, false)
 		if err != nil {
 			return true, err
 		}
@@ -1364,7 +1365,7 @@ type baseVotingData struct {
 	StateProofID    merklesignature.Commitment      `codec:"F"`
 }
 
-type baseOnlineAccountData struct {
+type BaseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	baseVotingData
@@ -1373,7 +1374,7 @@ type baseOnlineAccountData struct {
 	RewardsBase uint64            `codec:"Z"`
 }
 
-type baseAccountData struct {
+type BaseAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Status                     basics.Status     `codec:"a"`
@@ -1399,7 +1400,7 @@ type baseAccountData struct {
 }
 
 // IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
-func (ba *baseAccountData) IsEmpty() bool {
+func (ba *BaseAccountData) IsEmpty() bool {
 	return ba.Status == 0 &&
 		ba.MicroAlgos.Raw == 0 &&
 		ba.RewardsBase == 0 &&
@@ -1415,11 +1416,11 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.baseVotingData.IsEmpty()
 }
 
-func (ba *baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+func (ba *BaseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
 
-func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
+func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1436,7 +1437,7 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.baseVotingData.SetCoreAccountData(ad)
 }
 
-func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
+func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1458,14 +1459,14 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.baseVotingData.VoteKeyDilution = ad.VoteKeyDilution
 }
 
-func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
+func (ba *BaseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	return ledgercore.AccountData{
 		AccountBaseData: ba.GetLedgerCoreAccountBaseData(),
 		VotingData:      ba.GetLedgerCoreVotingData(),
 	}
 }
 
-func (ba *baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
+func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
 	return ledgercore.AccountBaseData{
 		Status:             ba.Status,
 		MicroAlgos:         ba.MicroAlgos,
@@ -1484,7 +1485,7 @@ func (ba *baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 	}
 }
 
-func (ba *baseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
+func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	return ledgercore.VotingData{
 		VoteID:          ba.VoteID,
 		SelectionID:     ba.SelectionID,
@@ -1495,7 +1496,7 @@ func (ba *baseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	}
 }
 
-func (ba *baseAccountData) GetAccountData() basics.AccountData {
+func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
 		Status:             ba.Status,
 		MicroAlgos:         ba.MicroAlgos,
@@ -1533,12 +1534,12 @@ func (bv *baseVotingData) SetCoreAccountData(ad *ledgercore.AccountData) {
 }
 
 // IsVotingEmpty checks if voting data fields are empty
-func (bo *baseOnlineAccountData) IsVotingEmpty() bool {
+func (bo *BaseOnlineAccountData) IsVotingEmpty() bool {
 	return bo.baseVotingData.IsEmpty()
 }
 
 // IsEmpty return true if any of the fields are non-zero.
-func (bo *baseOnlineAccountData) IsEmpty() bool {
+func (bo *BaseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&
 		bo.RewardsBase == 0
@@ -1546,7 +1547,7 @@ func (bo *baseOnlineAccountData) IsEmpty() bool {
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
 // TODO: unify
-func (bo *baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
+func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
 	return ledgercore.OnlineAccount{
 		Address:                 addr,
 		MicroAlgos:              bo.MicroAlgos,
@@ -1560,7 +1561,7 @@ func (bo *baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (bo *baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
+func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
@@ -1578,11 +1579,11 @@ func (bo *baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 	}
 }
 
-func (bo *baseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
 }
 
-func (bo *baseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
+func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bo.baseVotingData.SetCoreAccountData(ad)
 
 	// MicroAlgos/RewardsBase are updated by the evaluator when accounts are touched
@@ -2038,7 +2039,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	var processedAccounts uint64
 	var totalBaseAccounts uint64
 
-	totalBaseAccounts, err = totalAccounts(ctx, tx)
+	totalBaseAccounts, err = TotalAccounts(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -2056,7 +2057,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		var newAccountData baseAccountData
+		var newAccountData BaseAccountData
 		newAccountData.SetAccountData(&accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
 
@@ -2117,7 +2118,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		return nil
 	}
 
-	dbRound, err := accountsRound(tx)
+	dbRound, err := AccountsRound(tx)
 	if err != nil {
 		return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 	}
@@ -2126,11 +2127,11 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latestBlockRound, err := blockLatest(blockTx)
+		latestBlockRound, err := blockdb.BlockLatest(blockTx)
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
-		latestHdr, err := blockGetHdr(blockTx, dbRound)
+		latestHdr, err := blockdb.BlockGetHdr(blockTx, dbRound)
 		if err != nil {
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
@@ -2143,7 +2144,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, err := blockGet(blockTx, rnd)
+			blk, err := blockdb.BlockGet(blockTx, rnd)
 			if err != nil {
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
@@ -2153,22 +2154,22 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 				return err
 			}
 
-			encodedTail, _ := tail.encode()
+			encodedTail, _ := tail.Encode()
 			tailRounds = append(tailRounds, encodedTail)
 		}
 
-		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
+		return TxtailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
 	})
 
 	return err
 }
 
 func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
-	totals, err := accountsTotals(ctx, tx, false)
+	totals, err := AccountsTotals(ctx, tx, false)
 	if err != nil {
 		return err
 	}
-	rnd, err := accountsRound(tx)
+	rnd, err := AccountsRound(tx)
 	if err != nil {
 		return err
 	}
@@ -2177,7 +2178,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		currentProto = initProto
 	} else {
 		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-			hdr, err := blockGetHdr(blockTx, rnd)
+			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
 			if err != nil {
 				return err
 			}
@@ -2195,7 +2196,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 			CurrentProtocol: currentProto,
 		},
 	}
-	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
+	return AccountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
 }
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
@@ -2227,7 +2228,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	var processedAccounts uint64
 	var totalOnlineBaseAccounts uint64
 
-	totalOnlineBaseAccounts, err = totalAccounts(ctx, tx)
+	totalOnlineBaseAccounts, err = TotalAccounts(ctx, tx)
 	var total uint64
 	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err != nil {
@@ -2254,9 +2255,9 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	}
 
 	type acctState struct {
-		old    baseAccountData
+		old    BaseAccountData
 		oldEnc []byte
-		new    baseAccountData
+		new    BaseAccountData
 		newEnc []byte
 	}
 	acctRehash := make(map[basics.Address]acctState)
@@ -2275,7 +2276,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return err
 		}
-		var ba baseAccountData
+		var ba BaseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		if err != nil {
 			return err
@@ -2287,7 +2288,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
-			var baseOnlineAD baseOnlineAccountData
+			var baseOnlineAD BaseOnlineAccountData
 			baseOnlineAD.baseVotingData = ba.baseVotingData
 			baseOnlineAD.MicroAlgos = ba.MicroAlgos
 			baseOnlineAD.RewardsBase = ba.RewardsBase
@@ -2342,12 +2343,12 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return nil
 		}
 
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, ledgercore.TrieMemoryConfig)
 		if err != nil {
 			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 		}
 		for addr, state := range acctRehash {
-			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleteHash := AccountHashBuilderV6(addr, &state.old, state.oldEnc)
 			deleted, err := trie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -2356,7 +2357,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
-			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			addHash := AccountHashBuilderV6(addr, &state.new, state.newEnc)
 			added, err := trie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -2418,12 +2419,12 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 	return num, addresses, err
 }
 
-// accountDataToOnline returns the part of the AccountData that matters
+// AccountDataToOnline returns the part of the AccountData that matters
 // for online accounts (to answer top-N queries).  We store a subset of
 // the full AccountData because we need to store a large number of these
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+func AccountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
@@ -2435,12 +2436,12 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	}
 }
 
-func resetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
+func ResetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, `DELETE FROM accounthashes`)
 	return
 }
 
-func accountsReset(ctx context.Context, tx *sql.Tx) error {
+func AccountsReset(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
 		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
@@ -2451,8 +2452,8 @@ func accountsReset(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
-// accountsRound returns the tracker balances round number
-func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
+// AccountsRound returns the tracker balances round number
+func AccountsRound(q db.Queryable) (rnd basics.Round, err error) {
 	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
@@ -2460,9 +2461,9 @@ func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
 	return
 }
 
-// accountsHashRound returns the round of the hash tree
+// AccountsHashRound returns the round of the hash tree
 // if the hash of the tree doesn't exists, it returns zero.
-func accountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, err error) {
+func AccountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, err error) {
 	err = tx.QueryRowContext(ctx, "SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)
@@ -2471,9 +2472,9 @@ func accountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, e
 	return
 }
 
-func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
+func AccountsInitDbQueries(q db.Queryable) (*AccountsDbQueries, error) {
 	var err error
-	qs := &accountsDbQueries{}
+	qs := &AccountsDbQueries{}
 
 	qs.listCreatablesStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.asset, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
 	if err != nil {
@@ -2503,9 +2504,9 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	return qs, nil
 }
 
-func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, error) {
+func OnlineAccountsInitDbQueries(r db.Queryable) (*OnlineAccountsDbQueries, error) {
 	var err error
-	qs := &onlineAccountsDbQueries{}
+	qs := &OnlineAccountsDbQueries{}
 
 	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, acctrounds.rnd, onlineaccounts.data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
@@ -2524,8 +2525,8 @@ func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 	return qs, nil
 }
 
-// listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
-func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
+// ListCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
+func (qs *AccountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
 		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
@@ -2557,7 +2558,7 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
+func (qs *AccountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
@@ -2581,28 +2582,28 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
+func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.round, &buf)
+		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.Round, &buf)
 		if err == nil {
-			data.aidx = aidx
+			data.Aidx = aidx
 			if len(buf) > 0 && rowid.Valid {
-				data.addrid = rowid.Int64
-				err = protocol.Decode(buf, &data.data)
+				data.Addrid = rowid.Int64
+				err = protocol.Decode(buf, &data.Data)
 				if err != nil {
 					return err
 				}
-				if ctype == basics.AssetCreatable && !data.data.IsAsset() {
-					return fmt.Errorf("lookupResources asked for an asset but got %v", data.data)
+				if ctype == basics.AssetCreatable && !data.Data.IsAsset() {
+					return fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
 				}
-				if ctype == basics.AppCreatable && !data.data.IsApp() {
-					return fmt.Errorf("lookupResources asked for an app but got %v", data.data)
+				if ctype == basics.AppCreatable && !data.Data.IsApp() {
+					return fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
 				}
 				return nil
 			}
-			data.data = makeResourcesData(0)
+			data.Data = makeResourcesData(0)
 			// we don't have that account, just return the database round.
 			return nil
 		}
@@ -2617,7 +2618,7 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 	return
 }
 
-func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []persistedResourcesData, rnd basics.Round, err error) {
+func (qs *AccountsDbQueries) LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for all resources
 		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
@@ -2649,11 +2650,11 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 			if err != nil {
 				return err
 			}
-			data = append(data, persistedResourcesData{
-				addrid: addrid.Int64,
-				aidx:   basics.CreatableIndex(aidx.Int64),
-				data:   resData,
-				round:  dbRound,
+			data = append(data, PersistedResourcesData{
+				Addrid: addrid.Int64,
+				Aidx:   basics.CreatableIndex(aidx.Int64),
+				Data:   resData,
+				Round:  dbRound,
 			})
 			rnd = dbRound
 		}
@@ -2665,16 +2666,16 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 // lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
+func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data PersistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.Round, &buf)
 		if err == nil {
-			data.addr = addr
+			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid {
-				data.rowid = rowid.Int64
-				err = protocol.Decode(buf, &data.accountData)
+				data.Rowid = rowid.Int64
+				err = protocol.Decode(buf, &data.AccountData)
 				return err
 			}
 			// we don't have that account, just return the database round.
@@ -2692,18 +2693,18 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 	return
 }
 
-func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
 		var updround sql.NullInt64
-		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.round, &buf)
+		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.Round, &buf)
 		if err == nil {
-			data.addr = addr
+			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid && updround.Valid {
-				data.rowid = rowid.Int64
-				data.updRound = basics.Round(updround.Int64)
-				err = protocol.Decode(buf, &data.accountData)
+				data.Rowid = rowid.Int64
+				data.UpdRound = basics.Round(updround.Int64)
+				err = protocol.Decode(buf, &data.AccountData)
 				return err
 			}
 			// we don't have that account, just return the database round.
@@ -2721,7 +2722,7 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 	return
 }
 
-func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
+func (qs *OnlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
 	data := ledgercore.OnlineRoundParamsData{}
 	err := db.Retry(func() error {
 		row := qs.lookupOnlineTotalsStmt.QueryRow(round)
@@ -2739,7 +2740,7 @@ func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round)
 	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
-func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -2749,16 +2750,16 @@ func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (res
 
 		for rows.Next() {
 			var buf []byte
-			data := persistedOnlineAccountData{}
-			err := rows.Scan(&data.rowid, &data.updRound, &rnd, &buf)
+			data := PersistedOnlineAccountData{}
+			err := rows.Scan(&data.Rowid, &data.UpdRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
-			err = protocol.Decode(buf, &data.accountData)
+			err = protocol.Decode(buf, &data.AccountData)
 			if err != nil {
 				return err
 			}
-			data.addr = addr
+			data.Addr = addr
 			result = append(result, data)
 		}
 		return err
@@ -2766,7 +2767,7 @@ func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (res
 	return
 }
 
-func storeCatchpoint(ctx context.Context, e db.Executable, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+func StoreCatchpoint(ctx context.Context, e db.Executable, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		query := "DELETE FROM storedcatchpoints WHERE round=?"
 		_, err = e.ExecContext(ctx, query, round)
@@ -2781,7 +2782,7 @@ func storeCatchpoint(ctx context.Context, e db.Executable, round basics.Round, f
 	return
 }
 
-func getOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
+func GetOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
 		rows, err := q.QueryContext(ctx, query, filesToKeep, fileCount)
@@ -2809,7 +2810,7 @@ func getOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int
 	return
 }
 
-func readCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName CatchpointState) (val uint64, err error) {
+func ReadCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName CatchpointState) (val uint64, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT intval FROM catchpointstate WHERE id=?"
 		var v sql.NullInt64
@@ -2828,7 +2829,7 @@ func readCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName Ca
 	return val, err
 }
 
-func writeCatchpointStateUint64(ctx context.Context, e db.Executable, stateName CatchpointState, setValue uint64) (err error) {
+func WriteCatchpointStateUint64(ctx context.Context, e db.Executable, stateName CatchpointState, setValue uint64) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == 0 {
 			return deleteCatchpointStateImpl(ctx, e, stateName)
@@ -2842,7 +2843,7 @@ func writeCatchpointStateUint64(ctx context.Context, e db.Executable, stateName 
 	return err
 }
 
-func readCatchpointStateString(ctx context.Context, q db.Queryable, stateName CatchpointState) (val string, err error) {
+func ReadCatchpointStateString(ctx context.Context, q db.Queryable, stateName CatchpointState) (val string, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT strval FROM catchpointstate WHERE id=?"
 		var v sql.NullString
@@ -2862,7 +2863,7 @@ func readCatchpointStateString(ctx context.Context, q db.Queryable, stateName Ca
 	return val, err
 }
 
-func writeCatchpointStateString(ctx context.Context, e db.Executable, stateName CatchpointState, setValue string) (err error) {
+func WriteCatchpointStateString(ctx context.Context, e db.Executable, stateName CatchpointState, setValue string) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == "" {
 			return deleteCatchpointStateImpl(ctx, e, stateName)
@@ -2882,7 +2883,7 @@ func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName C
 	return err
 }
 
-func (qs *accountsDbQueries) close() {
+func (qs *AccountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
@@ -2898,7 +2899,7 @@ func (qs *accountsDbQueries) close() {
 	}
 }
 
-func (qs *onlineAccountsDbQueries) close() {
+func (qs *OnlineAccountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.lookupOnlineStmt,
 		&qs.lookupOnlineHistoryStmt,
@@ -2911,7 +2912,7 @@ func (qs *onlineAccountsDbQueries) close() {
 	}
 }
 
-// accountsOnlineTop returns the top n online accounts starting at position offset
+// AccountsOnlineTop returns the top n online accounts starting at position offset
 // (that is, the top offset'th account through the top offset+n-1'th account).
 //
 // The accounts are sorted by their normalized balance and address.  The normalized
@@ -2920,7 +2921,7 @@ func (qs *onlineAccountsDbQueries) close() {
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func accountsOnlineTop(tx *sql.Tx, rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
+func AccountsOnlineTop(tx *sql.Tx, rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
 	// onlineaccounts has historical data ordered by updround for both online and offline accounts.
 	// This means some account A might have norm balance != 0 at round N and norm balance == 0 at some round K > N.
 	// For online top query one needs to find entries not fresher than X with norm balance != 0.
@@ -2946,7 +2947,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 			return nil, err
 		}
 
-		var data baseOnlineAccountData
+		var data BaseOnlineAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return nil, err
@@ -2965,7 +2966,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 		copy(addr[:], addrbuf)
 		// TODO: figure out protocol to use for rewards
 		// The original implementation uses current proto to recalculate norm balance
-		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
+		// In the same time, in AccountsNewRound genesis protocol is used to fill norm balance value
 		// In order to be consistent with the original implementation recalculate the balance with current proto
 		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
 		oa := data.GetOnlineAccount(addr, normBalance)
@@ -2975,26 +2976,26 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 	return res, rows.Err()
 }
 
-func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccountData, error) {
+func OnlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]PersistedOnlineAccountData, error) {
 	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make([]persistedOnlineAccountData, 0, maxAccounts)
+	result := make([]PersistedOnlineAccountData, 0, maxAccounts)
 	var numAccounts uint64
 	seenAddr := make([]byte, len(basics.Address{}))
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		data := persistedOnlineAccountData{}
-		err := rows.Scan(&data.rowid, &addrbuf, &data.updRound, &buf)
+		data := PersistedOnlineAccountData{}
+		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
 		if err != nil {
 			return nil, err
 		}
-		if len(addrbuf) != len(data.addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
+		if len(addrbuf) != len(data.Addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.Addr))
 			return nil, err
 		}
 		if maxAccounts > 0 {
@@ -3006,8 +3007,8 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 				copy(seenAddr, addrbuf)
 			}
 		}
-		copy(data.addr[:], addrbuf)
-		err = protocol.Decode(buf, &data.accountData)
+		copy(data.Addr[:], addrbuf)
+		err = protocol.Decode(buf, &data.AccountData)
 		if err != nil {
 			return nil, err
 		}
@@ -3016,7 +3017,7 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 	return result, nil
 }
 
-func accountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
+func AccountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -3030,7 +3031,7 @@ func accountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool)
 	return
 }
 
-func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
+func AccountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -3044,7 +3045,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
-func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+func AccountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
 	rows, err := tx.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
 	if err != nil {
 		return nil, 0, err
@@ -3069,7 +3070,7 @@ func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 	return
 }
 
-func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
+func AccountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
 	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
 	if err != nil {
 		return err
@@ -3084,7 +3085,7 @@ func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore
 	return nil
 }
 
-func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
+func AccountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
 	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
 		deleteBeforeRound,
 	)
@@ -3092,9 +3093,9 @@ func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) 
 }
 
 type accountsWriter interface {
-	insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error)
+	insertAccount(addr basics.Address, normBalance uint64, data BaseAccountData) (rowid int64, err error)
 	deleteAccount(rowid int64) (rowsAffected int64, err error)
-	updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error)
+	updateAccount(rowid int64, normBalance uint64, data BaseAccountData) (rowsAffected int64, err error)
 
 	insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error)
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
@@ -3107,7 +3108,7 @@ type accountsWriter interface {
 }
 
 type onlineAccountsWriter interface {
-	insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error)
+	insertOnlineAccount(addr basics.Address, normBalance uint64, data BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error)
 
 	close()
 }
@@ -3215,7 +3216,7 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 	return
 }
 
-func (w accountsSQLWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+func (w accountsSQLWriter) insertAccount(addr basics.Address, normBalance uint64, data BaseAccountData) (rowid int64, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
 	if err != nil {
 		return
@@ -3233,7 +3234,7 @@ func (w accountsSQLWriter) deleteAccount(rowid int64) (rowsAffected int64, err e
 	return
 }
 
-func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data BaseAccountData) (rowsAffected int64, err error) {
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {
 		return
@@ -3305,7 +3306,7 @@ func makeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccount
 	return
 }
 
-func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBalance uint64, data BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data), updRound, voteLastValid)
 	if err != nil {
 		return
@@ -3314,14 +3315,14 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 	return
 }
 
-// accountsNewRound is a convenience wrapper for accountsNewRoundImpl
-func accountsNewRound(
+// AccountsNewRound is a convenience wrapper for AccountsNewRoundImpl
+func AccountsNewRound(
 	tx *sql.Tx,
-	updates compactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates CompactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
-	hasAccounts := updates.len() > 0
-	hasResources := resources.len() > 0
+) (updatedAccounts []PersistedAccountData, updatedResources map[basics.Address][]PersistedResourcesData, err error) {
+	hasAccounts := updates.Len() > 0
+	hasResources := resources.Len() > 0
 	hasCreatables := len(creatables) > 0
 
 	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
@@ -3330,15 +3331,15 @@ func accountsNewRound(
 	}
 	defer writer.close()
 
-	return accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+	return AccountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
 }
 
-func onlineAccountsNewRound(
+func OnlineAccountsNewRound(
 	tx *sql.Tx,
-	updates compactOnlineAccountDeltas,
+	updates CompactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, err error) {
-	hasAccounts := updates.len() > 0
+) (updatedAccounts []PersistedOnlineAccountData, err error) {
+	hasAccounts := updates.Len() > 0
 
 	writer, err := makeOnlineAccountsSQLWriter(tx, hasAccounts)
 	if err != nil {
@@ -3346,64 +3347,64 @@ func onlineAccountsNewRound(
 	}
 	defer writer.close()
 
-	updatedAccounts, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updatedAccounts, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	return
 }
 
-// accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
+// AccountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRoundImpl(
+func AccountsNewRoundImpl(
 	writer accountsWriter,
-	updates compactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates CompactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []PersistedAccountData, updatedResources map[basics.Address][]PersistedResourcesData, err error) {
 
-	updatedAccounts = make([]persistedAccountData, updates.len())
+	updatedAccounts = make([]PersistedAccountData, updates.Len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
-	for i := 0; i < updates.len(); i++ {
-		data := updates.getByIdx(i)
-		if data.oldAcct.rowid == 0 {
+	for i := 0; i < updates.Len(); i++ {
+		data := updates.GetByIdx(i)
+		if data.OldAcct.Rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.newAcct.IsEmpty() {
+			if data.NewAcct.IsEmpty() {
 				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
 				// because of non-zero UpdateRound field in a new delta
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
 				var rowid int64
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				rowid, err = writer.insertAccount(data.address, normBalance, data.newAcct)
+				normBalance := data.NewAcct.NormalizedOnlineBalance(proto)
+				rowid, err = writer.insertAccount(data.Address, normBalance, data.NewAcct)
 				if err == nil {
-					updatedAccounts[updatedAccountIdx].rowid = rowid
-					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
-					newAddressesRowIDs[data.address] = rowid
+					updatedAccounts[updatedAccountIdx].Rowid = rowid
+					updatedAccounts[updatedAccountIdx].AccountData = data.NewAcct
+					newAddressesRowIDs[data.Address] = rowid
 				}
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.newAcct.IsEmpty() {
+			if data.NewAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				var rowsAffected int64
-				rowsAffected, err = writer.deleteAccount(data.oldAcct.rowid)
+				rowsAffected, err = writer.deleteAccount(data.OldAcct.Rowid)
 				if err == nil {
 					// we deleted the entry successfully.
-					updatedAccounts[updatedAccountIdx].rowid = 0
-					updatedAccounts[updatedAccountIdx].accountData = baseAccountData{}
+					updatedAccounts[updatedAccountIdx].Rowid = 0
+					updatedAccounts[updatedAccountIdx].AccountData = BaseAccountData{}
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.OldAcct.Rowid)
 					}
 				}
 			} else {
 				var rowsAffected int64
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				rowsAffected, err = writer.updateAccount(data.oldAcct.rowid, normBalance, data.newAcct)
+				normBalance := data.NewAcct.NormalizedOnlineBalance(proto)
+				rowsAffected, err = writer.updateAccount(data.OldAcct.Rowid, normBalance, data.NewAcct)
 				if err == nil {
 					// rowid doesn't change on update.
-					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.rowid
-					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
+					updatedAccounts[updatedAccountIdx].Rowid = data.OldAcct.Rowid
+					updatedAccounts[updatedAccountIdx].AccountData = data.NewAcct
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.OldAcct.Rowid)
 					}
 				}
 			}
@@ -3414,12 +3415,12 @@ func accountsNewRoundImpl(
 		}
 
 		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
-		updatedAccounts[updatedAccountIdx].round = lastUpdateRound
-		updatedAccounts[updatedAccountIdx].addr = data.address
+		updatedAccounts[updatedAccountIdx].Round = lastUpdateRound
+		updatedAccounts[updatedAccountIdx].Addr = data.Address
 		updatedAccountIdx++
 	}
 
-	updatedResources = make(map[basics.Address][]persistedResourcesData)
+	updatedResources = make(map[basics.Address][]PersistedResourcesData)
 
 	// the resources update is going to be made in three parts:
 	// on the first loop, we will find out all the entries that need to be deleted, and parepare a pendingResourcesDeletion map.
@@ -3434,52 +3435,52 @@ func accountsNewRoundImpl(
 		aidx   basics.CreatableIndex
 	}
 	var pendingResourcesDeletion map[resourceKey]struct{} // map to indicate which resources need to be deleted
-	for i := 0; i < resources.len(); i++ {
-		data := resources.getByIdx(i)
-		if data.oldResource.addrid == 0 || data.oldResource.data.IsEmpty() || !data.newResource.IsEmpty() {
+	for i := 0; i < resources.Len(); i++ {
+		data := resources.GetByIdx(i)
+		if data.OldResource.Addrid == 0 || data.OldResource.Data.IsEmpty() || !data.NewResource.IsEmpty() {
 			continue
 		}
 		if pendingResourcesDeletion == nil {
 			pendingResourcesDeletion = make(map[resourceKey]struct{})
 		}
-		pendingResourcesDeletion[resourceKey{addrid: data.oldResource.addrid, aidx: data.oldResource.aidx}] = struct{}{}
+		pendingResourcesDeletion[resourceKey{addrid: data.OldResource.Addrid, aidx: data.OldResource.Aidx}] = struct{}{}
 
-		entry := persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, data: makeResourcesData(0), round: lastUpdateRound}
-		deltas := updatedResources[data.address]
+		entry := PersistedResourcesData{Addrid: 0, Aidx: data.OldResource.Aidx, Data: makeResourcesData(0), Round: lastUpdateRound}
+		deltas := updatedResources[data.Address]
 		deltas = append(deltas, entry)
-		updatedResources[data.address] = deltas
+		updatedResources[data.Address] = deltas
 	}
 
-	for i := 0; i < resources.len(); i++ {
-		data := resources.getByIdx(i)
-		addr := data.address
-		aidx := data.oldResource.aidx
-		addrid := data.oldResource.addrid
+	for i := 0; i < resources.Len(); i++ {
+		data := resources.GetByIdx(i)
+		addr := data.Address
+		aidx := data.OldResource.Aidx
+		addrid := data.OldResource.Addrid
 		if addrid == 0 {
-			// new entry, data.oldResource does not have addrid
+			// new entry, data.OldResource does not have addrid
 			// check if this delta is part of in-memory only account
 			// that is created, funded, transferred, and closed within a commit range
-			inMemEntry := data.oldResource.data.IsEmpty() && data.newResource.IsEmpty()
+			inMemEntry := data.OldResource.Data.IsEmpty() && data.NewResource.IsEmpty()
 			addrid = newAddressesRowIDs[addr]
 			if addrid == 0 && !inMemEntry {
-				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.NewResource)
 				return
 			}
 		}
-		var entry persistedResourcesData
-		if data.oldResource.data.IsEmpty() {
-			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
+		var entry PersistedResourcesData
+		if data.OldResource.Data.IsEmpty() {
+			// IsEmpty means we don't have a previous value. Note, can't use OldResource.data.MsgIsZero
 			// because of possibility of empty asset holdings or app local state after opting in,
 			// as well as non-zero UpdateRound field in a new delta
-			if data.newResource.IsEmpty() {
+			if data.NewResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
 				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
 				// because the base account might gone.
-				entry = persistedResourcesData{addrid: 0, aidx: aidx, data: makeResourcesData(0), round: lastUpdateRound}
+				entry = PersistedResourcesData{Addrid: 0, Aidx: aidx, Data: makeResourcesData(0), Round: lastUpdateRound}
 			} else {
 				// create a new entry.
-				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
+				if !data.NewResource.IsApp() && !data.NewResource.IsAsset() {
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.NewResource)
 					return
 				}
 				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
@@ -3489,38 +3490,38 @@ func accountsNewRoundImpl(
 					// update the database entry instead of deleting + inserting.
 					delete(pendingResourcesDeletion, resourceKey{addrid: addrid, aidx: aidx})
 					var rowsAffected int64
-					rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
+					rowsAffected, err = writer.updateResource(addrid, aidx, data.NewResource)
 					if err == nil {
 						// rowid doesn't change on update.
-						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
+						entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
 						if rowsAffected != 1 {
 							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 						}
 					}
 				} else {
-					_, err = writer.insertResource(addrid, aidx, data.newResource)
+					_, err = writer.insertResource(addrid, aidx, data.NewResource)
 					if err == nil {
 						// set the returned persisted account states so that we could store that as the baseResources in commitRound
-						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
+						entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
 					}
 				}
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.newResource.IsEmpty() {
+			if data.NewResource.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				// this case was already handled in the first loop.
 				continue
 			} else {
-				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
+				if !data.NewResource.IsApp() && !data.NewResource.IsAsset() {
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.NewResource)
 					return
 				}
 				var rowsAffected int64
-				rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
+				rowsAffected, err = writer.updateResource(addrid, aidx, data.NewResource)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
+					entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 					}
@@ -3571,19 +3572,19 @@ func accountsNewRoundImpl(
 	return
 }
 
-func onlineAccountsNewRoundImpl(
-	writer onlineAccountsWriter, updates compactOnlineAccountDeltas,
+func OnlineAccountsNewRoundImpl(
+	writer onlineAccountsWriter, updates CompactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, err error) {
+) (updatedAccounts []PersistedOnlineAccountData, err error) {
 
-	for i := 0; i < updates.len(); i++ {
-		data := updates.getByIdx(i)
+	for i := 0; i < updates.Len(); i++ {
+		data := updates.GetByIdx(i)
 		prevAcct := data.oldAcct
 		for j := 0; j < len(data.newAcct); j++ {
 			newAcct := data.newAcct[j]
 			updRound := data.updRound[j]
 			newStatus := data.newStatus[j]
-			if prevAcct.rowid == 0 {
+			if prevAcct.Rowid == 0 {
 				// zero rowid means we don't have a previous value.
 				if newAcct.IsEmpty() {
 					// IsEmpty means we don't have a previous value.
@@ -3591,26 +3592,26 @@ func onlineAccountsNewRoundImpl(
 				} else {
 					if newStatus == basics.Online {
 						if newAcct.IsVotingEmpty() {
-							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
+							err = fmt.Errorf("empty voting data for online account %s: %v", data.Address.String(), newAcct)
 						} else {
 							// create a new entry.
 							var rowid int64
 							normBalance := newAcct.NormalizedOnlineBalance(proto)
-							rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+							rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 							if err == nil {
-								updated := persistedOnlineAccountData{
-									addr:        data.address,
-									accountData: newAcct,
-									round:       lastUpdateRound,
-									rowid:       rowid,
-									updRound:    basics.Round(updRound),
+								updated := PersistedOnlineAccountData{
+									Addr:        data.Address,
+									AccountData: newAcct,
+									Round:       lastUpdateRound,
+									Rowid:       rowid,
+									UpdRound:    basics.Round(updRound),
 								}
 								updatedAccounts = append(updatedAccounts, updated)
 								prevAcct = updated
 							}
 						}
 					} else if !newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
+						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.Address.String(), newAcct)
 					}
 				}
 			} else {
@@ -3618,17 +3619,17 @@ func onlineAccountsNewRoundImpl(
 				if newAcct.IsVotingEmpty() {
 					// new value is zero then go offline
 					if newStatus == basics.Online {
-						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
+						err = fmt.Errorf("empty voting data but online account %s: %v", data.Address.String(), newAcct)
 					} else {
 						var rowid int64
-						rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, updRound, 0)
+						rowid, err = writer.insertOnlineAccount(data.Address, 0, BaseOnlineAccountData{}, updRound, 0)
 						if err == nil {
-							updated := persistedOnlineAccountData{
-								addr:        data.address,
-								accountData: baseOnlineAccountData{},
-								round:       lastUpdateRound,
-								rowid:       rowid,
-								updRound:    basics.Round(updRound),
+							updated := PersistedOnlineAccountData{
+								Addr:        data.Address,
+								AccountData: BaseOnlineAccountData{},
+								Round:       lastUpdateRound,
+								Rowid:       rowid,
+								UpdRound:    basics.Round(updRound),
 							}
 
 							updatedAccounts = append(updatedAccounts, updated)
@@ -3636,17 +3637,17 @@ func onlineAccountsNewRoundImpl(
 						}
 					}
 				} else {
-					if prevAcct.accountData != newAcct {
+					if prevAcct.AccountData != newAcct {
 						var rowid int64
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
-						rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err == nil {
-							updated := persistedOnlineAccountData{
-								addr:        data.address,
-								accountData: newAcct,
-								round:       lastUpdateRound,
-								rowid:       rowid,
-								updRound:    basics.Round(updRound),
+							updated := PersistedOnlineAccountData{
+								Addr:        data.Address,
+								AccountData: newAcct,
+								Round:       lastUpdateRound,
+								Rowid:       rowid,
+								UpdRound:    basics.Round(updRound),
 							}
 
 							updatedAccounts = append(updatedAccounts, updated)
@@ -3713,8 +3714,8 @@ func onlineAccountsDeleteByRowIDs(tx *sql.Tx, rowids []int64) (err error) {
 	return
 }
 
-// onlineAccountsDelete deleted entries with updRound <= expRound
-func onlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
+// OnlineAccountsDelete deleted entries with updRound <= expRound
+func OnlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
 	rows, err := tx.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
 	if err != nil {
 		return err
@@ -3751,7 +3752,7 @@ func onlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
 			// reset the state
 			prevAddr = addrbuf
 
-			var oad baseOnlineAccountData
+			var oad BaseOnlineAccountData
 			err = protocol.Decode(buf, &oad)
 			if err != nil {
 				return
@@ -3774,7 +3775,7 @@ func onlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
 }
 
 // updates the round number associated with the current account data.
-func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
+func UpdateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
@@ -3796,7 +3797,7 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
 			return
 		} else if base != rnd {
-			err = fmt.Errorf("updateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
+			err = fmt.Errorf("UpdateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
 			return
 		}
 	}
@@ -3804,7 +3805,7 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 }
 
 // updates the round number associated with the hash of current account data.
-func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
+func UpdateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
 	res, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
@@ -3822,8 +3823,8 @@ func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.R
 	return
 }
 
-// totalAccounts returns the total number of accounts
-func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
+// TotalAccounts returns the total number of accounts
+func TotalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
@@ -3964,8 +3965,8 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
-// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
-type encodedAccountsBatchIter struct {
+// EncodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
+type EncodedAccountsBatchIter struct {
 	accountsRows  *sql.Rows
 	resourcesRows *sql.Rows
 	nextRow       pendingRow
@@ -3973,7 +3974,7 @@ type encodedAccountsBatchIter struct {
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecordV6, err error) {
+func (iterator *EncodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []EncodedBalanceRecordV6, err error) {
 	if iterator.accountsRows == nil {
 		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
@@ -3988,12 +3989,12 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	}
 
 	// gather up to accountCount encoded accounts.
-	bals = make([]encodedBalanceRecordV6, 0, accountCount)
-	var encodedRecord encodedBalanceRecordV6
-	var baseAcct baseAccountData
+	bals = make([]EncodedBalanceRecordV6, 0, accountCount)
+	var encodedRecord EncodedBalanceRecordV6
+	var baseAcct BaseAccountData
 	var numAcct int
-	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
-		encodedRecord = encodedBalanceRecordV6{Address: addr, AccountData: encodedAccountData}
+	baseCb := func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) (err error) {
+		encodedRecord = EncodedBalanceRecordV6{Address: addr, AccountData: encodedAccountData}
 		baseAcct = *accountData
 		numAcct++
 		return nil
@@ -4065,7 +4066,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 }
 
 // Close shuts down the encodedAccountsBatchIter, releasing database resources.
-func (iterator *encodedAccountsBatchIter) Close() {
+func (iterator *EncodedAccountsBatchIter) Close() {
 	if iterator.accountsRows != nil {
 		iterator.accountsRows.Close()
 		iterator.accountsRows = nil
@@ -4115,9 +4116,9 @@ type orderedAccountsIter struct {
 	insertStmt      *sql.Stmt
 }
 
-// makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
+// MakeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
+func MakeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
 		tx:           tx,
 		accountCount: accountCount,
@@ -4133,7 +4134,7 @@ type pendingRow struct {
 
 func processAllResources(
 	resRows *sql.Rows,
-	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
+	addr basics.Address, accountData *BaseAccountData, acctRowid int64, pr pendingRow,
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 ) (pendingRow, error) {
 	var err error
@@ -4198,7 +4199,7 @@ func processAllResources(
 func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
-	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
+	baseCb func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) error,
 	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 	pending pendingRow, accountCount int,
 ) (int, pendingRow, error) {
@@ -4207,7 +4208,7 @@ func processAllBaseAccountRecords(
 	var err error
 	count := 0
 
-	var accountData baseAccountData
+	var accountData BaseAccountData
 	var addrbuf []byte
 	var buf []byte
 	var rowid int64
@@ -4224,7 +4225,7 @@ func processAllBaseAccountRecords(
 
 		copy(addr[:], addrbuf)
 
-		accountData = baseAccountData{}
+		accountData = BaseAccountData{}
 		err = protocol.Decode(buf, &accountData)
 		if err != nil {
 			return 0, pendingRow{}, err
@@ -4251,8 +4252,8 @@ func processAllBaseAccountRecords(
 	return count, pending, nil
 }
 
-// loadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
-func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data baseAccountData) (ad basics.AccountData, err error) {
+// loadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
+func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
 	hasResources := false
@@ -4366,7 +4367,7 @@ func LoadAllFullAccounts(
 			return
 		}
 
-		var data baseAccountData
+		var data BaseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -4394,15 +4395,15 @@ func LoadAllFullAccounts(
 
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
-	addrid int64
-	digest []byte
+	Addrid int64
+	Digest []byte
 }
 
 // Next returns an array containing the account address and hash
 // the Next function works in multiple processing stages, where it first processes the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHash array
 // and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
-// would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
+// would contain valid data ( and optionally the account data as well, if was asked in MakeOrderedAccountsIter) and
 // the processedRecords would be zero. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
@@ -4447,8 +4448,8 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepInsertAccountData {
 		var lastAddrID int64
-		baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
-			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+		baseCb := func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) (err error) {
+			hash := AccountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
@@ -4469,7 +4470,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", addr.String(), cidx, resData)
 					return err
 				}
-				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
+				hash := ResourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
 			}
 			return err
@@ -4536,7 +4537,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		acct = make([]accountAddressHash, iterator.accountCount)
 		acctIdx := 0
 		for iterator.hashesRows.Next() {
-			err = iterator.hashesRows.Scan(&(acct[acctIdx].addrid), &(acct[acctIdx].digest))
+			err = iterator.hashesRows.Scan(&(acct[acctIdx].Addrid), &(acct[acctIdx].Digest))
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -4586,8 +4587,7 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	return
 }
 
-// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
-func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
+func LookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
 	var addrbuf []byte
 	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
 	if err != nil {
@@ -4604,23 +4604,23 @@ func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid i
 	return
 }
 
-// catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
-type catchpointPendingHashesIterator struct {
+// CatchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
+type CatchpointPendingHashesIterator struct {
 	hashCount int
 	tx        *sql.Tx
 	rows      *sql.Rows
 }
 
-// makeCatchpointPendingHashesIterator create a pending hashes iterator that retrieves the hashes in the catchpointpendinghashes table.
-func makeCatchpointPendingHashesIterator(hashCount int, tx *sql.Tx) *catchpointPendingHashesIterator {
-	return &catchpointPendingHashesIterator{
+// MakeCatchpointPendingHashesIterator create a pending hashes iterator that retrieves the hashes in the catchpointpendinghashes table.
+func MakeCatchpointPendingHashesIterator(hashCount int, tx *sql.Tx) *CatchpointPendingHashesIterator {
+	return &CatchpointPendingHashesIterator{
 		hashCount: hashCount,
 		tx:        tx,
 	}
 }
 
 // Next returns an array containing the hashes, returning HashCount hashes at a time.
-func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
+func (iterator *CatchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
 	if iterator.rows == nil {
 		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
 		if err != nil {
@@ -4656,7 +4656,7 @@ func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hash
 }
 
 // Close shuts down the catchpointPendingHashesIterator, releasing database resources.
-func (iterator *catchpointPendingHashesIterator) Close() {
+func (iterator *CatchpointPendingHashesIterator) Close() {
 	if iterator.rows != nil {
 		iterator.rows.Close()
 		iterator.rows = nil
@@ -4665,25 +4665,25 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
-func (pac *persistedAccountData) before(other *persistedAccountData) bool {
-	return pac.round < other.round
+func (pac *PersistedAccountData) before(other *PersistedAccountData) bool {
+	return pac.Round < other.Round
 }
 
 // before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
-func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
-	return prd.round < other.round
+func (prd *PersistedResourcesData) before(other *PersistedResourcesData) bool {
+	return prd.Round < other.Round
 }
 
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
-func (pac *persistedOnlineAccountData) before(other *persistedOnlineAccountData) bool {
-	return pac.round < other.round
+func (pac *PersistedOnlineAccountData) before(other *PersistedOnlineAccountData) bool {
+	return pac.Round < other.Round
 }
 
-// txTailRoundLease is used as part of txTailRound for storing
+// TxTailRoundLease is used as part of txTailRound for storing
 // a single lease.
-type txTailRoundLease struct {
+type TxTailRoundLease struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Sender basics.Address `codec:"s"`
@@ -4696,30 +4696,30 @@ type txTailRoundLease struct {
 // in that way for efficient message=pack encoding. The Leases would point to the
 // respective transaction index. Note that this isn’t optimized for storing
 // leases, as leases are extremely rare.
-type txTailRound struct {
+type TxTailRound struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	TxnIDs    []transactions.Txid     `codec:"i,allocbound=-"`
 	LastValid []basics.Round          `codec:"v,allocbound=-"`
-	Leases    []txTailRoundLease      `codec:"l,allocbound=-"`
+	Leases    []TxTailRoundLease      `codec:"l,allocbound=-"`
 	Hdr       bookkeeping.BlockHeader `codec:"h,allocbound=-"`
 }
 
-// encode the transaction tail data into a serialized form, and return the serialized data
+// Encode the transaction tail data into a serialized form, and return the serialized data
 // as well as the hash of the data.
-func (t *txTailRound) encode() ([]byte, crypto.Digest) {
+func (t *TxTailRound) Encode() ([]byte, crypto.Digest) {
 	tailData := protocol.Encode(t)
 	hash := crypto.Hash(tailData)
 	return tailData, hash
 }
 
-func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
+func txTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
 
-	tail := &txTailRound{}
+	tail := &TxTailRound{}
 
 	tail.TxnIDs = make([]transactions.Txid, len(payset))
 	tail.LastValid = make([]basics.Round, len(payset))
@@ -4729,7 +4729,7 @@ func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
 		tail.TxnIDs[txIdxtxid] = txn.ID()
 		tail.LastValid[txIdxtxid] = txn.Txn.LastValid
 		if txn.Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
+			tail.Leases = append(tail.Leases, TxTailRoundLease{
 				Sender: txn.Txn.Sender,
 				Lease:  txn.Txn.Lease,
 				TxnIdx: uint64(txIdxtxid),
@@ -4739,7 +4739,7 @@ func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
 	return tail, nil
 }
 
-func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
+func TxtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(rnd, data) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -4757,7 +4757,7 @@ func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, rou
 	return err
 }
 
-func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
+func LoadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := tx.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
 	if err != nil {
 		return nil, nil, 0, err
@@ -4775,7 +4775,7 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 		if round != expectedRound {
 			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
 		}
-		tail := &txTailRound{}
+		tail := &TxTailRound{}
 		err = protocol.Decode(data, tail)
 		if err != nil {
 			return nil, nil, 0, err
@@ -4792,8 +4792,8 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 	return roundData, roundHash, expectedRound + 1, nil
 }
 
-// For the `catchpointfirststageinfo` table.
-type catchpointFirstStageInfo struct {
+// CatchpointFirstStageInfo is stored in the `catchpointfirststageinfo` table.
+type CatchpointFirstStageInfo struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
@@ -4808,7 +4808,7 @@ type catchpointFirstStageInfo struct {
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
-func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
+func InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *CatchpointFirstStageInfo) error {
 	infoSerialized := protocol.Encode(info)
 	f := func() error {
 		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
@@ -4818,7 +4818,7 @@ func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executabl
 	return db.Retry(f)
 }
 
-func selectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
+func SelectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
 		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
@@ -4831,23 +4831,23 @@ func selectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round b
 	}
 	err := db.Retry(f)
 	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
+		return CatchpointFirstStageInfo{}, false, err
 	}
 
 	if data == nil {
-		return catchpointFirstStageInfo{}, false, nil
+		return CatchpointFirstStageInfo{}, false, nil
 	}
 
-	var res catchpointFirstStageInfo
+	var res CatchpointFirstStageInfo
 	err = protocol.Decode(data, &res)
 	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
+		return CatchpointFirstStageInfo{}, false, err
 	}
 
 	return res, true, nil
 }
 
-func selectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
+func SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
 	var res []basics.Round
 
 	f := func() error {
@@ -4878,7 +4878,7 @@ func selectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable
 	return res, nil
 }
 
-func deleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, maxRoundToDelete basics.Round) error {
+func DeleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, maxRoundToDelete basics.Round) error {
 	f := func() error {
 		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
 		_, err := e.ExecContext(ctx, query, maxRoundToDelete)
@@ -4887,7 +4887,7 @@ func deleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, max
 	return db.Retry(f)
 }
 
-func insertUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round, blockHash crypto.Digest) error {
+func InsertUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round, blockHash crypto.Digest) error {
 	f := func() error {
 		query := "INSERT INTO unfinishedcatchpoints(round, blockhash) VALUES(?, ?)"
 		_, err := e.ExecContext(ctx, query, round, blockHash[:])
@@ -4897,11 +4897,11 @@ func insertUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 }
 
 type unfinishedCatchpointRecord struct {
-	round     basics.Round
-	blockHash crypto.Digest
+	Round     basics.Round
+	BlockHash crypto.Digest
 }
 
-func selectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinishedCatchpointRecord, error) {
+func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinishedCatchpointRecord, error) {
 	var res []unfinishedCatchpointRecord
 
 	f := func() error {
@@ -4916,11 +4916,11 @@ func selectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 		for rows.Next() {
 			var record unfinishedCatchpointRecord
 			var blockHash []byte
-			err = rows.Scan(&record.round, &blockHash)
+			err = rows.Scan(&record.Round, &blockHash)
 			if err != nil {
 				return err
 			}
-			copy(record.blockHash[:], blockHash)
+			copy(record.BlockHash[:], blockHash)
 			res = append(res, record)
 		}
 
@@ -4934,7 +4934,7 @@ func selectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 	return res, nil
 }
 
-func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round) error {
+func DeleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round) error {
 	f := func() error {
 		query := "DELETE FROM unfinishedcatchpoints WHERE round = ?"
 		_, err := e.ExecContext(ctx, query, round)

@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,16 +36,16 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-type trackerDBParams struct {
-	initAccounts      map[basics.Address]basics.AccountData
-	initProto         protocol.ConsensusVersion
-	catchpointEnabled bool
-	dbPathPrefix      string
-	blockDb           db.Pair
+type TrackerDBParams struct {
+	InitAccounts      map[basics.Address]basics.AccountData
+	InitProto         protocol.ConsensusVersion
+	CatchpointEnabled bool
+	DBPathPrefix      string
+	BlockDb           db.Pair
 }
 
 type trackerDBSchemaInitializer struct {
-	trackerDBParams
+	TrackerDBParams
 
 	// schemaVersion contains current db version
 	schemaVersion int32
@@ -58,16 +59,27 @@ type trackerDBSchemaInitializer struct {
 
 type trackerDBInitParams struct {
 	schemaVersion   int32
-	vacuumOnStartup bool
+	VacuumOnStartup bool
 }
 
-// trackerDBInitialize initializes the accounts DB if needed and return current account round.
+// LedgerForTrackerDBInit is used by TrackerDBInitialize
+type LedgerForTrackerDBInit interface {
+	TrackerDB() db.Pair
+	BlockDB() db.Pair
+	TrackerLog() logging.Logger
+
+	Latest() basics.Round
+	GenesisProtoVersion() protocol.ConsensusVersion
+	GenesisAccounts() map[basics.Address]basics.AccountData
+}
+
+// TrackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBInitParams, err error) {
-	dbs := l.trackerDB()
-	bdbs := l.blockDB()
-	log := l.trackerLog()
+func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBInitParams, err error) {
+	dbs := l.TrackerDB()
+	bdbs := l.BlockDB()
+	log := l.TrackerLog()
 
 	lastestBlockRound := l.Latest()
 
@@ -77,30 +89,30 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		tp := trackerDBParams{
-			initAccounts:      l.GenesisAccounts(),
-			initProto:         l.GenesisProtoVersion(),
-			catchpointEnabled: catchpointEnabled,
-			dbPathPrefix:      dbPathPrefix,
-			blockDb:           bdbs,
+		tp := TrackerDBParams{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			CatchpointEnabled: catchpointEnabled,
+			DBPathPrefix:      dbPathPrefix,
+			BlockDb:           bdbs,
 		}
 		var err0 error
-		mgr, err0 = runMigrations(ctx, tx, tp, log, accountDBVersion)
+		mgr, err0 = RunMigrations(ctx, tx, tp, log, accountDBVersion)
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, err := accountsRound(tx)
+		lastBalancesRound, err := AccountsRound(tx)
 		if err != nil {
 			return err
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if lastBalancesRound > lastestBlockRound {
 			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
-			err0 = accountsReset(ctx, tx)
+			err0 = AccountsReset(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
-			mgr, err0 = runMigrations(ctx, tx, tp, log, accountDBVersion)
+			mgr, err0 = RunMigrations(ctx, tx, tp, log, accountDBVersion)
 			if err0 != nil {
 				return err0
 			}
@@ -111,10 +123,10 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	return
 }
 
-// runMigrations initializes the accounts DB if needed and return current account round.
+// RunMigrations initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func runMigrations(ctx context.Context, tx *sql.Tx, params trackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerDBInitParams, err error) {
+func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerDBInitParams, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
@@ -122,7 +134,7 @@ func runMigrations(ctx context.Context, tx *sql.Tx, params trackerDBParams, log 
 	}
 
 	tu := trackerDBSchemaInitializer{
-		trackerDBParams: params,
+		TrackerDBParams: params,
 		schemaVersion:   dbVersion,
 		log:             log,
 	}
@@ -229,7 +241,7 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 //
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, config.Consensus[tu.initProto])
+	tu.newDatabase, err = accountsInit(tx, tu.InitAccounts, config.Consensus[tu.InitProto])
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
@@ -270,7 +282,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(ctx, tx)
+		err = ResetAccountHashes(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to reset account hashes : %v", err)
 		}
@@ -278,14 +290,14 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 		tu.log.Infof("upgradeDatabaseSchema1 preparing queries")
 		tu.log.Infof("upgradeDatabaseSchema1 resetting prior catchpoints")
 		// delete the last catchpoint label if we have any.
-		err = writeCatchpointStateString(ctx, tx, catchpointStateLastCatchpoint, "")
+		err = WriteCatchpointStateString(ctx, tx, CatchpointStateLastCatchpoint, "")
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to clear prior catchpoint : %v", err)
 		}
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = deleteStoredCatchpoints(ctx, tx, tu.trackerDBParams.dbPathPrefix)
+		err = DeleteStoredCatchpoints(ctx, tx, tu.TrackerDBParams.DBPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -315,7 +327,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.initProto])
+	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.InitProto])
 	if err != nil {
 		return err
 	}
@@ -334,12 +346,12 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 		goto done
 	}
 
-	numDeleted, addresses, err = removeEmptyAccountData(tx, tu.catchpointEnabled)
+	numDeleted, addresses, err = removeEmptyAccountData(tx, tu.CatchpointEnabled)
 	if err != nil {
 		return err
 	}
 
-	if tu.catchpointEnabled && len(addresses) > 0 {
+	if tu.CatchpointEnabled && len(addresses) > 0 {
 		mc, err := MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
@@ -347,7 +359,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 			tu.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
 			goto done
 		}
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, ledgercore.TrieMemoryConfig)
 		if err != nil {
 			tu.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
 			goto done
@@ -355,7 +367,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 
 		var totalHashesDeleted int
 		for _, addr := range addresses {
-			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			hash := AccountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
 			deleted, err := trie.Delete(hash)
 			if err != nil {
 				tu.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
@@ -389,7 +401,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
 	}
 
-	err = removeEmptyDirsOnSchemaUpgrade(tu.trackerDBParams.dbPathPrefix)
+	err = removeEmptyDirsOnSchemaUpgrade(tu.TrackerDBParams.DBPathPrefix)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to clear empty catchpoint directories : %v", err)
 	}
@@ -410,7 +422,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	}
 
 	// reset the merkle trie
-	err = resetAccountHashes(ctx, tx)
+	err = ResetAccountHashes(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
 	}
@@ -421,7 +433,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 
 func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, tx *sql.Tx) error {
 	// Delete an unfinished catchpoint if there is one.
-	round, err := readCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint)
+	round, err := ReadCatchpointStateUint64(ctx, tx, CatchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
 	}
@@ -431,13 +443,13 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 
 	relCatchpointFilePath := filepath.Join(
 		CatchpointDirName,
-		makeCatchpointFilePath(basics.Round(round)))
-	err = removeSingleCatchpointFileFromDisk(tu.dbPathPrefix, relCatchpointFilePath)
+		MakeCatchpointFilePath(basics.Round(round)))
+	err = RemoveSingleCatchpointFileFromDisk(tu.DBPathPrefix, relCatchpointFilePath)
 	if err != nil {
 		return err
 	}
 
-	return writeCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint, 0)
+	return WriteCatchpointStateUint64(ctx, tx, CatchpointStateWritingCatchpoint, 0)
 }
 
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
@@ -475,13 +487,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	}
 
 	if !tu.newDatabase {
-		err = performTxTailTableMigration(ctx, tx, tu.blockDb.Rdb)
+		err = performTxTailTableMigration(ctx, tx, tu.BlockDb.Rdb)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
 	}
 
-	err = performOnlineRoundParamsTailMigration(ctx, tx, tu.blockDb.Rdb, tu.newDatabase, tu.initProto)
+	err = performOnlineRoundParamsTailMigration(ctx, tx, tu.BlockDb.Rdb, tu.newDatabase, tu.InitProto)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}

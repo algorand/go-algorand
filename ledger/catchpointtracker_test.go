@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"io/ioutil"
 	"os"
 	"path"
@@ -66,7 +67,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	au.initialize(conf)
 	ct.initialize(conf, dbPathPrefix)
 	ao.initialize(conf)
-	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
+	_, err := accountdb.TrackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
 	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao, &txTail{}}, conf)
@@ -92,7 +93,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	filesToCreate := 4
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, accountdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -100,13 +101,13 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
-		fileName := filepath.Join(CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
+		fileName := filepath.Join(accountdb.CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		err = ioutil.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
+		err := accountdb.StoreCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -126,14 +127,14 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectory, CatchpointDirName, "2.catchpoint"))
+	err = os.Remove(filepath.Join(temporaryDirectory, accountdb.CatchpointDirName, "2.catchpoint"))
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
+	err = accountdb.StoreCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
 	require.NoError(t, err)
@@ -143,14 +144,14 @@ func TestGetCatchpointStream(t *testing.T) {
 	outData = []byte{3, 4, 5}
 	require.Equal(t, outData, dataRead)
 
-	err = deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
+	err = accountdb.DeleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
 	require.NoError(t, err)
 }
 
-// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the accountdb.DeleteStoredCatchpoints function works correctly.
 // It does so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
 // ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test calls the function
-// and ensures that it did not error, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// and ensures that it did not error, the catchpoint files were correctly deleted, and that accountdb.DeleteStoredCatchpoints contains no more
 // entries.
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -172,7 +173,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
 		file := fmt.Sprintf("%s%c%d%c%d%cdummy_catchpoint_file-%d",
-			CatchpointDirName, os.PathSeparator,
+			accountdb.CatchpointDirName, os.PathSeparator,
 			i/10, os.PathSeparator,
 			i/2, os.PathSeparator,
 			i)
@@ -184,11 +185,11 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-		err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
+		err = accountdb.StoreCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
 
-	err := deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
+	err := accountdb.DeleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
 	require.NoError(t, err)
 
 	// ensure that all the files were deleted.
@@ -196,7 +197,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
-	fileNames, err := getOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
+	fileNames, err := accountdb.GetOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
@@ -208,11 +209,11 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// we don't want to run this test before the binary is compiled against the latest database upgrade schema.
-	if accountDBVersion < 6 {
+	if accountdb.AccountDBVersion < 6 {
 		return
 	}
 	temporaryDirectroy := t.TempDir()
-	tempCatchpointDir := filepath.Join(temporaryDirectroy, CatchpointDirName)
+	tempCatchpointDir := filepath.Join(temporaryDirectroy, accountdb.CatchpointDirName)
 
 	// creating empty catchpoint directories
 	emptyDirPath := path.Join(tempCatchpointDir, "2f", "e1")
@@ -246,7 +247,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectroy
 
-	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
+	_, err = accountdb.TrackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
 	emptyDirs, err := getEmptyDirs(tempCatchpointDir)
@@ -288,7 +289,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
 
-	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	_, err := accountdb.TrackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
 	err = ct.loadFromDisk(ml, ml.Latest())
@@ -301,7 +302,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(context.Background(), accountsRound, round, catchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+		err = ct.createCatchpoint(context.Background(), accountsRound, round, accountdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -340,7 +341,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	ct.initialize(cfg, ".")
 
 	temporaryDirectroy := b.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, accountdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
@@ -354,22 +355,22 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			var updates compactAccountDeltas
+			var updates accountdb.CompactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := baseAccountData{}
+				acctData := accountdb.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountDelta{newAcct: acctData})
+				updates.upsert(addr, accountdb.AccountDelta{NewAcct: acctData})
 				i++
 			}
 
-			_, _, err = accountsNewRound(tx, updates, CompactResourcesDeltas{}, nil, proto, basics.Round(1))
+			_, _, err = accountdb.AccountsNewRound(tx, updates, accountdb.CompactResourcesDeltas{}, nil, proto, basics.Round(1))
 			if err != nil {
 				return
 			}
 		}
 
-		return updateAccountsHashRound(ctx, tx, 1)
+		return accountdb.UpdateAccountsHashRound(ctx, tx, 1)
 	})
 	require.NoError(b, err)
 
@@ -450,7 +451,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		totals[testPoolAddr] = newPool
 		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		require.Equal(t, prevTotals.All(), curTotals.All())
-		newAccts := applyPartialDeltas(base, updates)
+		newAccts := ledgertesting.ApplyPartialDeltas(base, updates)
 
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
 		require.Equal(t, newTotals.All(), curTotals.All())
@@ -464,7 +465,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		blk.CurrentProtocol = testProtocolVersion
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Creatables = ledgertesting.CreatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
 		ml.trackers.newBlock(blk, delta)
@@ -864,7 +865,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	defer ct.close()
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, accountdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -910,12 +911,12 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	numEntries := uint64(0)
 	i -= basics.Round(cfg.MaxAcctLookback)
 	for i > 0 {
-		_, recordExists, err := selectCatchpointFirstStageInfo(
+		_, recordExists, err := accountdb.SelectCatchpointFirstStageInfo(
 			context.Background(), ct.dbs.Rdb.Handle, i)
 		require.NoError(t, err)
 
 		catchpointDataFilePath :=
-			filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(i))
+			filepath.Join(catchpointsDirectory, accountdb.MakeCatchpointDataFilePath(i))
 		_, err = os.Stat(catchpointDataFilePath)
 		if errors.Is(err, os.ErrNotExist) {
 			require.False(t, recordExists, i)
@@ -953,7 +954,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, accountdb.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -985,7 +986,7 @@ func TestFirstStagePersistence(t *testing.T) {
 
 	// Check that the data file exists.
 	catchpointDataFilePath :=
-		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
+		filepath.Join(catchpointsDirectory, accountdb.MakeCatchpointDataFilePath(firstStageRound))
 	info, err := os.Stat(catchpointDataFilePath)
 	require.NoError(t, err)
 
@@ -1001,12 +1002,12 @@ func TestFirstStagePersistence(t *testing.T) {
 	ml.Close()
 
 	// Insert unfinished first stage record.
-	err = writeCatchpointStateUint64(
-		context.Background(), ml2.dbs.Wdb.Handle, catchpointStateWritingFirstStageInfo, 1)
+	err = accountdb.WriteCatchpointStateUint64(
+		context.Background(), ml2.dbs.Wdb.Handle, accountdb.CatchpointStateWritingFirstStageInfo, 1)
 	require.NoError(t, err)
 
 	// Delete the database record.
-	err = deleteOldCatchpointFirstStageInfo(
+	err = accountdb.DeleteOldCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound)
 	require.NoError(t, err)
 
@@ -1021,14 +1022,14 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	_, exists, err := selectCatchpointFirstStageInfo(
+	_, exists, err := accountdb.SelectCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
 	require.NoError(t, err)
 	require.True(t, exists)
 
 	// Check that the unfinished first stage record is deleted.
-	v, err := readCatchpointStateUint64(
-		context.Background(), ml2.dbs.Rdb.Handle, catchpointStateWritingFirstStageInfo)
+	v, err := accountdb.ReadCatchpointStateUint64(
+		context.Background(), ml2.dbs.Rdb.Handle, accountdb.CatchpointStateWritingFirstStageInfo)
 	require.NoError(t, err)
 	require.Zero(t, v)
 }
@@ -1055,7 +1056,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, accountdb.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -1068,8 +1069,8 @@ func TestSecondStagePersistence(t *testing.T) {
 	secondStageRound := basics.Round(36)
 	firstStageRound := secondStageRound - basics.Round(protoParams.CatchpointLookback)
 	catchpointDataFilePath :=
-		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
-	var firstStageInfo catchpointFirstStageInfo
+		filepath.Join(catchpointsDirectory, accountdb.MakeCatchpointDataFilePath(firstStageRound))
+	var firstStageInfo accountdb.CatchpointFirstStageInfo
 	var catchpointData []byte
 
 	// Add blocks until the first catchpoint round.
@@ -1078,7 +1079,7 @@ func TestSecondStagePersistence(t *testing.T) {
 			// Save first stage info and data file.
 			var exists bool
 			var err error
-			firstStageInfo, exists, err = selectCatchpointFirstStageInfo(
+			firstStageInfo, exists, err = accountdb.SelectCatchpointFirstStageInfo(
 				context.Background(), ml.dbs.Rdb.Handle, firstStageRound)
 			require.NoError(t, err)
 			require.True(t, exists)
@@ -1111,7 +1112,7 @@ func TestSecondStagePersistence(t *testing.T) {
 
 	// Check that the data file exists.
 	catchpointFilePath :=
-		filepath.Join(catchpointsDirectory, makeCatchpointFilePath(secondStageRound))
+		filepath.Join(catchpointsDirectory, accountdb.MakeCatchpointFilePath(secondStageRound))
 	info, err := os.Stat(catchpointFilePath)
 	require.NoError(t, err)
 
@@ -1131,17 +1132,17 @@ func TestSecondStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Restore the first stage database record.
-	err = insertOrReplaceCatchpointFirstStageInfo(
+	err = accountdb.InsertOrReplaceCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
+	err = accountdb.InsertUnfinishedCatchpoint(
 		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Delete the catchpoint file database record.
-	err = storeCatchpoint(
+	err = accountdb.StoreCatchpoint(
 		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, "", "", 0)
 	require.NoError(t, err)
 
@@ -1156,13 +1157,13 @@ func TestSecondStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	filename, _, _, err := getCatchpoint(
+	filename, _, _, err := accountdb.GetCatchpoint(
 		context.Background(), ml2.dbs.Rdb.Handle, secondStageRound)
 	require.NoError(t, err)
 	require.NotEmpty(t, filename)
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
+	unfinishedCatchpoints, err := accountdb.SelectUnfinishedCatchpoints(
 		context.Background(), ml2.dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
@@ -1252,7 +1253,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	ml2.trackers.waitAccountsWriting()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
+	unfinishedCatchpoints, err := accountdb.SelectUnfinishedCatchpoints(
 		context.Background(), ml2.dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
@@ -1321,13 +1322,13 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	ml.Close()
 
 	// Sanity check: first stage record should be deleted.
-	_, exists, err := selectCatchpointFirstStageInfo(
+	_, exists, err := accountdb.SelectCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
 	require.NoError(t, err)
 	require.False(t, exists)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
+	err = accountdb.InsertUnfinishedCatchpoint(
 		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
@@ -1336,7 +1337,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ct2.close()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
+	unfinishedCatchpoints, err := accountdb.SelectUnfinishedCatchpoints(
 		context.Background(), ml2.dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)

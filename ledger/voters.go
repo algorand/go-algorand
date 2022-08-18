@@ -153,7 +153,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 		defer vt.loadWaitGroup.Done()
 		err := tr.LoadTree(vt.onlineAccountsFetcher, hdr)
 		if err != nil {
-			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
+			vt.l.TrackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
 			tr.BroadcastError(err)
 		}
@@ -185,7 +185,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 
 	_, ok := vt.votersForRoundCache[basics.Round(r)]
 	if ok {
-		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
+		vt.l.TrackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 	} else {
 		vt.loadTree(hdr)
 	}
