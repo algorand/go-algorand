@@ -291,17 +291,10 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-#      - attach_workspace:
-#          at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
-#      - restore_cache:
-#          keys:
-#            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-#            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-#            - 'go-cache-v3-{{ arch }}-'
       - run:
           name: Run build tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -363,8 +356,6 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-#      - attach_workspace:
-#          at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
