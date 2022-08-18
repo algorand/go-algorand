@@ -465,9 +465,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 64
+    parallelism: 32
     steps:
       - prepare_build_dir
       - checkout
@@ -504,9 +504,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 32
+    parallelism: 16
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
@@ -544,9 +544,9 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 32
+    parallelism: 10
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
