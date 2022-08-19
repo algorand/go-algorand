@@ -1,3 +1,7 @@
+# Disclaimer:
+# * Unless otherwise specified, assume `resource_class` and `parallelism` values are cherry-picked values that provided a reasonable enough build-duration-to-cost tradeoff at the time of choosing.
+# * There's too many variables (architecture types, CircleCI concurrency limitations, parallel pipeline runs, source code changes) to feel confident we've found a best-fit configuration.
+
 version: 2.1
 
 orbs:
