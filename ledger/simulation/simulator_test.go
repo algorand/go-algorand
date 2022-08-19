@@ -935,14 +935,13 @@ log
 int 0
 `
 
-func makeProgramToCallInner(program string) (string, error) {
+func makeItxnSubmitToCallInner(program string) (string, error) {
 	ops, err := logic.AssembleString(program)
 	if err != nil {
 		return "", err
 	}
 	programBytesHex := hex.EncodeToString(ops.Program)
-	outerProgram := fmt.Sprintf(`#pragma version 6
-byte "starting inner txn"
+	itxnSubmit := fmt.Sprintf(`byte "starting inner txn"
 log
 itxn_begin
 int appl
@@ -953,11 +952,24 @@ byte 0x068101
 itxn_field ClearStateProgram
 byte 0x%s
 itxn_field ApprovalProgram
-itxn_submit
-int 1
-`, programBytesHex)
+itxn_submit`, programBytesHex)
+	return itxnSubmit, nil
+}
 
-	return outerProgram, nil
+func wrapCodeWithVersionAndReturn(code string) string {
+	return fmt.Sprintf(`#pragma version 6
+%s
+int 1
+return`, code)
+}
+
+func makeProgramToCallInner(program string) (string, error) {
+	itxnSubmitCode, err := makeItxnSubmitToCallInner(program)
+	if err != nil {
+		return "", err
+	}
+
+	return wrapCodeWithVersionAndReturn(itxnSubmitCode), nil
 }
 
 func TestDetailedSimulateAccessInnerTxnApplyDataOnFail(t *testing.T) {
@@ -1047,4 +1059,90 @@ func TestDetailedSimulateAccessInnerTxnApplyDataOnFail(t *testing.T) {
 	require.Equal(t, "starting inner txn", outerAppEvalDelta.Logs[0])
 	require.Equal(t, "starting inner txn", middleAppEvalDelta.Logs[0])
 	require.Equal(t, "message", innerAppEvalDelta.Logs[0])
+}
+
+const createAssetCode = `byte "starting asset create"
+log
+itxn_begin
+int acfg
+itxn_field TypeEnum
+itxn_submit
+`
+
+func TestDetailedSimulateAccessInnerTxnNonAppCallApplyDataOnFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Set up simulator
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+
+	// Compile approval program
+	logAndFailItxnCode, err := makeItxnSubmitToCallInner(logAndFail)
+	approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + logAndFailItxnCode)
+	ops, err := logic.AssembleString(approvalProgram)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	txgroup := []transactions.SignedTxn{
+		// fund outer app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.AppIndex(2).Address(),
+					Amount:   basics.MicroAlgos{Raw: 401000}, // 400000 min balance plus 1000 for 1 txn
+				},
+			},
+		},
+		// create app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApplicationArgs:   [][]byte{uint64ToBytes(uint64(1))},
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+	}
+
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
+	result, err := s.DetailedSimulate(txgroup)
+	require.NoError(t, err)
+	require.False(t, result.WouldSucceed)
+	txnGroup := result.TxnGroups[0]
+	require.Contains(t, txnGroup.FailureMessage, "rejected by ApprovalProgram")
+
+	// Check that logs are correct
+	outerTxnEvalDelta := txnGroup.Txns[1].Txn.ApplyData.EvalDelta
+	require.Equal(t, "starting asset create", outerTxnEvalDelta.Logs[0])
+	require.Equal(t, "starting inner txn", outerTxnEvalDelta.Logs[1])
+
+	// Check that inner transaction ApplyData is accessible within both asset create and app call
+	assetCreateInnerTxnApplyData := outerTxnEvalDelta.InnerTxns[0].ApplyData
+	require.Equal(t, basics.AssetIndex(3), assetCreateInnerTxnApplyData.ConfigAsset)
+	appCallInnerTxnEvalDelta := outerTxnEvalDelta.InnerTxns[1].ApplyData.EvalDelta
+	require.Equal(t, "message", appCallInnerTxnEvalDelta.Logs[0])
 }
