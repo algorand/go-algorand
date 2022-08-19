@@ -72,7 +72,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	ct.initialize(conf, ".")
 	ao.initialize(conf)
 
-	_, err := accountdb.trackerDBInitialize(ml, false, ".")
+	_, err := accountdb.TrackerDBInitialize(ml, false, ".")
 	a.NoError(err)
 
 	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao, &txTail{}}, conf)

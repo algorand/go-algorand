@@ -47,11 +47,11 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
+func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
 
-	err = accountsAddNormalizedBalance(tx, config.Consensus[proto])
+	err = AccountsAddNormalizedBalance(tx, config.Consensus[proto])
 	require.NoError(tb, err)
 
 	err = accountsCreateResourceTable(context.Background(), tx)
@@ -189,7 +189,7 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB := accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	newDB := AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.True(t, newDB)
 
 	checkAccounts(t, tx, 0, accts)
@@ -214,7 +214,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := AccountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
@@ -367,7 +367,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 		defer tx.Rollback()
 
 		accts := ledgertesting.RandomAccounts(1, true)
-		accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+		AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 		addr := ledgertesting.RandomAddress()
 
 		// lastCreatableID stores asset or app max used index to get rid of conflicts
@@ -437,7 +437,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, false)
-	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_ = AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
 }
@@ -626,7 +626,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto pro
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	accountsInitTest(b, tx, updates, proto)
+	AccountsInitTest(b, tx, updates, proto)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -846,7 +846,7 @@ func TestAccountsReencoding(t *testing.T) {
 	crypto.RandBytes(stateProofID.Commitment[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -924,7 +924,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 		return nil
 	})
 	require.NoError(t, err)
@@ -2188,7 +2188,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]int64)
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for i := range addrs {
 			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
@@ -2819,7 +2819,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	totals, err := AccountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 
@@ -2828,7 +2828,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	var baseOnlineAccounts LRUOnlineAccounts
 	baseAccounts.Init(nil, 100, 80)
 	baseResources.Init(nil, 100, 80)
-	baseOnlineAccounts.init(nil, 100, 80)
+	baseOnlineAccounts.Init(nil, 100, 80)
 
 	addrA := basics.Address(crypto.Hash([]byte("A")))
 	addrB := basics.Address(crypto.Hash([]byte("B")))
@@ -3321,7 +3321,7 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
 	const maxRounds = 40 // any number
@@ -3475,7 +3475,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	updates := CompactOnlineAccountDeltas{}
 	addrA := ledgertesting.RandomAddress()
@@ -3709,12 +3709,12 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(t, err)
 
-		// this is the same seq as accountsInitTest makes but it stops
+		// this is the same seq as AccountsInitTest makes but it stops
 		// before the online accounts table creation to generate a trie and commit it
 		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
 		require.NoError(t, err)
 
-		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+		err = AccountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
 		require.NoError(t, err)
 
 		err = accountsCreateResourceTable(context.Background(), tx)

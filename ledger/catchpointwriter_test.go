@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -49,8 +50,8 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
-	er := encodedBalanceRecordV5{}
+func makeTestEncodedBalanceRecordV5(t *testing.T) accountdb.EncodedBalanceRecordV5 {
+	er := accountdb.EncodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
@@ -161,7 +162,7 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecordV5(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecordV5
+	var er2 accountdb.EncodedBalanceRecordV5
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -217,7 +218,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.data")
 
-	readDb := ml.trackerDB().Rdb
+	readDb := ml.TrackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
 		if err != nil {
@@ -299,7 +300,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
-	readDb := ml.trackerDB().Rdb
+	readDb := ml.TrackerDB().Rdb
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
@@ -320,11 +321,11 @@ func TestFullCatchpointWriter(t *testing.T) {
 		totalAccounts = writer.GetTotalAccounts()
 		totalChunks = writer.GetTotalChunks()
 		biggestChunkLen = writer.GetBiggestChunkLen()
-		accountsRnd, err = accountsRound(tx)
+		accountsRnd, err = accountdb.AccountsRound(tx)
 		if err != nil {
 			return
 		}
-		totals, err = accountsTotals(ctx, tx, false)
+		totals, err = accountdb.AccountsTotals(ctx, tx, false)
 		return
 	})
 	require.NoError(t, err)
@@ -395,7 +396,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
+		err := accountdb.ApplyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)

@@ -1191,10 +1191,10 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_ = accountdb.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
-	err = accountdb.accountsAddNormalizedBalance(tx, proto)
+	err = accountdb.AccountsAddNormalizedBalance(tx, proto)
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
@@ -1272,7 +1272,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = accountdb.loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		ad, err = accountdb.LoadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
@@ -1399,11 +1399,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// check deltas without missing accounts
-	baseAccounts.Write(accountdb.PersistedAccountData{addr: addrs[0], accountData: accountdb.BaseAccountData{}})
+	baseAccounts.Write(accountdb.PersistedAccountData{Addr: addrs[0], AccountData: accountdb.BaseAccountData{}})
 	outAccountDeltas = accountdb.MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	require.Equal(t, 0, len(outAccountDeltas.misses))
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, accountdb.PersistedAccountData{addr: addrs[0]}, delta.OldAcct)
+	require.Equal(t, accountdb.PersistedAccountData{Addr: addrs[0]}, delta.OldAcct)
 	require.Equal(t, accountdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.init(nil, 100, 80)
@@ -1417,8 +1417,8 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.Write(accountdb.PersistedAccountData{addr: addrs[0], accountData: accountdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	baseAccounts.Write(accountdb.PersistedAccountData{addr: addrs[3], accountData: accountdb.BaseAccountData{}})
+	baseAccounts.Write(accountdb.PersistedAccountData{Addr: addrs[0], AccountData: accountdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.Write(accountdb.PersistedAccountData{Addr: addrs[3], AccountData: accountdb.BaseAccountData{}})
 	outAccountDeltas = accountdb.MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
@@ -1426,11 +1426,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, len(outCreatableDeltas))
 
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, uint64(1), delta.OldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(1), delta.OldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(2), delta.NAcctDeltas)
 	delta, _ = outAccountDeltas.get(addrs[3])
-	require.Equal(t, uint64(0), delta.OldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(0), delta.OldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(1), delta.NAcctDeltas)
 
@@ -1506,7 +1506,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	assetHolding103 := basics.AssetHolding{Amount: 103}
 	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{Params: &assetParams103}, ledgercore.AssetHoldingDelta{Holding: &assetHolding103})
 
-	baseResources.init(nil, 100, 80)
+	baseResources.Init(nil, 100, 80)
 
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry

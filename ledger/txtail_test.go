@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -147,8 +148,8 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
-	t.blockDBs, _ = dbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.blockDBs, _ = ledgertesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = ledgertesting.DbOpenTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
@@ -166,12 +167,12 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
 		require.NoError(ts, err)
-		tail, err := txTailRoundFromBlock(blk)
+		tail, err := accountdb.TxTailRoundFromBlock(blk)
 		require.NoError(ts, err)
-		encoded, _ := tail.encode()
+		encoded, _ := tail.Encode()
 		roundData = append(roundData, encoded)
 	}
-	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	err = accountdb.TxtailNewRound(context.Background(), tx, startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
 	return nil

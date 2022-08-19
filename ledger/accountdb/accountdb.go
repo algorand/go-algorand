@@ -374,7 +374,7 @@ type NormalizedAccountBalance struct {
 	encodedResources map[basics.CreatableIndex][]byte
 }
 
-// PrepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
+// PrepareNormalizedBalancesV5 converts an array of EncodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
 func PrepareNormalizedBalancesV5(bals []EncodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
@@ -413,7 +413,7 @@ func PrepareNormalizedBalancesV5(bals []EncodedBalanceRecordV5, proto config.Con
 	return
 }
 
-// PrepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
+// PrepareNormalizedBalancesV6 converts an array of EncodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
 func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
@@ -1233,9 +1233,9 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	return newDatabase, nil
 }
 
-// accountsAddNormalizedBalance adds the normalizedonlinebalance column
+// AccountsAddNormalizedBalance adds the normalizedonlinebalance column
 // to the accountbase table.
-func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) error {
+func AccountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) error {
 	var exists bool
 	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
 	if err == nil {
@@ -4252,8 +4252,8 @@ func processAllBaseAccountRecords(
 	return count, pending, nil
 }
 
-// loadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
-func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
+func LoadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
 	hasResources := false
@@ -4381,7 +4381,7 @@ func LoadAllFullAccounts(
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = loadFullAccount(ctx, tx, resourcesTable, addr, rowid.Int64, data)
+		ad, err = LoadFullAccount(ctx, tx, resourcesTable, addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}

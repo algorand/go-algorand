@@ -327,7 +327,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.InitProto])
+	err = AccountsAddNormalizedBalance(tx, config.Consensus[tu.InitProto])
 	if err != nil {
 		return err
 	}

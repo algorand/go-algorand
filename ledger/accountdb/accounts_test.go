@@ -56,7 +56,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		ad, err = LoadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
