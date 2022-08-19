@@ -68,14 +68,6 @@ func makeDebuggerHook(txgroup []transactions.SignedTxn) debuggerHook {
 	return debuggerHook{result: &result}
 }
 
-func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	// Update ApplyData if not an inner transaction
-	if len(dh.cursor) == 1 {
-		dh.result.TxnGroups[0].Txns[groupIndex].Txn.ApplyData = ep.TxnGroup[groupIndex].ApplyData
-	}
-	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
-}
-
 func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyData, error) {
 	if len(path) == 0 {
 		return nil, fmt.Errorf("simulator debugger error: path is empty")
@@ -106,6 +98,26 @@ func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedT
 // Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
 	return dh.populateInnerTransactions(ep.TxnGroup)
+}
+
+func (dh *debuggerHook) saveApplyData(applyData transactions.ApplyData) error {
+	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.cursor)
+	if err != nil {
+		return err
+	}
+
+	*applyDataOfCurrentTxn = applyData
+	return nil
+}
+
+func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	// Update ApplyData if not an inner transaction
+	err := dh.saveApplyData(ep.TxnGroup[groupIndex].ApplyData)
+	if err != nil {
+		return err
+	}
+
+	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
 }
 
 func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {
