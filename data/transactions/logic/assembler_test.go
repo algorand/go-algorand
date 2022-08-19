@@ -2723,14 +2723,16 @@ func TestMacros(t *testing.T) {
 		AssemblerMaxVersion, Expect{2, "Macro cycle discovered: X -> X"},
 	)
 
+	// Check that macros are filtered; if pragma is given, only macros that violate
+	// that version's filter should be errored on
 	testProg(t, `
 		#define return random
 		#define pay randomm
 		#define NoOp randommm
 		#define + randommmm
-		#pragma version 1
-		#define return hi
-		#define + hey
+		#pragma version 1 // now the versioned filter should activate and check all previous macros
+		#define return hi // no error b/c return is after v1
+		#define + hey // since versioned filter is now online, we can error here
 		int 1`,
 		assemblerNoVersion,
 		Expect{3, "Named constants..."},
@@ -2739,12 +2741,14 @@ func TestMacros(t *testing.T) {
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
+	// Same filter check, but this time since no version is given, filter should be
+	// from AssemblerDefaultVersion and activates on first instruction
 	testProg(t, `
 		#define return random
 		#define pay randomm
 		#define NoOp randommm
 		#define + randommmm
-		int 1
+		int 1 // versioned filter activates here
 		#define return hi
 		#define + hey`,
 		assemblerNoVersion,
@@ -2754,18 +2758,20 @@ func TestMacros(t *testing.T) {
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
+	// Filter check for fields; note fields are also versioned so same deal as last two tests
 	testProg(t, `
 		#define Sender hello
 		#define ApplicationArgs hiya
 		#pragma version 1
 		#define Sender helllooooo
-		#define ApplicationArgs heyyyyy
+		#define ApplicationArgs heyyyyy // no error b/c ApplicationArgs is after v1
 		int 1`,
 		assemblerNoVersion,
 		Expect{4, "Sender is defined as a macro but is a field name..."},
 		Expect{5, "Macro names cannot be field names: Sender"},
 	)
 
+	// Same check but defaults to AssemblerDefaultVersion instead of pragma
 	testProg(t, `
 		#define Sender hello
 		#define ApplicationArgs hiya
