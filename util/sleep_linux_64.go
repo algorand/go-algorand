@@ -30,5 +30,5 @@ func NanoSleep(d time.Duration) {
 		Nsec: d.Nanoseconds() % time.Second.Nanoseconds(),
 		Sec:  d.Nanoseconds() / time.Second.Nanoseconds(),
 	}
-	syscall.Nanosleep(timeSpec, nil) // nolint:errcheck
+	syscall.Nanosleep(timeSpec, nil) // nolint:errcheck // ignoring error
 }

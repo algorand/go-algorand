@@ -66,9 +66,9 @@ func loadMnemonic(mnemonic string) crypto.Seed {
 // Like shared/pingpong/accounts.go
 func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 	keylist := make([]*crypto.SignatureSecrets, 0, 5)
-	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, _ error) error {
 		var handle db.Accessor
-		handle, err = db.MakeErasableAccessor(path)
+		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
 			return nil // don't care, move on
 		}
@@ -241,7 +241,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 		sendSize = transactionBlockSize
 	}
 	// create sendSize transaction to send.
-	txns := make([]transactions.SignedTxn, sendSize, sendSize)
+	txns := make([]transactions.SignedTxn, sendSize)
 	for i := range txns {
 		tx := transactions.Transaction{
 			Header: transactions.Header{
@@ -289,7 +289,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	for i := 0; i < nroutines; i++ {
 		totalSent += sent[i]
 	}
-	dt := time.Now().Sub(start)
+	dt := time.Since(start)
 	fmt.Fprintf(os.Stdout, "sent %d/%d in %s (%.1f/s)\n", totalSent, sendSize, dt.String(), float64(totalSent)/dt.Seconds())
 	if cfg.TxnsToSend != 0 {
 		// We attempted what we were asked. We're done.

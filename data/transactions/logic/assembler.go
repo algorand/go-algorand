@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/abi"
+	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -723,7 +723,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error()) // nolint:errcheck
+			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error())
 		}
 		hash := sha512.Sum512_256(methodSig)
 		ops.ByteLiteral(hash[0:4])
@@ -1571,7 +1571,7 @@ func (ops *OpStream) assemble(text string) error {
 				directive := first[1:]
 				switch directive {
 				case "pragma":
-					ops.pragma(tokens)
+					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
 					ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				default:
 					ops.errorf("Unknown directive: %s", directive)
@@ -1618,7 +1618,8 @@ func (ops *OpStream) assemble(text string) error {
 					}
 				}
 				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
-				spec.asm(ops, &spec, current[1:])
+				spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+
 				if spec.deadens() { // An unconditional branch deadens the following code
 					ops.known.deaden()
 				}

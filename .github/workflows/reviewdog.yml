@@ -20,10 +20,11 @@ jobs:
         with:
           golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
-          reporter: "github-pr-review"
+          reporter: "github-pr-check"
           tool_name: "Lint Errors"
           level: "error"
           fail_on_error: true
+          filter_mode: "nofilter"
   # Non-Blocking Warnings Section
   reviewdog-warnings:
     runs-on: ubuntu-latest
