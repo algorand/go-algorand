@@ -18,8 +18,9 @@ package stateproof
 
 import (
 	"encoding/binary"
-	"golang.org/x/crypto/sha3"
 	"math/big"
+
+	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -75,7 +76,7 @@ func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
 	choice.version = VersionForCoinGenerator
 	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
-	shk.Write(rep)
+	shk.Write(rep) //nolint:errcheck // ShakeHash.Write may panic, but does not return error
 
 	threshold := prepareRejectionSamplingThreshold(choice.signedWeight)
 	return coinGenerator{shkContext: shk, signedWeight: choice.signedWeight, threshold: threshold}
@@ -111,7 +112,7 @@ func (cg *coinGenerator) getNextCoin() uint64 {
 	var randNumFromXof uint64
 	for {
 		var shakeDigest [8]byte
-		cg.shkContext.Read(shakeDigest[:])
+		cg.shkContext.Read(shakeDigest[:]) //nolint:errcheck // ShakeHash.Read never returns error
 		randNumFromXof = binary.LittleEndian.Uint64(shakeDigest[:])
 
 		z := &big.Int{}

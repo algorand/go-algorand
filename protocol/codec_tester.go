@@ -17,7 +17,6 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -230,7 +229,13 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v.SetUint(rand.Uint64())
+		if strings.HasSuffix(datapath, "/HashType") &&
+			strings.HasSuffix(v.Type().PkgPath(), "go-algorand/crypto") && v.Type().Name() == "HashType" {
+			// generate value that will avoid protocol.ErrInvalidObject from HashType.Validate()
+			v.SetUint(rand.Uint64() % 3) // 3 is crypto.MaxHashType
+		} else {
+			v.SetUint(rand.Uint64())
+		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
@@ -243,6 +248,12 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
+	case reflect.Ptr:
+		v.Set(reflect.New(v.Type().Elem()))
+		err := randomizeValue(reflect.Indirect(v), datapath, tag, remainingChanges, seenTypes)
+		if err != nil {
+			return err
+		}
 	case reflect.Struct:
 		st := v.Type()
 		if !seenTypes[st] {
@@ -427,15 +438,7 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			t.Skip()
 			return
 		}
-		if err == nil {
-			continue
-		}
 
-		// some objects might appen to the original error additional info.
-		// we ensure that invalidObject error is not failing the test.
-		if errors.As(err, &ErrInvalidObject) {
-			continue
-		}
 		require.NoError(t, err)
 	}
 }
