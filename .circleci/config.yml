@@ -222,6 +222,9 @@ commands:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
       - restore_libsodium
       - restore_cache:
           keys:
@@ -474,9 +477,6 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
@@ -492,9 +492,6 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
@@ -515,9 +512,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -534,9 +528,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -555,9 +546,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -574,9 +562,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -594,9 +579,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -616,9 +598,6 @@ jobs:
       # one of the platforms in the matrix.
       CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
