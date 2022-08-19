@@ -30,8 +30,8 @@ function verify_at_least_one_running() {
 function verify_none_running() {
     local datadir=$1
 
-    # Shutting down can take some time, so wait at least 5 seconds
-    for TRIES in 1 2 3 4 5; do
+    # Shutting down can take some time, so wait at least 10 seconds
+    for TRIES in $(seq 1 10); do
         update_running_count
         if [ ${RUNNING_COUNT} -eq 0 ]; then
             return 0
