@@ -965,7 +965,7 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccou
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, prevAccount basics.Address) error {
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	selectAcctStmt, err := tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
 		return err
@@ -984,16 +984,8 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	var result sql.Result
 	var rowID int64
 	for _, balance := range bals {
-		if prevAccount == balance.address {
-			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
-			if err != nil {
-				return err
-			}
-		} else {
-			result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
-			if err != nil {
-				return err
-			}
+		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+		if err == nil {
 			var aff int64
 			aff, err = result.RowsAffected()
 			if err != nil {
@@ -1006,7 +998,15 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			if err != nil {
 				return err
 			}
+		} else if err.Error() == "UNIQUE constraint failed: catchpointbalances.address" {
+			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
 		}
+
 		// write resources
 		for aidx := range balance.resources {
 			var result sql.Result

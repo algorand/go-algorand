@@ -97,6 +97,8 @@ type CatchpointCatchupAccessorImpl struct {
 
 	acctResCnt catchpointAccountResourceCounter
 
+	// expecting next account to be a specific account
+	expectingSpecificAccount bool
 	// next expected balance account, empty address if not expecting specific account
 	nextExpectedAccount basics.Address
 }
@@ -347,12 +349,13 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
 	}
 
+	expectingSpecificAccount := c.expectingSpecificAccount
 	nextExpectedAccount := c.nextExpectedAccount
 
 	// keep track of number of resources processed for each account
 	for i, balance := range normalizedAccountBalances {
 		// missing resources for this account
-		if !nextExpectedAccount.IsZero() && balance.address != nextExpectedAccount {
+		if expectingSpecificAccount && balance.address != nextExpectedAccount {
 			return fmt.Errorf("processStagingBalances received incomplete chunks for account %v", nextExpectedAccount)
 		}
 
@@ -406,8 +409,10 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 			c.acctResCnt = catchpointAccountResourceCounter{}
 			nextExpectedAccount = basics.Address{}
+			expectingSpecificAccount = false
 		} else {
 			nextExpectedAccount = balance.address
+			expectingSpecificAccount = true
 		}
 	}
 
@@ -426,7 +431,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		defer wg.Done()
 		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			start := time.Now()
-			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances, c.nextExpectedAccount)
+			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			durBalances = time.Since(start)
 			return err
 		})
@@ -507,6 +512,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 
+	c.expectingSpecificAccount = expectingSpecificAccount
 	c.nextExpectedAccount = nextExpectedAccount
 	return err
 }
