@@ -62,6 +62,8 @@ issues:
     - ineffective break statement. Did you mean to break out of the outer loop
     # revive: irrelevant error about naming
     - "var-naming: don't use leading k in Go names"
+    # staticcheck: we'll keep using ioutil for now
+    - 'SA1019: "io/ioutil" has been deprecated since Go 1.16'
 
   exclude-rules:
     # Add all linters here -- Comment this block out for testing linters
