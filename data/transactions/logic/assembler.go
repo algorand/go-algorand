@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -1600,14 +1601,19 @@ func (ops *OpStream) assemble(text string) error {
 			// we're about to begin processing opcodes, so settle the Version
 			if ops.Version == assemblerNoVersion {
 				ops.Version = AssemblerDefaultVersion
-				ops.versionedMacroFilter()
+				ops.versionedCheckMacroNames()
 			}
 			if ops.versionedPseudoOps == nil {
 				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 			}
 			opstring := current[0]
 			if opstring[len(opstring)-1] == ':' {
-				ops.createLabel(opstring[:len(opstring)-1])
+				labelName := opstring[:len(opstring)-1]
+				if _, ok := ops.macros[labelName]; ok {
+					ops.errorf("Cannot create label with same name as macro: %s", labelName)
+				} else {
+					ops.createLabel(opstring[:len(opstring)-1])
+				}
 				current = current[1:]
 				if len(current) == 0 {
 					ops.trace("%3d: label only\n", ops.sourceLine)
@@ -1698,39 +1704,59 @@ func (ops *OpStream) cycle(macro string, previous ...string) bool {
 	return false
 }
 
-// Once a version is obtained, versionedMacroFilter goes through previously defined macros
+// Once a version is obtained, versionedCheckMacroNames goes through previously defined macros
 // and ensures they don't use opcodes/fields from the obtained version
-func (ops *OpStream) versionedMacroFilter() error {
-	var err error = nil
+func (ops *OpStream) versionedCheckMacroNames() error {
+	var errored bool
 	for macroName := range ops.macros {
 		if fieldNames[ops.Version][macroName] {
-			err = fmt.Errorf("%s is defined as a macro but is a field name in version %d", macroName, ops.Version)
+			ops.errorf("%s is defined as a macro but is a field name in version %d", macroName, ops.Version)
+			errored = true
+			delete(ops.macros, macroName)
 		} else if _, ok := OpsByName[ops.Version][macroName]; ok {
-			err = fmt.Errorf("%s is defined as a macro but is an opcode in version %d", macroName, ops.Version)
-		} else {
-			continue
+			ops.errorf("%s is defined as a macro but is an opcode in version %d", macroName, ops.Version)
+			errored = true
+			delete(ops.macros, macroName)
 		}
-		ops.error(err)
-		delete(ops.macros, macroName)
 	}
-	if err != nil {
-		err = errors.New("version is incompatible with defined macros")
+	if errored {
+		return errors.New("version is incompatible with defined macros")
 	}
-	return err
+	return nil
 }
 
-func (ops *OpStream) filterMacro(macroName string) error {
+func checkMacroName(macroName string, version uint64) error {
+	otherAllowedChars := [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '#': true, '!': true, '>': true, '<': true, ':': true, '=': true, '?': true}
+	for i := 0; i < len(macroName); i++ {
+		c := macroName[i]
+		if !unicode.IsLetter(rune(c)) && !unicode.IsDigit(rune(c)) && !otherAllowedChars[c] {
+			return fmt.Errorf("%s character not allowed in macro name", string(c))
+		}
+	}
+	firstChar := macroName[0]
+	lastChar := macroName[len(macroName)-1]
+	if firstChar == '-' && len(macroName) > 1 {
+		if unicode.IsDigit(rune(macroName[1])) {
+			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+		}
+	}
+	if lastChar == ':' {
+		return fmt.Errorf("Macro names cannot end in colons: %s", macroName)
+	}
+	if macroName == "b64" || macroName == "base64" {
+		return fmt.Errorf("Cannot use base 64 notation in macro name: %s", macroName)
+	}
 	_, isTxnType := txnTypeMap[macroName]
 	_, isOnCompletion := onCompletionMap[macroName]
 	if isTxnType || isOnCompletion {
-		return ops.errorf("Named constants cannot be used as macro names: %s", macroName)
+		return fmt.Errorf("Named constants cannot be used as macro names: %s", macroName)
 	}
-	if ops.Version != assemblerNoVersion {
-		if _, ok := OpsByName[ops.Version][macroName]; ok {
-			return ops.errorf("Macro names cannot be opcodes: %s", macroName)
+	if version != assemblerNoVersion {
+		if _, ok := OpsByName[version][macroName]; ok {
+			return fmt.Errorf("Macro names cannot be opcodes: %s", macroName)
 		}
-		if fieldNames[ops.Version][macroName] {
-			return ops.errorf("Macro names cannot be field names: %s", macroName)
+		if fieldNames[version][macroName] {
+			return fmt.Errorf("Macro names cannot be field names: %s", macroName)
 		}
 	}
 	return nil
@@ -1743,9 +1769,14 @@ func (ops *OpStream) define(tokens []string) error {
 	if len(tokens) < 3 {
 		return ops.errorf("define directive requires a name and body")
 	}
-	saved, ok := ops.macros[tokens[1]]
-	ops.macros[tokens[1]] = tokens[2:len(tokens):len(tokens)]
-	if ops.cycle(tokens[1]) || ops.filterMacro(tokens[1]) != nil {
+	name := tokens[1]
+	err := checkMacroName(name, ops.Version)
+	if err != nil {
+		return ops.error(err)
+	}
+	saved, ok := ops.macros[name]
+	ops.macros[name] = tokens[2:len(tokens):len(tokens)]
+	if ops.cycle(tokens[1]) {
 		if ok {
 			ops.macros[tokens[1]] = saved
 		} else {
@@ -1786,7 +1817,7 @@ func (ops *OpStream) pragma(tokens []string) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-			return ops.versionedMacroFilter()
+			return ops.versionedCheckMacroNames()
 		}
 		if ops.Version != ver {
 			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)

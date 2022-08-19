@@ -2661,14 +2661,13 @@ func TestMacros(t *testing.T) {
 		label1:
 		pushint 1`, `
 		#define ==? ==; bnz
-		#define one 1
-		#define two 2
-		pushint one; pushint two; ==? label1
+		pushint 1; pushint 2; ==? label1
 		err
 		label1: 
-		pushint one`,
+		pushint 1`,
 	)
 
+	// Test redefining macros with macro chaining works
 	checkSame(t, AssemblerMaxVersion, `
 		pushbytes 0x100000000000; substring 3 5; substring 0 1`, `
 		#define rowSize 3
@@ -2680,6 +2679,7 @@ func TestMacros(t *testing.T) {
 		substring tableDimensions`,
 	)
 
+	// Test more complicated macros like multi-token
 	checkSame(t, AssemblerMaxVersion, `
 		int 3
 		store 0
@@ -2723,16 +2723,16 @@ func TestMacros(t *testing.T) {
 		AssemblerMaxVersion, Expect{2, "Macro cycle discovered: X -> X"},
 	)
 
-	// Check that macros are filtered; if pragma is given, only macros that violate
-	// that version's filter should be errored on
+	// Check that macros names can't be things like named constants, opcodes, etc.
+	// If pragma is given, only macros that violate that version's stuff should be errored on
 	testProg(t, `
 		#define return random
 		#define pay randomm
 		#define NoOp randommm
 		#define + randommmm
-		#pragma version 1 // now the versioned filter should activate and check all previous macros
+		#pragma version 1 // now the versioned check should activate and check all previous macros
 		#define return hi // no error b/c return is after v1
-		#define + hey // since versioned filter is now online, we can error here
+		#define + hey // since versioned check is now online, we can error here
 		int 1`,
 		assemblerNoVersion,
 		Expect{3, "Named constants..."},
@@ -2741,14 +2741,14 @@ func TestMacros(t *testing.T) {
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
-	// Same filter check, but this time since no version is given, filter should be
-	// from AssemblerDefaultVersion and activates on first instruction
+	// Same check, but this time since no version is given, the versioned check
+	// uses AssemblerDefaultVersion and activates on first instruction (int 1)
 	testProg(t, `
 		#define return random
 		#define pay randomm
 		#define NoOp randommm
 		#define + randommmm
-		int 1 // versioned filter activates here
+		int 1 // versioned check activates here
 		#define return hi
 		#define + hey`,
 		assemblerNoVersion,
@@ -2758,7 +2758,7 @@ func TestMacros(t *testing.T) {
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
-	// Filter check for fields; note fields are also versioned so same deal as last two tests
+	// Check fields can't be used as macro names; note fields are also versioned so same deal as last two tests
 	testProg(t, `
 		#define Sender hello
 		#define ApplicationArgs hiya
