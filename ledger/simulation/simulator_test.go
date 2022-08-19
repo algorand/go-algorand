@@ -18,6 +18,7 @@ package simulation_test
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -926,4 +927,124 @@ func TestDetailedSimulateMissingSignatures(t *testing.T) {
 	require.False(t, result.WouldSucceed)
 	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
 	require.False(t, result.TxnGroups[0].Txns[1].MissingSignature)
+}
+
+const logAndFail = `#pragma version 6
+byte "message"
+log
+int 0
+`
+
+func makeProgramToCallInner(program string) (string, error) {
+	ops, err := logic.AssembleString(program)
+	if err != nil {
+		return "", err
+	}
+	programBytesHex := hex.EncodeToString(ops.Program)
+	outerProgram := fmt.Sprintf(`#pragma version 6
+byte "starting inner txn"
+log
+itxn_begin
+int appl
+itxn_field TypeEnum
+int NoOp
+itxn_field OnCompletion
+byte 0x068101
+itxn_field ClearStateProgram
+byte 0x%s
+itxn_field ApprovalProgram
+itxn_submit
+int 1
+`, programBytesHex)
+
+	return outerProgram, nil
+}
+
+func TestDetailedSimulateAccessInnerTxnApplyDataOnFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Set up simulator
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+
+	// Compile approval program
+	singleInnerLogAndFail, err := makeProgramToCallInner(logAndFail)
+	require.NoError(t, err)
+	nestedInnerLogAndFail, err := makeProgramToCallInner(singleInnerLogAndFail)
+	require.NoError(t, err)
+	ops, err := logic.AssembleString(nestedInnerLogAndFail)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	txgroup := []transactions.SignedTxn{
+		// fund outer app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.AppIndex(3).Address(),
+					Amount:   basics.MicroAlgos{Raw: 401000}, // 400000 min balance plus 1000 for 1 txn
+				},
+			},
+		},
+		// fund inner app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.AppIndex(4).Address(),
+					Amount:   basics.MicroAlgos{Raw: 401000}, // 400000 min balance plus 1000 for 1 txn
+				},
+			},
+		},
+		// create app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApplicationArgs:   [][]byte{uint64ToBytes(uint64(1))},
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+	}
+
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
+	result, err := s.DetailedSimulate(txgroup)
+	require.NoError(t, err)
+	require.False(t, result.WouldSucceed)
+	txnGroup := result.TxnGroups[0]
+	require.Contains(t, txnGroup.FailureMessage, "rejected by ApprovalProgram")
+	require.Equal(t, simulation.TxnPath{2, 0, 0}, txnGroup.FailedAt)
+
+	// Check that inner transaction ApplyData is accessible
+	outerAppEvalDelta := txnGroup.Txns[2].Txn.ApplyData.EvalDelta
+	middleAppEvalDelta := outerAppEvalDelta.InnerTxns[0].ApplyData.EvalDelta
+	innerAppEvalDelta := middleAppEvalDelta.InnerTxns[0].ApplyData.EvalDelta
+	require.Equal(t, "starting inner txn", outerAppEvalDelta.Logs[0])
+	require.Equal(t, "starting inner txn", middleAppEvalDelta.Logs[0])
+	require.Equal(t, "message", innerAppEvalDelta.Logs[0])
 }

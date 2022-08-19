@@ -17,6 +17,8 @@
 package simulation
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
@@ -57,7 +59,8 @@ func (ph *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) err
 type debuggerHook struct {
 	cursorDebuggerHook
 
-	result *SimulationResult
+	result            *SimulationResult
+	evalDeltaSnapshot transactions.EvalDelta
 }
 
 func makeDebuggerHook(txgroup []transactions.SignedTxn) debuggerHook {
@@ -73,14 +76,48 @@ func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
 	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
 }
 
-func (dh *debuggerHook) AfterTealOp(state *logic.DebugState) error {
-	// When an error occurs, store the ApplyData for the transaction before it's lost
-	if state.Error != "" {
-		// The cursor won't have been updated yet, so a length of 2 means
-		// we're in a first-level inner transaction and are about to leave it
-		if len(dh.cursor) == 2 {
-			dh.result.TxnGroups[0].Txns[state.GroupIndex].Txn.ApplyData.EvalDelta = state.EvalDelta
-		}
+func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyData, error) {
+	if len(path) == 0 {
+		return nil, fmt.Errorf("simulator debugger error: path is empty")
 	}
+
+	applyDataCursor := &dh.result.TxnGroups[0].Txns[dh.cursor[0]].Txn.ApplyData
+
+	for _, index := range dh.cursor[1:] {
+		innerTxns := (*applyDataCursor).EvalDelta.InnerTxns
+		if index >= uint64(len(innerTxns)) {
+			return nil, fmt.Errorf("simulator debugger error: index %d out of range", index)
+		}
+		applyDataCursor = &innerTxns[index].ApplyData
+	}
+
+	return applyDataCursor, nil
+}
+
+func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedTxnWithAD) error {
+	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.cursor) // this works because the cursor has not been updated yet by `BeforeTxn`
+	if err != nil {
+		return err
+	}
+	applyDataOfCallingTxn.EvalDelta.InnerTxns = append(applyDataOfCallingTxn.EvalDelta.InnerTxns, txgroup...)
 	return nil
+}
+
+// Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
+func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	return dh.populateInnerTransactions(ep.TxnGroup)
+}
+
+func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {
+	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.cursor)
+	if err != nil {
+		return err
+	}
+
+	applyDataOfCurrentTxn.EvalDelta = evalDelta
+	return nil
+}
+
+func (dh *debuggerHook) BeforeTealOp(state *logic.DebugState) error {
+	return dh.saveEvalDelta(state.EvalDelta)
 }
