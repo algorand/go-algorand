@@ -368,6 +368,10 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
+type proofParams struct {
+	HashType string `url:"hashtype"`
+}
+
 type accountInformationParams struct {
 	Format  string `url:"format"`
 	Exclude string `url:"exclude"`
@@ -649,10 +653,16 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-// Proof gets a Merkle proof for a transaction in a block.
-func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
+// LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
+func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.LightBlockHeaderProofResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
+	return
+}
+
+// TransactionProof gets a Merkle proof for a transaction in a block.
+func (client RestClient) TransactionProof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.TransactionProofResponse, err error) {
 	txid = stripTransaction(txid)
-	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), proofParams{HashType: hashType.String()})
 	return
 }
 

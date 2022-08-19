@@ -3,26 +3,19 @@ run:
   tests: false
   
 linters:
+  # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
   disable-all: true
   enable:
     - errcheck
     - gofmt
-    - golint
+    - gosimple
     - govet
     - ineffassign
     - misspell
-    - gci
-
-linters-settings:
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/algorand)
-      - prefix(github.com/algorand/go-algorand)
-
-    section-separators:
-      - newLine
+    - nolintlint
+    - revive
+    - staticcheck
+    - typecheck
 
 severity:
   default-severity: error
@@ -36,6 +29,20 @@ severity:
         - misspell
         - gci
       severity: error
+
+linters-settings:
+  nolintlint:
+    # require naming a specific linter X using //nolint:X
+    require-specific: true
+    # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
+    require-explanation: true
+  errcheck:
+    exclude-functions:
+      # data/transactions/logic/assembler.go uses ops.error, warn, to append log messages: OK to ignore for this case
+    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).errorf
+    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).error
+    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
+    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
 
 issues:
   # use these new lint checks on code since #2574
@@ -63,6 +70,8 @@ issues:
     - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
+    # revive: irrelevant error about naming
+    - "var-naming: don't use leading k in Go names"
 
   exclude-rules:
     # Add all linters here -- Comment this block out for testing linters

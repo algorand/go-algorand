@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/stateproof"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -464,6 +466,21 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
+// lookbackForStateproofsSupport calculates the lookback (from topblock round) needed to be downloaded
+// in order to support state proofs verification.
+func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	if proto.StateProofInterval == 0 {
+		return 0
+	}
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&topBlock.BlockHeader)
+	// in order to be able to confirm/build lowestStateProofRound we would need to reconstruct
+	// the corresponding voterForRound which is (lowestStateProofRound - stateproofInterval - VotersLookback)
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	return uint64(topBlock.Round().SubSaturate(lowestStateProofRound))
+}
+
 // processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
@@ -471,11 +488,19 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
-	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife
-	if lookback < config.Consensus[topBlock.CurrentProtocol].MaxBalLookback {
-		lookback = config.Consensus[topBlock.CurrentProtocol].MaxBalLookback
+	// pick the lookback with the greater of either (MaxTxnLife+DeeperBlockHeaderHistory)
+	// or MaxBalLookback
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+	if lookback < proto.MaxBalLookback {
+		lookback = proto.MaxBalLookback
 	}
+
+	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
+	if lookback < lookbackForStateProofSupport {
+		lookback = lookbackForStateProofSupport
+	}
+
 	// in case the effective lookback is going before our rounds count, trim it there.
 	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
 	if lookback >= uint64(topBlock.Round()) {
@@ -565,9 +590,12 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
 		}
 
-		cs.updateBlockRetrievalStatistics(0, 1)
-		peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		if psp != nil {
+			// the block might have been retrieved from the local ledger, nothing to rank
+			cs.updateBlockRetrievalStatistics(0, 1)
+			peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		}
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)

@@ -52,6 +52,7 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	ep := defaultEvalParamsWithVersion(nil, version)
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(makeSampleTxnGroup(makeSampleTxn()))
 	ledger := MakeLedger(map[basics.Address]uint64{})
+	ep.SigLedger = ledger
 	ep.Ledger = ledger
 	return ep, &ep.TxnGroup[0].Txn, ledger
 }
@@ -69,7 +70,7 @@ func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify* and err are tested separately below
 
-	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
+	// check modeAny (v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
 	opcodesRunModeAny := `intcblock 0 1 1 1 1 5 100
 	bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
@@ -313,7 +314,7 @@ func TestBalance(t *testing.T) {
 
 	text = `txn Accounts 1; balance; int 177; ==;`
 	// won't assemble in old version teal
-	testProg(t, text, directRefEnabledVersion-1, Expect{2, "balance arg 0 wanted type uint64..."})
+	testProg(t, text, directRefEnabledVersion-1, Expect{1, "balance arg 0 wanted type uint64..."})
 	// but legal after that
 	testApp(t, text, ep)
 
@@ -474,7 +475,7 @@ func TestMinBalance(t *testing.T) {
 
 	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion-1,
-		Expect{2, "min_balance arg 0 wanted type uint64..."})
+		Expect{1, "min_balance arg 0 wanted type uint64..."})
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion)
 	testApp(t, "txn Accounts 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	// Receiver opts in
@@ -527,7 +528,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
 	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
 	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
-		Expect{3, "app_opted_in arg 0 wanted type uint64..."})
+		Expect{1, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Receiver opts into 888, the current app in testApp
 	ledger.NewLocals(txn.Txn.Receiver, 888)
@@ -938,7 +939,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, Expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
+		directRefEnabledVersion-1, Expect{1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
@@ -2345,6 +2346,8 @@ func TestReturnTypes(t *testing.T) {
 		"substring":         "substring 0 2",
 		"extract_uint32":    ": byte 0x0102030405; int 1; extract_uint32",
 		"extract_uint64":    ": byte 0x010203040506070809; int 1; extract_uint64",
+		"replace2":          ": byte 0x0102030405; byte 0x0809; replace2 2",
+		"replace3":          ": byte 0x0102030405; int 2; byte 0x0809; replace3",
 		"asset_params_get":  "asset_params_get AssetUnitName",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"gtxns":             "gtxns Sender",
@@ -2369,6 +2372,8 @@ func TestReturnTypes(t *testing.T) {
 
 		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
+
+		"block": "block BlkSeed",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2388,6 +2393,12 @@ func TestReturnTypes(t *testing.T) {
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
+
+		"vrf_verify": true,
+
+		"bn256_add":        true,
+		"bn256_scalar_mul": true,
+		"bn256_pairing":    true,
 	}
 
 	byName := OpsByName[LogicVersion]
@@ -2522,6 +2533,46 @@ func TestLatestTimestamp(t *testing.T) {
 	ep, _, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
 	testApp(t, source, ep)
+}
+
+func TestBlockSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, l := makeSampleEnv()
+
+	// makeSampleEnv creates txns with fv, lv that don't actually fit the round
+	// in l.  Nothing in most tests cares. But the rule for `block` is related
+	// to lv and fv, so we set the fv,lv more realistically.
+	txn.FirstValid = l.round() - 10
+	txn.LastValid = l.round() + 10
+
+	// Keep in mind that proto.MaxTxnLife is 1500 in the test proto
+
+	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
+
+	// These first two tests show that current-1 is not available now, though a
+	// resonable extension is to allow such access for apps (not sigs).
+	testApp(t, "int 4294967299; block BlkSeed; len; int 32; ==", ep,
+		"not available") // current - 1
+	testApp(t, "int 4294967300; block BlkSeed; len; int 32; ==", ep,
+		"not available") // can't get current round's blockseed
+
+	testApp(t, "int 4294967300; int 1500; -; block BlkSeed; len; int 32; ==", ep,
+		"not available") // 1500 back from current is more than 1500 back from lv
+	testApp(t, "int 4294967310; int 1500; -; block BlkSeed; len; int 32; ==", ep) // 1500 back from lv is legal
+	testApp(t, "int 4294967310; int 1501; -; block BlkSeed; len; int 32; ==", ep) // 1501 back from lv is legal
+	testApp(t, "int 4294967310; int 1502; -; block BlkSeed; len; int 32; ==", ep,
+		"not available") // 1501 back from lv is not
+
+	// A little silly, as it only tests the test ledger: ensure samenes and differentness
+	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
+	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
+
+	// `block` should also work in LogicSigs, to drive home the point, blot out
+	// the normal Ledger
+	ep.Ledger = nil
+	testLogic(t, "int 0xfffffff0; block BlkTimestamp", randomnessVersion, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

@@ -25,7 +25,7 @@ import (
 )
 
 // updateDNSRecordRequest construct a http request that would update an existing dns record
-func updateDNSRecordRequest(zoneID string, authEmail string, authKey string, recordID string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
+func updateDNSRecordRequest(zoneID string, authToken string, recordID string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -51,12 +51,12 @@ func updateDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
 // updateSRVRecordRequest construct a http request that would update an existing srv record
-func updateSRVRecordRequest(zoneID string, authEmail string, authKey string, recordID string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
+func updateSRVRecordRequest(zoneID string, authToken string, recordID string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -86,7 +86,7 @@ func updateSRVRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 

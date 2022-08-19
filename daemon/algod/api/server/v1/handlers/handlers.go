@@ -93,8 +93,8 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetFreezeTxEncode(tx, ad)
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
-	case protocol.CompactCertTx:
-		res = compactCertTxEncode(tx, ad)
+	case protocol.StateProofTx:
+		res = stateProofTxEncode(tx)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -351,14 +351,14 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	cc := v1.CompactCertTransactionType{
-		CertRound: uint64(tx.CompactCertTxnFields.CertRound),
-		Cert:      protocol.Encode(&tx.CompactCertTxnFields.Cert),
+func stateProofTxEncode(tx transactions.Transaction) v1.Transaction {
+	sp := v1.StateProofTransactionType{
+		StateProof:        protocol.Encode(&tx.StateProofTxnFields.StateProof),
+		StateProofMessage: protocol.Encode(&tx.Message),
 	}
 
 	return v1.Transaction{
-		CompactCert: &cc,
+		StateProof: &sp,
 	}
 }
 
@@ -487,7 +487,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		Seed:              crypto.Digest(b.Seed()).String(),
 		Proposer:          c.Proposal.OriginalProposer.String(),
 		Round:             uint64(b.Round()),
-		TransactionsRoot:  b.TxnRoot.String(),
+		TransactionsRoot:  b.TxnCommitments.NativeSha512_256Commitment.String(), // No need to support SHA256 in API V1
 		RewardsRate:       b.RewardsRate,
 		RewardsLevel:      b.RewardsLevel,
 		RewardsResidue:    b.RewardsResidue,
@@ -504,13 +504,6 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
-		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64(),
-		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
-	}
-
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
-		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
-		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions

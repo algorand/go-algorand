@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,9 +33,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -188,9 +189,15 @@ func init() {
 
 	infoAppCmd.MarkFlagRequired("app-id")
 
-	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
-	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
+	panicIfErr(methodAppCmd.MarkFlagRequired("method"))
+	panicIfErr(methodAppCmd.MarkFlagRequired("from"))
+	panicIfErr(appCmd.PersistentFlags().MarkHidden("app-arg"))
+}
+
+func panicIfErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 type appCallArg struct {
@@ -461,7 +468,7 @@ var createAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -478,7 +485,7 @@ var createAppCmd = &cobra.Command{
 		if outFilename == "" {
 			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -536,7 +543,7 @@ var updateAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -553,7 +560,7 @@ var updateAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -606,7 +613,7 @@ var optInAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -623,7 +630,7 @@ var optInAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -676,7 +683,7 @@ var closeOutAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -693,7 +700,7 @@ var closeOutAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -746,7 +753,7 @@ var clearAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -763,7 +770,7 @@ var clearAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -816,7 +823,7 @@ var callAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -833,7 +840,7 @@ var callAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -886,7 +893,7 @@ var deleteAppCmd = &cobra.Command{
 		tx.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -903,7 +910,7 @@ var deleteAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -927,7 +934,6 @@ var deleteAppCmd = &cobra.Command{
 				err = writeDryrunReqToFile(client, tx, outFilename)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-
 			}
 			if err != nil {
 				reportErrorf(err.Error())
@@ -1170,6 +1176,76 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 	return resolvedIndexes, nil
 }
 
+// maxAppArgs is the maximum number of arguments for an application call transaction, in compliance
+// with ARC-4. Currently this is the same as the MaxAppArgs consensus parameter, but the
+// difference is that the consensus parameter is liable to change in a future consensus upgrade.
+// However, the ARC-4 ABI argument encoding **MUST** always remain the same.
+const maxAppArgs = 16
+
+// The tuple threshold is maxAppArgs, minus 1 for the method selector in the first app arg,
+// minus 1 for the final app argument becoming a tuple of the remaining method args
+const methodArgsTupleThreshold = maxAppArgs - 2
+
+// parseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
+// if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
+func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
+	abiTypes := make([]abi.Type, len(argTypes))
+	for i, typeString := range argTypes {
+		abiType, err := abi.TypeOf(typeString)
+		if err != nil {
+			return err
+		}
+		abiTypes[i] = abiType
+	}
+
+	if len(abiTypes) != len(jsonArgs) {
+		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTypes))
+	}
+
+	// Up to 16 app arguments can be passed to app call. First is reserved for method selector,
+	// and the rest are for method call arguments. But if more than 15 method call arguments
+	// are present, then the method arguments after the 14th are placed in a tuple in the last
+	// app argument slot
+	if len(abiTypes) > maxAppArgs-1 {
+		typesForTuple := make([]abi.Type, len(abiTypes)-methodArgsTupleThreshold)
+		copy(typesForTuple, abiTypes[methodArgsTupleThreshold:])
+
+		compactedType, err := abi.MakeTupleType(typesForTuple)
+		if err != nil {
+			return err
+		}
+
+		abiTypes = append(abiTypes[:methodArgsTupleThreshold], compactedType)
+
+		tupleValues := make([]json.RawMessage, len(jsonArgs)-methodArgsTupleThreshold)
+		for i, jsonArg := range jsonArgs[methodArgsTupleThreshold:] {
+			tupleValues[i] = []byte(jsonArg)
+		}
+
+		remainingJSON, err := json.Marshal(tupleValues)
+		if err != nil {
+			return err
+		}
+
+		jsonArgs = append(jsonArgs[:methodArgsTupleThreshold], string(remainingJSON))
+	}
+
+	// parse JSON value to ABI encoded bytes
+	for i := 0; i < len(jsonArgs); i++ {
+		interfaceVal, err := abiTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
+		if err != nil {
+			return err
+		}
+		abiEncoded, err := abiTypes[i].Encode(interfaceVal)
+		if err != nil {
+			return err
+		}
+		*applicationArgs = append(*applicationArgs, abiEncoded)
+	}
+	return nil
+}
+
 var methodAppCmd = &cobra.Command{
 	Use:   "method",
 	Short: "Invoke an ABI method",
@@ -1285,7 +1361,7 @@ var methodAppCmd = &cobra.Command{
 			basicArgValues[basicArgIndex] = strconv.Itoa(resolved)
 		}
 
-		err = abi.ParseArgJSONtoByteSlice(basicArgTypes, basicArgValues, &applicationArgs)
+		err = parseMethodArgJSONtoByteSlice(basicArgTypes, basicArgValues, &applicationArgs)
 		if err != nil {
 			reportErrorf("cannot parse arguments to ABI encoding: %v", err)
 		}
@@ -1308,7 +1384,7 @@ var methodAppCmd = &cobra.Command{
 		appCallTxn.Lease = parseLease(cmd)
 
 		// Fill in rounds, fee, etc.
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}

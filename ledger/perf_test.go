@@ -142,7 +142,7 @@ func BenchmarkValidate(b *testing.B) {
 			newblk.Payset = append(newblk.Payset, txib)
 		}
 
-		newblk.BlockHeader.TxnRoot, err = newblk.PaysetCommit()
+		newblk.BlockHeader.TxnCommitments, err = newblk.PaysetCommit()
 		require.NoError(b, err)
 
 		b.StartTimer()

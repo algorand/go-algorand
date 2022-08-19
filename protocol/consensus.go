@@ -128,7 +128,7 @@ const ConsensusV23 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f",
 )
 
-// ConsensusV24 include the applications, rekeying and teal v2
+// ConsensusV24 include the applications, rekeying and AVM v2
 const ConsensusV24 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
 )
@@ -176,6 +176,17 @@ const ConsensusV32 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7",
 )
 
+// ConsensusV33 enables large blocks, the deeper block history for TEAL
+// and catchpoint generation round after lowering in-memory deltas size (320 -> 4).
+const ConsensusV33 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/830a4e673148498cc7230a0d1ba1ed0a5471acc6",
+)
+
+// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda.
+const ConsensusV34 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -188,7 +199,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV32
+const ConsensusCurrentVersion = ConsensusV34
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

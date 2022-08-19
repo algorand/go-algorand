@@ -20,18 +20,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -39,14 +42,18 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
+
+const stateProofIntervalForHandlerTests = uint64(256)
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
@@ -117,12 +124,8 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetBlockJsonEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
+func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
-	defer releasefunc()
 
 	l := handler.Node.LedgerForAPI()
 
@@ -193,24 +196,34 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	blk.Payset = append(blk.Payset, txib)
 	blk.BlockHeader.TxnCounter++
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
+	return handler, c, rec, stx, releasefunc
+}
+
+func TestGetBlockJsonEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
 	format := "json"
-	err = handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
-	data := rec.Body.Bytes()
+	body := rec.Body.Bytes()
 
 	response := struct {
 		Block bookkeeping.Block `codec:"block"`
 	}{}
 
-	err = json.Unmarshal(data, &response)
+	err = json.Unmarshal(body, &response)
 	require.NoError(t, err)
 }
 
@@ -514,7 +527,10 @@ func TestAbortCatchup(t *testing.T) {
 	abortCatchupTest(t, badCatchPoint, 400)
 }
 
-func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDeveloperAPI bool) {
+func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
+	enableDeveloperAPI bool, params generated.TealCompileParams,
+	expectedSourcemap *logic.SourceMap,
+) (response v2.CompileResponseWithSourceMap) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -532,23 +548,55 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bytesToUse))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.TealCompile(c)
+	err := handler.TealCompile(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+
+	// Check compiled response.
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		if expectedSourcemap != nil {
+			require.Equal(t, *expectedSourcemap, *response.Sourcemap)
+		} else {
+			require.Nil(t, response.Sourcemap)
+		}
+	}
+	return
 }
 
 func TestTealCompile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tealCompileTest(t, nil, 200, true) // nil program should work
-	goodProgram := `int 1`
+	params := generated.TealCompileParams{}
+	tealCompileTest(t, nil, 200, true, params, nil) // nil program should work
+
+	goodProgram := fmt.Sprintf(`#pragma version %d
+int 1
+assert
+int 1`, logic.AssemblerMaxVersion)
+	ops, _ := logic.AssembleString(goodProgram)
+	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
 	goodProgramBytes := []byte(goodProgram)
-	tealCompileTest(t, goodProgramBytes, 200, true)
-	tealCompileTest(t, goodProgramBytes, 404, false)
+
+	// Test good program with params
+	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
+	paramValue := true
+	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	tealCompileTest(t, goodProgramBytes, 200, true, params, &expectedSourcemap)
+	paramValue = false
+	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
+
+	// Test a program without the developer API flag.
+	tealCompileTest(t, goodProgramBytes, 404, false, params, nil)
+
+	// Test bad program.
 	badProgram := "bad program"
 	badProgramBytes := []byte(badProgram)
-	tealCompileTest(t, badProgramBytes, 400, true)
+	tealCompileTest(t, badProgramBytes, 400, true, params, nil)
 }
 
 func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
@@ -599,7 +647,7 @@ func TestTealDisassemble(t *testing.T) {
 	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
 
 	// Test a valid program.
-	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+	for ver := 1; ver <= logic.AssemblerMaxVersion; ver++ {
 		goodProgram := `int 1`
 		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
 		disassembledProgram, _ := logic.Disassemble(ops.Program)
@@ -608,7 +656,7 @@ func TestTealDisassemble(t *testing.T) {
 	// Test a nil program without the developer API flag.
 	tealDisassembleTest(t, testProgram, 404, "", false)
 
-	// Test bad program
+	// Test bad program.
 	badProgram := []byte{1, 99}
 	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
 }
@@ -858,4 +906,254 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusInternalServerError, rec.Code)
 		require.Contains(t, rec.Body.String(), expectedErr.Error())
 	})
+}
+
+// TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
+type TxnMerkleElemRaw struct {
+	Txn  crypto.Digest // txn id
+	Stib crypto.Digest // hash value of transactions.SignedTxnInBlock
+}
+
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
+	buf = make([]byte, 2*crypto.DigestSize)
+	copy(buf[:], txid[:])
+	copy(buf[crypto.DigestSize:], stib[:])
+	return
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
+}
+
+func TestGetProofDefault(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+
+	handler, c, rec, stx, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
+	txid := stx.ID()
+	err := handler.GetTransactionProof(c, 1, txid.String(), generated.GetTransactionProofParams{})
+	a.NoError(err)
+
+	var resp generatedV2.TransactionProofResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	a.NoError(err)
+	a.Equal("sha512_256", resp.Hashtype)
+
+	l := handler.Node.LedgerForAPI()
+	blkHdr, err := l.BlockHdr(1)
+	a.NoError(err)
+
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(resp.Hashtype, resp.Treedepth, resp.Proof)
+	a.NoError(err)
+
+	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	copy(element.Stib[:], resp.Stibhash[:])
+	elems := make(map[uint64]crypto.Hashable)
+	elems[0] = &element
+
+	// Verifies that the default proof is using SHA512_256
+	err = merklearray.Verify(blkHdr.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, singleLeafProof.ToProof())
+	a.NoError(err)
+}
+
+func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bookkeeping.Block, l v2.LedgerForAPI) bookkeeping.Block {
+	totalsRound, totals, err := l.LatestTotals()
+	a.NoError(err)
+	a.Equal(l.Latest(), totalsRound)
+
+	totalRewardUnits := totals.RewardUnits()
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
+	a.NoError(err)
+
+	latestBlock := lastBlock
+
+	var blk bookkeeping.Block
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID:    genBlk.GenesisID(),
+		GenesisHash:  genBlk.GenesisHash(),
+		Round:        l.Latest() + 1,
+		Branch:       latestBlock.Hash(),
+		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState: latestBlock.UpgradeState,
+	}
+
+	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
+
+	blk.RewardsPool = latestBlock.RewardsPool
+	blk.FeeSink = latestBlock.FeeSink
+	blk.CurrentProtocol = latestBlock.CurrentProtocol
+	blk.TimeStamp = latestBlock.TimeStamp + 1
+
+	blk.BlockHeader.TxnCounter++
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	a.NoError(err)
+
+	return blk
+}
+
+func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
+	round := uint64(blk.Round())
+	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
+		return blk
+	}
+	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
+	tx := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type:   protocol.StateProofTx,
+			Header: transactions.Header{Sender: transactions.StateProofSender},
+			StateProofTxnFields: transactions.StateProofTxnFields{
+				StateProofType: 0,
+				Message: stateproofmsg.Message{
+					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
+					FirstAttestedRound:     stateProofRound + 1,
+					LastAttestedRound:      stateProofRound + stateProofIntervalForHandlerTests,
+				},
+			},
+		},
+	}
+	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
+	blk.Payset = append(blk.Payset, txnib)
+
+	return blk
+}
+
+func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
+	ledger := h.Node.LedgerForAPI()
+
+	genBlk, err := ledger.Block(0)
+	a.NoError(err)
+
+	lastBlk := genBlk
+	for i := 0; i < numRounds; i++ {
+		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
+		blk = addStateProofIfNeeded(blk)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+		lastBlk = blk
+	}
+}
+
+func TestStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 700)
+
+	a.NoError(handler.GetStateProof(ctx, 650))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProofHigherRoundThanLatest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	a.NoError(handler.GetStateProof(ctx, 2))
+	a.Equal(500, responseRecorder.Code)
+}
+
+func TestStateProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 1000)
+
+	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
+	a.Equal(200, responseRecorder.Code)
+
+	stprfResp := generated.StateProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+
+	a.Equal([]byte{0x0, 0x1, 0x2}, stprfResp.Message.BlockHeadersCommitment)
+}
+
+func TestHeaderProofRoundTooHigh(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
+	a.Equal(500, responseRecorder.Code)
+}
+
+func TestHeaderProofStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 700)
+
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 650))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestGetBlockProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 1000)
+
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.Equal(200, responseRecorder.Code)
+
+	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
+	a.NoError(err)
+
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)
+	a.NoError(err)
+
+	proofResp := generated.LightBlockHeaderProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &proofResp))
+	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
+	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))
+}
+
+func TestStateproofTransactionForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	a.NoError(err)
+	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000)
+	a.NoError(err)
+	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
+	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000)
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }

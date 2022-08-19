@@ -44,8 +44,8 @@ var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the 
 var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
 var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
 
-var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode tasks dropped per type")
-var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode task result timeouts per type")
+var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode {TAG} tasks dropped", "proposal", "vote")
+var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode {TAG} task result timeouts", "vote", "pvote", "ppayload")
 
 // A pseudonode creates proposals and votes with a KeyManager which holds participation keys.
 //

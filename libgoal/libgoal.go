@@ -18,10 +18,12 @@ package libgoal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -509,17 +511,18 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // 		 M     |     0     | first + validRounds - 1
 // 		 M     |     M     | error
 //
-func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.SuggestedParams()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
+		return 0, 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 
-	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	first, last, err = computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	return first, last, params.LastRound, err
 }
 
 func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
@@ -936,6 +939,30 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// VerifyParticipationKey checks if a given participationID is installed in a loop until timeout has elapsed.
+func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID string) error {
+	start := time.Now()
+
+	for {
+		keysResp, err := c.GetParticipationKeys()
+		if err != nil {
+			return err
+		}
+		for _, key := range keysResp {
+			if key.Id == participationID {
+				// Installation successful.
+				return nil
+			}
+		}
+
+		if time.Since(start) > timeout {
+			return errors.New("timeout waiting for key to appear")
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp generatedV2.PostParticipationResponse, err error) {
@@ -1182,11 +1209,20 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 	return
 }
 
-// TxnProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TxnProof(txid string, round uint64) (resp generatedV2.ProofResponse, err error) {
+// TransactionProof returns a Merkle proof for a transaction in a block.
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		return algod.Proof(txid, round)
+		return algod.TransactionProof(txid, round, hashType)
+	}
+	return
+}
+
+// LightBlockHeaderProof returns a Merkle proof for a block.
+func (c *Client) LightBlockHeaderProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.LightBlockHeaderProof(round)
 	}
 	return
 }

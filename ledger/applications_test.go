@@ -143,15 +143,15 @@ return`
 	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
 	// the consensus upgrade, and affects only nodes that have been updated.
 	if proto.EnableAccountDataResourceSeparation {
-		expectedCreatorBase, err = hex.DecodeString("85a16101a162ce009d2290a16704a16b01a17a01")
+		expectedCreatorBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce009d2290a16704a16b01a17a01")
 		a.NoError(err)
 		expectedCreatorResource, err = hex.DecodeString("86a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903a17a01")
 		a.NoError(err)
-		expectedUserOptInBase, err = hex.DecodeString("85a16101a162ce00a02fd0a16701a16c01a17a02")
+		expectedUserOptInBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a02fd0a16701a16c01a17a02")
 		a.NoError(err)
 		expectedUserOptInResource, err = hex.DecodeString("82a16f01a17a02")
 		a.NoError(err)
-		expectedUserLocalBase, err = hex.DecodeString("85a16101a162ce00a33540a16701a16c01a17a04")
+		expectedUserLocalBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a33540a16701a16c01a17a04")
 		a.NoError(err)
 		expectedUserLocalResource, err = hex.DecodeString("83a16f01a17081a26c6b82a27462a56c6f63616ca2747401a17a04")
 		a.NoError(err)
@@ -296,7 +296,8 @@ return`
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
 	// ensure writing into empty global state works as well
-	l.reloadLedger()
+	err = l.reloadLedger()
+	a.NoError(err)
 	txHeader.Sender = creator
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -585,7 +586,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -730,7 +731,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -867,7 +868,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -1233,4 +1234,71 @@ int 1
 			a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[1]["lk"].Bytes, "local")
 		})
 	}
+}
+
+// TestLogicSigValidation tests that LogicSig-signed transactions can be validated properly.
+func TestLogicSigValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := `#pragma version 6
+int 1
+`
+
+	a := require.New(t)
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+	pd := logic.HashProgram(program)
+	lsigAddr := basics.Address(pd)
+
+	funder, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	a.Contains(genesisInitState.Accounts, funder)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      funder,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// fund lsig account
+	fundingPayment := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: txHeader,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: lsigAddr,
+			Amount:   basics.MicroAlgos{Raw: proto.MinBalance + proto.MinTxnFee},
+		},
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, fundingPayment, transactions.ApplyData{})
+	a.NoError(err)
+
+	// send 0 Algos from lsig account to self
+	txHeader.Sender = lsigAddr
+	lsigPayment := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: txHeader,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: lsigAddr,
+		},
+	}
+	signedLsigPayment := transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Logic: program},
+		Txn:  lsigPayment,
+	}
+	err = l.appendUnvalidatedSignedTx(t, genesisInitState.Accounts, signedLsigPayment, transactions.ApplyData{})
+	a.NoError(err)
 }

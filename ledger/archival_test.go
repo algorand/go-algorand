@@ -21,9 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	mathrand "math/rand"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -95,6 +93,10 @@ func (wl *wrappedLedger) GenesisHash() crypto.Digest {
 
 func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
+}
+
+func (wl *wrappedLedger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return wl.l.GenesisProtoVersion()
 }
 
 func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
@@ -194,11 +196,8 @@ func TestArchivalRestart(t *testing.T) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
@@ -344,11 +343,8 @@ func TestArchivalCreatables(t *testing.T) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -376,7 +372,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
 		creator := basics.Address{}
-		_, err = rand.Read(creator[:])
+		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
 		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
@@ -697,11 +693,9 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer func() {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
-	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
-	require.NoError(t, err)
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -714,7 +708,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		addr := basics.Address{}
-		_, err = rand.Read(addr[:])
+		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
 		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
 		genesisInitState.Accounts[addr] = br.AccountData
@@ -801,7 +795,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	wl.l.trackerMu.RLock()
 	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		if au, ok := trk.(*accountUpdates); ok {
+		if _, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
 			minSave, _ = trk.committedUpTo(rnd)
 			wl.l.trackers.committedUpTo(rnd)
@@ -814,7 +808,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			trackerType = reflect.TypeOf(trk).Elem()
 			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 
-			au = cleanTracker.(*accountUpdates)
+			au := cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
 			au.initialize(cfg)

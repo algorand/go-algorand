@@ -883,8 +883,9 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 
-	// run round with current consensus version first
-	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, protocol.ConsensusCurrentVersion))
+	// run round with round-specific consensus version first (since fix in #1896)
+	version, _ := baseLedger.ConsensusVersion(ParamsRound(startRound))
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	for j := 1; j < numRounds; j++ {
 		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
 		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
@@ -1968,7 +1969,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 

@@ -103,7 +103,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 		},
 	}
 	var err error
-	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(tb, err)
 	if params.SupportGenesisHash {
 		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
@@ -576,7 +576,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 			err := l.AddBlock(blk, agreement.Certificate{})
 			// AddBlock is used in 2 places:
 			// - data.ledger.EnsureBlock which reports a log message as Error or Debug
-			// - catchup.service.fetchAndWrite which leads to interrupting catchup or skiping the round
+			// - catchup.service.fetchAndWrite which leads to interrupting catchup or skipping the round
 			if err != nil {
 				switch err.(type) {
 				// The following two cases are okay to ignore, since these are expected and handled
@@ -658,7 +658,7 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 	blk.FeeSink = testSinkAddr
 	blk.CurrentProtocol = lastBlock.CurrentProtocol
 
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
 		return
 	}

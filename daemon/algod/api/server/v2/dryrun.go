@@ -242,6 +242,10 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
@@ -413,6 +417,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
+			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
@@ -506,6 +511,9 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					messages[0] = "ApprovalProgram"
 				}
 				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
+				if !pass {
+					delta = ep.TxnGroup[ti].EvalDelta
+				}
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
@@ -537,8 +545,17 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
-				cost64 := uint64(cost)
-				result.Cost = &cost64
+				// The cost is broken up into two fields: budgetAdded and budgetConsumed.
+				// This is necessary because the fields can only be represented as unsigned
+				// integers, so a negative cost would underflow. The two fields also provide
+				// more information, which can be useful for testing purposes.
+				// cost = budgetConsumed - budgetAdded
+				netCost := uint64(cost)
+				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
+				budgetConsumed := uint64(cost) + budgetAdded
+				result.Cost = &netCost
+				result.BudgetAdded = &budgetAdded
+				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget
 				cumulativeCost += cost
 
@@ -619,4 +636,14 @@ func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
 	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
 		base.GlobalStateSchema = update.GlobalStateSchema
 	}
+}
+
+// count all inner transactions contained within the eval delta
+func numInnerTxns(delta transactions.EvalDelta) (cnt int) {
+	cnt = len(delta.InnerTxns)
+	for _, itxn := range delta.InnerTxns {
+		cnt += numInnerTxns(itxn.EvalDelta)
+	}
+
+	return
 }

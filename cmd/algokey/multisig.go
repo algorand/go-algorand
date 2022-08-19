@@ -73,7 +73,7 @@ var multisigCmd = &cobra.Command{
 		}
 
 		var outBytes []byte
-		dec := protocol.NewDecoderBytes(txdata)
+		dec := protocol.NewMsgpDecoderBytes(txdata)
 		for {
 			var stxn transactions.SignedTxn
 			err = dec.Decode(&stxn)
@@ -123,7 +123,7 @@ var appendAuthAddrCmd = &cobra.Command{
 		}
 
 		var outBytes []byte
-		dec := protocol.NewDecoderBytes(txdata)
+		dec := protocol.NewMsgpDecoderBytes(txdata)
 
 		var stxn transactions.SignedTxn
 		err = dec.Decode(&stxn)

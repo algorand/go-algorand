@@ -22,8 +22,6 @@ package participation
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -40,12 +38,8 @@ import (
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
-	dir, err := ioutil.TempDir("", "temporary_partkey_dir")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir())
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())
@@ -60,8 +54,8 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound+1, txParams.LastRound+1, txParams.Fee, [32]byte{})
-	require.NoError(t, err)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.Fee, txParams.LastRound+1, txParams.LastRound+1, [32]byte{}, true)
+	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
 	require.NoError(t, err)

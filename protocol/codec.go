@@ -246,6 +246,35 @@ func NewDecoderBytes(b []byte) Decoder {
 	return codec.NewDecoderBytes(b, CodecHandle)
 }
 
+// NewMsgpDecoderBytes returns a decoder object reading bytes from [b].
+// that works with msgp-serialized objects
+func NewMsgpDecoderBytes(b []byte) *MsgpDecoderBytes {
+	return &MsgpDecoderBytes{b: b, pos: 0}
+}
+
+// MsgpDecoderBytes is a []byte decoder into msgp-encoded objects
+type MsgpDecoderBytes struct {
+	b   []byte
+	pos int
+}
+
+// Decode an objptr from from a byte stream
+func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
+	if !objptr.CanUnmarshalMsg(objptr) {
+		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)
+	}
+	if d.pos >= len(d.b) {
+		return io.EOF
+	}
+
+	rem, err := objptr.UnmarshalMsg(d.b[d.pos:])
+	if err != nil {
+		return err
+	}
+	d.pos = (len(d.b) - len(rem))
+	return nil
+}
+
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {

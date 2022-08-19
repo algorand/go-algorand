@@ -230,7 +230,16 @@ func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) erro
 }
 
 func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
-	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, basics.Address{})
+	var authAddr basics.Address
+	var err error
+	if signerAddress != "" {
+		authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+		if err != nil {
+			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+		}
+	}
+
+	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
 	if err != nil {
 		return err
 	}
@@ -375,7 +384,7 @@ var sendCmd = &cobra.Command{
 			}
 		}
 		client := ensureFullClient(dataDir)
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
@@ -415,7 +424,7 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader, nil)
 			if err == nil {
 				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
 			}
@@ -433,7 +442,17 @@ var sendCmd = &cobra.Command{
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, basics.Address{})
+			var authAddr basics.Address
+			if signerAddress != "" {
+				if !signTx {
+					reportErrorf("Signer specified when txn won't be signed")
+				}
+				authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+				if err != nil {
+					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+				}
+			}
+			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, authAddr)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
@@ -525,7 +544,7 @@ var rawsendCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 		client := ensureAlgodClient(ensureSingleDataDir())
 
 		txnIDs := make(map[transactions.Txid]transactions.SignedTxn)
@@ -654,7 +673,7 @@ var inspectCmd = &cobra.Command{
 				reportErrorf(fileReadError, txFilename, err)
 			}
 
-			dec := protocol.NewDecoderBytes(data)
+			dec := protocol.NewMsgpDecoderBytes(data)
 			count := 0
 			for {
 				var txn transactions.SignedTxn
@@ -754,7 +773,7 @@ var signCmd = &cobra.Command{
 		}
 
 		var outData []byte
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 		// read the entire file and prepare in-memory copy of each signed transaction, with grouping.
 		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
 		var groupsOrder []crypto.Digest
@@ -806,7 +825,7 @@ var signCmd = &cobra.Command{
 			}
 			var groupCtx *verify.GroupContext
 			if lsig.Logic != nil {
-				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr)
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr, nil)
 				if err != nil {
 					// this error has to be unsupported protocol
 					reportErrorf("%s: %v", txFilename, err)
@@ -849,7 +868,7 @@ var groupCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 
 		var stxns []transactions.SignedTxn
 		var group transactions.TxGroup
@@ -874,7 +893,7 @@ var groupCmd = &cobra.Command{
 			}
 
 			stxns = append(stxns, stxn)
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(stxn.Txn))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxn.ID()))
 			transactionIdx++
 		}
 
@@ -901,7 +920,7 @@ var splitCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 
 		var txns []transactions.SignedTxn
 		for {
@@ -1101,7 +1120,7 @@ var dryrunCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 		stxns := make([]transactions.SignedTxn, 0, 10)
 		for {
 			var txn transactions.SignedTxn
@@ -1143,6 +1162,7 @@ var dryrunCmd = &cobra.Command{
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
 			ep := logic.NewEvalParams(txgroup, &params, nil)
+			ep.SigLedger = logic.NoHeaderLedger{}
 			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
@@ -1213,6 +1233,12 @@ var dryrunRemoteCmd = &cobra.Command{
 				}
 				if txnResult.Cost != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
+				}
+				if txnResult.BudgetConsumed != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
+				}
+				if txnResult.BudgetAdded != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
 				}
 
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)

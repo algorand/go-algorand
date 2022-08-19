@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util"
@@ -75,6 +76,7 @@ var partGenerateCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
 		fmt.Println("Please stand by while generating keys. This might take a few minutes...")
 
@@ -97,6 +99,9 @@ var partGenerateCmd = &cobra.Command{
 		fmt.Println("Participation key generation successful")
 
 		printPartkey(partkey.Participation)
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with algokey v" + version.String())
 	},
 }
 
@@ -112,6 +117,7 @@ var partInfoCmd = &cobra.Command{
 		}
 
 		partkey, err := account.RestoreParticipation(partdb)
+		partdb.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
@@ -138,6 +144,7 @@ var partReparentCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
 		partkey, err := account.RestoreParticipation(partdb)
 		if err != nil {
@@ -161,8 +168,9 @@ func printPartkey(partkey account.Participation) {
 	fmt.Printf("Parent address:    %s\n", partkey.Parent.String())
 	fmt.Printf("VRF public key:    %s\n", base64.StdEncoding.EncodeToString(partkey.VRF.PK[:]))
 	fmt.Printf("Voting public key: %s\n", base64.StdEncoding.EncodeToString(partkey.Voting.OneTimeSignatureVerifier[:]))
-	if partkey.StateProofSecrets != nil && !partkey.StateProofSecrets.GetVerifier().IsEmpty() {
-		fmt.Printf("State proof key:   %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier()[:]))
+	if partkey.StateProofSecrets != nil && !partkey.StateProofSecrets.GetVerifier().MsgIsZero() {
+		fmt.Printf("State proof key:   %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier().Commitment[:]))
+		fmt.Printf("State proof key lifetime:   %d\n", partkey.StateProofSecrets.GetVerifier().KeyLifetime)
 	}
 	fmt.Printf("First round:       %d\n", partkey.FirstValid)
 	fmt.Printf("Last round:        %d\n", partkey.LastValid)
