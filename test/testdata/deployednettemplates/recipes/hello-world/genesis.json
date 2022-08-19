@@ -1,7 +1,7 @@
 {
   "NetworkName": "",
   "VersionModifier": "",
-  "ConsensusProtocol": "alpha2",
+  "ConsensusProtocol": "future",
   "FirstPartKeyRound": 0,
   "LastPartKeyRound": 1000300,
   "PartKeyDilution": 0,
