@@ -474,7 +474,7 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.Uint(i)
 		return nil
 	}
-	// check OnCompetion constants
+	// check OnCompletion constants
 	oc, isOCStr := onCompletionMap[args[0]]
 	if isOCStr {
 		ops.Uint(oc)
