@@ -4,4 +4,4 @@ github.com/algorand/msgp v1.1.52
 github.com/algorand/oapi-codegen v1.3.7
 github.com/go-swagger/go-swagger v0.25.0
 gotest.tools/gotestsum v1.6.4
-github.com/golangci/golangci-lint/cmd/golangci-lint v1.41.1
+github.com/golangci/golangci-lint/cmd/golangci-lint v1.47.3
