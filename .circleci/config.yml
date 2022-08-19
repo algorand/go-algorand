@@ -70,7 +70,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["mac_arm64"] # TESTONLY["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
           filters: &filters-default
             branches:
               ignore:
@@ -155,7 +155,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["mac_arm64"] # TESTONLY ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -179,7 +179,7 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-            # - codegen_verification
+            - codegen_verification
           filters:
             branches:
               only:
@@ -188,7 +188,7 @@ workflows:
             - slack-secrets
             - aws-secrets
 
-      # - windows_x64_build
+      #- windows_x64_build
 
 commands:
   prepare_go:
