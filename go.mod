@@ -3,6 +3,7 @@ module github.com/algorand/go-algorand
 go 1.17
 
 require (
+	github.com/algorand/avm-abi v0.1.0
 	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
@@ -12,7 +13,6 @@ require (
 	github.com/algorand/oapi-codegen v1.3.7
 	github.com/algorand/websocket v1.4.5
 	github.com/aws/aws-sdk-go v1.16.5
-	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/consensys/gnark-crypto v0.7.0
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
@@ -39,6 +39,7 @@ require (
 )
 
 require (
+	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e // indirect
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect

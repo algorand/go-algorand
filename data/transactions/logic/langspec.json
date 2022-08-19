@@ -2297,7 +2297,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)",
+      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
       "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"

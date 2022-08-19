@@ -246,10 +246,10 @@ class RunSet:
             return self.pubw, self.maxpubaddr
 
     def start(self, scriptname, timeout):
-        self.event_log("run", scriptname)
         t = threading.Thread(target=script_thread, args=(self, scriptname, timeout))
         t.start()
         with self.lock:
+            self.event_log("run", scriptname)
             self.threads[scriptname] = t
 
     def running(self, scriptname, p):
@@ -257,8 +257,8 @@ class RunSet:
             self.procs[scriptname] = p
 
     def done(self, scriptname, ok, seconds):
-        self.event_log("pass" if ok else "fail", scriptname, seconds)
         with self.lock:
+            self.event_log("pass" if ok else "fail", scriptname, seconds)
             self.statuses.append( {'script':scriptname, 'ok':ok, 'seconds':seconds} )
             if not ok:
                 self.errors.append('{} failed'.format(scriptname))

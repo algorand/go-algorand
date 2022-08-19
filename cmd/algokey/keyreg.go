@@ -75,10 +75,14 @@ func init() {
 
 	keyregCmd.Flags().Uint64Var(&params.fee, "fee", minFee, "transaction fee")
 	keyregCmd.Flags().Uint64Var(&params.firstValid, "firstvalid", 0, "first round where the transaction may be committed to the ledger")
-	keyregCmd.MarkFlagRequired("firstvalid") // nolint:errcheck
+	if err := keyregCmd.MarkFlagRequired("firstvalid"); err != nil {
+		panic(err)
+	}
 	keyregCmd.Flags().Uint64Var(&params.lastValid, "lastvalid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to firstvalid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
-	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
+	if err := keyregCmd.MarkFlagRequired("network"); err != nil {
+		panic(err)
+	}
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction; only specify when bringing an account online to vote in Algorand consensus")

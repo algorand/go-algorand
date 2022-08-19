@@ -64,13 +64,13 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      # - codegen_verification
+      - codegen_verification
 
       - build:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64"]
           filters: &filters-default
             branches:
               ignore:
@@ -155,7 +155,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -179,7 +179,6 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
           filters:
             branches:
               only:
@@ -443,9 +442,21 @@ commands:
           at: << parameters.result_path >>
       - run:
           name: Check if all tests were run
+          # Add to --ignored-tests when a test should _not_ be considered.
+          # * For example, E2E expect test runners (e.g. `TestAlgodWithExpect`)
+          # produce partitioned subtests.
+          # * The parent tests are deliberately _not_ partitioned.  By ignoring
+          # these tests, `check_tests.py` won't provide conflicting advice to
+          # partition the parent tests.
           command: |
             cat << parameters.result_path >>/<< parameters.result_subdir >>/**/testresults.json > << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
-            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
+            python3 scripts/buildtools/check_tests.py \
+              --tests-results-filepath << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json \
+              --ignored-tests \
+                TestAlgodWithExpect \
+                TestAlgohWithExpect \
+                TestGoalWithExpect \
+                TestTealdbgWithExpect
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
@@ -483,16 +494,6 @@ commands:
                     scripts/travis/test_release.sh
 
 jobs:
-  codegen_verification:
-    executor: amd64_medium
-    steps:
-      - checkout
-      - prepare_go
-      - run: |
-          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-          export GOPATH="/home/circleci/go"
-          scripts/travis/codegen_verification.sh
-
   build:
     parameters:
       platform:

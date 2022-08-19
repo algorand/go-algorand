@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -49,14 +50,15 @@ func main() {
 		return
 	}
 	var mu deadlock.Mutex
-	wp, err := fixtures.MakeWebProxy(*webProxyDestination, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+	log := logging.Base()
+	wp, err := fixtures.MakeWebProxy(*webProxyDestination, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
 		mu.Lock()
 		time.Sleep(time.Duration(*webProxyRequestDelay) * time.Millisecond)
 		mu.Unlock()
 		// prevent requests for block #2 to go through.
 		if strings.HasSuffix(request.URL.String(), "/block/2") {
-			response.Write([]byte("webProxy prevents block 2 from serving"))
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte("webProxy prevents block 2 from serving")) //nolint:errcheck // don't care
 			return
 		}
 		if *webProxyLogFile != "" {
