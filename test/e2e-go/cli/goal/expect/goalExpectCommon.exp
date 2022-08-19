@@ -52,6 +52,8 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
+        ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
+
         log_user 1
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Primary
         if { [file exists $NODE_DATA_DIR] } {
@@ -74,12 +76,12 @@ proc ::AlgorandGoal::Abort { ERROR } {
             puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
             set LOGS_COLLECTED 1
         }
-
-        ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
     }
 
     if { [info exists ::GLOBAL_TEST_ALGO_DIR] } {
         puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+
+        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
 
         if { $LOGS_COLLECTED == 0 } {
             log_user 1
@@ -90,8 +92,6 @@ proc ::AlgorandGoal::Abort { ERROR } {
             set nodeLog [exec -- tail -n 50 $::GLOBAL_TEST_ALGO_DIR/node.log]
             puts "\n$::GLOBAL_TEST_ALGO_DIR/node.log:\r\n$nodeLog"
         }
-
-        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
     }
 
     exit 1
