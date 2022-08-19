@@ -211,12 +211,20 @@ commands:
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
 
   generic_build:
-    description: Run basic build
+    description: >
+      Run basic build.
+
+      If command execution time increases _appreciably_, revisit CI topology:
+      * Historically, the command executes _quickly_ (< 3m with resource class >= medium).
+      * Consequently, it's faster to embed the command in a combined build + test workflow rather than independent build and test workflows.
     parameters:
       build_dir:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
       - restore_libsodium
       - restore_cache:
           keys:
@@ -469,9 +477,6 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
@@ -487,9 +492,6 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
@@ -510,9 +512,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -529,9 +528,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -550,9 +546,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -569,9 +562,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -589,9 +579,6 @@ jobs:
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
@@ -611,9 +598,6 @@ jobs:
       # one of the platforms in the matrix.
       CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
       - generic_integration:
           platform: << parameters.platform >>
