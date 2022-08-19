@@ -8,7 +8,6 @@ linters:
   enable:
     - errcheck
     - gofmt
-    - revive
     - gosimple
     - govet
     - ineffassign
