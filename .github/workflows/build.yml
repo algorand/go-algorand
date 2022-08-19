@@ -1,6 +1,7 @@
 name: "Build workflow"
 on:
-  pull_request:
+  schedule:
+    - cron: "7 2 * * *" # Choose haphazard minute to minimize Github scheduling delays.
 jobs:
   build-test-windows:
     runs-on: windows-2022
