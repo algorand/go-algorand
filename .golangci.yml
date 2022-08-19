@@ -17,9 +17,7 @@ severity:
 
 issues:
   # use these new lint checks on code since #2574
-  #new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57
-  # use stricter enforcement since ##4410
-  new-from-rev: fd488f806dcbc2586f585155eea0180c30287f70
+  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57
 
   # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false
