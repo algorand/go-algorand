@@ -64,8 +64,6 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      - codegen_verification
-
       - build:
           name: << matrix.platform >>_build
           matrix: &matrix-default
