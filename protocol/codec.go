@@ -248,18 +248,18 @@ func NewDecoderBytes(b []byte) Decoder {
 
 // NewMsgpDecoderBytes returns a decoder object reading bytes from [b].
 // that works with msgp-serialized objects
-func NewMsgpDecoderBytes(b []byte) *msgpDecoderBytes {
-	return &msgpDecoderBytes{b: b, pos: 0}
+func NewMsgpDecoderBytes(b []byte) *MsgpDecoderBytes {
+	return &MsgpDecoderBytes{b: b, pos: 0}
 }
 
-// msgpDecoderBytes is a []byte decoder into msgp-encoded objects
-type msgpDecoderBytes struct {
+// MsgpDecoderBytes is a []byte decoder into msgp-encoded objects
+type MsgpDecoderBytes struct {
 	b   []byte
 	pos int
 }
 
 // Decode an objptr from from a byte stream
-func (d *msgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
+func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	if !objptr.CanUnmarshalMsg(objptr) {
 		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)
 	}
