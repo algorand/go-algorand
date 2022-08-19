@@ -1146,3 +1146,91 @@ func TestDetailedSimulateAccessInnerTxnNonAppCallApplyDataOnFail(t *testing.T) {
 	appCallInnerTxnEvalDelta := outerTxnEvalDelta.InnerTxns[1].ApplyData.EvalDelta
 	require.Equal(t, "message", appCallInnerTxnEvalDelta.Logs[0])
 }
+
+const invalidCreateAssetCode = `byte "starting invalid asset create"
+log
+itxn_begin
+int acfg
+itxn_field TypeEnum
+int 2
+itxn_field ConfigAssetDefaultFrozen
+itxn_submit
+`
+
+func TestDetailedSimulateAccessInnerTxnWithNonAppCallsFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Set up simulator
+	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].addr
+
+	// Compile approval program
+	approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + invalidCreateAssetCode)
+	ops, err := logic.AssembleString(approvalProgram)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	// Compile clear program
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	txgroup := []transactions.SignedTxn{
+		// fund outer app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.PaymentTx,
+				Header: makeTxnHeader(sender),
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.AppIndex(2).Address(),
+					Amount:   basics.MicroAlgos{Raw: 402000}, // 400000 min balance plus 2000 for 2 txns
+				},
+			},
+		},
+		// create app
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: makeTxnHeader(sender),
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApplicationArgs:   [][]byte{uint64ToBytes(uint64(1))},
+					ApprovalProgram:   approvalProg,
+					ClearStateProgram: clearStateProg,
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      0,
+						NumByteSlice: 0,
+					},
+				},
+			},
+		},
+	}
+
+	err = attachGroupID(txgroup)
+	require.NoError(t, err)
+
+	result, err := s.DetailedSimulate(txgroup)
+	require.NoError(t, err)
+	require.False(t, result.WouldSucceed)
+	txnGroup := result.TxnGroups[0]
+	require.Contains(t, txnGroup.FailureMessage, "boolean is neither 1 nor 0")
+
+	// Check that logs are correct
+	outerTxnEvalDelta := txnGroup.Txns[1].Txn.ApplyData.EvalDelta
+	require.Equal(t, "starting asset create", outerTxnEvalDelta.Logs[0])
+	require.Equal(t, "starting invalid asset create", outerTxnEvalDelta.Logs[1])
+
+	// Check that inner transaction ApplyData is accessible within asset create
+	assetCreateInnerTxnApplyData := outerTxnEvalDelta.InnerTxns[0].ApplyData
+	require.Equal(t, basics.AssetIndex(3), assetCreateInnerTxnApplyData.ConfigAsset)
+
+	// Check that the second asset create doesn't have an associated inner txn because it was invalid
+	require.Len(t, outerTxnEvalDelta.InnerTxns, 1)
+}
