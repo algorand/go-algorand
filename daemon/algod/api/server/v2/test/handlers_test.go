@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -471,6 +472,199 @@ func TestSimulateTransaction(t *testing.T) {
 	simulateTransactionTest(t, -1, 400, true)
 	simulateTransactionTest(t, 0, 404, false)
 	simulateTransactionTest(t, 0, 200, true)
+}
+
+const trivialAVMProgram = `#pragma version 6
+int 1`
+const plannedFailureProgramWithLogs = `#pragma version 6
+int 3                           // [index(3)]
+prepare_txn:
+	itxn_begin                    // [index]
+	int appl                      // [index, appl]
+	itxn_field TypeEnum           // [index]
+	int NoOp                      // [index, NoOp]
+	itxn_field OnCompletion       // [index]
+	byte 0x068101                 // [index, 0x068101]
+	itxn_field ClearStateProgram  // [index]
+app_arg_check:
+	dup													  // [index, index]
+	txn ApplicationArgs 0         // [index, index, args[0]]
+	btoi                          // [index, index, btoi(args[0])]
+	==                            // [index, index=?=btoi(args[0])]
+	bnz reject_approval_program   // [index]
+pass_approval_program:
+	byte 0x068101                 // [index, 0x068101]. 0x068101 is #pragma version 6; int 1;
+	b submit_and_loop             // [index, 0x068101]
+reject_approval_program:
+	byte 0x068100                 // [index, 0x068100]. 0x068100 is #pragma version 6; int 0;
+	b submit_and_loop             // [index, 0x068100]
+submit_and_loop:
+	itxn_field ApprovalProgram    // [index]
+	itxn_submit                   // [index]
+decrement_and_loop:
+	int 1                         // [index, 1]
+	-                             // [index - 1]
+	dup                           // [index - 1, index - 1]
+	itob                          // [index - 1, itob(index - 1)]
+	log                           // [index - 1]
+	dup                           // [index - 1, index - 1]
+	bnz prepare_txn               // [index - 1]
+pop                             // []
+int 1                           // [1]
+`
+
+func TestDetailedSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 0, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode.config.EnableTransactionSimulator = true
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	// compile programs
+	ops, err := logic.AssembleString(plannedFailureProgramWithLogs)
+	require.NoError(t, err, ops.Errors)
+	approvalProg := ops.Program
+
+	ops, err = logic.AssembleString(trivialAVMProgram)
+	require.NoError(t, err, ops.Errors)
+	clearStateProg := ops.Program
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+
+	sender := roots[0]
+	header := transactions.Header{
+		Sender:      sender.Address(),
+		Fee:         basics.MicroAlgos{Raw: 1000},
+		FirstValid:  hdr.Round,
+		LastValid:   hdr.Round + basics.Round(1000),
+		GenesisID:   hdr.GenesisID,
+		GenesisHash: hdr.GenesisHash,
+	}
+
+	for i := 0; i < 4; i++ {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			// prepare transaction group
+			txns := []transactions.Transaction{
+				{
+					Type:   protocol.PaymentTx,
+					Header: header,
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: basics.AppIndex(2).Address(),
+						Amount:   basics.MicroAlgos{Raw: 403000}, // 400000 min balance plus 3000 for 3 txns
+					},
+				},
+				{
+					Type:   protocol.ApplicationCallTx,
+					Header: header,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID:     0,
+						ApplicationArgs:   [][]byte{{0, 0, 0, 0, 0, 0, 0, byte(3 - i)}},
+						ApprovalProgram:   approvalProg,
+						ClearStateProgram: clearStateProg,
+						LocalStateSchema: basics.StateSchema{
+							NumUint:      0,
+							NumByteSlice: 0,
+						},
+						GlobalStateSchema: basics.StateSchema{
+							NumUint:      0,
+							NumByteSlice: 0,
+						},
+					},
+				},
+			}
+
+			// attach group ID
+			var group transactions.TxGroup
+			for _, tx := range txns {
+				group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(tx.ID()))
+			}
+			groupID := crypto.HashObj(group)
+			for i := range txns {
+				txns[i].Header.Group = groupID
+			}
+
+			// sign the transaction group
+			stxns := make([]transactions.SignedTxn, len(txns))
+			for i, txn := range txns {
+				stxns[i] = txn.Sign(sender.Secrets())
+			}
+
+			// build request body
+			var body io.Reader
+			var bodyBytes []byte
+			for _, stxn := range stxns {
+				bodyBytes = append(bodyBytes, protocol.Encode(&stxn)...)
+			}
+			body = bytes.NewReader(bodyBytes)
+			req := httptest.NewRequest(http.MethodPost, "/", body)
+			rec := httptest.NewRecorder()
+
+			e := echo.New()
+			c := e.NewContext(req, rec)
+
+			// simulate transaction
+			err := handler.SimulateTransaction(c)
+
+			// common checks
+			require.NoError(t, err)
+			require.Equal(t, 200, rec.Code, rec.Body.String())
+
+			// decode response
+			var result v2.EncodedSimulationResult
+			enc := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.CodecHandle)
+			err = enc.Decode(&result)
+			require.NoError(t, err)
+
+			// check common fields
+			require.Equal(t, uint64(1), result.Version)
+			require.NotNil(t, result.TxnGroups)
+
+			// if i == 3, the program should pass because no inner txn was marked for failure
+			if i == 3 {
+				require.NotNil(t, result.WouldSucceed)
+				require.True(t, *result.WouldSucceed)
+
+				// check logs
+				logs := *(*result.TxnGroups)[0].Txns[1].Txn.Logs
+				require.Len(t, logs, 3)
+				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 2}, logs[0])
+				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 1}, logs[1])
+				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0}, logs[2])
+			} else {
+				// otherwise the program should fail at the correct index
+				require.Nil(t, result.WouldSucceed)
+				txnGroup := (*result.TxnGroups)[0]
+				require.Contains(t, *txnGroup.FailureMessage, "rejected by ApprovalProgram")
+				require.Equal(t, simulation.TxnPath{1, uint64(i)}, *txnGroup.FailedAt)
+
+				// check inner txn length
+				innerTxns := *txnGroup.Txns[1].Txn.Inners
+				require.Len(t, innerTxns, i+1)
+
+				// check log length, if logs should exist
+				logsPointer := txnGroup.Txns[1].Txn.Logs
+				if i == 0 {
+					require.Nil(t, logsPointer)
+				} else {
+					require.NotNil(t, logsPointer)
+					logs := *logsPointer
+					require.Len(t, logs, i)
+				}
+			}
+		})
+	}
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {

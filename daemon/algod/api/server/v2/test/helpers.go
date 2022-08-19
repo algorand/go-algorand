@@ -146,7 +146,9 @@ func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.Valida
 }
 
 func (m mockNode) DetailedSimulate(txgroup []transactions.SignedTxn) (simulation.SimulationResult, error) {
-	return simulation.SimulationResult{}, m.err
+	// use actual DetailedSimulate
+	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
+	return simulator.DetailedSimulate(txgroup)
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {

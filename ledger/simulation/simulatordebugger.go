@@ -21,51 +21,66 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+type cursorDebuggerHook struct {
+	cursor TxnPath
+	serial bool
+	index  uint64
+}
+
+func (ph *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	if !ph.serial {
+		ph.index = 0
+	}
+	ph.cursor = append(ph.cursor, ph.index)
+	ph.serial = false
+	return nil
+}
+
+func (ph *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	// pop the last index
+	lastIndex := len(ph.cursor) - 1
+	lastItem := ph.cursor[lastIndex]
+	ph.cursor = ph.cursor[:lastIndex]
+
+	if ph.serial {
+		ph.index = lastItem
+	}
+	ph.index++
+	ph.serial = true
+	return nil
+}
+
 // ==============================
 // > Simulator Debugger
 // ==============================
 
 type debuggerHook struct {
-	result        *SimulationResult
-	cursor        TxnPath
-	innerTxnIndex int
+	cursorDebuggerHook
+
+	result *SimulationResult
 }
 
 func makeDebuggerHook(txgroup []transactions.SignedTxn) debuggerHook {
 	result := MakeSimulationResult([][]transactions.SignedTxn{txgroup})
-	return debuggerHook{result: &result, cursor: make(TxnPath, 0)}
-}
-
-func (dh *debuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	// Add this transaction to the cursor
-	dh.cursor = append(dh.cursor, uint64(groupIndex))
-	return nil
+	return debuggerHook{result: &result}
 }
 
 func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	// Remove this transaction from the cursor
-	dh.cursor = dh.cursor[:len(dh.cursor)-1]
-
-	// Reset the inner txn index
-	dh.innerTxnIndex = 0
-
-	// Set result ApplyData for this transaction
-	dh.result.TxnGroups[0].Txns[groupIndex].Txn.ApplyData = ep.TxnGroup[groupIndex].ApplyData
-	return nil
+	// Update ApplyData if not an inner transaction
+	if len(dh.cursor) == 1 {
+		dh.result.TxnGroups[0].Txns[groupIndex].Txn.ApplyData = ep.TxnGroup[groupIndex].ApplyData
+	}
+	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
 }
 
-func (dh *debuggerHook) BeforeInnerTxn(ep *logic.EvalParams) error {
-	// Add this inner transaction to the cursor
-	dh.cursor = append(dh.cursor, uint64(dh.innerTxnIndex))
-
-	// Increment the inner txn index
-	dh.innerTxnIndex++
-
-	return nil
-}
-
-func (dh *debuggerHook) AfterInnerTxn(ep *logic.EvalParams) error {
-	// Remove this inner transaction from the cursor
-	dh.cursor = dh.cursor[:len(dh.cursor)-1]
+func (dh *debuggerHook) AfterTealOp(state *logic.DebugState) error {
+	// When an error occurs, store the ApplyData for the transaction before it's lost
+	if state.Error != "" {
+		// The cursor won't have been updated yet, so a length of 2 means
+		// we're in a first-level inner transaction and are about to leave it
+		if len(dh.cursor) == 2 {
+			dh.result.TxnGroups[0].Txns[state.GroupIndex].Txn.ApplyData.EvalDelta = state.EvalDelta
+		}
+	}
 	return nil
 }

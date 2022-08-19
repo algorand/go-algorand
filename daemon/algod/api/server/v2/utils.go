@@ -362,8 +362,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 
 	if len(txnGroupResult.FailedAt) > 0 {
 		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
-		for _, txn := range txnGroupResult.FailedAt {
-			failedAt = append(failedAt, uint64(txn))
+		for i, txn := range txnGroupResult.FailedAt {
+			failedAt[i] = uint64(txn)
 		}
 		encoded.FailedAt = &failedAt
 	}
@@ -371,8 +371,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 	return encoded
 }
 
-func convertSimulationResult(result simulation.SimulationResult) encodedSimulationResult {
-	var encodedSimulationResult encodedSimulationResult
+func convertSimulationResult(result simulation.SimulationResult) EncodedSimulationResult {
+	var encodedSimulationResult EncodedSimulationResult
 	encodedSimulationResult.Version = result.Version
 
 	if result.TxnGroups != nil {

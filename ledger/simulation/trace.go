@@ -51,7 +51,7 @@ func MakeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 	return groupResult
 }
 
-const SimulationResultCurrentVersion = 1
+const SimulationResultCurrentVersion = uint64(1)
 
 type SimulationResult struct {
 	Version      uint64
@@ -59,7 +59,7 @@ type SimulationResult struct {
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 }
 
-func MakeSimulationResultWithVersion(version uint64, txgroups [][]transactions.SignedTxn) SimulationResult {
+func MakeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) SimulationResult {
 	groups := make([]TxnGroupResult, len(txgroups))
 
 	for i, txgroup := range txgroups {
@@ -70,5 +70,5 @@ func MakeSimulationResultWithVersion(version uint64, txgroups [][]transactions.S
 }
 
 func MakeSimulationResult(txgroups [][]transactions.SignedTxn) SimulationResult {
-	return MakeSimulationResultWithVersion(SimulationResultCurrentVersion, txgroups)
+	return MakeSimulationResultWithVersion(txgroups, SimulationResultCurrentVersion)
 }

@@ -4809,6 +4809,11 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		err = cx.Ledger.Perform(i, ep)
 		if err != nil {
+			// Populate EvalDelta with inner txns so debuggers can
+			// access them from `afterTealOp` even when an error occurs.
+			// This information is scrubbed later in the eval process during
+			// StatefulEval's error handling.
+			cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 			return err
 		}
 		// This is mostly a no-op, because Perform does its work "in-place", but

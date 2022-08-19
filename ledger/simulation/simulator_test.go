@@ -761,6 +761,8 @@ func TestDetailedSimulateResultLogs(t *testing.T) {
 		},
 	}
 
+	txgroup[0] = txgroup[0].Txn.Sign(accounts[0].sk)
+
 	result, err := s.DetailedSimulate(txgroup)
 	require.NoError(t, err)
 	require.True(t, result.WouldSucceed)

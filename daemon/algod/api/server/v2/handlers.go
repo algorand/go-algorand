@@ -808,7 +808,7 @@ type encodedTxnGroupResult struct {
 	FailedAt       *[]uint64 `codec:"failedat,omitempty"`
 }
 
-type encodedSimulationResult struct {
+type EncodedSimulationResult struct {
 	Version      uint64                   `codec:"v"`
 	TxnGroups    *[]encodedTxnGroupResult `codec:"txns,omitempty"`
 	WouldSucceed *bool                    `codec:"s,omitempty"`

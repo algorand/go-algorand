@@ -186,7 +186,6 @@ func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (Simulatio
 
 		// and set WouldSucceed to false
 		simulatorDebugger.result.WouldSucceed = false
-		err = nil
 	}
 
 	// mark whether signatures are missing
@@ -197,5 +196,5 @@ func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (Simulatio
 		}
 	}
 
-	return *simulatorDebugger.result, err
+	return *simulatorDebugger.result, nil
 }
