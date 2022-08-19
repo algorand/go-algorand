@@ -122,11 +122,11 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
-    
+
     # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
     # Please update as necessary.
     "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
-    
+
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
     duration "e2e client setup"
@@ -168,7 +168,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
       KEEP_TEMPS_CMD_STR="--keep-temps"
     fi
 
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${KEEP_TEMPS_CMD_STR} ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+
+    clientrunner="${TEMPDIR}/ve/bin/python3 e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
+
+    $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
@@ -189,12 +192,12 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     duration "parallel client runner"
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+        $clientrunner --version "$(basename "$vdir")" "$vdir"/*.sh
     done
     duration "vdir client runners"
 
     for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+        $clientrunner "$script"
     done
 
     deactivate

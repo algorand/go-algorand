@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/abi"
+	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -545,7 +545,7 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func base32DecdodeAnyPadding(x string) (val []byte, err error) {
+func base32DecodeAnyPadding(x string) (val []byte, err error) {
 	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
 	if err != nil {
 		// try again with standard padding
@@ -567,7 +567,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = errors.New("byte base32 arg lacks close paren")
 			return
 		}
-		val, err = base32DecdodeAnyPadding(arg[open+1 : close])
+		val, err = base32DecodeAnyPadding(arg[open+1 : close])
 		if err != nil {
 			return
 		}
@@ -595,7 +595,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = fmt.Errorf("need literal after 'byte %s'", arg)
 			return
 		}
-		val, err = base32DecdodeAnyPadding(args[1])
+		val, err = base32DecodeAnyPadding(args[1])
 		if err != nil {
 			return
 		}
@@ -1399,25 +1399,29 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-var spaces = [256]uint8{'\t': 1, ' ': 1}
+// newline not included since handled in scanner
+var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
-func fieldsFromLine(line string) []string {
-	var fields []string
+func tokensFromLine(line string) []string {
+	var tokens []string
 
 	i := 0
-	for i < len(line) && spaces[line[i]] != 0 {
+	for i < len(line) && tokenSeparators[line[i]] {
+		if line[i] == ';' {
+			tokens = append(tokens, ";")
+		}
 		i++
 	}
 
 	start := i
-	inString := false
-	inBase64 := false
+	inString := false // tracked to allow spaces and comments inside
+	inBase64 := false // tracked to allow '//' inside
 	for i < len(line) {
-		if spaces[line[i]] == 0 { // if not space
+		if !tokenSeparators[line[i]] { // if not space
 			switch line[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+					if i == 0 || i > 0 && tokenSeparators[line[i-1]] {
 						inString = true
 					}
 				} else {
@@ -1428,9 +1432,9 @@ func fieldsFromLine(line string) []string {
 			case '/': // is a comment?
 				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
 					if start != i { // if a comment without whitespace
-						fields = append(fields, line[start:i])
+						tokens = append(tokens, line[start:i])
 					}
-					return fields
+					return tokens
 				}
 			case '(': // is base64( seq?
 				prefix := line[start:i]
@@ -1446,19 +1450,29 @@ func fieldsFromLine(line string) []string {
 			i++
 			continue
 		}
+
+		// we've hit a space, end last token unless inString
+
 		if !inString {
-			field := line[start:i]
-			fields = append(fields, field)
-			if field == "base64" || field == "b64" {
-				inBase64 = true
-			} else if inBase64 {
+			token := line[start:i]
+			tokens = append(tokens, token)
+			if line[i] == ';' {
+				tokens = append(tokens, ";")
+			}
+			if inBase64 {
 				inBase64 = false
+			} else if token == "base64" || token == "b64" {
+				inBase64 = true
 			}
 		}
 		i++
 
+		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && spaces[line[i]] != 0 {
+			for i < len(line) && tokenSeparators[line[i]] {
+				if line[i] == ';' {
+					tokens = append(tokens, ";")
+				}
 				i++
 			}
 			start = i
@@ -1467,10 +1481,10 @@ func fieldsFromLine(line string) []string {
 
 	// add rest of the string if any
 	if start < len(line) {
-		fields = append(fields, line[start:i])
+		tokens = append(tokens, line[start:i])
 	}
 
-	return fields
+	return tokens
 }
 
 func (ops *OpStream) trace(format string, args ...interface{}) {
@@ -1531,6 +1545,16 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+// splitTokens breaks tokens into two slices at the first semicolon.
+func splitTokens(tokens []string) (current, rest []string) {
+	for i, token := range tokens {
+		if token == ";" {
+			return tokens[:i], tokens[i+1:]
+		}
+	}
+	return tokens, nil
+}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	fin := strings.NewReader(text)
@@ -1541,71 +1565,78 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if len(line) == 0 {
-			ops.trace("%3d: 0 line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			ops.trace("%3d: // line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "#pragma") {
-			ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			ops.pragma(line)
-			continue
-		}
-		fields := fieldsFromLine(line)
-		if len(fields) == 0 {
-			ops.trace("%3d: no fields\n", ops.sourceLine)
-			continue
-		}
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-		}
-		opstring := fields[0]
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			fields = fields[1:]
-			if len(fields) == 0 {
-				ops.trace("%3d: label only\n", ops.sourceLine)
+		tokens := tokensFromLine(line)
+		if len(tokens) > 0 {
+			if first := tokens[0]; first[0] == '#' {
+				directive := first[1:]
+				switch directive {
+				case "pragma":
+					ops.pragma(tokens)
+					ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				default:
+					ops.errorf("Unknown directive: %s", directive)
+				}
 				continue
 			}
-			opstring = fields[0]
 		}
-		spec, expandedName, ok := getSpec(ops, opstring, fields[1:])
-		if ok {
-			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-			ops.recordSourceLine()
-			if spec.Modes == modeApp {
-				ops.HasStatefulOps = true
+		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
+			if len(current) == 0 {
+				continue
 			}
-			args, returns := spec.Arg.Types, spec.Return.Types
-			if spec.refine != nil {
-				nargs, nreturns := spec.refine(&ops.known, fields[1:])
-				if nargs != nil {
-					args = nargs
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+			}
+			opstring := current[0]
+			if opstring[len(opstring)-1] == ':' {
+				ops.createLabel(opstring[:len(opstring)-1])
+				current = current[1:]
+				if len(current) == 0 {
+					ops.trace("%3d: label only\n", ops.sourceLine)
+					continue
 				}
-				if nreturns != nil {
-					returns = nreturns
+				opstring = current[0]
+			}
+			spec, expandedName, ok := getSpec(ops, opstring, current[1:])
+			if ok {
+				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+				ops.recordSourceLine()
+				if spec.Modes == modeApp {
+					ops.HasStatefulOps = true
 				}
-			}
-			ops.trackStack(args, returns, append([]string{expandedName}, fields[1:]...))
-			spec.asm(ops, &spec, fields[1:])
-			if spec.deadens() { // An unconditional branch deadens the following code
-				ops.known.deaden()
-			}
-			if spec.Name == "callsub" {
-				// since retsub comes back to the callsub, it is an entry point like a label
-				ops.known.label()
+				args, returns := spec.Arg.Types, spec.Return.Types
+				if spec.refine != nil {
+					nargs, nreturns := spec.refine(&ops.known, current[1:])
+					if nargs != nil {
+						args = nargs
+					}
+					if nreturns != nil {
+						returns = nreturns
+					}
+				}
+				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
+				spec.asm(ops, &spec, current[1:])
+				if spec.deadens() { // An unconditional branch deadens the following code
+					ops.known.deaden()
+				}
+				if spec.Name == "callsub" {
+					// since retsub comes back to the callsub, it is an entry point like a label
+					ops.known.label()
+				}
 			}
 			ops.trace("\n")
 			continue
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			err = errors.New("line too long")
+		}
+		ops.error(err)
 	}
 
 	// backward compatibility: do not allow jumps behind last instruction in v1
@@ -1635,21 +1666,20 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(line string) error {
-	fields := strings.Split(line, " ")
-	if fields[0] != "#pragma" {
-		return ops.errorf("invalid syntax: %s", fields[0])
+func (ops *OpStream) pragma(tokens []string) error {
+	if tokens[0] != "#pragma" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
-	if len(fields) < 2 {
+	if len(tokens) < 2 {
 		return ops.error("empty pragma")
 	}
-	key := fields[1]
+	key := tokens[1]
 	switch key {
 	case "version":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no version value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		var ver uint64
 		if ops.pending.Len() > 0 {
 			return ops.error("#pragma version is only allowed before instructions")
@@ -1674,10 +1704,10 @@ func (ops *OpStream) pragma(line string) error {
 		}
 		return nil
 	case "typetrack":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no typetrack value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		on, err := strconv.ParseBool(value)
 		if err != nil {
 			return ops.errorf("bad #pragma typetrack: %#v", value)
@@ -2269,7 +2299,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	if strings.HasPrefix(spec.Name, "bytec_") {
 		b := spec.Name[len(spec.Name)-1] - byte('0')
-		if int(b) < len(dis.intc) {
+		if int(b) < len(dis.bytec) {
 			out += fmt.Sprintf(" // %s", guessByteFormat(dis.bytec[b]))
 		}
 	}

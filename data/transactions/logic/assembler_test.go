@@ -423,6 +423,7 @@ var compiled = map[uint64]string{
 	5: "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03",
 	6: "06" + v6Compiled,
 	7: "07" + v7Compiled,
+	8: "08" + v8Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -471,13 +472,16 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{fidoVersion, pairingVersion}
+var experiments = []uint64{pairingVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had
 // intended to release the opcodes, they should have been removed from
 // `experiments`.
 func TestExperimental(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
 	for _, v := range experiments {
 		// Allows less, so we can push something out, even before vFuture has been updated.
@@ -518,20 +522,46 @@ func testMatch(t testing.TB, actual, expected string) bool {
 	}
 }
 
-func assemblyTrace(text string, ver uint64) string {
+func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	ops := newOpStream(ver)
 	ops.Trace = &strings.Builder{}
-	ops.assemble(text)
-	return ops.Trace.String()
+	err := ops.assemble(text)
+	return &ops, err
+}
+
+func lines(s string, num int) (bool, string) {
+	if num < 1 {
+		return true, ""
+	}
+	found := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			found++
+			if found == num {
+				return true, s[0 : i+1]
+			}
+		}
+	}
+	return false, s
+}
+
+func summarize(trace *strings.Builder) string {
+	truncated, msg := lines(trace.String(), 50)
+	if !truncated {
+		return msg
+	}
+	return msg + "(trace truncated)\n"
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpStream {
 	t.Helper()
-	program := strings.ReplaceAll(source, ";", "\n")
-	ops, err := AssembleStringWithVersion(program, ver)
+	ops, err := assembleWithTrace(source, ver)
 	if len(expected) == 0 {
 		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, ver))
+			t.Log(summarize(ops.Trace))
+		}
+		if len(ops.Errors) > 10 {
+			ops.Errors = ops.Errors[:10] // Truncate to reasonable
 		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
@@ -539,13 +569,13 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		require.NotNil(t, ops.Program)
 		// It should always be possible to Disassemble
 		dis, err := Disassemble(ops.Program)
-		require.NoError(t, err, program)
+		require.NoError(t, err, source)
 		// And, while the disassembly may not match input
 		// exactly, the assembly of the disassembly should
 		// give the same bytecode
 		ops2, err := AssembleStringWithVersion(notrack(dis), ver)
 		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
-			t.Log(program)
+			t.Log(source)
 			t.Log(dis)
 		}
 		require.Empty(t, ops2.Errors)
@@ -553,7 +583,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		require.Equal(t, ops.Program, ops2.Program)
 	} else {
 		if err == nil {
-			t.Log(program)
+			t.Log(source)
 		}
 		require.Error(t, err)
 		errors := ops.Errors
@@ -569,7 +599,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 					}
 				}
 				if fail {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			} else {
@@ -586,7 +616,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
 				msg := found.Unwrap().Error()
 				if !testMatch(t, msg, exp.s) {
-					t.Log(assemblyTrace(program, ver))
+					t.Log(summarize(ops.Trace))
 					t.FailNow()
 				}
 			}
@@ -673,9 +703,9 @@ func TestAssembleGlobal(t *testing.T) {
 	testProg(t, "global MinTxnFee; int 2; +", AssemblerMaxVersion)
 	testProg(t, "global ZeroAddress; byte 0x12; concat; len", AssemblerMaxVersion)
 	testProg(t, "global MinTxnFee; byte 0x12; concat", AssemblerMaxVersion,
-		Expect{3, "concat arg 0 wanted type []byte..."})
+		Expect{1, "concat arg 0 wanted type []byte..."})
 	testProg(t, "int 2; global ZeroAddress; +", AssemblerMaxVersion,
-		Expect{3, "+ arg 1 wanted type uint64..."})
+		Expect{1, "+ arg 1 wanted type uint64..."})
 }
 
 func TestAssembleDefault(t *testing.T) {
@@ -1083,209 +1113,91 @@ func TestFieldsFromLine(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	line := "op arg"
-	fields := fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "arg", fields[1])
+	check := func(line string, tokens ...string) {
+		t.Helper()
+		assert.Equal(t, tokensFromLine(line), tokens)
+	}
 
-	line = "op arg // test"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "arg", fields[1])
+	check("op arg", "op", "arg")
+	check("op arg // test", "op", "arg")
+	check("op base64 ABC//==", "op", "base64", "ABC//==")
+	check("op base64 base64", "op", "base64", "base64")
+	check("op base64 base64 //comment", "op", "base64", "base64")
+	check("op base64 base64; op2 //done", "op", "base64", "base64", ";", "op2")
+	check("op base64 ABC/==", "op", "base64", "ABC/==")
+	check("op base64 ABC/== /", "op", "base64", "ABC/==", "/")
+	check("op base64 ABC/== //", "op", "base64", "ABC/==")
+	check("op base64 ABC//== //", "op", "base64", "ABC//==")
+	check("op b64 ABC//== //", "op", "b64", "ABC//==")
+	check("op b64(ABC//==) // comment", "op", "b64(ABC//==)")
+	check("op base64(ABC//==) // comment", "op", "base64(ABC//==)")
+	check("op b64(ABC/==) // comment", "op", "b64(ABC/==)")
+	check("op base64(ABC/==) // comment", "op", "base64(ABC/==)")
+	check("base64(ABC//==)", "base64(ABC//==)")
+	check("b(ABC//==)", "b(ABC")
+	check("b(ABC//==) //", "b(ABC")
+	check("b(ABC ==) //", "b(ABC", "==)")
+	check("op base64 ABC)", "op", "base64", "ABC)")
+	check("op base64 ABC) // comment", "op", "base64", "ABC)")
+	check("op base64 ABC//) // comment", "op", "base64", "ABC//)")
+	check(`op "test"`, "op", `"test"`)
+	check(`op "test1 test2"`, "op", `"test1 test2"`)
+	check(`op "test1 test2" // comment`, "op", `"test1 test2"`)
+	check(`op "test1 test2 // not a comment"`, "op", `"test1 test2 // not a comment"`)
+	check(`op "test1 test2 // not a comment" // comment`, "op", `"test1 test2 // not a comment"`)
+	check(`op "test1 test2" //`, "op", `"test1 test2"`)
+	check(`op "test1 test2"//`, "op", `"test1 test2"`)
+	check(`op "test1 test2`, "op", `"test1 test2`)          // non-terminated string literal
+	check(`op "test1 test2\"`, "op", `"test1 test2\"`)      // non-terminated string literal
+	check(`op \"test1 test2\"`, "op", `\"test1`, `test2\"`) // not a string literal
+	check(`"test1 test2"`, `"test1 test2"`)
+	check(`\"test1 test2"`, `\"test1`, `test2"`)
+	check(`"" // test`, `""`)
+	check("int 1; int 2", "int", "1", ";", "int", "2")
+	check("int 1;;;int 2", "int", "1", ";", ";", ";", "int", "2")
+	check("int 1; ;int 2;; ; ;; ", "int", "1", ";", ";", "int", "2", ";", ";", ";", ";", ";")
+	check(";", ";")
+	check("; ; ;;;;", ";", ";", ";", ";", ";", ";")
+	check(" ;", ";")
+	check(" ; ", ";")
+}
 
-	line = "op base64 ABC//=="
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
+func TestSplitTokens(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	line = "op base64 ABC/=="
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
+	check := func(tokens []string, left []string, right []string) {
+		t.Helper()
+		current, next := splitTokens(tokens)
+		assert.Equal(t, left, current)
+		assert.Equal(t, right, next)
+	}
 
-	line = "op base64 ABC/== /"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 4, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
-	require.Equal(t, "/", fields[3])
+	check([]string{"hey,", "how's", ";", ";", "it", "going", ";"},
+		[]string{"hey,", "how's"},
+		[]string{";", "it", "going", ";"},
+	)
 
-	line = "op base64 ABC/== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC/==", fields[2])
+	check([]string{";"},
+		[]string{},
+		[]string{},
+	)
 
-	line = "op base64 ABC//== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
+	check([]string{";", "it", "going"},
+		[]string{},
+		[]string{"it", "going"},
+	)
 
-	line = "op b64 ABC//== //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64", fields[1])
-	require.Equal(t, "ABC//==", fields[2])
+	check([]string{"hey,", "how's"},
+		[]string{"hey,", "how's"},
+		nil,
+	)
 
-	line = "op b64(ABC//==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64(ABC//==)", fields[1])
+	check([]string{`"hey in quotes;"`, "getting", `";"`, ";", "tricky"},
+		[]string{`"hey in quotes;"`, "getting", `";"`},
+		[]string{"tricky"},
+	)
 
-	line = "op base64(ABC//==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64(ABC//==)", fields[1])
-
-	line = "op b64(ABC/==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "b64(ABC/==)", fields[1])
-
-	line = "op base64(ABC/==) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64(ABC/==)", fields[1])
-
-	line = "base64(ABC//==)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "base64(ABC//==)", fields[0])
-
-	line = "b(ABC//==)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-
-	line = "b(ABC//==) //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-
-	line = "b(ABC ==) //"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "b(ABC", fields[0])
-	require.Equal(t, "==)", fields[1])
-
-	line = "op base64 ABC)"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC)", fields[2])
-
-	line = "op base64 ABC) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC)", fields[2])
-
-	line = "op base64 ABC//) // comment"
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, "base64", fields[1])
-	require.Equal(t, "ABC//)", fields[2])
-
-	line = `op "test"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test"`, fields[1])
-
-	line = `op "test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2 // not a comment"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2 // not a comment" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2 // not a comment" // comment`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
-
-	line = `op "test1 test2" //`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2"//`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2"`, fields[1])
-
-	line = `op "test1 test2` // non-terminated string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2`, fields[1])
-
-	line = `op "test1 test2\"` // non-terminated string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `"test1 test2\"`, fields[1])
-
-	line = `op \"test1 test2\"` // not a string literal
-	fields = fieldsFromLine(line)
-	require.Equal(t, 3, len(fields))
-	require.Equal(t, "op", fields[0])
-	require.Equal(t, `\"test1`, fields[1])
-	require.Equal(t, `test2\"`, fields[2])
-
-	line = `"test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, `"test1 test2"`, fields[0])
-
-	line = `\"test1 test2"`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 2, len(fields))
-	require.Equal(t, `\"test1`, fields[0])
-	require.Equal(t, `test2"`, fields[1])
-
-	line = `"" // test`
-	fields = fieldsFromLine(line)
-	require.Equal(t, 1, len(fields))
-	require.Equal(t, `""`, fields[0])
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -1770,22 +1682,22 @@ func TestAssembleAsset(t *testing.T) {
 		testProg(t, "asset_holding_get ABC 1", v,
 			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; asset_holding_get ABC 1", v,
-			Expect{2, "asset_holding_get ABC 1 expects 2 stack arguments..."})
+			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
-			Expect{3, "asset_holding_get expects 1 immediate argument"})
+			Expect{1, "asset_holding_get expects 1 immediate argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
-			Expect{3, "asset_holding_get unknown field: \"ABC\""})
+			Expect{1, "asset_holding_get unknown field: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-			Expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
+			Expect{1, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
 		// Test that AssetUnitName is known to return bytes
 		testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
-			Expect{5, "+ arg 0 wanted type uint64..."})
+			Expect{1, "+ arg 0 wanted type uint64..."})
 
 		// Test that AssetTotal is known to return uint64
 		testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
-			Expect{5, "concat arg 0 wanted type []byte..."})
+			Expect{1, "concat arg 0 wanted type []byte..."})
 
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
 		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
@@ -2394,29 +2306,29 @@ func TestSwapTypeCheck(t *testing.T) {
 	t.Parallel()
 
 	/* reconfirm that we detect this type error */
-	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, Expect{3, "+ arg 1..."})
+	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, Expect{1, "+ arg 1..."})
 	/* despite swap, we track types */
-	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
-	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, Expect{4, "+ arg 1..."})
+	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
+	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, Expect{1, "+ arg 1..."})
 }
 
 func TestDigAsm(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; dig; +", AssemblerMaxVersion, Expect{2, "dig expects 1 immediate..."})
-	testProg(t, "int 1; dig junk; +", AssemblerMaxVersion, Expect{2, "dig unable to parse..."})
+	testProg(t, "int 1; dig; +", AssemblerMaxVersion, Expect{1, "dig expects 1 immediate..."})
+	testProg(t, "int 1; dig junk; +", AssemblerMaxVersion, Expect{1, "dig unable to parse..."})
 
 	testProg(t, "int 1; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion)
 	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion,
-		Expect{5, "+ arg 1..."})
+		Expect{1, "+ arg 1..."})
 	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 3; +", AssemblerMaxVersion,
-		Expect{4, "dig 3 expects 4..."})
+		Expect{1, "dig 3 expects 4..."})
 	testProg(t, "int 1; byte 0x1234; int 2; dig 12; +", AssemblerMaxVersion,
-		Expect{4, "dig 12 expects 13..."})
+		Expect{1, "dig 12 expects 13..."})
 
 	// Confirm that digging something out does not ruin our knowledge about the types in the middle
 	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
-		Expect{8, "+ arg 1..."})
+		Expect{1, "+ arg 1..."})
 	testProg(t, "int 3; pushbytes \"123456\"; int 1; dig 2; substring3", AssemblerMaxVersion)
 
 }
@@ -2424,39 +2336,39 @@ func TestDigAsm(t *testing.T) {
 func TestEqualsTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, Expect{3, "== arg 0..."})
-	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, Expect{3, "!= arg 0..."})
-	testProg(t, "byte 0x1234; int 1; ==", AssemblerMaxVersion, Expect{3, "== arg 0..."})
-	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, Expect{3, "!= arg 0..."})
+	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, Expect{1, "== arg 0..."})
+	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, Expect{1, "!= arg 0..."})
+	testProg(t, "byte 0x1234; int 1; ==", AssemblerMaxVersion, Expect{1, "== arg 0..."})
+	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, Expect{1, "!= arg 0..."})
 }
 
 func TestDupTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
+	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
 	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
-	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, Expect{4, "+ arg 1..."})
+	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
+	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, Expect{1, "+ arg 1..."})
 
-	testProg(t, "byte 0x1234; int 1; dup; dig 1; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup; dig 1; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
+	testProg(t, "byte 0x1234; int 1; dup; dig 1; len", AssemblerMaxVersion, Expect{1, "len arg 0..."})
+	testProg(t, "int 1; byte 0x1234; dup; dig 1; !", AssemblerMaxVersion, Expect{1, "! arg 0..."})
 
-	testProg(t, "byte 0x1234; int 1; dup2; dig 2; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
+	testProg(t, "byte 0x1234; int 1; dup2; dig 2; len", AssemblerMaxVersion, Expect{1, "len arg 0..."})
+	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, Expect{1, "! arg 0..."})
 }
 
 func TestSelectTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
+	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, Expect{1, "len arg 0..."})
+	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, Expect{1, "! arg 0..."})
 }
 
 func TestSetBitTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
+	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, Expect{1, "len arg 0..."})
+	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{1, "! arg 0..."})
 }
 
 func TestScratchTypeCheck(t *testing.T) {
@@ -2465,13 +2377,13 @@ func TestScratchTypeCheck(t *testing.T) {
 	// All scratch slots should start as uint64
 	testProg(t, "load 0; int 1; +", AssemblerMaxVersion)
 	// Check load and store accurately using the scratch space
-	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
+	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
 	// Loads should know the type it's loading if all the slots are the same type
-	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
+	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
 	// Loads doesn't know the type when slot types vary
 	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion)
 	// Stores should only set slots to StackAny if they are not the same type as what is being stored
-	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
+	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
 	// ScratchSpace should reset after hitting label in deadcode
 	testProg(t, "byte 0x01; store 0; b label1; label1:; load 0; int 1; +", AssemblerMaxVersion)
 	// But it should reset to StackAny not uint64
@@ -2479,7 +2391,7 @@ func TestScratchTypeCheck(t *testing.T) {
 	// Callsubs should also reset the scratch space
 	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
 	// But the scratchspace should still be tracked after the callsub
-	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{5, "btoi arg 0..."})
+	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
 }
 
 func TestCoverAsm(t *testing.T) {
@@ -2487,9 +2399,9 @@ func TestCoverAsm(t *testing.T) {
 	t.Parallel()
 	testProg(t, `int 4; byte "john"; int 5; cover 2; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
+	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, Expect{1, "+ arg 1..."})
 
-	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, Expect{2, "cover unable to parse n ..."})
+	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, Expect{1, "cover unable to parse n ..."})
 }
 
 func TestUncoverAsm(t *testing.T) {
@@ -2498,38 +2410,38 @@ func TestUncoverAsm(t *testing.T) {
 	testProg(t, `int 4; byte "john"; int 5; uncover 2; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 1; byte "jj"; byte "ayush"; byte "john"; int 5; uncover 4; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
+	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, Expect{1, "+ arg 1..."})
 }
 
 func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{2, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{3, "...wanted type []byte got uint64"})
+	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type []byte got uint64"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
 
-	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{2, "itxn_field Amount expects 1 stack argument..."})
-	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{3, "...wanted type uint64 got []byte"})
+	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})
+	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got []byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
 }
 
 func TestBadInnerFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{4, "...is not allowed."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in v6..."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{4, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 5, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{1, "...Note field was introduced in v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{1, "...is not allowed."})
 
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{4, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{1, "...is not allowed."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{4, "...is not allowed."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{1, "...is not allowed."})
 }
 
 func TestTypeTracking(t *testing.T) {
@@ -2545,7 +2457,7 @@ func TestTypeTracking(t *testing.T) {
 
 	// but we do want to ensure we're not just treating the code after callsub as dead
 	testProg(t, "callsub A; int 1; concat; return; A: int 1; int 2; retsub", LogicVersion,
-		Expect{3, "concat arg 1 wanted..."})
+		Expect{1, "concat arg 1 wanted..."})
 
 	// retsub deadens code, like any unconditional branch
 	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub; concat", LogicVersion)
@@ -2669,7 +2581,7 @@ func TestAddPseudoDocTags(t *testing.T) {
 		delete(opDocByName, "any")
 	}()
 
-	pseudoOps["tests"] = map[int]OpSpec{2: OpSpec{Name: "multiple"}, 1: OpSpec{Name: "single"}, 0: OpSpec{Name: "none"}, anyImmediates: OpSpec{Name: "any"}}
+	pseudoOps["tests"] = map[int]OpSpec{2: {Name: "multiple"}, 1: {Name: "single"}, 0: {Name: "none"}, anyImmediates: {Name: "any"}}
 	addPseudoDocTags()
 	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
 	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
@@ -2683,7 +2595,45 @@ func TestReplacePseudo(t *testing.T) {
 	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
-		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{3, "replace without immediates expects 3 stack arguments but stack height is 2"})
-		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{4, "replace 0 arg 0 wanted type []byte got uint64"})
+		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{1, "replace without immediates expects 3 stack arguments but stack height is 2"})
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{1, "replace 0 arg 0 wanted type []byte got uint64"})
 	}
+}
+
+func checkSame(t *testing.T, version uint64, first string, compares ...string) {
+	t.Helper()
+	if version == 0 {
+		version = assemblerNoVersion
+	}
+	ops, err := AssembleStringWithVersion(first, version)
+	require.NoError(t, err, first)
+	for _, compare := range compares {
+		other, err := AssembleStringWithVersion(compare, version)
+		assert.NoError(t, err, compare)
+		assert.Equal(t, other.Program, ops.Program, "%s unlike %s", first, compare)
+	}
+}
+
+func TestSemiColon(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	checkSame(t, AssemblerMaxVersion,
+		"pushint 0 ; pushint 1 ; +; int 3 ; *",
+		"pushint 0\npushint 1\n+\nint 3\n*",
+		"pushint 0; pushint 1; +; int 3; *; // comment; int 2",
+		"pushint 0; ; ; pushint 1 ; +; int 3 ; *//check",
+	)
+
+	checkSame(t, 0,
+		"#pragma version 7\nint 1",
+		"// junk;\n#pragma version 7\nint 1",
+		"// junk;\n #pragma version 7\nint 1",
+	)
+
+	checkSame(t, AssemblerMaxVersion,
+		`byte "test;this"; pop;`,
+		`byte "test;this"; ; pop;`,
+		`byte "test;this";;;pop;`,
+	)
 }
