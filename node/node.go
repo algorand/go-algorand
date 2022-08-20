@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -900,7 +899,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
 	genesisDir := filepath.Join(node.rootDir, node.genesisID)
-	files, err := ioutil.ReadDir(genesisDir)
+	files, err := os.ReadDir(genesisDir)
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
 	}

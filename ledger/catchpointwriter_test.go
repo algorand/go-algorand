@@ -24,7 +24,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -235,7 +235,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(fileName)
+	fileContent, err := os.ReadFile(fileName)
 	require.NoError(t, err)
 	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)
@@ -358,7 +358,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(catchpointFilePath)
+	fileContent, err := os.ReadFile(catchpointFilePath)
 	require.NoError(t, err)
 	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)

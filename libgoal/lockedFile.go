@@ -18,7 +18,7 @@ package libgoal
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 )
 
@@ -72,7 +72,7 @@ func (f *lockedFile) read() (bytes []byte, err error) {
 		}
 	}()
 
-	bytes, err = ioutil.ReadAll(fd)
+	bytes, err = io.ReadAll(fd)
 	return
 }
 

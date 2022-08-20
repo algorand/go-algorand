@@ -19,7 +19,6 @@ package gen
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -374,7 +373,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	}
 
 	jsonData := protocol.EncodeJSON(g)
-	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
+	err = os.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
 
 	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
 		fmt.Printf("Created %d new rootkeys and %d new partkeys in %s.\n", rootKeyCreated, partKeyCreated, time.Since(createStart))

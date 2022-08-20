@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -63,7 +63,7 @@ func loadMnemonic(mnemonic string) crypto.Seed {
 }
 
 func loadKeyfile(keyfile string) crypto.Seed {
-	seedbytes, err := ioutil.ReadFile(keyfile)
+	seedbytes, err := os.ReadFile(keyfile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read key seed from %s: %v\n", keyfile, err)
 		os.Exit(1)
@@ -75,7 +75,7 @@ func loadKeyfile(keyfile string) crypto.Seed {
 }
 
 func writePrivateKey(keyfile string, seed crypto.Seed) {
-	err := ioutil.WriteFile(keyfile, seed[:], 0600)
+	err := os.WriteFile(keyfile, seed[:], 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot write key to %s: %v\n", keyfile, err)
 		os.Exit(1)
@@ -84,7 +84,7 @@ func writePrivateKey(keyfile string, seed crypto.Seed) {
 
 func writePublicKey(pubkeyfile string, checksummed string) {
 	data := fmt.Sprintf("%s\n", checksummed)
-	err := ioutil.WriteFile(pubkeyfile, []byte(data), 0666)
+	err := os.WriteFile(pubkeyfile, []byte(data), 0666)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot write public key to %s: %v\n", pubkeyfile, err)
 		os.Exit(1)
@@ -100,7 +100,7 @@ func computeMnemonic(seed crypto.Seed) string {
 	return mnemonic
 }
 
-// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// writeFile is a wrapper of os.WriteFile which considers the special
 // case of stdout filename
 func writeFile(filename string, data []byte, perm os.FileMode) error {
 	var err error
@@ -111,14 +111,14 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		}
 		return nil
 	}
-	return ioutil.WriteFile(filename, data, perm)
+	return os.WriteFile(filename, data, perm)
 }
 
-// readFile is a wrapper of ioutil.ReadFile which considers the
+// readFile is a wrapper of os.ReadFile which considers the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {
-		return ioutil.ReadAll(os.Stdin)
+		return io.ReadAll(os.Stdin)
 	}
-	return ioutil.ReadFile(filename)
+	return os.ReadFile(filename)
 }

@@ -23,7 +23,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -47,7 +47,7 @@ func main() {
 	keyfname := os.Args[1]
 	lsigfname := os.Args[2]
 
-	kdata, err := ioutil.ReadFile(keyfname)
+	kdata, err := os.ReadFile(keyfname)
 	failFast(err)
 	var seed crypto.Seed
 	copy(seed[:], kdata)
@@ -56,10 +56,10 @@ func main() {
 	if len(os.Args) == 4 {
 		// In this mode, interpret lsig-file as raw program bytes and produce a signature
 		// over the data file
-		pdata, err := ioutil.ReadFile(lsigfname)
+		pdata, err := os.ReadFile(lsigfname)
 		failFast(err)
 
-		ddata, err := ioutil.ReadFile(os.Args[3])
+		ddata, err := os.ReadFile(os.Args[3])
 		failFast(err)
 
 		dsig := sec.Sign(logic.Msg{
@@ -71,13 +71,13 @@ func main() {
 	} else {
 		// In this mode, interpret lsig-file as a LogicSig struct and sign the
 		// txid of the transaction passed over stdin
-		pdata, err := ioutil.ReadFile(lsigfname)
+		pdata, err := os.ReadFile(lsigfname)
 		failFast(err)
 		var lsig transactions.LogicSig
 		err = protocol.Decode(pdata, &lsig)
 		failFast(err)
 
-		txdata, err := ioutil.ReadAll(os.Stdin)
+		txdata, err := io.ReadAll(os.Stdin)
 		failFast(err)
 		var txn transactions.SignedTxn
 		err = protocol.Decode(txdata, &txn)

@@ -19,7 +19,6 @@ package nodecfg
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -174,9 +173,11 @@ func (nd *nodeDir) configureAPIToken(token string) (err error) {
 		return
 	}
 	fmt.Fprintf(os.Stdout, " - Assigning APIToken: %s\n", token)
-	ioutil.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodTokenFilename), []byte(token), 0600)
-	err = nd.saveConfig()
-	return
+	err = os.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodTokenFilename), []byte(token), 0600)
+	if err != nil {
+		return err
+	}
+	return nd.saveConfig()
 }
 
 func (nd *nodeDir) configureTelemetry(enable bool) (err error) {

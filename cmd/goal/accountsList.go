@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -184,7 +183,7 @@ func (accountList *AccountsList) getNameByAddress(address string) string {
 func (accountList *AccountsList) dumpList() {
 	accountsListJSON, _ := json.MarshalIndent(accountList, "", "  ")
 	accountsListJSON = append(accountsListJSON, '\n')
-	err := ioutil.WriteFile(accountList.accountListFileName(), accountsListJSON, 0644)
+	err := os.WriteFile(accountList.accountListFileName(), accountsListJSON, 0644)
 
 	if err != nil {
 		log.Error(err.Error())
@@ -197,7 +196,7 @@ func (accountList *AccountsList) loadList() {
 	// First, check if the file exists.
 	filename := accountList.accountListFileName()
 	if _, err := os.Stat(filename); err == nil {
-		raw, err := ioutil.ReadFile(filename)
+		raw, err := os.ReadFile(filename)
 		if err != nil {
 			log.Error(err.Error())
 		}

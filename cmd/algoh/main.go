@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -351,8 +350,8 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 		log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.ErrorOutputEvent, details)
 
 		// Write stdout & stderr streams to disk
-		_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdOutFilename), []byte(output.output), os.ModePerm)
-		_ = ioutil.WriteFile(filepath.Join(absolutePath, nodecontrol.StdErrFilename), []byte(errorOutput.output), os.ModePerm)
+		_ = os.WriteFile(filepath.Join(absolutePath, nodecontrol.StdOutFilename), []byte(output.output), os.ModePerm)
+		_ = os.WriteFile(filepath.Join(absolutePath, nodecontrol.StdErrFilename), []byte(errorOutput.output), os.ModePerm)
 	}
 	if errorCondition && algohConfig.UploadOnError {
 		fmt.Fprintf(os.Stdout, "Uploading logs...\n")

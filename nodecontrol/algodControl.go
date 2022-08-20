@@ -18,7 +18,6 @@ package nodecontrol
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -368,7 +367,7 @@ func (nc NodeController) GetGenesis() (bookkeeping.Genesis, error) {
 	var genesis bookkeeping.Genesis
 
 	genesisFile := filepath.Join(nc.GetDataDir(), config.GenesisJSONFile)
-	genesisText, err := ioutil.ReadFile(genesisFile)
+	genesisText, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return genesis, err
 	}
@@ -417,7 +416,7 @@ func (nc NodeController) setAlgodCmdLogFiles(cmd *exec.Cmd) (files []*os.File) {
 
 func (nc NodeController) readGenesisJSON(genesisFile string) (genesisLedger bookkeeping.Genesis, err error) {
 	// Load genesis
-	genesisText, err := ioutil.ReadFile(genesisFile)
+	genesisText, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return
 	}

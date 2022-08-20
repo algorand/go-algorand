@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/base32"
 	"encoding/base64"
-	"io/ioutil"
+	"os"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -83,7 +83,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 		var kdata []byte
 		var err error
 		if keyFilename != "" {
-			kdata, err = ioutil.ReadFile(keyFilename)
+			kdata, err = os.ReadFile(keyFilename)
 			if err != nil {
 				reportErrorf(tealsignKeyfileFail, err)
 			}
@@ -123,7 +123,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 		if lsigTxnFilename != "" {
 			// If passed a SignedTxn with a logic sig, compute
 			// the hash of the program within the logic sig
-			stxnBytes, err := ioutil.ReadFile(lsigTxnFilename)
+			stxnBytes, err := os.ReadFile(lsigTxnFilename)
 			if err != nil {
 				reportErrorf(fileReadError, lsigTxnFilename, err)
 			}
@@ -159,7 +159,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 		var dataToSign []byte
 
 		if dataFile != "" {
-			dataToSign, err = ioutil.ReadFile(dataFile)
+			dataToSign, err = os.ReadFile(dataFile)
 			if err != nil {
 				reportErrorf(tealsignParseData, err)
 			}

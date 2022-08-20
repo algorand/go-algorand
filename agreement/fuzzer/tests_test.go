@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -440,7 +439,7 @@ func TestFuzzer(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 			jsonFilename := jsonFiles[testName]
-			jsonBytes, err := ioutil.ReadFile(jsonFilename)
+			jsonBytes, err := os.ReadFile(jsonFilename)
 			require.NoError(t, err)
 			var fuzzerTest FuzzerTestFile
 			err = json.Unmarshal(jsonBytes, &fuzzerTest)

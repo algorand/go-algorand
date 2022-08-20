@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -150,7 +150,7 @@ func (cfg dispenserSiteConfig) checkRecaptcha(remoteip, response string) (r reca
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -219,7 +219,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	configText, err := ioutil.ReadFile(*configFile)
+	configText, err := os.ReadFile(*configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read config file (%s): %v\n", *configFile, err)
 		os.Exit(1)
@@ -237,7 +237,7 @@ func main() {
 	var hosts []string
 	for h, cfg := range configMap {
 		// Make a cache dir for wallet handle tokens
-		cacheDir, err := ioutil.TempDir("", "dispenser")
+		cacheDir, err := os.MkdirTemp("", "dispenser")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot make temp dir: %v\n", err)
 			os.Exit(1)

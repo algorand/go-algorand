@@ -19,7 +19,6 @@ package fixtures
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,7 +135,7 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 	}
 
 	keyDir := filepath.Join(dataDir, genID)
-	files, err := ioutil.ReadDir(keyDir)
+	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return
 	}

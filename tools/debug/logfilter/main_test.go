@@ -19,7 +19,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ func TestLogFilterExamples(t *testing.T) {
 	for _, exampleFileName := range exampleFiles {
 		// load the expected result file.
 		expectedOutFile := strings.Replace(exampleFileName, ".in", ".out.expected", 1)
-		expectedOutBytes, err := ioutil.ReadFile(expectedOutFile)
+		expectedOutBytes, err := os.ReadFile(expectedOutFile)
 		require.NoError(t, err)
 		expectedErrorCode := 0
 		if strings.Contains(string(expectedOutBytes), "FAIL") {

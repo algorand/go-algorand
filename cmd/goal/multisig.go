@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -240,7 +239,7 @@ var mergeSigCmd = &cobra.Command{
 
 		var txnLists [][]transactions.SignedTxn
 		for _, arg := range args {
-			data, err := ioutil.ReadFile(arg)
+			data, err := os.ReadFile(arg)
 			if err != nil {
 				reportErrorf(fileReadError, arg, err)
 			}

@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -102,7 +101,7 @@ var timestampCmd = &cobra.Command{
 			// Write out the genesis file in the same way we do to generate originally
 			// (see gen/generate.go)
 			jsonData := protocol.EncodeJSON(genesis)
-			err = ioutil.WriteFile(timestampFile, append(jsonData, '\n'), 0666)
+			err = os.WriteFile(timestampFile, append(jsonData, '\n'), 0666)
 			if err != nil {
 				reportErrorf("Error saving genesis file '%s': %v\n", timestampFile, err)
 			}
@@ -117,7 +116,7 @@ var dumpGenesisIDCmd = &cobra.Command{
 	Short: "Dump the genesis ID for the specified genesis file",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load genesis
-		genesisText, err := ioutil.ReadFile(genesisFile)
+		genesisText, err := os.ReadFile(genesisFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisFile, err)
 			os.Exit(1)
@@ -139,7 +138,7 @@ var dumpGenesisHashCmd = &cobra.Command{
 	Short: "Dump the genesis Hash for the specified genesis file",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load genesis
-		genesisText, err := ioutil.ReadFile(genesisFile)
+		genesisText, err := os.ReadFile(genesisFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisFile, err)
 			os.Exit(1)
@@ -206,7 +205,7 @@ var ensureCmd = &cobra.Command{
 			} else {
 				// Write source genesis (now updated with release timestamp, if applicable)
 				jsonData := protocol.EncodeJSON(sourceGenesis)
-				err = ioutil.WriteFile(targetFile, jsonData, 0666)
+				err = os.WriteFile(targetFile, jsonData, 0666)
 				if err != nil {
 					reportErrorf("Error writing target genesis file '%s': %v\n", targetFile, err)
 				}
@@ -231,13 +230,13 @@ func ensureReleaseGenesis(src bookkeeping.Genesis, releaseFile string) (err erro
 
 	releaseGenesis = src
 	jsonData := protocol.EncodeJSON(releaseGenesis)
-	err = ioutil.WriteFile(releaseFile, jsonData, 0666)
+	err = os.WriteFile(releaseFile, jsonData, 0666)
 	if err != nil {
 		return fmt.Errorf("error saving file: %v", err)
 	}
 
 	hash := releaseGenesis.Hash()
-	err = ioutil.WriteFile(releaseFileHash, []byte(hash.String()), 0666)
+	err = os.WriteFile(releaseFileHash, []byte(hash.String()), 0666)
 	if err != nil {
 		return fmt.Errorf("error saving hash file '%s': %v", releaseFileHash, err)
 	}
@@ -278,7 +277,7 @@ func verifyGenesisHashes(src, release bookkeeping.Genesis, hashFile string) (err
 		return fmt.Errorf("source and release hashes differ - genesis.json may have diverge from released version")
 	}
 
-	relHashBytes, err := ioutil.ReadFile(hashFile)
+	relHashBytes, err := os.ReadFile(hashFile)
 	if err != nil {
 		return fmt.Errorf("error loading release hash file '%s'", hashFile)
 	}

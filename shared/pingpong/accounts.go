@@ -18,7 +18,6 @@ package pingpong
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -48,7 +47,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 		return
 	}
 	genesisDir := filepath.Join(ac.DataDir(), genID)
-	files, err2 := ioutil.ReadDir(genesisDir)
+	files, err2 := os.ReadDir(genesisDir)
 	if err2 != nil {
 		err = err2
 		return
