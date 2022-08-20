@@ -150,7 +150,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 		if err != nil {
 			continue
 		}
-		if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) != -1 {
+		if strings.Contains(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) {
 			// message pack alloc bound definition was found.
 			return true
 		}

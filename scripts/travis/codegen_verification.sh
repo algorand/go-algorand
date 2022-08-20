@@ -42,7 +42,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$("$GOPATH"/bin/golangci-lint -c .golangci.yml | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
@@ -51,7 +51,7 @@ function runGoLint() {
     echo >&2 " make lint"
 
     # run the linter again to output the actual issues
-    "$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) >&2
+    "$GOPATH"/bin/golangci-lint -c .golangci.yml >&2
     return 1
 }
 

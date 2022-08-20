@@ -96,7 +96,7 @@ var addSigCmd = &cobra.Command{
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 
 		var outData []byte
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 		for {
 			var stxn transactions.SignedTxn
 			err = dec.Decode(&stxn)
@@ -245,7 +245,7 @@ var mergeSigCmd = &cobra.Command{
 				reportErrorf(fileReadError, arg, err)
 			}
 
-			dec := protocol.NewDecoderBytes(data)
+			dec := protocol.NewMsgpDecoderBytes(data)
 			var txns []transactions.SignedTxn
 			for {
 				var txn transactions.SignedTxn
