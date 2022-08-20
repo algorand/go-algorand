@@ -20,7 +20,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,7 +106,7 @@ type param struct {
 }
 
 func initCommandsFromDir(dirname string) error {
-	files, err := ioutil.ReadDir(dirname)
+	files, err := os.ReadDir(dirname)
 	if err != nil {
 		return err
 	}
@@ -137,7 +136,7 @@ func initCommandsFromDir(dirname string) error {
 		if err != nil {
 			return err
 		}
-		data, err := ioutil.ReadFile(fullpath)
+		data, err := os.ReadFile(fullpath)
 		if err != nil {
 			return err
 		}

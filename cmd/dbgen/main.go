@@ -21,7 +21,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -59,13 +59,13 @@ func main() {
 	if *inputfilename == "" {
 		panic("error: No database schema file specified")
 	}
-	input, err := ioutil.ReadFile(*inputfilename)
+	input, err := os.ReadFile(*inputfilename)
 	if err != nil {
 		panic(err)
 	}
 	header := ""
 	if *headerfilename != "" {
-		headerBytes, err := ioutil.ReadFile(*headerfilename)
+		headerBytes, err := os.ReadFile(*headerfilename)
 		if err != nil {
 			panic(err)
 		}
@@ -78,7 +78,7 @@ func main() {
 	if *outputfilename == "" {
 		fmt.Println(payload)
 	} else {
-		err := ioutil.WriteFile(*outputfilename, []byte(payload), 0666)
+		err := os.WriteFile(*outputfilename, []byte(payload), 0666)
 		if err != nil {
 			panic(err)
 		}

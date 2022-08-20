@@ -21,7 +21,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -573,7 +573,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 
 	logger := logging.NewLogger()
-	logger.SetOutput(ioutil.Discard)
+	logger.SetOutput(io.Discard)
 
 	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 

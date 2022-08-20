@@ -18,7 +18,7 @@ package bookkeeping
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -86,7 +86,7 @@ type Genesis struct {
 // LoadGenesisFromFile attempts to load a Genesis structure from a (presumably) genesis.json file.
 func LoadGenesisFromFile(genesisFile string) (genesis Genesis, err error) {
 	// Load genesis.json
-	genesisText, err := ioutil.ReadFile(genesisFile)
+	genesisText, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return
 	}

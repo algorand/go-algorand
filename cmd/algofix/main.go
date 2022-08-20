@@ -13,7 +13,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -135,7 +135,7 @@ func processFile(filename string, useStdin bool) error {
 		defer f.Close()
 	}
 
-	src, err := ioutil.ReadAll(f)
+	src, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func processFile(filename string, useStdin bool) error {
 	}
 
 	fixedSome = true
-	return ioutil.WriteFile(f.Name(), newSrc, 0)
+	return os.WriteFile(f.Name(), newSrc, 0)
 }
 
 var gofmtBuf bytes.Buffer
@@ -248,7 +248,7 @@ func isGoFile(f os.FileInfo) bool {
 }
 
 func writeTempFile(dir, prefix string, data []byte) (string, error) {
-	file, err := ioutil.TempFile(dir, prefix)
+	file, err := os.CreateTemp(dir, prefix)
 	if err != nil {
 		return "", err
 	}

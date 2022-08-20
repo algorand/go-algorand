@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -56,7 +55,7 @@ func main() {
 	}
 	var splitbytes [8]byte
 	binary.BigEndian.PutUint64(splitbytes[:], splitnum)
-	data, err := ioutil.ReadFile(os.Args[1])
+	data, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		panic(err)
 	}

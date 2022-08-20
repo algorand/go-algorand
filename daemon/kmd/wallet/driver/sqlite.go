@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -231,7 +230,7 @@ func walletMetadataFromDBPath(dbPath string) (metadata wallet.Metadata, err erro
 func (swd *SQLiteWalletDriver) potentialWalletPaths() (paths []string, err error) {
 	// List all files and folders in the wallets directory
 	wDir := swd.walletsDir()
-	files, err := ioutil.ReadDir(wDir)
+	files, err := os.ReadDir(wDir)
 	if err != nil {
 		return
 	}

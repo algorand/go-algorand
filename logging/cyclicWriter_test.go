@@ -17,7 +17,6 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -49,12 +48,12 @@ func TestCyclicWrite(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(secondWrite), n)
 
-	liveData, err := ioutil.ReadFile(liveFileName)
+	liveData, err := os.ReadFile(liveFileName)
 	require.NoError(t, err)
 	require.Len(t, liveData, len(secondWrite))
 	require.Equal(t, byte('B'), liveData[0])
 
-	oldData, err := ioutil.ReadFile(archiveFileName)
+	oldData, err := os.ReadFile(archiveFileName)
 	require.NoError(t, err)
 	require.Len(t, oldData, space)
 	for i := 0; i < space; i++ {

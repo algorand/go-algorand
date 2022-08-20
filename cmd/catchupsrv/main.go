@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -118,7 +117,7 @@ func main() {
 		var data []byte
 		if *dirFlag != "" {
 			blkPath := blockToPath(roundNumber)
-			data, err = ioutil.ReadFile(
+			data, err = os.ReadFile(
 				path.Join(
 					*dirFlag,
 					"v"+versionStr,

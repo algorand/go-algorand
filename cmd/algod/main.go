@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -119,7 +118,7 @@ func run() int {
 	}
 
 	// Load genesis
-	genesisText, err := ioutil.ReadFile(genesisPath)
+	genesisText, err := os.ReadFile(genesisPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
 		return 1

@@ -20,7 +20,6 @@ import (
 	"encoding/base32"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,7 +55,7 @@ func testIdempotentRoundtrip(t *testing.T, mpdata []byte) {
 		}
 		p1in.Close()
 	}()
-	res, err := ioutil.ReadAll(p3out)
+	res, err := io.ReadAll(p3out)
 
 	require.NoError(t, err)
 	require.Equal(t, mpdata, res)

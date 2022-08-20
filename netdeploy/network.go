@@ -19,7 +19,6 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -233,7 +232,7 @@ func saveNetworkCfg(cfg NetworkCfg, configFile string) error {
 
 func (n *Network) scanForNodes() error {
 	// Enumerate direct sub-directories of our root and look for valid node data directories (where genesis.json exists)
-	entries, err := ioutil.ReadDir(n.rootDir)
+	entries, err := os.ReadDir(n.rootDir)
 	if err != nil {
 		return err
 	}

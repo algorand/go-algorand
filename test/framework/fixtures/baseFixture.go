@@ -18,7 +18,6 @@ package fixtures
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
@@ -55,7 +54,7 @@ func (f *baseFixture) initialize(instance Fixture) {
 	}
 	f.testDir = os.Getenv("TESTDIR")
 	if f.testDir == "" {
-		f.testDir, _ = ioutil.TempDir("", "tmp")
+		f.testDir, _ = os.MkdirTemp("", "tmp")
 		f.testDirTmp = true
 	}
 	f.testDataDir = os.Getenv("TESTDATADIR")

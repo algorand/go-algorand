@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -135,7 +134,7 @@ func extractError(resp *http.Response) error {
 		return nil
 	}
 
-	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
+	errorBuf, _ := io.ReadAll(resp.Body) // ignore returned error
 	errorString := filterASCII(string(errorBuf))
 
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -221,7 +220,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return fmt.Errorf("can only decode raw response into type implementing v1.RawResponse")
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -638,7 +637,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}

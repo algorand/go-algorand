@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -57,7 +56,7 @@ func main() {
 	}
 
 	// write logo
-	tf, err := ioutil.TempFile("", "algorand-logo.png")
+	tf, err := os.CreateTemp("", "algorand-logo.png")
 	if err != nil {
 		panic(err)
 	}

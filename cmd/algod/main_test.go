@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,7 +29,7 @@ import (
 
 func BenchmarkAlgodStartup(b *testing.B) {
 	tmpDir := b.TempDir()
-	genesisFile, err := ioutil.ReadFile("../../installer/genesis/devnet/genesis.json")
+	genesisFile, err := os.ReadFile("../../installer/genesis/devnet/genesis.json")
 	require.NoError(b, err)
 
 	dataDirectory = &tmpDir
@@ -38,7 +37,7 @@ func BenchmarkAlgodStartup(b *testing.B) {
 	initAndExit = &bInitAndExit
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		err := ioutil.WriteFile(filepath.Join(tmpDir, config.GenesisJSONFile), genesisFile, 0766)
+		err := os.WriteFile(filepath.Join(tmpDir, config.GenesisJSONFile), genesisFile, 0766)
 		require.NoError(b, err)
 		fmt.Printf("file %s was written\n", filepath.Join(tmpDir, config.GenesisJSONFile))
 		run()

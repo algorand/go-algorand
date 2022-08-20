@@ -18,7 +18,6 @@ package protocol
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -146,7 +145,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 		return nil
 	})
 	for _, packageFile := range packageFiles {
-		fileBytes, err := ioutil.ReadFile(packageFile)
+		fileBytes, err := os.ReadFile(packageFile)
 		if err != nil {
 			continue
 		}
@@ -363,7 +362,11 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		err = os.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	e1 := EncodeMsgp(v0.(msgp.Marshaler))
@@ -371,8 +374,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 
 	// for debug, write out the encodings to a file
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/e1", e1, 0666)
-		ioutil.WriteFile("/tmp/e2", e2, 0666)
+		err = os.WriteFile("/tmp/e1", e1, 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/e2", e2, 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	if !reflect.DeepEqual(e1, e2) {
@@ -393,8 +402,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
-		ioutil.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+		err = os.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	// At this point, it might be that v differs from v1 and v2,
@@ -413,8 +428,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	ee2 := EncodeReflect(v1)
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/ee1", ee1, 0666)
-		ioutil.WriteFile("/tmp/ee2", ee2, 0666)
+		err = os.WriteFile("/tmp/ee1", ee1, 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/ee2", ee2, 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	if !reflect.DeepEqual(e1, ee1) {

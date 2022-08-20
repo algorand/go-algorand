@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 
@@ -198,7 +198,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(resp.Body)
 		return basics.Address{}, fmt.Errorf("application response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var appResp ApplicationIndexerResponse
@@ -229,7 +229,7 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(resp.Body)
 		return basics.AccountData{}, fmt.Errorf("account response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var accountResp AccountIndexerResponse

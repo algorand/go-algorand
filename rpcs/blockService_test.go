@@ -19,7 +19,7 @@ package rpcs
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -173,7 +173,7 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, http.StatusOK, response.StatusCode)
-	bodyData, err := ioutil.ReadAll(response.Body)
+	bodyData, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(bodyData))
 }

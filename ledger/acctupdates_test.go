@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -138,9 +137,9 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	ml.dbs.Wdb.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
-		bytes, err := ioutil.ReadFile(ml.filename + ext)
+		bytes, err := os.ReadFile(ml.filename + ext)
 		require.NoError(t, err)
-		err = ioutil.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
+		err = os.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
 		require.NoError(t, err)
 	}
 	dbs, err := db.OpenPair(newLedgerTracker.filename, false)
