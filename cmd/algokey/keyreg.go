@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -248,7 +247,7 @@ func run(params keyregCmdParams) error {
 			return fmt.Errorf("failed to write transaction to stdout: %w", err)
 		}
 	} else {
-		if err = ioutil.WriteFile(params.txFile, data, 0600); err != nil {
+		if err = os.WriteFile(params.txFile, data, 0600); err != nil {
 			return fmt.Errorf("failed to write transaction to '%s': %w", params.txFile, err)
 		}
 	}

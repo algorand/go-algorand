@@ -18,7 +18,6 @@ package stateproofs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -633,7 +632,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
-	dir, err := ioutil.TempDir("", "temporary_partkey_dir")
+	dir, err := os.MkdirTemp("", "temporary_partkey_dir")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -107,10 +106,10 @@ func main() {
 	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
 		if algodDir != "" {
 			path := filepath.Join(algodDir, "algod.net")
-			net, err := ioutil.ReadFile(path)
+			net, err := os.ReadFile(path)
 			maybefail(err, "%s: %v\n", path, err)
 			path = filepath.Join(algodDir, "algod.token")
-			token, err := ioutil.ReadFile(path)
+			token, err := os.ReadFile(path)
 			maybefail(err, "%s: %v\n", path, err)
 			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
 			maybefail(err, "bad net url %v\n", err)

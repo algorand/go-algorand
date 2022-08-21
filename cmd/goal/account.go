@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1291,7 +1290,7 @@ var importRootKeysCmd = &cobra.Command{
 		}
 
 		keyDir := filepath.Join(dataDir, genID)
-		files, err := ioutil.ReadDir(keyDir)
+		files, err := os.ReadDir(keyDir)
 		if err != nil {
 			return
 		}
@@ -1475,7 +1474,7 @@ func listParticipationKeyFiles(c *libgoal.Client) (partKeyFiles map[string]algod
 
 	// Get a list of files in the participation keys directory
 	keyDir := filepath.Join(c.DataDir(), genID)
-	files, err := ioutil.ReadDir(keyDir)
+	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return
 	}
