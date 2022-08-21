@@ -23,6 +23,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
@@ -38,7 +39,8 @@ import (
 // The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
 // It should be configured to be higher then the number of CPU cores, so that the execution pool get saturated, but not too high to avoid lockout of the
 // execution pool for a long duration of time.
-const txBacklogSize = 1000
+// Set backlog at 'approximately one block' by dividing block size by a typical transaction size.
+var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
@@ -203,7 +205,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
+		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
 	}
 
 	select {
@@ -295,7 +297,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	}
 
 	unverifiedTxnGroups := bookkeeping.SignedTxnsToGroups(unverifiedTxGroup)
-	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache(), handler.ledger)
 	if err != nil {
 		// transaction is invalid
 		logging.Base().Warnf("One or more transactions were malformed: %v", err)

@@ -28,6 +28,7 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -41,6 +42,7 @@ import (
 type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
 	latest   basics.Round
+	blocks   []bookkeeping.Block
 }
 
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
@@ -110,6 +112,25 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 	panic("not implemented")
+}
+
+func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
+	blk := l.blocks[r]
+
+	spec := transactions.SpecialAddresses{
+		FeeSink:     blk.FeeSink,
+		RewardsPool: blk.RewardsPool,
+	}
+
+	var res []transactions.SignedTxnWithAD
+
+	for _, tx := range blk.Payset {
+		if tx.Txn.MatchAddress(id, spec) {
+			signedTxn := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: tx.Txn}}
+			res = append(res, signedTxn)
+		}
+	}
+	return res, nil
 }
 
 func randomAccountWithResources(N int) basics.AccountData {

@@ -29,23 +29,23 @@ func TestRoundToIndex(t *testing.T) {
 
 	count := uint64(200)
 
-	// firstValid <= interval
+	// firstValid <= keyLifetime
 	firstValid := uint64(100)
-	interval := uint64(101)
+	keyLifetime := uint64(101)
 	ic := uint64(1)
-	checkRoundToIndex(count, ic, firstValid, interval, t)
+	checkRoundToIndex(count, ic, firstValid, keyLifetime, t)
 
-	// firstValid > interval
+	// firstValid > keyLifetime
 	firstValid = uint64(100)
-	interval = uint64(99)
+	keyLifetime = uint64(99)
 	ic = uint64(2)
-	checkRoundToIndex(count, ic, firstValid, interval, t)
+	checkRoundToIndex(count, ic, firstValid, keyLifetime, t)
 
-	// firstValid >> interval
+	// firstValid >> keyLifetime
 	firstValid = uint64(100)
-	interval = uint64(20)
+	keyLifetime = uint64(20)
 	ic = uint64(5)
-	checkRoundToIndex(count, ic, firstValid, interval, t)
+	checkRoundToIndex(count, ic, firstValid, keyLifetime, t)
 }
 
 func TestIndexToRoundToIndex(t *testing.T) {
@@ -53,63 +53,52 @@ func TestIndexToRoundToIndex(t *testing.T) {
 
 	count := uint64(200)
 	firstValid := uint64(100)
-	interval := uint64(101)
-	checkIndexToRoundToIndex(count, firstValid, interval, t)
+	keyLifetime := uint64(101)
+	checkIndexToRoundToIndex(count, firstValid, keyLifetime, t)
 
 	firstValid = uint64(100)
-	interval = uint64(99)
-	checkIndexToRoundToIndex(count, firstValid, interval, t)
+	keyLifetime = uint64(99)
+	checkIndexToRoundToIndex(count, firstValid, keyLifetime, t)
 
 	firstValid = uint64(100)
-	interval = uint64(20)
-	checkIndexToRoundToIndex(count, firstValid, interval, t)
+	keyLifetime = uint64(20)
+	checkIndexToRoundToIndex(count, firstValid, keyLifetime, t)
 }
 
 func TestErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	firstValid := uint64(100)
-	interval := uint64(101)
-	round := uint64(0)
-	require.Equal(t, errRoundNotZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
+	firstValid := uint64(101)
+	round := firstValid - 1
+	keyLifetime := round / 2
+	require.Equal(t, errRoundFirstValid, checkMerkleSignatureSchemeParams(firstValid, round, keyLifetime))
 
-	round = interval - 1
-	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
+	keyLifetime = 0
+	require.Equal(t, ErrKeyLifetimeIsZero, checkMerkleSignatureSchemeParams(firstValid, round, keyLifetime))
 
-	round = interval + 1
-	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
-	firstValid = uint64(101)
-	round = firstValid - 1
-	interval = round / 2
-	require.Equal(t, errRoundFirstValid, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
-	interval = 0
-	require.Equal(t, errIntervalZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
-	interval = 107
+	keyLifetime = 107
 	round = 107
 	firstValid = 107
-	require.NoError(t, checkMerkleSignatureSchemeParams(firstValid, round, interval))
+	require.NoError(t, checkMerkleSignatureSchemeParams(firstValid, round, keyLifetime))
 }
 
-func checkIndexToRoundToIndex(count, firstValid, interval uint64, t *testing.T) {
+func checkIndexToRoundToIndex(count, firstValid, keyLifetime uint64, t *testing.T) {
 	for pos := uint64(0); pos < count; pos++ {
-		round := indexToRound(firstValid, interval, uint64(pos))
-		index := roundToIndex(firstValid, round, interval)
+		round := indexToRound(firstValid, keyLifetime, uint64(pos))
+		index := roundToIndex(firstValid, round, keyLifetime)
 		require.Equal(t, uint64(pos), index)
 	}
 
 }
 
-func checkRoundToIndex(count, initC, firstValid, interval uint64, t *testing.T) {
+func checkRoundToIndex(count, initC, firstValid, keyLifetime uint64, t *testing.T) {
 	expIndex := uint64(0)
 	for c := initC; c < count; c++ {
-		round := interval * c
-		index := roundToIndex(firstValid, round, interval)
+		round := keyLifetime * c
+		index := roundToIndex(firstValid, round, keyLifetime)
 		require.Equal(t, expIndex, index)
 		expIndex++
-		round2 := indexToRound(firstValid, interval, index)
+		round2 := indexToRound(firstValid, keyLifetime, index)
 		require.Equal(t, round, round2)
 	}
 

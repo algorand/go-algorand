@@ -131,7 +131,7 @@ func addFile(tw *tar.Writer, filePath string) error {
 			return err
 		}
 		// copy the file data to the tarball
-		if _, err := io.Copy(tw, file); err != nil {
+		if _, err := io.CopyN(tw, file, stat.Size()); err != nil {
 			return err
 		}
 	}

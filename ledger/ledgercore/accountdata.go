@@ -52,7 +52,7 @@ type AccountBaseData struct {
 type VotingData struct {
 	VoteID       crypto.OneTimeSignatureVerifier
 	SelectionID  crypto.VRFVerifier
-	StateProofID merklesignature.Verifier
+	StateProofID merklesignature.Commitment
 
 	VoteFirstValid  basics.Round
 	VoteLastValid   basics.Round

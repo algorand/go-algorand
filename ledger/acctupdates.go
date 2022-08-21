@@ -548,8 +548,8 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 	return aul.au.ledger.GenesisProto()
 }
 
-// CompactCertVoters returns the top online accounts at round rnd.
-func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
+// VotersForStateProof returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.ao.voters.getVoters(rnd)
 }
 
