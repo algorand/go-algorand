@@ -59,7 +59,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 			accountData := baseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
-			// have the first account be the 0 address
+			// have the first account be the zero address
 			if i > 0 {
 				crypto.RandBytes(randomAccount.Address[:])
 			}

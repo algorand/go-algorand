@@ -999,13 +999,17 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			if err != nil {
 				return err
 			}
-		} else if err.Error() == "UNIQUE constraint failed: catchpointbalances.address" {
-			err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
-			if err != nil {
+		} else {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique  {
+				// address exists: overflowed account record: find addrid
+				err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
+				if err != nil {
+					return err
+				}
+			} else {
 				return err
 			}
-		} else {
-			return err
 		}
 
 		// write resources
