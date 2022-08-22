@@ -721,6 +721,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	cfg.Archival = false
 
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
