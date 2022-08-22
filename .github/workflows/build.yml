@@ -33,6 +33,7 @@ jobs:
         run: |
           export ALGORAND_DEADLOCK=enable
           export SKIP_GO_INSTALLATION=True
+          export GOPROXY=direct
           scripts/travis/build_test.sh
       # - name: Upload artifact to Github
       #   uses: actions/upload-artifact@v2
