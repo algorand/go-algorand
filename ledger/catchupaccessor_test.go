@@ -372,3 +372,53 @@ func TestVerifyCatchpoint(t *testing.T) {
 	require.Error(t, err)
 	//require.NoError(t, err)
 }
+
+func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	var progress CatchpointCatchupAccessorProgress
+	ctx := context.Background()
+
+	// content.msgpack from this:
+	fileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     basics.Round(0),
+		BlocksRound:       basics.Round(0),
+		Totals:            ledgercore.AccountTotals{},
+		TotalAccounts:     1,
+		TotalChunks:       1,
+		Catchpoint:        "",
+		BlockHeaderDigest: crypto.Digest{},
+	}
+	encodedFileHeader := protocol.Encode(&fileHeader)
+	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	require.NoError(t, err)
+
+	var balances catchpointFileBalancesChunkV6
+	balances.Balances = make([]encodedBalanceRecordV6, 1)
+	var randomAccount encodedBalanceRecordV6
+	accountData := baseAccountData{}
+	accountData.MicroAlgos.Raw = crypto.RandUint63()
+	accountData.TotalAppParams = 1
+	randomAccount.AccountData = protocol.Encode(&accountData)
+	crypto.RandBytes(randomAccount.Address[:])
+	binary.LittleEndian.PutUint64(randomAccount.Address[:], 0)
+	balances.Balances[0] = randomAccount
+	encodedAccounts := protocol.Encode(&balances)
+
+	// expect error since there is a resource count mismatch
+	err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+	require.Error(t, err)
+}
