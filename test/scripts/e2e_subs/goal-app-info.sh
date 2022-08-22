@@ -46,7 +46,7 @@ fi
 # Use the Python SDK to get the expected app escrow address
 EXPECTED_APP_ACCOUNT=$(python3 -c "from algosdk.logic import get_application_address;print(get_application_address($APPID))")
 if [[ $EXPECTED_APP_ACCOUNT != ${ACTUAL_APP_ACCOUNT[2]} ]]; then
-    date "+${scriptname} FAIL returned app account does not match TODO != ${ACTUAL_APP_ACCOUNT[2]} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL returned app account does not match ${EXPECTED_APP_ACCOUNT} != ${ACTUAL_APP_ACCOUNT[2]} %Y%m%d_%H%M%S"
     false
 fi
 
