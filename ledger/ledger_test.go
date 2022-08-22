@@ -2665,6 +2665,7 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
