@@ -20,7 +20,6 @@ github.com/algorand/websocket v1.4.5/go.mod h1:79n6FSZY08yQagHzE/YWZqTPBYfY5wc3I
 github.com/aws/aws-sdk-go v1.16.5 h1:NVxzZXIuwX828VcJrpNxxWjur1tlOBISdMdDdHIKHcc=
 github.com/aws/aws-sdk-go v1.16.5/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e h1:CHPYEbz71w8DqJ7DRIq+MXyCQsdibK08vdcQTY4ufas=
-github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e/go.mod h1:6Xhs0ZlsRjXLIiSMLKafbZxML/j30pg9Z1priLuha5s=
 github.com/consensys/gnark-crypto v0.7.0 h1:rwdy8+ssmLYRqKp+ryRRgQJl/rCq2uv+n83cOydm5UE=
 github.com/consensys/gnark-crypto v0.7.0/go.mod h1:KPSuJzyxkJA8xZ/+CV47tyqkr9MmpZA3PXivK4VPrVg=
 github.com/cpuguy83/go-md2man v1.0.8 h1:DwoNytLphI8hzS2Af4D0dfaEaiSq2bN05mEm4R6vf8M=
