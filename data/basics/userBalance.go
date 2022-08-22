@@ -624,8 +624,9 @@ func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgo
 	// because perRewardUnit >= proto.RewardUnit, as long
 	// as u.RewardBase isn't huge enough to cause overflow..
 	if overflowed {
-		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)",
-			microAlgos.ToUint64(), genesisProto.RewardUnit, rewardsBase, genesisProto.RewardUnit)
+		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)", microAlgos.ToUint64(), genesisProto.RewardUnit, rewardsBase, genesisProto.RewardUnit)
+		// } else {
+		// 	logging.Base().Warnf("norm=%d (%d * %d / (%d + %d))", norm, microAlgos.ToUint64(), genesisProto.RewardUnit, rewardsBase, genesisProto.RewardUnit)
 	}
 
 	return norm

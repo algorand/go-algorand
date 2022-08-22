@@ -283,6 +283,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
+	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
 	_, err := ao.onlineTotals(latest + 1)
 	require.Error(t, err)
 

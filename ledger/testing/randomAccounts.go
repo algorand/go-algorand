@@ -305,6 +305,27 @@ func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 	return res
 }
 
+// RandomOnlineAccounts creates num simple online accounts
+func RandomOnlineAccounts(num int) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+
+	for i := uint64(0); i < uint64(num); i++ {
+		var data basics.AccountData
+
+		// Avoid overflowing totals
+		data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+
+		data.Status = basics.Online
+		data.VoteLastValid = 10000000
+
+		data.VoteFirstValid = 0
+		data.RewardsBase = 0
+
+		res[RandomAddress()] = data
+	}
+	return res
+}
+
 // RandomDeltas generates a random set of accounts delta
 func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
 	var lastCreatableID basics.CreatableIndex

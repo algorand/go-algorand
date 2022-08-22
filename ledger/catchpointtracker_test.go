@@ -474,6 +474,8 @@ func TestCatchpoint_ReproducibleLabels(t *testing.T) {
 	}
 	lastRound := i
 
+	t.Logf("Applying blocks to forked ledgers...")
+
 	// Test in reverse what happens when we try to repeat the exact same blocks.
 	// Start off with the catchpoint before the last one.
 	for startingRound := lastRound - basics.Round(cfg.CatchpointInterval); uint64(startingRound) > protoParams.CatchpointLookback; startingRound -= basics.Round(cfg.CatchpointInterval) {
@@ -508,6 +510,8 @@ func TestCatchpoint_ReproducibleLabels(t *testing.T) {
 			}
 		}
 	}
+
+	t.Logf("Done with forked ledgers")
 
 	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
 	require.NotZero(t, len(ct.roundDigest))

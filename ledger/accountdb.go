@@ -2740,7 +2740,7 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 	return
 }
 
-func (qs *onlineAccountsDbQueries) lookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
+func (qs *onlineAccountsDbQueries) lookupOnlineTotalsForRound(round basics.Round) (basics.MicroAlgos, error) {
 	data := ledgercore.OnlineRoundParamsData{}
 	err := db.Retry(func() error {
 		row := qs.lookupOnlineTotalsStmt.QueryRow(round)

@@ -526,7 +526,7 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 		ao.log.Errorf("onlineTotalsImpl error:  %w", err)
 	}
 
-	totalsOnline, err = ao.accountsq.lookupOnlineTotalsHistory(rnd)
+	totalsOnline, err = ao.accountsq.lookupOnlineTotalsForRound(rnd)
 	return totalsOnline, err
 }
 
@@ -896,11 +896,12 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 		if err != nil {
 			return nil, basics.MicroAlgos{}, err
 		}
+		fmt.Printf("totalOnlineStake = %d\n", totalOnlineStake.Raw)
 		ot := basics.OverflowTracker{}
 		for _, oa := range invalidOnlineAccounts {
 			totalOnlineStake = ot.SubA(totalOnlineStake, oa.MicroAlgos)
 			if ot.Overflowed {
-				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
+				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound: %d - %d", totalOnlineStake.Raw, oa.MicroAlgos.Raw)
 			}
 			if params.StateProofExcludeTotalWeightWithRewards {
 				rewards := basics.PendingRewards(&ot, *params, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)

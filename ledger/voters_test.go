@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -50,27 +49,6 @@ func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64)
 	}
 }
 
-func makeRandomOnlineAccounts(numberOfAccounts uint64) map[basics.Address]basics.AccountData {
-	res := make(map[basics.Address]basics.AccountData)
-
-	for i := uint64(0); i < numberOfAccounts; i++ {
-		var data basics.AccountData
-
-		// Avoid overflowing totals
-		data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
-
-		data.Status = basics.Online
-		data.VoteLastValid = 10000000
-
-		data.VoteFirstValid = 0
-		data.RewardsBase = 0
-
-		res[ledgertesting.RandomAddress()] = data
-	}
-
-	return res
-}
-
 func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -79,7 +57,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	numOfIntervals := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals - 1
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -150,7 +128,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	recoveryIntervalForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -237,7 +215,7 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
