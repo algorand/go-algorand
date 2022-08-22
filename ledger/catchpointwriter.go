@@ -38,7 +38,7 @@ const (
 
 	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
 	// 3000000 resources * 300B/resource => roughly max 1GB per chunk
-	DefaultMaxResourcesPerChunk = 3000000
+	DefaultMaxResourcesPerChunk = 300000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
