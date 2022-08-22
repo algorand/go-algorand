@@ -896,6 +896,15 @@ func TestBytecTooFar(t *testing.T) {
 	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
 }
 
+func TestManualCBlockEval(t *testing.T) {
+	// TestManualCBlock in assembler_test.go demonstrates that these will use
+	// an inserted constant block.
+	testAccepts(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", 2)
+	testAccepts(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", 2)
+	testAccepts(t, "byte 0x2222; byte 0x2222; concat; len; int 4; ==; return; bytecblock 0x11", 2)
+	testAccepts(t, "b skip; bytecblock 0x11; skip: byte 0x2222; byte 0x2222; concat; len; int 4; ==", 2)
+}
+
 func TestTxnBadField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
