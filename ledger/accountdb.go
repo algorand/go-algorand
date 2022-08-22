@@ -302,7 +302,7 @@ type compactAccountDeltas struct {
 }
 
 // onlineAccountDelta track all changes of account state within a range,
-// used in conjunction wih compactOnlineAccountDeltas to group and represent per-account changes.
+// used in conjunction with compactOnlineAccountDeltas to group and represent per-account changes.
 // oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
 // to determine if the acct became online or went offline.
 type onlineAccountDelta struct {
@@ -1593,7 +1593,7 @@ func (bo *baseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) 
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding    resourceFlags = 0 //nolint:deadcode,varcheck
+	resourceFlagsHolding    resourceFlags = 0
 	resourceFlagsNotHolding resourceFlags = 1
 	resourceFlagsOwnership  resourceFlags = 2
 	resourceFlagsEmptyAsset resourceFlags = 4

@@ -1041,14 +1041,17 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
+		if err != nil {
+			return ledgercore.AccountResource{}, basics.Round(0), err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.addrid != 0 {
 				// if we read actual data return it
 				au.baseResources.writePending(persistedData, addr)
-				return persistedData.AccountResource(), rnd, err
+				return persistedData.AccountResource(), rnd, nil
 			}
 			// otherwise return empty
-			return ledgercore.AccountResource{}, rnd, err
+			return ledgercore.AccountResource{}, rnd, nil
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
@@ -1140,19 +1143,22 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
+		if err != nil {
+			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
-				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, err
+				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// otherwise return empty
-			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, err
+			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+				return ledgercore.AccountData{}, basics.Round(0), "", 0, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1162,7 +1168,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
-			return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.AccountData{}, basics.Round(0), "", 0, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1219,9 +1225,11 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 		}
 		// Check the database
 		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
-
+		if err != nil {
+			return basics.Address{}, false, err
+		}
 		if dbRound == currentDbRound {
-			return
+			return creator, ok, nil
 		}
 		if synchronized {
 			if dbRound < currentDbRound {

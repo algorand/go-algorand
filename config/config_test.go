@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -245,7 +244,7 @@ func TestConfigExampleIsCorrect(t *testing.T) {
 // see their default (zero) values and instead see the
 // new default because they won't exist in the old file.
 func loadWithoutDefaults(cfg Local) (Local, error) {
-	file, err := ioutil.TempFile("", "lwd")
+	file, err := os.CreateTemp("", "lwd")
 	if err != nil {
 		return Local{}, err
 	}

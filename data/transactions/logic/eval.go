@@ -1341,17 +1341,17 @@ func opLt(cx *EvalContext) error {
 // opSwap, opLt, and opNot always succeed (return nil). So error checking elided in Gt,Le,Ge
 
 func opGt(cx *EvalContext) error {
-	opSwap(cx)
+	opSwap(cx) //nolint:errcheck // opSwap always succeeds
 	return opLt(cx)
 }
 
 func opLe(cx *EvalContext) error {
-	opGt(cx)
+	opGt(cx) //nolint:errcheck // opGt always succeeds
 	return opNot(cx)
 }
 
 func opGe(cx *EvalContext) error {
-	opLt(cx)
+	opLt(cx) //nolint:errcheck // opLt always succeeds
 	return opNot(cx)
 }
 
