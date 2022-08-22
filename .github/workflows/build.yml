@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.17.9'
       - name: Restore libsodium from cache
@@ -27,6 +27,8 @@ jobs:
         with:
           path: crypto/libs
           key: libsodium-fork-v2-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: clean go mod cache
+        run: go clean -modcache
       - name: Build
         run: |
           export ALGORAND_DEADLOCK=enable
