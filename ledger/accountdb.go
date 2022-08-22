@@ -4239,6 +4239,7 @@ func processAllResources(
 		}
 		count++
 		if resourceCount > 0 && count == resourceCount {
+			// last resource to be included in chunk
 			err := callback(addr, aidx, &resData, buf, true)
 			return pendingResourceRow{}, count, err
 		}
