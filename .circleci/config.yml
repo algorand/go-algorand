@@ -477,7 +477,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
     steps:
@@ -544,7 +544,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_large
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 10
     environment:
