@@ -38,6 +38,7 @@ GO_DEPS=(
     "$GO_BIN/golint"
     "$GO_BIN/stringer"
     "$GO_BIN/msgp"
+    "$GO_BIN/golangci-lint"
 )
 
 check_deps() {

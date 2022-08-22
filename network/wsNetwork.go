@@ -22,7 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -2031,7 +2031,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which alredy finsihed reading all the data from the network
 			// and placed it all in a ioutil.NopCloser reader.
-			bodyBytes, _ := ioutil.ReadAll(response.Body)
+			bodyBytes, _ := io.ReadAll(response.Body)
 			errString := string(bodyBytes)
 			if len(errString) > 128 {
 				errString = errString[:128]

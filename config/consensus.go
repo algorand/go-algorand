@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -595,7 +594,7 @@ func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) 
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
 	return err
 }
 
