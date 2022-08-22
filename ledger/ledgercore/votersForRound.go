@@ -36,7 +36,7 @@ type OnlineAccountsFetcher interface {
 	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 	// balance and address, whose voting keys are valid in voteRnd.  See the
 	// normalization description in AccountData.NormalizedOnlineBalance().
-	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params config.ConsensusParams, hdr bookkeeping.BlockHeader) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
+	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
@@ -113,7 +113,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	// using the balances from round r.
 	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters, tr.Proto, hdr)
+	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters, tr.Proto, hdr.RewardsLevel)
 	if err != nil {
 		return err
 	}
