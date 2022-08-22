@@ -204,7 +204,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV34
+const ConsensusCurrentVersion = ConsensusV35
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
