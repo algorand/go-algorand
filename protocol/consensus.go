@@ -187,6 +187,11 @@ const ConsensusV34 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
 )
 
+// ConsensusV35 updates the calculation of total stake in state proofs.
+const ConsensusV35 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/285eb74fb13a76b30219426799fa82bccbc311f2",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
