@@ -82,9 +82,9 @@ if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; t
 fi
 
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
-    make -d build build-race
+    make build build-race
     duration "make build build-race"
 else
-    make -d build
+    make build
     duration "make build"
 fi
