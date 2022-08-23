@@ -38,19 +38,19 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: medium
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1
+    resource_class: algorand/macstadium-m1-macos11
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
@@ -228,12 +228,12 @@ commands:
       - restore_libsodium
       - restore_cache:
           keys:
-            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v3-{{ arch }}-'
+            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-'
+            - 'go-cache-v4-{{ arch }}-'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -246,11 +246,11 @@ commands:
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
-          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+          key: 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
           paths:
             - tmp/go-cache
 
@@ -263,7 +263,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
+          key: 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
 
@@ -277,7 +277,7 @@ commands:
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
+            - 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 
   generic_test:
     description: Run build tests from build workspace, for re-use by diferent architectures
@@ -616,7 +616,7 @@ jobs:
       - run:
           no_output_timeout: 45m
           command: |
-            #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export SKIP_GO_INSTALLATION=True
@@ -631,9 +631,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout
@@ -646,9 +646,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout
