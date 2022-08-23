@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -83,7 +82,7 @@ func fileAccounts(ac *libgoal.Client) (out <-chan *crypto.SignatureSecrets, err 
 		return
 	}
 	genesisDir := filepath.Join(ac.DataDir(), genID)
-	files, err2 := ioutil.ReadDir(genesisDir)
+	files, err2 := os.ReadDir(genesisDir)
 	if err2 != nil {
 		err = err2
 		return

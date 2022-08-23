@@ -634,7 +634,6 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
-			err = nil
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
@@ -764,7 +763,6 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			}
 			// the round number cannot be found in deltas, it is in history
 			inMemory = false
-			err = nil
 		}
 
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)

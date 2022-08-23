@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/libgoal"
@@ -101,7 +101,7 @@ func (componentInstance *PingPongComponentInstance) Terminate() (err error) {
 
 func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.PpConfig) (err error) {
 	// Make a cache dir for wallet handle tokens
-	cacheDir, err := ioutil.TempDir(GetHostAgent().TempDir, PINGPONG)
+	cacheDir, err := os.MkdirTemp(GetHostAgent().TempDir, PINGPONG)
 	if err != nil {
 		log.Errorf("Cannot make temp dir: %v\n", err)
 		return

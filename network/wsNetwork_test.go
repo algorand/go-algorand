@@ -1838,7 +1838,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	require.NoError(t, netB.RegisterMessageInterest(ft2))
+	netB.RegisterMessageInterest(ft2)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
