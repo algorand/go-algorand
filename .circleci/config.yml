@@ -226,9 +226,9 @@ commands:
       - checkout
       - prepare_go
       - restore_libsodium
-      - restore_cache:
-          keys:
-            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+      # - restore_cache:
+      #     keys:
+      #       - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
             - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
@@ -245,10 +245,10 @@ commands:
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
-      - save_cache:
-          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-          paths:
-            - << parameters.build_dir >>/go/pkg/mod
+      # - save_cache:
+      #     key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+      #     paths:
+      #       - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
           key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
           paths:
