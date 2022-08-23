@@ -19,12 +19,14 @@ package simulation
 import (
 	"errors"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // ==============================
@@ -95,26 +97,68 @@ func MakeSimulator(ledger *data.Ledger) *Simulator {
 	}
 }
 
+func txnHasNoSignature(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank()
+}
+
+type missingSigInfo struct {
+	index    int
+	authAddr basics.Address
+}
+
+// A randomly generated private key. The actual value does not matter, as long as this is a valid
+// private key.
+var proxySigner = crypto.PrivateKey{
+	128, 128, 92, 23, 212, 119, 175, 51, 157, 2, 165,
+	215, 137, 37, 82, 42, 52, 227, 54, 41, 243, 67,
+	141, 76, 208, 17, 199, 17, 140, 46, 113, 0, 159,
+	50, 105, 52, 77, 104, 118, 200, 104, 220, 105, 21,
+	147, 162, 191, 236, 115, 201, 197, 128, 8, 91, 224,
+	78, 104, 209, 2, 185, 110, 28, 42, 97,
+}
+
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (isMissingSigs bool, err error) {
-	// verify the signed transactions are well-formed and have valid or missing signatures
-	_, err = verify.TxnGroupWithMissingSignatures(txgroup, hdr, nil)
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn) (bool, error) {
+	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
-		err = InvalidTxGroupError{SimulatorError{err}}
-		return
+		return false, err
 	}
 
-	// determine whether signatures are missing
-	for _, tx := range txgroup {
-		if verify.TxnIsMissingSig(&tx) {
-			isMissingSigs = true
-			break
+	missingSigs := make([]missingSigInfo, 0, len(txgroup))
+	for i, stxn := range txgroup {
+		if stxn.Txn.Type == protocol.CompactCertTx {
+			return false, errors.New("cannot simulate CompactCert transactions")
+		}
+		if txnHasNoSignature(stxn) {
+			missingSigs = append(missingSigs, missingSigInfo{
+				index:    i,
+				authAddr: stxn.AuthAddr,
+			})
+
+			// Replace the signed txn with one signed by the proxySigner. This will allow the
+			// transaction to pass verification, and we will restore the original signed transaction
+			// before evaluation.
+			txgroup[i] = stxn.Txn.Sign(proxySignerSecrets)
 		}
 	}
 
-	return
+	// Verify the signed transactions are well-formed and have valid signatures
+	_, err = verify.TxnGroup(txgroup, hdr, nil)
+	if err != nil {
+		return false, InvalidTxGroupError{SimulatorError{err}}
+	}
+
+	// Restore any transactions that were missing signatures
+	for _, missingSig := range missingSigs {
+		txgroup[missingSig.index] = transactions.SignedTxn{
+			Txn:      txgroup[missingSig.index].Txn,
+			AuthAddr: missingSig.authAddr,
+		}
+	}
+
+	return len(missingSigs) != 0, nil
 }
 
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn) (*ledgercore.ValidatedBlock, error) {
@@ -142,20 +186,20 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
-		return
+		return nil, false, err
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err = s.check(hdr, txgroup)
+	missingSignatures, err := s.check(hdr, txgroup)
 	if err != nil {
-		return
+		return nil, false, err
 	}
 
-	vb, err = s.evaluate(hdr, txgroup)
-	return
+	vb, err := s.evaluate(hdr, txgroup)
+	return vb, missingSignatures, err
 }

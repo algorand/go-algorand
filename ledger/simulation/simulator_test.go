@@ -260,6 +260,28 @@ func TestOverspendPayTxn(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
 }
 
+func TestCompactCertTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, _, makeTxnHeader := prepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type:   protocol.CompactCertTx,
+				Header: makeTxnHeader(transactions.CompactCertSender),
+				// No need to fill out CompactCertTxnFields, this should fail at signature verification
+			},
+		},
+	}
+
+	_, _, err := s.Simulate(txgroup)
+	require.ErrorContains(t, err, "cannot simulate CompactCert transactions")
+}
+
 func TestSimpleGroupTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

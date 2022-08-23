@@ -97,8 +97,6 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 		g.minAvmVersion == other.minAvmVersion
 }
 
-var errMissingSig = errors.New("signedtxn has no sig")
-
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
@@ -135,19 +133,9 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, false)
-}
-
-// TxnGroupWithMissingSignatures verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
-func TxnGroupWithMissingSignatures(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, true)
-}
-
-// txnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
-func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ignoreMissingSigs bool) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier, ignoreMissingSigs); err != nil {
+	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier); err != nil {
 		return nil, err
 	}
 
@@ -163,15 +151,9 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 }
 
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
-// it is the caller's responsibility to call batchVerifier.verify()
+// it is the caller responsibility to call batchVerifier.verify()
 func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
-	return txnGroupBatchVerify(stxs, contextHdr, cache, verifier, false)
-}
-
-// txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
-// it is the caller's responsibility to call batchVerifier.verify()
-func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, ignoreMissingSigs bool) (*GroupContext, error) {
-	groupCtx, err := PrepareGroupContext(stxs, contextHdr)
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
 	}
@@ -181,11 +163,8 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	for i, stxn := range stxs {
 		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
 		if err != nil {
-			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && ignoreMissingSigs
-			if !isIgnoredMissingSigError {
-				err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
-				return nil, err
-			}
+			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+			return
 		}
 		if stxn.Txn.Type != protocol.CompactCertTx {
 			minFeeCount++
@@ -195,7 +174,7 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
 		err = fmt.Errorf("txgroup fee requirement overflow")
-		return nil, err
+		return
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
@@ -203,16 +182,20 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
 			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
-		return nil, err
+		return
 	}
 
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}
-	return groupCtx, nil
+	return
 }
 
-func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig bool, hasLogicSig bool) {
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+	numSigs := 0
+	hasSig := false
+	hasMsig := false
+	hasLogicSig := false
 	if s.Sig != (crypto.Signature{}) {
 		numSigs++
 		hasSig = true
@@ -225,38 +208,18 @@ func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig
 		numSigs++
 		hasLogicSig = true
 	}
-	return
-}
-
-// Special case: special sender address can issue special transaction
-// types (compact cert txn) without any signature.  The well-formed
-// check ensures that this transaction cannot pay any fee, and
-// cannot have any other interesting fields, except for the compact
-// cert payload.
-func isCompactCertSpecialCase(s *transactions.SignedTxn) bool {
-	return s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx
-}
-
-// TxnIsMissingSig returns true if the transaction is unsigned without reason, false otherwise.
-// Transactions are allowed to be unsigned if they are special cases, such as a compact cert transaction.
-func TxnIsMissingSig(s *transactions.SignedTxn) bool {
-	numSigs, _, _, _ := identifySigs(s)
-	return numSigs == 0 && !isCompactCertSpecialCase(s)
-}
-
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
-	if TxnIsMissingSig(s) {
-		return errMissingSig
-	}
-
-	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)
-
-	// if numSigs is 0 then we end early because this is a special case;
-	// otherwise it would have been caught by TxnIsMissingSig
 	if numSigs == 0 {
-		return nil
-	}
+		// Special case: special sender address can issue special transaction
+		// types (compact cert txn) without any signature.  The well-formed
+		// check ensures that this transaction cannot pay any fee, and
+		// cannot have any other interesting fields, except for the compact
+		// cert payload.
+		if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
+			return nil
+		}
 
+		return errors.New("signedtxn has no sig")
+	}
 	if numSigs > 1 {
 		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
