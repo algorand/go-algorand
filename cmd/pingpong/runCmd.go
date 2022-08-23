@@ -406,7 +406,10 @@ var runCmd = &cobra.Command{
 		}
 
 		if saveConfig {
-			cfg.Save(dataDirCfgPath)
+			err = cfg.Save(dataDirCfgPath)
+			if err != nil {
+				reportErrorf("%s: could not save config, %v\n", dataDirCfgPath, err)
+			}
 		}
 
 		reportInfof("Preparing to run PingPong with config:\n")

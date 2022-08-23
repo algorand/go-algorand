@@ -719,8 +719,8 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		if err != nil {
 			return
 		}
-		txgroup = txgroup[:0]
-		senders = senders[:0]
+		//txgroup = txgroup[:0]
+		//senders = senders[:0]
 	}
 	return
 }

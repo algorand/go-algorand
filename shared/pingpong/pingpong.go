@@ -74,7 +74,7 @@ func (ppa *pingPongAccount) addBalance(offset int64) {
 		atomic.AddUint64(&ppa.balance, uint64(offset))
 		return
 	}
-	for true {
+	for {
 		v := atomic.LoadUint64(&ppa.balance)
 		nv := v - uint64(-offset)
 		done := atomic.CompareAndSwapUint64(&ppa.balance, v, nv)
@@ -970,7 +970,7 @@ func pReplace(i int) bool {
 	return rand.Intn(i) == 0
 }
 
-func (pps *WorkerState) constructAssetTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select a pair of random opted-in accounts by aidx
 	// use them as from/to addresses
 	amt := uint64(1)
@@ -1026,7 +1026,7 @@ func (pps *WorkerState) constructAssetTxn(from, to string, fee uint64, client *l
 		toAcct = fromAcct
 	}
 
-	to = toAcct.pk.String()
+	to := toAcct.pk.String()
 	from = fromAcct.pk.String()
 	sender = from
 	if to != from {
