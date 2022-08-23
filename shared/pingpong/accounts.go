@@ -19,7 +19,6 @@ package pingpong
 import (
 	"encoding/binary"
 	"fmt"
-	"io/fs"
 	"log"
 	"math/rand"
 	"os"
@@ -93,7 +92,7 @@ func fileAccounts(ac *libgoal.Client) (out <-chan *crypto.SignatureSecrets, err 
 	return ch, nil
 }
 
-func enumerateFileAccounts(files []fs.FileInfo, genesisDir string, out chan<- *crypto.SignatureSecrets) {
+func enumerateFileAccounts(files []os.DirEntry, genesisDir string, out chan<- *crypto.SignatureSecrets) {
 	for _, info := range files {
 		var handle db.Accessor
 
