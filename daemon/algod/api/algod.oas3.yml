@@ -630,16 +630,6 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "StateProofResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/StateProof"
-            }
-          }
-        },
-        "description": "StateProofResponse wraps the StateProof type in a response."
-      },
       "SimulationResponse": {
         "content": {
           "application/json": {
@@ -663,6 +653,16 @@
           }
         },
         "description": "Result of a transaction group simulation."
+      },
+      "StateProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StateProof"
+            }
+          }
+        },
+        "description": "StateProofResponse wraps the StateProof type in a response."
       },
       "SupplyResponse": {
         "content": {

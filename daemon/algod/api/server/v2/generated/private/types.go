@@ -761,9 +761,6 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// StateProofResponse defines model for StateProofResponse.
-type StateProofResponse StateProof
-
 // SimulationResponse defines model for SimulationResponse.
 type SimulationResponse struct {
 
@@ -773,6 +770,9 @@ type SimulationResponse struct {
 	// \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
 	MissingSignatures bool `json:"missing-signatures"`
 }
+
+// StateProofResponse defines model for StateProofResponse.
+type StateProofResponse StateProof
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {

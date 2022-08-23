@@ -128,8 +128,8 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 
 	missingSigs := make([]missingSigInfo, 0, len(txgroup))
 	for i, stxn := range txgroup {
-		if stxn.Txn.Type == protocol.CompactCertTx {
-			return false, errors.New("cannot simulate CompactCert transactions")
+		if stxn.Txn.Type == protocol.StateProofTx {
+			return false, errors.New("cannot simulate StateProof transactions")
 		}
 		if txnHasNoSignature(stxn) {
 			missingSigs = append(missingSigs, missingSigInfo{
@@ -145,7 +145,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroup(txgroup, hdr, nil)
+	_, err = verify.TxnGroup(txgroup, hdr, nil, s.ledger)
 	if err != nil {
 		return false, InvalidTxGroupError{SimulatorError{err}}
 	}

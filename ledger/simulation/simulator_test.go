@@ -312,7 +312,7 @@ func TestAuthAddrTxn(t *testing.T) {
 	}
 }
 
-func TestCompactCertTxn(t *testing.T) {
+func TestStateProofTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -323,15 +323,15 @@ func TestCompactCertTxn(t *testing.T) {
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
-				Type:   protocol.CompactCertTx,
-				Header: makeTxnHeader(transactions.CompactCertSender),
-				// No need to fill out CompactCertTxnFields, this should fail at signature verification
+				Type:   protocol.StateProofTx,
+				Header: makeTxnHeader(transactions.StateProofSender),
+				// No need to fill out StateProofTxnFields, this should fail at signature verification
 			},
 		},
 	}
 
 	_, _, err := s.Simulate(txgroup)
-	require.ErrorContains(t, err, "cannot simulate CompactCert transactions")
+	require.ErrorContains(t, err, "cannot simulate StateProof transactions")
 }
 
 func TestSimpleGroupTxn(t *testing.T) {
