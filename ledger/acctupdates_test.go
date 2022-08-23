@@ -291,7 +291,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Error(t, err)
 	require.Equal(t, basics.Round(0), validThrough)
 
-	if base > 0 {
+	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
