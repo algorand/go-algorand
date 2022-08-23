@@ -5,14 +5,12 @@ run:
 linters:
   disable-all: true
   enable:
-    - staticcheck
+    - deadcode
+    - partitiontest
     - structcheck
     - typecheck
     - varcheck
-    - deadcode
-    - gosimple
     - unused
-    - partitiontest
 
 
 linters-settings:

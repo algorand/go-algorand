@@ -47,8 +47,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO: change to ConsensusCurrentVersion when updated
-var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+var stateProofIntervalForTests = config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 
 func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
 	return getRegistryImpl(t, true, false)
@@ -82,16 +81,21 @@ func assertParticipation(t testing.TB, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.KeyDilution, pr.KeyDilution)
 	require.Equal(t, p.Parent, pr.Account)
 	if p.StateProofSecrets != nil {
-		require.Equal(t, p.StateProofSecrets.GetVerifier()[:], pr.StateProof[:])
+		require.Equal(t, p.StateProofSecrets.GetVerifier().Commitment[:], pr.StateProof.Commitment[:])
+		require.Equal(t, p.StateProofSecrets.GetVerifier().KeyLifetime, pr.StateProof.KeyLifetime)
 	}
 
 }
 
 func makeTestParticipation(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64) Participation {
+	return makeTestParticipationWithLifetime(a, addrID, first, last, dilution, uint64((last+1)/2))
+}
+
+func makeTestParticipationWithLifetime(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64, keyLifetime uint64) Participation {
 	a.True(first < last)
 
 	// Generate sample of stateproof keys. because it might take time we will reduce the number always to get 2 keys
-	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), (uint64(last)+1)/2)
+	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), keyLifetime)
 	a.NoError(err)
 
 	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
@@ -314,6 +318,67 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 	a.NoError(registry.initializeCache())
 	checkExpired(registry.GetAll())
+}
+
+func TestParticipation_CleanupTablesAfterDeleteExpired(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
+
+	keyDilution := 1
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(a, i, 1, basics.Round(i), uint64(keyDilution))
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+
+		err = registry.AppendKeys(id, p.StateProofSecrets.GetAllKeys())
+		a.NoError(err)
+	}
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	latestRound := basics.Round(50)
+	err := registry.DeleteExpired(latestRound, config.Consensus[protocol.ConsensusCurrentVersion])
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+	var numOfRecords int
+	// make sure tables are clean
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from Keysets`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
+
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from Rolling`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
+
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from stateproofkeys`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
 }
 
 // Make sure the register function properly sets effective first/last for all effected records.
@@ -849,7 +914,7 @@ func TestAddStateProofKeys(t *testing.T) {
 
 	// Install a key to add StateProof keys.
 	max := uint64(20)
-	p := makeTestParticipation(a, 1, 0, basics.Round(max), 3)
+	p := makeTestParticipationWithLifetime(a, 1, 0, basics.Round(max), 3, 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
@@ -861,15 +926,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	signer, err := merklesignature.New(1, max, 3)
 	a.NoError(err)
 	// Initialize keys array.
-	var keys StateProofKeys
-	for i := uint64(1); i < max; i++ {
-		k := signer.GetKey(i)
-		if k == nil {
-			continue
-		}
-		keysRound := merklesignature.KeyRoundPair{Round: i, Key: k}
-		keys = append(keys, keysRound)
-	}
+	keys := signer.GetAllKeys()
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -878,18 +935,26 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	j := 0
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(1))
+	a.Error(err)
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(2))
+	a.Error(err)
+
 	// Make sure we're able to fetch the same data that was put in.
-	for i := uint64(1); i < max; i++ {
-		r, err := registry.GetStateProofForRound(id, basics.Round(i))
+	for i := uint64(3); i < max; i++ {
+		r, err := registry.GetStateProofSecretsForRound(id, basics.Round(i))
 		a.NoError(err)
 
 		if r.StateProofSecrets != nil {
-			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
-			a.Equal(keys[j].Round, i)
-			j++
-		}
+			j := i/3 - 1 // idx in keys array
 
+			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
+
+			keyFirstValidRound, err := r.StateProofSecrets.FirstRoundInKeyLifetime()
+			a.NoError(err)
+
+			a.Equal(keys[j].Round, keyFirstValidRound)
+		}
 	}
 }
 
@@ -905,11 +970,8 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetStateProofForRound(id, basics.Round(2))
+	_, err = registry.GetForRound(id, basics.Round(2))
 	a.NoError(err)
-
-	// Empty stateproof key
-	a.Nil(r.StateProofSecrets)
 
 	_, err = registry.GetForRound(id, basics.Round(100))
 	a.ErrorIs(err, ErrRequestedRoundOutOfRange)
@@ -926,7 +988,7 @@ func TestAddingSecretTwice(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -938,7 +1000,7 @@ func TestAddingSecretTwice(t *testing.T) {
 	// Append key
 	var keys StateProofKeys
 
-	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keysRound := merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)
@@ -964,7 +1026,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -974,34 +1036,109 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err := registry.GetStateProofForRound(id, 1)
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	partPerRound, err := registry.GetStateProofSecretsForRound(id, 1)
+	a.Error(err)
 
-	// Should return nil as well since no state proof keys were added
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
+	a.Error(err)
 
 	// Append key
 	keys := make(StateProofKeys, 1)
-	keys[0] = merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keys[0] = merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds)-1)
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
+	a.Error(err)
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
+	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
 
 	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
-	a.Equal(CompactCertRounds, keys[0].Round)
+	a.Equal(stateProofIntervalForTests, keys[0].Round)
+}
+
+type keypairs []merklesignature.KeyRoundPair
+
+func (k keypairs) findPairForSpecificRound(round uint64) merklesignature.KeyRoundPair {
+	for _, pair := range k {
+		if pair.Round == round {
+			return pair
+		}
+	}
+	return merklesignature.KeyRoundPair{}
+}
+
+func TestDeleteStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	// Install a key to add StateProof keys.
+	maxRound := uint64(20)
+	p := makeTestParticipationWithLifetime(a, 1, 0, basics.Round(maxRound), 3, 4)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Wait for async DB operations to finish.
+	a.NoError(registry.Flush(10 * time.Second))
+
+	keys := keypairs(p.StateProofSecrets.GetAllKeys())
+
+	a.NoError(registry.AppendKeys(id, StateProofKeys(keys)))
+
+	// Wait for async DB operations to finish.
+	a.NoError(registry.Flush(10 * time.Second))
+
+	// Make sure we're able to fetch the same data that was put in.
+	for i := uint64(4); i < maxRound; i += 4 {
+		r, err := registry.GetStateProofSecretsForRound(id, basics.Round(i))
+		a.NoError(err)
+
+		a.Equal(keys.findPairForSpecificRound(i).Key, r.StateProofSecrets.SigningKey)
+	}
+
+	removeKeysRound := basics.Round(maxRound / 2)
+	a.NoError(registry.DeleteStateProofKeys(id, removeKeysRound))
+
+	a.NoError(registry.Flush(10 * time.Second))
+
+	// verify that the db does not contain any state proof key with round less than 10
+
+	registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var pk int
+		a.NoError(tx.QueryRow(selectPK, id[:]).Scan(&pk))
+
+		// make certain keys below the cutting round do not exist in the db.
+		var num int
+		a.NoError(
+			tx.QueryRow(
+				"SELECT COUNT(*) FROM StateProofKeys where pk=? AND round <=?",
+				pk,
+				removeKeysRound,
+			).Scan(&num),
+		)
+		a.Zero(num)
+
+		// make certain keys above the cutting round exist in the db.
+		a.NoError(
+			tx.QueryRow(
+				"SELECT COUNT(*) FROM StateProofKeys where pk=? AND round >?",
+				pk,
+				removeKeysRound,
+			).Scan(&num),
+		)
+
+		// includes removeKeysRound
+		a.Equal(int(maxRound)/4-int(removeKeysRound)/4, num) // 1 DELETED 1 NOT
+		return nil
+	})
 }
 
 // test that sets up an error that should come up while flushing, and ensures that flush resets the last error
@@ -1015,7 +1152,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	a.NoError(err)
 
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -1027,7 +1164,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	// Append key
 	var keys StateProofKeys
 
-	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keysRound := merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)
@@ -1084,7 +1221,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 	const targetFlushes = 5
 	go func() {
 		for i := 0; i < 25; i++ {
-			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusFuture])
+			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
 			registry.Flush(defaultTimeout)
 			if atomic.LoadInt32(&flushCount) < targetFlushes {
 				atomic.AddInt32(&flushCount, 1)
@@ -1100,7 +1237,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 			time.Sleep(time.Second)
 			goto repeat
 		}
-		_, err = registry.GetStateProofForRound(id2, basics.Round(256))
+		_, err = registry.GetStateProofSecretsForRound(id2, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while the main thread is updating the Rolling table.
 		a.NoError(err)
@@ -1111,6 +1248,57 @@ func TestParticipationDB_Locking(t *testing.T) {
 	deadlineCount := strings.Count(warnings, "tx surpassed expected deadline")
 	a.Empty(deadlineCount, fmt.Sprintf("found %d messages 'tx surpassed expected deadline' but expected 0", deadlineCount))
 	wg.Wait()
+}
+
+func TestParticipationDBInstallWhileReading(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	dbName := strings.Replace(t.Name(), "/", "_", -1)
+
+	dbpair, err := db.OpenErasablePair(dbName + ".sqlite3")
+	a.NoError(err)
+
+	registry, err := makeParticipationRegistry(dbpair, logging.TestingLog(t))
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+	defer registryCloseTest(t, registry, dbName)
+
+	var sampledPartID ParticipationID
+	for i := 0; i < 3; i++ {
+		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		id, err := registry.Insert(part)
+		if i == 0 {
+			sampledPartID = id
+		}
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, part.StateProofSecrets.GetAllKeys()))
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, part.ID())
+	}
+
+	appendedKeys := make(chan struct{})
+	newPart := makeTestParticipationWithLifetime(a, 1, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution, merklesignature.KeyLifetimeDefault)
+	go func() {
+		id, err := registry.Insert(newPart)
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, newPart.StateProofSecrets.GetAllKeys()))
+		appendedKeys <- struct{}{}
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, newPart.ID())
+	}()
+
+	<-appendedKeys // Makes sure we start fetching keys after the append keys operation has already started
+	for i := 0; i < 50; i++ {
+		_, err = registry.GetStateProofSecretsForRound(sampledPartID, basics.Round(256))
+		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
+		// while a different go routine is installing new keys.
+		a.NoError(err)
+	}
 }
 
 // based on BenchmarkOldKeysDeletion

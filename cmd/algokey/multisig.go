@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -66,14 +65,14 @@ var multisigCmd = &cobra.Command{
 		seed := loadKeyfileOrMnemonic(multisigKeyfile, multisigMnemonic)
 		key := crypto.GenerateSignatureSecrets(seed)
 
-		txdata, err := ioutil.ReadFile(multisigTxfile)
+		txdata, err := os.ReadFile(multisigTxfile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read transactions from %s: %v\n", multisigTxfile, err)
 			os.Exit(1)
 		}
 
 		var outBytes []byte
-		dec := protocol.NewDecoderBytes(txdata)
+		dec := protocol.NewMsgpDecoderBytes(txdata)
 		for {
 			var stxn transactions.SignedTxn
 			err = dec.Decode(&stxn)
@@ -101,7 +100,7 @@ var multisigCmd = &cobra.Command{
 			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
-		err = ioutil.WriteFile(multisigOutfile, outBytes, 0600)
+		err = os.WriteFile(multisigOutfile, outBytes, 0600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot write signed transactions to %s: %v\n", multisigOutfile, err)
 			os.Exit(1)
@@ -123,7 +122,7 @@ var appendAuthAddrCmd = &cobra.Command{
 		}
 
 		var outBytes []byte
-		dec := protocol.NewDecoderBytes(txdata)
+		dec := protocol.NewMsgpDecoderBytes(txdata)
 
 		var stxn transactions.SignedTxn
 		err = dec.Decode(&stxn)

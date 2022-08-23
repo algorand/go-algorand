@@ -326,7 +326,7 @@ return stack matches the name of the input value.
 | `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate. |
 | `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates. |
 | `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
-| `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
+| `json_ref r` | key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A |
 
 The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -440,7 +440,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
+| 19 | AssetSender | []byte |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
 | 20 | AssetReceiver | []byte |      | 32 byte address |
 | 21 | AssetCloseTo | []byte |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
@@ -479,7 +479,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
-| 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
+| 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
@@ -615,7 +615,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
-| `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
+| `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 
 ### Inner Transactions
 
@@ -681,7 +681,7 @@ The assembler parses line by line. Ops that only take stack arguments
 appear on a line by themselves. Immediate arguments follow the opcode
 on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting AVM v2. By default, the assembler targets AVM v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting v2. By default, the assembler targets v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -732,25 +732,26 @@ A compiled program starts with a varuint declaring the version of the compiled c
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
 
-It is important to prevent newly-introduced transaction fields from
-breaking assumptions made by older versions of the AVM. If one of the
-transactions in a group will execute a program whose version predates
-a given field, that field must not be set anywhere in the transaction
-group, or the group will be rejected. For example, executing a version
-1 program on a transaction with RekeyTo set to a nonzero address will
-cause the program to fail, regardless of the other contents of the
-program itself.
+It is important to prevent newly-introduced transaction types and
+fields from breaking assumptions made by programs written before they
+existed. If one of the transactions in a group will execute a program
+whose version predates a transaction type or field that can violate
+expectations, that transaction type or field must not be used anywhere
+in the transaction group.
+
+Concretely, the above requirement is translated as follows: A v1
+program included in a transaction group that includes a
+ApplicationCall transaction or a non-zero RekeyTo field will fail
+regardless of the program itself.
 
 This requirement is enforced as follows:
 
 * For every transaction, compute the earliest version that supports
-  all the fields and values in this transaction. For example, a
-  transaction with a nonzero RekeyTo field will be (at least) v2.
-
+  all the fields and values in this transaction.
+  
 * Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
-In addition, applications must be version 6 or greater to be eligible
-for being called in an inner transaction.
+In addition, applications must be v4 or greater to be called in an inner transaction.
 
 ## Varuint
 

@@ -30,33 +30,26 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type TestingHashable struct {
-	data []byte
-}
-
-func (s TestingHashable) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.TestHashable, s.data
-}
-
 func TestSignerCreation(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	for i := uint64(1); i < 20; i++ {
 		signer := generateTestSigner(i, i+1, 1, a)
-		_, err = signer.GetSigner(i).Sign(h)
+		_, err = signer.GetSigner(i).SignBytes(h)
 		a.NoError(err)
 	}
 
-	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
-		signer := generateTestSigner(firstValid, lastValid, interval, a)
+	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, keyLifetime uint64, expectedLen int) {
+		signer := generateTestSigner(firstValid, lastValid, keyLifetime, a)
 		a.Equal(expectedLen, length(signer, a))
 	}
 
-	testSignerNumKeysLimits(0, 0, 1, 0)
-	testSignerNumKeysLimits(0, 1, 1, 1)
+	testSignerNumKeysLimits(0, 0, 1, 1)
+	testSignerNumKeysLimits(0, 1, 1, 2)
 	testSignerNumKeysLimits(2, 2, 2, 1)
 	testSignerNumKeysLimits(8, 21, 10, 2)
 	testSignerNumKeysLimits(8, 20, 10, 2)
@@ -67,24 +60,44 @@ func TestSignerCreation(t *testing.T) {
 	signer := generateTestSigner(2, 2, 2, a)
 	a.Equal(1, length(signer, a))
 
-	sig, err := signer.GetSigner(2).Sign(genHashableForTest())
+	sig, err := signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(2, genHashableForTest(), sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(2, genMsgForTest(), &sig))
 
 	signer = generateTestSigner(2, 2, 3, a)
 	a.Equal(0, length(signer, a))
-	_, err = signer.GetSigner(2).Sign(genHashableForTest())
+	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(11, 19, 10, a)
 	a.Equal(0, length(signer, a))
-	_, err = signer.GetSigner(2).Sign(genHashableForTest())
+	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
+
+	// Make sure both rounds 10 and 11 can be signed (as key for round 10 is valid for both)
+	signer = generateTestSigner(0, 19, 10, a)
+
+	sig, err = signer.GetSigner(10).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(10, genMsgForTest(), &sig))
+
+	sig, err = signer.GetSigner(11).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(11, genMsgForTest(), &sig))
+
+	sig, err = signer.GetSigner(0).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(0, genMsgForTest(), &sig))
+
+	sig, err = signer.GetSigner(1).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(1, genMsgForTest(), &sig))
 }
 
 func TestSignerCreationOutOfBounds(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	_, err := New(8, 4, 1)
@@ -93,43 +106,64 @@ func TestSignerCreationOutOfBounds(t *testing.T) {
 
 	_, err = New(1, 8, 0)
 	a.Error(err)
-	a.ErrorIs(err, ErrDivisorIsZero)
+	a.ErrorIs(err, ErrKeyLifetimeIsZero)
 }
 
 func TestEmptyVerifier(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(8, 9, 5, a)
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
-	a.Equal(false, signer.GetVerifier().IsEmpty())
+	a.False(signer.GetVerifier().MsgIsZero())
+}
+
+func TestVerifierKeyLifetimeError(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer := generateTestSigner(8, 12, 1, a)
+	verifier := signer.GetVerifier()
+
+	verifier.KeyLifetime = 0
+	a.ErrorIs(verifier.VerifyBytes(0, []byte(""), &Signature{}), ErrKeyLifetimeIsZero)
+
+	verifier.KeyLifetime = 1
+	sig, err := signer.GetSigner(10).SignBytes([]byte("hello"))
+	a.NoError(err)
+
+	a.NoError(verifier.VerifyBytes(10, []byte("hello"), &sig))
 }
 
 func TestEmptySigner(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	signer := generateTestSigner(8, 9, 5, a)
 	a.Equal(0, length(signer, a))
 
-	_, err = signer.GetSigner(8).Sign(h)
+	_, err = signer.GetSigner(8).SignBytes(h)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
-	_, err = signer.GetSigner(9).Sign(h)
+	_, err = signer.GetSigner(9).SignBytes(h)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(0, 100, 1, a)
-	for i := uint64(1); i < 100; i++ {
+	for i := uint64(0); i < 100; i++ {
 		k := signer.GetKey(i)
 		a.NotNil(k)
 	}
@@ -146,19 +180,26 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	k = signer.GetKey(999)
 	a.Nil(k)
 
-	signer = generateTestSigner(1000, 1100, 101, a)
-	intervalRounds := make([]uint64, 0)
-	for i := uint64(1000); i <= 1100; i++ {
-		if i%101 == 0 {
-			intervalRounds = append(intervalRounds, i)
-			continue
-		}
-		k := signer.GetKey(i)
-		a.Nil(k)
+	signer = generateTestSigner(1000, 1100, 105, a)
+	i := uint64(1000)
+	for ; i < 1050; i++ {
+		a.Nil(signer.GetKey(i))
+	}
+
+	k = signer.GetKey(i) // 1050
+	a.NotNil(k)
+	pk := k.PublicKey
+	i++
+
+	for ; i <= 1100; i++ { // same key since it's under the same lifetime period
+		k = signer.GetKey(i)
+		a.NotNil(k)
+		a.Equal(pk, k.PublicKey)
 	}
 }
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -182,13 +223,14 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 }
 
 func TestSignatureStructure(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	signer := generateTestSigner(50, 100, 1, a)
 
-	hashable := genHashableForTest()
-	sig, err := signer.GetSigner(51).Sign(hashable)
+	msg := genMsgForTest()
+	sig, err := signer.GetSigner(51).SignBytes(msg)
 	a.NoError(err)
 
 	key := signer.GetKey(51)
@@ -203,58 +245,59 @@ func TestSignatureStructure(t *testing.T) {
 	a.NotEqual(nil, sig.Signature)
 }
 
-func genHashableForTest() crypto.Hashable {
-	hashable := TestingHashable{[]byte("test msg")}
-
-	return hashable
+func genMsgForTest() []byte {
+	return []byte("test msg")
 }
 
 func TestSigning(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, end := uint64(50), uint64(100)
 	signer := generateTestSigner(start, end, 1, a)
 
-	hashable := genHashableForTest()
+	msg := genMsgForTest()
 
-	sig, err := signer.GetSigner(start).Sign(hashable)
+	sig, err := signer.GetSigner(start).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, &sig))
 
-	_, err = signer.GetSigner(start - 1).Sign(hashable)
+	_, err = signer.GetSigner(start - 1).SignBytes(msg)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
-	_, err = signer.GetSigner(end + 1).Sign(hashable)
+	_, err = signer.GetSigner(end + 1).SignBytes(msg)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(start, end, 10, a)
 
-	sig, err = signer.GetSigner(start).Sign(hashable)
+	sig, err = signer.GetSigner(start).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
+	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, &sig))
 
-	sig, err = signer.GetSigner(start + 5).Sign(hashable)
-	a.Error(err)
+	sig, err = signer.GetSigner(start + 5).SignBytes(msg)
+	a.NoError(err)
 
-	err = signer.GetVerifier().Verify(start+5, hashable, sig)
-	a.Error(err)
-	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	err = signer.GetVerifier().VerifyBytes(start+5, msg, &sig)
+	a.NoError(err)
+	err = signer.GetVerifier().VerifyBytes(start+7, msg, &sig) // same key used since both rounds under same lifetime of key
+	a.NoError(err)
 
 	signer = generateTestSigner(50, 100, 12, a)
 	a.Equal(4, length(signer, a))
 
-	for i := uint64(50); i < 100; i++ {
-		if i%12 != 0 {
-			_, err = signer.GetSigner(i).Sign(hashable)
-			a.Error(err)
-		} else {
-			sig, err = signer.GetSigner(i).Sign(hashable)
-			a.NoError(err)
-			a.NoError(signer.GetVerifier().Verify(i, hashable, sig))
-		}
+	i := uint64(50)
+	for ; i < 60; i++ { // no key for these rounds (key for round 48 was not generated)
+		_, err = signer.GetSigner(i).SignBytes(msg)
+		a.Error(err)
+		a.ErrorIs(err, ErrNoStateProofKeyForRound)
+	}
+	for ; i < 100; i++ {
+		sig, err = signer.GetSigner(i).SignBytes(msg)
+		a.NoError(err)
+		a.NoError(signer.GetVerifier().VerifyBytes(i, msg, &sig))
 	}
 
 	signer = generateTestSigner(234, 4634, 256, a)
@@ -262,42 +305,44 @@ func TestSigning(t *testing.T) {
 	a.NotNil(key)
 	key = signer.GetKey(4096)
 	a.NotNil(key)
-	key = signer.GetKey(234 + 256)
+	key = signer.GetKey(234) // keys valid only for round > 256
 	a.Nil(key)
 }
 
 func TestBadRound(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
-	err := signer.GetVerifier().Verify(start+1, hashable, sig)
+	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	hashable, sig = makeSig(signer, start+1, a)
-	err = signer.GetVerifier().Verify(start, hashable, sig)
+	msg, sig = makeSig(signer, start+1, a)
+	err = signer.GetVerifier().VerifyBytes(start, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	err = signer.GetVerifier().Verify(start+2, hashable, sig)
+	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
-	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
@@ -305,7 +350,7 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
-	err = signer.GetVerifier().Verify(start, hashable, sig3)
+	err = signer.GetVerifier().VerifyBytes(start, msg, &sig3)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -322,11 +367,12 @@ func copySig(sig Signature) Signature {
 }
 
 func TestIncorrectByteSignature(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
 	sig2 := sig
 	bs := make([]byte, len(sig.Signature))
@@ -334,44 +380,46 @@ func TestIncorrectByteSignature(t *testing.T) {
 	bs[0]++
 	sig2.Signature = bs
 
-	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestIncorrectMerkleIndex(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	signer := generateTestSigner(8, 100, 5, a)
 	a.NoError(err)
 
-	sig, err := signer.GetSigner(20).Sign(h)
+	sig, err := signer.GetSigner(20).SignBytes(h)
 	a.NoError(err)
 
-	sig.MerkleArrayIndex = 0
-	err = signer.GetVerifier().Verify(20, h, sig)
+	sig.VectorCommitmentIndex = 0
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	sig.MerkleArrayIndex = math.MaxUint64
-	err = signer.GetVerifier().Verify(20, h, sig)
+	sig.VectorCommitmentIndex = math.MaxUint64
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	err = signer.GetVerifier().Verify(20, h, sig)
+	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start+1, a)
+	msg, sig := makeSig(signer, start+1, a)
 	// taking signature for specific round and changing the round
 
 	// taking signature and changing the key to match different round
@@ -381,12 +429,13 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 
 	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
-	err := signer.GetVerifier().Verify(start+1, hashable, sig2)
+	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestMarshal(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -405,49 +454,51 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestNumberOfGeneratedKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numberOfKeys := uint64(1 << 6)
-	validPeriod := numberOfKeys*interval - 1
+	validPeriod := numberOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = New(firstValid, lastValid, interval)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
-	a.Equal(numberOfKeys-1, uint64(length(s, a)))
+	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
-	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, interval)
+	lastValid = validPeriod + 1000 - (keyLifetime * 50)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	a.Equal(numberOfKeys-50, uint64(length(s, a)))
 }
 
 func TestGetAllKeys(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	keys := s.GetAllKeys()
 	for i := uint64(0); i < uint64(len(s.ephemeralKeys)); i++ {
 		a.Equal(s.ephemeralKeys[i], *keys[i].Key)
-		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
+		a.Equal(indexToRound(firstValid, keyLifetime, i), keys[i].Round)
 	}
 
 	s, err = New(1, 2, 100)
@@ -459,13 +510,13 @@ func TestGetAllKeys(t *testing.T) {
 }
 
 //#region Helper Functions
-func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
-	hashable := genHashableForTest()
+func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, Signature) {
+	msg := genMsgForTest()
 
-	sig, err := signer.GetSigner(sigRound).Sign(hashable)
+	sig, err := signer.GetSigner(sigRound).SignBytes(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(sigRound, hashable, sig))
-	return hashable, sig
+	a.NoError(signer.GetVerifier().VerifyBytes(sigRound, msg, &sig))
+	return msg, sig
 }
 
 func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
@@ -474,8 +525,8 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	return start, end, signer
 }
 
-func generateTestSigner(firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
-	signer, err := New(firstValid, lastValid, interval)
+func generateTestSigner(firstValid, lastValid, keyLifetime uint64, a *require.Assertions) *Secrets {
+	signer, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	return signer
@@ -502,16 +553,16 @@ func copyProof(proof merklearray.SingleLeafProof) merklearray.SingleLeafProof {
 func TestTreeRootHashLength(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	a.Equal(MerkleSignatureSchemeRootSize, len(s.Tree.Root()))
-	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}))
+	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}.Commitment))
 }

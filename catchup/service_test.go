@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -791,6 +792,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service
@@ -832,7 +834,7 @@ func TestCreatePeerSelector(t *testing.T) {
 
 	cfg.NetAddress = "someAddress"
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps := s.createPeerSelector(true)
+	ps := createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
 	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
@@ -848,7 +850,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
 	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
@@ -862,7 +864,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -879,7 +881,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -894,7 +896,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -909,7 +911,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
+	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 2, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -922,7 +924,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -937,7 +939,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
+	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 2, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -956,7 +958,7 @@ func TestServiceStartStop(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	s.Start()
 	s.Stop()
-	_, ok := (<-s.done)
+	_, ok := <-s.done
 	require.False(t, ok)
 }
 
@@ -971,4 +973,43 @@ func TestSynchronizingTime(t *testing.T) {
 	require.Equal(t, time.Duration(0), s.SynchronizingTime())
 	atomic.StoreInt64(&s.syncStartNS, 1000000)
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
+}
+
+func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// make sure we download enough blocks to verify state proof 512
+	topBlk := bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 1500
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+	trackingData := bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
+	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
+
+	lookback := lookbackForStateproofsSupport(&topBlk)
+	oldestRound := topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
+	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusFuture].StateProofInterval-config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback)
+
+	// the network has made progress and now it is on round 8000. in this case we would not download blocks to cover 512.
+	// instead, we will download blocks to confirm only the recovery period lookback.
+	topBlk = bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 8000
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+	trackingData = bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
+	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
+
+	lookback = lookbackForStateproofsSupport(&topBlk)
+	oldestRound = topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
+
+	lowestRoundToRetain := 8000 - (8000 % config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval) -
+		config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*(config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals+1) - config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+
+	assert.Equal(t, uint64(oldestRound), lowestRoundToRetain)
+
+	topBlk = bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 8000
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusV32
+	lookback = lookbackForStateproofsSupport(&topBlk)
+	assert.Equal(t, uint64(0), lookback)
 }

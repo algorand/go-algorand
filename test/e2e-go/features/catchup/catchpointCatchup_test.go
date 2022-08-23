@@ -18,7 +18,6 @@ package catchup
 
 import (
 	"fmt"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +31,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
@@ -81,7 +83,7 @@ func (ec *nodeExitErrorCollector) Print() {
 }
 
 // awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
-func awaitCatchpointCreation(client algodclient.RestClient, fixture fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
+func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
 	s, err := client.Status()
 	if err != nil {
 		return generatedV2.NodeStatusResponse{}, err
@@ -116,11 +118,11 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, secondary has 0%)
-	// Nodes are having a consensus allowing balances history of 32 rounds and transaction history of 33 rounds.
-	// Let it run for 37 rounds.
-	// create a web proxy, and connect it to the primary node, blocking all requests for round #1. ( and allowing everything else )
-	// start a secondary node, and instuct it to catchpoint catchup from the proxy. ( which would be for round 36 )
-	// wait until the clone node cought up, skipping the "impossible" hole of round #1.
+	// Nodes are having a consensus allowing balances history of 8 rounds and transaction history of 13 rounds.
+	// Let it run for 21 rounds.
+	// create a web proxy, and connect it to the primary node, blocking all requests for round #2. ( and allowing everything else )
+	// start a secondary node, and instuct it to catchpoint catchup from the proxy. ( which would be for round 20 )
+	// wait until the clone node cought up, skipping the "impossible" hole of round #2.
 
 	consensus := make(config.ConsensusProtocols)
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
@@ -129,9 +131,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	catchpointCatchupProtocol.SeedLookback = 2
-	catchpointCatchupProtocol.SeedRefreshInterval = 8
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
-	catchpointCatchupProtocol.MaxTxnLife = 33
+	catchpointCatchupProtocol.SeedRefreshInterval = 2
+	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
+	catchpointCatchupProtocol.MaxTxnLife = 13
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
@@ -161,13 +163,16 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	cfg.CatchpointInterval = 4
+	const catchpointInterval = 4
+	cfg.CatchpointInterval = catchpointInterval
 	cfg.MaxAcctLookback = 2
 	cfg.SaveToDisk(primaryNode.GetDataDir())
 	cfg.Archival = false
+	cfg.CatchpointInterval = 0
 	cfg.NetAddress = ""
 	cfg.EnableLedgerService = false
 	cfg.EnableBlockService = false
+	cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
 	cfg.SaveToDisk(secondNode.GetDataDir())
 
 	// start the primary node
@@ -180,10 +185,15 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
+	defer primaryNode.StopAlgod()
 
 	// Let the network make some progress
 	currentRound := uint64(1)
-	const targetRound = uint64(37)
+	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
+	const restrictedBlock = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
+	// calculate the target round: this is the next round after catchpoint that is greater than expectedBlocksToDownload before the restrictedBlock block number
+	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+restrictedBlock)/catchpointInterval + 1) * catchpointInterval
+	targetRound := uint64(targetCatchpointRound) + 1 // 21
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
@@ -194,16 +204,17 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 			break
 		}
 		currentRound++
-
 	}
 	log.Infof("done building!\n")
+
 	primaryListeningAddress, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
 		// prevent requests for block #2 to go through.
 		if request.URL.String() == "/v1/test-v1/block/2" {
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte("webProxy prevents block 2 from serving"))
 			return
 		}
 		next(response, request)
@@ -222,6 +233,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
+	defer secondNode.StopAlgod()
 
 	// wait until node is caught up.
 	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
@@ -240,10 +252,32 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	}
 	log.Infof(" - done catching up!\n")
 
-	status, err := awaitCatchpointCreation(primaryNodeRestClient, fixture, 3)
-	a.NoError(err)
+	// ensure the catchpoint is created for targetCatchpointRound
+	var status generatedV2.NodeStatusResponse
+	timer := time.NewTimer(10 * time.Second)
+outer:
+	for {
+		status, err = primaryNodeRestClient.Status()
+		a.NoError(err)
 
-	log.Infof("primary node latest catchpoint - %s!\n", status.LastCatchpoint)
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			a.NoError(err)
+			if round >= targetCatchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			break outer
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	log.Infof("primary node latest catchpoint - %s!\n", *status.LastCatchpoint)
 	_, err = secondNodeRestClient.Catchup(*status.LastCatchpoint)
 	a.NoError(err)
 
@@ -260,9 +294,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		currentRound++
 	}
 	log.Infof("done catching up!\n")
-
-	secondNode.StopAlgod()
-	primaryNode.StopAlgod()
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
@@ -295,9 +326,9 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 			// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 			catchpointCatchupProtocol.SeedLookback = 2
-			catchpointCatchupProtocol.SeedRefreshInterval = 8
-			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
-			catchpointCatchupProtocol.MaxTxnLife = 33
+			catchpointCatchupProtocol.SeedRefreshInterval = 2
+			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
+			catchpointCatchupProtocol.MaxTxnLife = 13
 			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
@@ -338,10 +369,11 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 				ExitErrorCallback: errorsCollector.nodeExitWithError,
 			})
 			a.NoError(err)
+			defer primaryNode.StopAlgod()
 
 			// Let the network make some progress
 			currentRound := uint64(1)
-			targetRound := uint64(41)
+			targetRound := uint64(21)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 			log.Infof("Building ledger history..")
@@ -364,7 +396,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			} else {
 				a.Empty(*primaryNodeStatus.LastCatchpoint)
 			}
-			primaryNode.StopAlgod()
 		})
 	}
 }

@@ -214,7 +214,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 	} else {
 		data.VoteID = crypto.OneTimeSignatureVerifier{}
 		data.SelectionID = crypto.VRFVerifier{}
-		data.StateProofID = merklesignature.Verifier{}
+		data.StateProofID = merklesignature.Commitment{}
 		data.VoteFirstValid = 0
 		data.VoteLastValid = 0
 		data.VoteKeyDilution = 0

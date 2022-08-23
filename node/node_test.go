@@ -502,51 +502,6 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	require.NoError(t, os.RemoveAll(testDirectroy))
 }
 
-func TestAsyncRecord(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDirectroy := t.TempDir()
-
-	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-node-record-async",
-		Proto:       protocol.ConsensusCurrentVersion,
-		Network:     config.Devtestnet,
-		FeeSink:     sinkAddr.String(),
-		RewardsPool: poolAddr.String(),
-	}
-
-	cfg := config.GetDefaultLocal()
-	cfg.DisableNetworking = true
-	node, err := MakeFull(logging.TestingLog(t), testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
-	require.NoError(t, err)
-	node.Start()
-	defer node.Stop()
-
-	var addr basics.Address
-	addr[0] = 1
-
-	p := account.Participation{
-		Parent:     addr,
-		FirstValid: 0,
-		LastValid:  1000000,
-		Voting:     &crypto.OneTimeSignatureSecrets{},
-		VRF:        &crypto.VRFSecrets{},
-	}
-	id, err := node.accountManager.Registry().Insert(p)
-	require.NoError(t, err)
-	err = node.accountManager.Registry().Register(id, 0)
-	require.NoError(t, err)
-
-	node.Record(addr, 10000, account.Vote)
-	node.Record(addr, 20000, account.BlockProposal)
-
-	time.Sleep(5000 * time.Millisecond)
-	records := node.accountManager.Registry().GetAll()
-	require.Len(t, records, 1)
-	require.Equal(t, 10000, int(records[0].LastVote))
-	require.Equal(t, 20000, int(records[0].LastBlockProposal))
-}
-
 // TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set
 func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
