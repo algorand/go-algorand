@@ -37,7 +37,7 @@ const (
 	BalancesPerCatchpointFileChunk = 512
 
 	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
-	// 3000000 resources * 300B/resource => roughly max 100MB per chunk
+	// 300000 resources * 300B/resource => roughly max 100MB per chunk
 	DefaultMaxResourcesPerChunk = 300000
 )
 
