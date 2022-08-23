@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"math/rand"
 	"os"
 	"runtime"
@@ -1540,7 +1541,7 @@ func generateCreatables(numElementsPerSegement int) (
 	appID3 basics.CreatableIndex,
 	err error) {
 
-	_, randomCtbs = randomCreatables(numElementsPerSegement)
+	_, randomCtbs = ledgertesting.RandomCreatables(numElementsPerSegement)
 	asCounter3 := 0
 	apCounter3 := 0
 
@@ -2194,9 +2195,9 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accountDBVersion = 6
+	accountdb.AccountDBVersion = 6
 	defer func() {
-		accountDBVersion = 7
+		accountdb.AccountDBVersion = 7
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2220,16 +2221,16 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
+		if err := accountdb.AccountsCreateOnlineAccountsTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
+		if err := accountdb.AccountsCreateTxTailTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
+		if err := accountdb.AccountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+		if err := accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
 			return err
 		}
 		return nil
@@ -2403,7 +2404,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.Close()
 
 	cfg.MaxAcctLookback = shorterLookback
-	accountDBVersion = 7
+	accountdb.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {

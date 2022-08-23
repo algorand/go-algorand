@@ -49,7 +49,7 @@ type trackerDBSchemaInitializer struct {
 
 	// schemaVersion contains current db version
 	schemaVersion int32
-	// vacuumOnStartup controls whether the accounts database would get vacuumed on startup.
+	// vacuumOnStartup controls whether the accounts database would Get vacuumed on startup.
 	vacuumOnStartup bool
 	// newDatabase indicates if the db is newly created
 	newDatabase bool
@@ -97,7 +97,7 @@ func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPat
 			BlockDb:           bdbs,
 		}
 		var err0 error
-		mgr, err0 = RunMigrations(ctx, tx, tp, log, accountDBVersion)
+		mgr, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
 		if err0 != nil {
 			return err0
 		}
@@ -112,7 +112,7 @@ func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPat
 			if err0 != nil {
 				return err0
 			}
-			mgr, err0 = RunMigrations(ctx, tx, tp, log, accountDBVersion)
+			mgr, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
 			if err0 != nil {
 				return err0
 			}
@@ -130,7 +130,7 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log 
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
+		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to Read database schema version : %v", err)
 	}
 
 	tu := trackerDBSchemaInitializer{
@@ -234,14 +234,14 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 //
 // As the first step of the upgrade, the above tables are being created if they do not already exists.
 // Following that, the assetcreators table is being altered by adding a new column to it (ctype).
-// Last, in case the database was just created, it would get initialized with the following:
-// The accountbase would get initialized with the au.initAccounts
-// The accounttotals would get initialized to align with the initialization account added to accountbase
-// The acctrounds would get updated to indicate that the balance matches round 0
+// Last, in case the database was just created, it would Get initialized with the following:
+// The accountbase would Get initialized with the au.initAccounts
+// The accounttotals would Get initialized to align with the initialization account added to accountbase
+// The acctrounds would Get updated to indicate that the balance matches round 0
 //
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(tx, tu.InitAccounts, config.Consensus[tu.InitProto])
+	tu.newDatabase, err = AccountsInit(tx, tu.InitAccounts, config.Consensus[tu.InitProto])
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
@@ -456,17 +456,17 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 // adding a new onlineaccounts table
 // TODO: onlineaccounts: upgrade as needed after switching to the final table version
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsCreateOnlineAccountsTable(ctx, tx)
+	err = AccountsCreateOnlineAccountsTable(ctx, tx)
 	if err != nil {
 		return err
 	}
 
-	err = accountsCreateTxTailTable(ctx, tx)
+	err = AccountsCreateTxTailTable(ctx, tx)
 	if err != nil {
 		return err
 	}
 
-	err = accountsCreateOnlineRoundParamsTable(ctx, tx)
+	err = AccountsCreateOnlineRoundParamsTable(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	if err != nil {
 		return err
 	}
-	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+	err = AccountsCreateCatchpointFirstStageInfoTable(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -529,8 +529,8 @@ func isDirEmpty(path string) (bool, error) {
 	return true, nil
 }
 
-// getEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
-func getEmptyDirs(PathToScan string) ([]string, error) {
+// GetEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
+func GetEmptyDirs(PathToScan string) ([]string, error) {
 	var emptyDir []string
 	err := filepath.Walk(PathToScan, func(path string, f os.FileInfo, errIn error) error {
 		if errIn != nil {
@@ -560,7 +560,7 @@ func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {
 		return nil
 	}
 	for {
-		emptyDirs, err := getEmptyDirs(catchpointRootDir)
+		emptyDirs, err := GetEmptyDirs(catchpointRootDir)
 		if err != nil {
 			return err
 		}

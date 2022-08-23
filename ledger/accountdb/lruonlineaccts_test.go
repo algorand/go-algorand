@@ -49,7 +49,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	// verify that all these accounts are truly there.
 	for i := 0; i < accountsNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		acct, has := baseOnlineAcct.read(addr)
+		acct, has := baseOnlineAcct.Read(addr)
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.round)
 		require.Equal(t, addr, acct.Addr)
@@ -60,7 +60,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	// verify expected missing entries
 	for i := accountsNum; i < accountsNum*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		acct, has := baseOnlineAcct.read(addr)
+		acct, has := baseOnlineAcct.Read(addr)
 		require.False(t, has)
 		require.Equal(t, PersistedOnlineAccountData{}, acct)
 	}
@@ -70,7 +70,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	// verify expected (missing/existing) entries
 	for i := 0; i < accountsNum*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		acct, has := baseOnlineAcct.read(addr)
+		acct, has := baseOnlineAcct.Read(addr)
 
 		if i >= accountsNum/2 && i < accountsNum {
 			// expected to have it.
@@ -112,7 +112,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 		allAccountsLoaded := true
 		for i := 0; i < accountsNum; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			_, has := baseOnlineAcct.read(addr)
+			_, has := baseOnlineAcct.Read(addr)
 			if !has {
 				allAccountsLoaded = false
 				break
@@ -178,7 +178,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	// verify that all these accounts are truly there.
 	for i := 0; i < pendingWritesBuffer; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		acct, has := baseOnlineAcct.read(addr)
+		acct, has := baseOnlineAcct.Read(addr)
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.round)
 		require.Equal(t, addr, acct.Addr)
@@ -189,7 +189,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	// verify expected missing entries
 	for i := pendingWritesBuffer; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		acct, has := baseOnlineAcct.read(addr)
+		acct, has := baseOnlineAcct.Read(addr)
 		require.False(t, has)
 		require.Equal(t, PersistedOnlineAccountData{}, acct)
 	}

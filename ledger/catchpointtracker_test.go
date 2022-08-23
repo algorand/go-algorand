@@ -250,7 +250,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	_, err = accountdb.TrackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
-	emptyDirs, err := getEmptyDirs(tempCatchpointDir)
+	emptyDirs, err := accountdb.GetEmptyDirs(tempCatchpointDir)
 	require.NoError(t, err)
 	onlyTempDirEmpty := len(emptyDirs) == 0
 	require.Equal(t, onlyTempDirEmpty, true)
@@ -310,7 +310,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, conf.CatchpointFileHistoryLength, numberOfCatchpointFiles)
 
-	emptyDirs, err := getEmptyDirs(temporaryDirectory)
+	emptyDirs, err := accountdb.GetEmptyDirs(temporaryDirectory)
 	require.NoError(t, err)
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
 		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
@@ -360,7 +360,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 				addr := ledgertesting.RandomAddress()
 				acctData := accountdb.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountdb.AccountDelta{NewAcct: acctData})
+				updates.Insert(accountdb.AccountDelta{Address: addr, NewAcct: acctData})
 				i++
 			}
 

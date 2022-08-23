@@ -45,7 +45,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	for i := 0; i < roundsNum; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(addr, acct)
 		require.True(t, written)
@@ -62,7 +62,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	for i := proto.MaxBalLookback; i < uint64(roundsNum)+proto.MaxBalLookback; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(addr, acct)
 		require.True(t, written)
@@ -89,7 +89,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	// attempt to insert a value with the updRound less than latest, expect it to have ignored
 	acct = cachedOnlineAccount{
 		updRound:              basics.Round(uint64(roundsNum) + proto.MaxBalLookback - 1),
-		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 	}
 	written := oac.writeFront(addr, acct)
 	require.False(t, written)
@@ -110,7 +110,7 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 	for i := 0; i < roundsNum; i++ {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 		}
 		oac.writeFront(addr, acct)
 	}
@@ -140,7 +140,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 		lastAddr = ledgertesting.RandomAddress()
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
-			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+			BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 		}
 		written := oac.writeFront(lastAddr, acct)
 		require.True(t, written)
@@ -148,7 +148,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 
 	acct := cachedOnlineAccount{
 		updRound:              basics.Round(100),
-		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: accountdb.baseVotingData{VoteLastValid: 1000}},
+		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, BaseVotingData: accountdb.BaseVotingData{VoteLastValid: 1000}},
 	}
 	written := oac.writeFront(ledgertesting.RandomAddress(), acct)
 	require.False(t, written)
@@ -159,7 +159,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	// set one to be expired
 	acct = cachedOnlineAccount{
 		updRound:              basics.Round(maxCacheSize),
-		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, baseVotingData: accountdb.baseVotingData{}},
+		BaseOnlineAccountData: accountdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(100)}, BaseVotingData: accountdb.BaseVotingData{}},
 	}
 	written = oac.writeFront(lastAddr, acct)
 	require.True(t, written)

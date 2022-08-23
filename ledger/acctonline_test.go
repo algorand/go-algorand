@@ -227,7 +227,7 @@ func TestAcctOnline(t *testing.T) {
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 			require.Empty(t, data.AccountData)
 
-			data, has := oa.baseOnlineAccounts.read(bal.Addr)
+			data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 			require.True(t, has)
 			require.NotEmpty(t, data.Rowid)
 			require.Empty(t, data.AccountData)
@@ -260,7 +260,7 @@ func TestAcctOnline(t *testing.T) {
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 			require.Empty(t, data.AccountData)
 
-			data, has := oa.baseOnlineAccounts.read(bal.Addr)
+			data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 			require.True(t, has)
 			require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.AccountData)
@@ -286,7 +286,7 @@ func TestAcctOnline(t *testing.T) {
 				require.NotEmpty(t, data.AccountData)
 
 				// the most recent value is empty because the account is scheduled for removal
-				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 				require.True(t, has)
 				require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData)
@@ -310,7 +310,7 @@ func TestAcctOnline(t *testing.T) {
 				require.NotEmpty(t, data.AccountData)
 
 				// the most recent value is empty because the account is scheduled for removal
-				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 				require.True(t, has)
 				require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData)
@@ -339,7 +339,7 @@ func TestAcctOnline(t *testing.T) {
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 		require.Empty(t, data.AccountData)
 
-		data, has := oa.baseOnlineAccounts.read(bal.Addr)
+		data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 		require.True(t, has)
 		require.NotEmpty(t, data.Rowid)
 		require.Empty(t, data.AccountData)
@@ -373,7 +373,7 @@ func TestAcctOnline(t *testing.T) {
 		require.NotEmpty(t, data.AccountData)
 
 		// the base cache also does not have such entires
-		data, has := oa.baseOnlineAccounts.read(bal.Addr)
+		data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 		require.False(t, has)
 		require.Empty(t, data)
 	}

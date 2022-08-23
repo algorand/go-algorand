@@ -49,9 +49,9 @@ func (m *LRUOnlineAccounts) Init(log logging.Logger, pendingWrites int, pendingW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the lruAccounts has for the given address.
-// thread locking semantics : read lock
-func (m *LRUOnlineAccounts) read(addr basics.Address) (data PersistedOnlineAccountData, has bool) {
+// Read the persistedAccountData object that the lruAccounts has for the given address.
+// thread locking semantics : Read lock
+func (m *LRUOnlineAccounts) Read(addr basics.Address) (data PersistedOnlineAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
 	}

@@ -47,43 +47,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
-	require.NoError(tb, err)
-
-	err = AccountsAddNormalizedBalance(tx, config.Consensus[proto])
-	require.NoError(tb, err)
-
-	err = accountsCreateResourceTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performResourceTableMigration(context.Background(), tx, nil)
-	require.NoError(tb, err)
-
-	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = accountsCreateTxTailTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
-	require.NoError(tb, err)
-
-	// since this is a test that starts from genesis, there is no tail that needs to be migrated.
-	// we'll pass a nil here in order to ensure we still call this method, although it would
-	// be a noop.
-	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
-	require.NoError(tb, err)
-
-	err = accountsCreateOnlineRoundParamsTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
-	require.NoError(tb, err)
-
-	return newDB
-}
-
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	r, err := AccountsRound(tx)
 	require.NoError(t, err)
@@ -189,12 +152,13 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB := AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	newDB, err := AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 	require.True(t, newDB)
 
 	checkAccounts(t, tx, 0, accts)
 
-	newDB, err = accountsInit(tx, accts, proto)
+	newDB, err = AccountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)
@@ -214,7 +178,8 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := AccountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
@@ -226,9 +191,9 @@ func TestAccountDBRound(t *testing.T) {
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegment := 10
 
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	// lastCreatableID stores asset or app max used index to Get rid of conflicts
 	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
+	ctbsList, randomCtbs := ledgertesting.RandomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts LRUAccounts
 	var baseResources LRUResources
@@ -236,13 +201,13 @@ func TestAccountDBRound(t *testing.T) {
 	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.Init(nil, 100, 80)
 	baseResources.Init(nil, 100, 80)
-	baseOnlineAccounts.init(nil, 100, 80)
+	baseOnlineAccounts.Init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates, newacctsTotals, _ = ledgertesting.RandomDeltasFull(20, accts, 0, &lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = ledgertesting.ApplyPartialDeltas(accts, updates)
-		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
+		ctbsWithDeletes := ledgertesting.RandomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
 		oldBase := i - 1
@@ -367,10 +332,11 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 		defer tx.Rollback()
 
 		accts := ledgertesting.RandomAccounts(1, true)
-		AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+		_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+		require.NoError(t, err)
 		addr := ledgertesting.RandomAddress()
 
-		// lastCreatableID stores asset or app max used index to get rid of conflicts
+		// lastCreatableID stores asset or app max used index to Get rid of conflicts
 		var baseAccounts LRUAccounts
 		var baseResources LRUResources
 		baseAccounts.Init(nil, 100, 80)
@@ -384,18 +350,18 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			outAccountDeltas := MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 			require.Equal(t, 1, len(outAccountDeltas.Deltas))
 			require.Equal(t, AccountDelta{NewAcct: BaseAccountData{UpdateRound: lastRound}, NAcctDeltas: numAcctDeltas, Address: addr}, outAccountDeltas.Deltas[0])
-			require.Equal(t, 1, len(outAccountDeltas.misses))
+			require.Equal(t, 1, len(outAccountDeltas.Misses))
 
 			outResourcesDeltas := MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
-			require.Equal(t, 1, len(outResourcesDeltas.deltas))
+			require.Equal(t, 1, len(outResourcesDeltas.Deltas))
 			require.Equal(t,
 				ResourceDelta{
-					OldResource: PersistedResourcesData{Aidx: 100}, NewResource: makeResourcesData(lastRound - 1),
+					OldResource: PersistedResourcesData{Aidx: 100}, NewResource: MakeResourcesData(lastRound - 1),
 					NAcctDeltas: numResDeltas, Address: addr,
 				},
-				outResourcesDeltas.deltas[0],
+				outResourcesDeltas.Deltas[0],
 			)
-			require.Equal(t, 1, len(outAccountDeltas.misses))
+			require.Equal(t, 1, len(outAccountDeltas.Misses))
 
 			err = outAccountDeltas.AccountsLoadOld(tx)
 			require.NoError(t, err)
@@ -418,7 +384,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
 			require.Equal(t,
-				PersistedResourcesData{Addrid: 0, Aidx: 100, Data: makeResourcesData(0), Round: basics.Round(lastRound)},
+				PersistedResourcesData{Addrid: 0, Aidx: 100, Data: MakeResourcesData(0), Round: basics.Round(lastRound)},
 				updatesResources[addr][0],
 			)
 		})
@@ -437,7 +403,8 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, false)
-	_ = AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
 }
@@ -481,97 +448,6 @@ func checkCreatables(t *testing.T,
 		require.True(t, expectedDbImage[asset].Created)
 	}
 	require.Equal(t, len(expectedDbImage), counter)
-}
-
-// randomCreatableSampling sets elements to delete from previous iteration
-// It consideres 10 elements in an iteration.
-// loop 0: returns the first 10 elements
-// loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
-// loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
-func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
-	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
-	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
-	numElementsPerSegement int) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
-
-	iteration-- // 0-based here
-
-	delSegmentEnd := iteration * numElementsPerSegement
-	delSegmentStart := delSegmentEnd - numElementsPerSegement
-	if delSegmentStart < 0 {
-		delSegmentStart = 0
-	}
-
-	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	stop := delSegmentEnd + numElementsPerSegement
-
-	for i := delSegmentStart; i < delSegmentEnd; i++ {
-		ctb := creatables[crtbsList[i]]
-		if ctb.Created &&
-			// Always delete the first element, to make sure at least one
-			// element is always deleted.
-			(i == delSegmentStart || (crypto.RandUint64()%2) == 1) {
-			ctb.Created = false
-			newSample[crtbsList[i]] = ctb
-			delete(expectedDbImage, crtbsList[i])
-		}
-	}
-
-	for i := delSegmentEnd; i < stop; i++ {
-		newSample[crtbsList[i]] = creatables[crtbsList[i]]
-		if creatables[crtbsList[i]].Created {
-			expectedDbImage[crtbsList[i]] = creatables[crtbsList[i]]
-		}
-	}
-
-	return newSample
-}
-
-func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
-	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
-	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
-
-	for i := 0; i < numElementsPerSegement*10; i++ {
-		assetIndex, mc := randomCreatable(uniqueAssetIds)
-		creatables[assetIndex] = mc
-		creatablesList[i] = assetIndex
-	}
-	return creatablesList, creatables // creatablesList is needed for maintaining the order
-}
-
-// randomCreatable generates a random creatable.
-func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
-	assetIndex basics.CreatableIndex, mc ledgercore.ModifiedCreatable) {
-
-	var ctype basics.CreatableType
-
-	switch crypto.RandUint64() % 2 {
-	case 0:
-		ctype = basics.AssetCreatable
-	case 1:
-		ctype = basics.AppCreatable
-	}
-
-	creatable := ledgercore.ModifiedCreatable{
-		Ctype:   ctype,
-		Created: (crypto.RandUint64() % 2) == 1,
-		Creator: ledgertesting.RandomAddress(),
-		Ndeltas: 1,
-	}
-
-	var assetIdx basics.CreatableIndex
-	for {
-		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
-		_, found := uniqueAssetIds[assetIdx]
-		if !found {
-			uniqueAssetIds[assetIdx] = true
-			break
-		}
-	}
-	return assetIdx, creatable
 }
 
 func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
@@ -626,7 +502,8 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto pro
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	AccountsInitTest(b, tx, updates, proto)
+	_, err = AccountsInitTest(tx, updates, proto)
+	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -649,7 +526,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	// read all the balances in the database.
+	// Read all the balances in the database.
 	bal, err2 := accountsAll(tx)
 	require.NoError(b, err2)
 	tx.Commit()
@@ -680,7 +557,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	qs, err := AccountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(b, err)
 
-	// read all the balances in the database, shuffled
+	// Read all the balances in the database, shuffled
 	addrs := make([]basics.Address, len(accounts))
 	pos := 0
 	for addr := range accounts {
@@ -718,7 +595,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		benchmarkInitBalances(b, startupAcct, dbs, protocol.ConsensusCurrentVersion)
 		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
-		// insert 1M accounts data, in batches of 1000
+		// Insert 1M accounts data, in batches of 1000
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
 
@@ -749,7 +626,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		accountsAddress = make([][]byte, 0, totalStartupAccountsNumber+startupAcct)
 		accountsRowID = make([]int, 0, totalStartupAccountsNumber+startupAcct)
 
-		// read all the accounts to obtain the addrs.
+		// Read all the accounts to obtain the addrs.
 		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
 		require.NoError(b, err)
 		defer rows.Close()
@@ -846,7 +723,10 @@ func TestAccountsReencoding(t *testing.T) {
 	crypto.RandBytes(stateProofID.Commitment[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		_, err = AccountsInitTest(tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		if err != nil {
+			return err
+		}
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -924,8 +804,8 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
-		return nil
+		_, err = AccountsInitTest(tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		return err
 	})
 	require.NoError(t, err)
 	qs, err := AccountsInitDbQueries(dbs.Rdb.Handle)
@@ -940,7 +820,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 // upsert updates existing or inserts a new entry
 func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
 	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx}]; exist {
-		a.deltas[idx] = delta
+		a.Deltas[idx] = delta
 		return
 	}
 	a.insert(delta)
@@ -953,7 +833,7 @@ func (a *CompactAccountDeltas) upsertOld(old PersistedAccountData) {
 		a.Deltas[idx].OldAcct = old
 		return
 	}
-	a.insert(AccountDelta{OldAcct: old, Address: old.Addr})
+	a.Insert(AccountDelta{OldAcct: old, Address: old.Addr})
 }
 
 // upsert updates existing or inserts a new entry
@@ -962,7 +842,7 @@ func (a *CompactAccountDeltas) upsert(addr basics.Address, delta AccountDelta) {
 		a.Deltas[idx] = delta
 		return
 	}
-	a.insert(delta)
+	a.Insert(delta)
 }
 func TestCompactAccountDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -970,12 +850,12 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a := require.New(t)
 
 	ad := CompactAccountDeltas{}
-	data, idx := ad.get(basics.Address{})
+	data, idx := ad.Get(basics.Address{})
 	a.Equal(-1, idx)
 	a.Equal(AccountDelta{}, data)
 
 	addr := ledgertesting.RandomAddress()
-	data, idx = ad.get(addr)
+	data, idx = ad.Get(addr)
 	a.Equal(-1, idx)
 	a.Equal(AccountDelta{}, data)
 
@@ -984,7 +864,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 
 	sample1 := AccountDelta{NewAcct: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}, Address: addr}
 	ad.upsert(addr, sample1)
-	data, idx = ad.get(addr)
+	data, idx = ad.Get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
 
@@ -995,7 +875,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 
 	sample2 := AccountDelta{NewAcct: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}, Address: addr}
 	ad.upsert(addr, sample2)
-	data, idx = ad.get(addr)
+	data, idx = ad.Get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample2, data)
 
@@ -1005,7 +885,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(sample2, data)
 
 	ad.update(idx, sample2)
-	data, idx2 := ad.get(addr)
+	data, idx2 := ad.Get(addr)
 	a.Equal(idx, idx2)
 	a.Equal(sample2, data)
 
@@ -1042,7 +922,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 
 	addr2 := ledgertesting.RandomAddress()
 	sample2.Address = addr2
-	idx = ad.insert(sample2)
+	idx = ad.Insert(sample2)
 	a.Equal(3, ad.Len())
 	a.Equal(2, idx)
 	data = ad.GetByIdx(idx)
@@ -1053,11 +933,11 @@ func TestCompactAccountDeltas(t *testing.T) {
 // upsertOld updates existing or inserts a new partial entry with only old field filled
 func (a *CompactResourcesDeltas) upsertOld(addr basics.Address, old PersistedResourcesData) {
 	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: addr, Index: old.Aidx}]; exist {
-		a.deltas[idx].OldResource = old
+		a.Deltas[idx].OldResource = old
 		return
 	}
 	idx := a.insert(ResourceDelta{OldResource: old, Address: addr})
-	a.deltas[idx].Address = addr
+	a.Deltas[idx].Address = addr
 }
 func TestCompactResourceDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1065,12 +945,12 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a := require.New(t)
 
 	ad := CompactResourcesDeltas{}
-	data, idx := ad.get(basics.Address{}, 0)
+	data, idx := ad.Get(basics.Address{}, 0)
 	a.Equal(-1, idx)
 	a.Equal(ResourceDelta{}, data)
 
 	addr := ledgertesting.RandomAddress()
-	data, idx = ad.get(addr, 0)
+	data, idx = ad.Get(addr, 0)
 	a.Equal(-1, idx)
 	a.Equal(ResourceDelta{}, data)
 
@@ -1079,7 +959,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 
 	sample1 := ResourceDelta{NewResource: resourcesData{Total: 123}, Address: addr, OldResource: PersistedResourcesData{Aidx: 1}}
 	ad.upsert(sample1)
-	data, idx = ad.get(addr, 1)
+	data, idx = ad.Get(addr, 1)
 	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
 
@@ -1090,7 +970,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 
 	sample2 := ResourceDelta{NewResource: resourcesData{Total: 456}, Address: addr, OldResource: PersistedResourcesData{Aidx: 1}}
 	ad.upsert(sample2)
-	data, idx = ad.get(addr, 1)
+	data, idx = ad.Get(addr, 1)
 	a.NotEqual(-1, idx)
 	a.Equal(sample2, data)
 
@@ -1100,7 +980,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(sample2, data)
 
 	ad.update(idx, sample2)
-	data, idx2 := ad.get(addr, 1)
+	data, idx2 := ad.Get(addr, 1)
 	a.Equal(idx, idx2)
 	a.Equal(sample2, data)
 
@@ -1142,7 +1022,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(2, idx)
 	data = ad.GetByIdx(idx)
 	a.Equal(addr2, data.Address)
-	cachedData, pos := ad.get(addr2, 2)
+	cachedData, pos := ad.Get(addr2, 2)
 	a.Equal(2, pos)
 	a.Equal(data, cachedData)
 	a.Equal(sample2, data)
@@ -1157,7 +1037,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsApp())
 	a.True(rd.IsEmpty())
 
-	rd = makeResourcesData(1)
+	rd = MakeResourcesData(1)
 	a.False(rd.IsApp())
 	a.False(rd.IsHolding())
 	a.False(rd.IsOwning())
@@ -1275,7 +1155,7 @@ func TestResourcesDataApp(t *testing.T) {
 
 	// check migration flow (accountDataResources)
 	// 1. both exist and empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppLocalState(appLocalEmpty)
 	rd.SetAppParams(appParamsEmpty, true)
 	a.True(rd.IsApp())
@@ -1285,7 +1165,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 2. both exist and not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppLocalState(appState)
 	rd.SetAppParams(appParams, true)
 	a.True(rd.IsApp())
@@ -1295,7 +1175,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 3. both exist: holding not empty, param is empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppLocalState(appState)
 	rd.SetAppParams(appParamsEmpty, true)
 	a.True(rd.IsApp())
@@ -1305,7 +1185,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 4. both exist: holding empty, param is not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppLocalState(appLocalEmpty)
 	rd.SetAppParams(appParams, true)
 	a.True(rd.IsApp())
@@ -1315,7 +1195,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 5. holding does not exist and params is empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppParams(appParamsEmpty, false)
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
@@ -1324,7 +1204,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 6. holding does not exist and params is not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppParams(appParams, false)
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
@@ -1333,7 +1213,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 7. holding exist and not empty and params does not exist
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAppLocalState(appState)
 	a.True(rd.IsApp())
 	a.False(rd.IsOwning())
@@ -1342,7 +1222,7 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 8. both do not exist
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	a.False(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
@@ -1360,7 +1240,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsAsset())
 	a.True(rd.IsEmpty())
 
-	rd = makeResourcesData(1)
+	rd = MakeResourcesData(1)
 	a.False(rd.IsAsset())
 	a.False(rd.IsHolding())
 	a.False(rd.IsOwning())
@@ -1478,7 +1358,7 @@ func TestResourcesDataAsset(t *testing.T) {
 
 	// check migration operations (accountDataResources)
 	// 1. both exist and empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHoldingEmpty)
 	rd.SetAssetParams(assetParamsEmpty, true)
 	a.True(rd.IsAsset())
@@ -1488,7 +1368,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 2. both exist and not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHolding)
 	rd.SetAssetParams(assetParams, true)
 	a.True(rd.IsAsset())
@@ -1498,7 +1378,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 3. both exist: holding not empty, param is empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHolding)
 	rd.SetAssetParams(assetParamsEmpty, true)
 	a.True(rd.IsAsset())
@@ -1508,7 +1388,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 4. both exist: holding empty, param is not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHoldingEmpty)
 	rd.SetAssetParams(assetParams, true)
 	a.True(rd.IsAsset())
@@ -1518,7 +1398,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 5. holding does not exist and params is empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetParams(assetParamsEmpty, false)
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
@@ -1527,7 +1407,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 6. holding does not exist and params is not empty
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetParams(assetParams, false)
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
@@ -1536,7 +1416,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 7. holding exist and not empty and params does not exist
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHolding)
 	a.True(rd.IsAsset())
 	a.False(rd.IsOwning())
@@ -1545,7 +1425,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsEmpty())
 
 	// 8. both do not exist
-	rd = makeResourcesData(0)
+	rd = MakeResourcesData(0)
 	a.False(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
@@ -1568,7 +1448,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		act
 	)
 
-	// apply deltas encoded as deltaCode to a base resourcesData for both apps and assets
+	// apply Deltas encoded as deltaCode to a base resourcesData for both apps and assets
 	apply := func(t *testing.T, base resourcesData, testType basics.CreatableType, pcode, hcode deltaCode) resourcesData {
 		if testType == basics.AssetCreatable {
 			var p ledgercore.AssetParamsDelta
@@ -1650,10 +1530,10 @@ func TestResourcesDataSetData(t *testing.T) {
 	}
 
 	empty := func(testType basics.CreatableType) resourcesData {
-		return makeResourcesData(0)
+		return MakeResourcesData(0)
 	}
 	emptyParamsNoHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetParams(basics.AssetParams{}, false)
 		} else {
@@ -1662,7 +1542,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	emptyParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{})
 			rd.SetAssetParams(basics.AssetParams{}, true)
@@ -1673,7 +1553,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	emptyParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
 			rd.SetAssetParams(basics.AssetParams{}, true)
@@ -1684,7 +1564,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	paramsNoHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetParams(basics.AssetParams{Total: 222}, false)
 		} else {
@@ -1693,7 +1573,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	paramsEmptyHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{})
 			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
@@ -1704,7 +1584,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	paramsAndHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
 			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
@@ -1715,7 +1595,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	noParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{})
 		} else {
@@ -1724,7 +1604,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		return rd
 	}
 	noParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
-		rd := makeResourcesData(0)
+		rd := MakeResourcesData(0)
 		if testType == basics.AssetCreatable {
 			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
 		} else {
@@ -2148,7 +2028,7 @@ func TestBaseVotingDataGettersSetters(t *testing.T) {
 	data.VoteLastValid = basics.Round(crypto.RandUint64()) // int64 is the max sqlite can store
 	data.VoteKeyDilution = crypto.RandUint64()
 
-	var bv baseVotingData
+	var bv BaseVotingData
 	require.True(t, bv.IsEmpty())
 
 	ad := ledgercore.ToAccountData(data)
@@ -2172,7 +2052,7 @@ func TestBaseOnlineAccountDataReflect(t *testing.T) {
 func TestBaseVotingDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	require.Equal(t, 7, reflect.TypeOf(baseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
+	require.Equal(t, 7, reflect.TypeOf(BaseVotingData{}).NumField(), "update all getters and setters for BaseVotingData and change the field count")
 }
 
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
@@ -2188,7 +2068,10 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]int64)
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		_, err = AccountsInitTest(tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		if err != nil {
+			return err
+		}
 
 		for i := range addrs {
 			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
@@ -2510,13 +2393,13 @@ func TestFactorialPerm(t *testing.T) {
 }
 
 func compactAccountDeltasPermutations(a *require.Assertions, cad CompactAccountDeltas) []CompactAccountDeltas {
-	a.Empty(cad.misses)
+	a.Empty(cad.Misses)
 
 	size := cad.Len()
 	result := make([]CompactAccountDeltas, 0, factorial(size))
 
 	perms := permHeap(size)
-	// remap existing deltas to permutated one
+	// remap existing Deltas to permutated one
 	for _, perm := range perms {
 		new := CompactAccountDeltas{}
 		new.cache = make(map[basics.Address]int, size)
@@ -2548,19 +2431,19 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 	result := make([]CompactResourcesDeltas, 0, factorial(size))
 
 	perms := permHeap(size)
-	// remap existing deltas to permutated one
+	// remap existing Deltas to permutated one
 	for _, perm := range perms {
 		new := CompactResourcesDeltas{}
 		new.cache = make(map[ledgercore.AccountCreatable]int, size)
-		new.deltas = make([]ResourceDelta, size)
-		new.misses = make([]int, len(crd.misses))
+		new.Deltas = make([]ResourceDelta, size)
+		new.Misses = make([]int, len(crd.Misses))
 		for i, k := range perm {
-			new.deltas[k] = crd.deltas[i]
+			new.Deltas[k] = crd.Deltas[i]
 		}
 		for key, i := range crd.cache {
 			new.cache[key] = perm[i]
 		}
-		copy(new.misses, crd.misses)
+		copy(new.Misses, crd.Misses)
 		result = append(result, new)
 	}
 
@@ -2578,7 +2461,7 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 
 // TestAccountUnorderedUpdates ensures rowid reuse in accountbase does not lead to
 // resources insertion problems.
-// This test simulates a problem found while testing resources deltas on testnet:
+// This test simulates a problem found while testing resources Deltas on testnet:
 //
 // unable to advance tracker db snapshot (16541781-16541801): db op failed:
 // addr RGJVDTZIFR7VIHI4QMSA6Y7H3FCHUXIBS5H26UKDGMWHALTMW3ZRGMNX3M addrid 515356, aidx 22045503, err: UNIQUE constraint failed
@@ -2588,9 +2471,9 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 // at 16541783 YF5 made a payment txn (one acct delta)
 // at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
 // at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
-// Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
+// Because YF5 had modifications before RGJ, all its acct Deltas were compacted into a single entry before RGJ (delete, create)
 // In the same time, the order in resources delta remained the same (opt-in, delete).
-// While processing acct deltas (delete, create) SQLite reused on old rowid for new account.
+// While processing acct Deltas (delete, create) SQLite reused on old rowid for new account.
 // Then this rowid was discovered as addrid for opt-in operation and the "UNIQUE constraint failed" error happened.
 func TestAccountUnorderedUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -2633,7 +2516,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	latestRound := basics.Round(16541801)
 
 	// we want to have all accounts to be found: addr1, observer existed, and addr2 non-existed
-	// this would have compact deltas current and without missing entries
+	// this would have compact Deltas current and without missing entries
 	var baseAccounts LRUAccounts
 	baseAccounts.Init(nil, 100, 80)
 
@@ -2648,7 +2531,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	baseAccounts.Write(PersistedAccountData{Addr: addr2})
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
-	a.Empty(acctDeltas.misses)
+	a.Empty(acctDeltas.Misses)
 	a.Equal(3, acctDeltas.Len())
 
 	// we want to have (addr1, aidx) and (observer, aidx)
@@ -2665,7 +2548,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	baseResources.Write(prd, observer)
 
 	resDeltas := MakeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
-	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
+	a.Equal(1, len(resDeltas.Misses)) // (addr2, aidx) does not exist
 	a.Equal(3, resDeltas.Len())       // (addr1, aidx), (observer, aidx) found
 
 	acctVariants := compactAccountDeltasPermutations(a, acctDeltas)
@@ -2737,10 +2620,10 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.NoError(err)
 	a.True(ok)
 	baseAccounts.Write(pad)
-	baseAccounts.Write(PersistedAccountData{Addr: addr2}) // put an empty record for addr2 to get rid of lookups
+	baseAccounts.Write(PersistedAccountData{Addr: addr2}) // put an empty record for addr2 to Get rid of lookups
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
-	a.Empty(acctDeltas.misses)
+	a.Empty(acctDeltas.Misses)
 	a.Equal(3, acctDeltas.Len())
 
 	// we want to have (addr1, aidx) and (observer, aidx)
@@ -2754,7 +2637,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	baseResources.Write(prd, observer)
 
 	resDeltas := MakeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
-	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
+	a.Equal(1, len(resDeltas.Misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.Len())       // (addr1, aidx) found
 
 	updatedAccounts, updatedResources, err := AccountsNewRoundImpl(
@@ -2782,7 +2665,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(1, len(upd))
 		a.Equal(int64(0), upd[0].Addrid)
 		a.Equal(basics.CreatableIndex(aidx), upd[0].Aidx)
-		a.Equal(makeResourcesData(uint64(0)), upd[0].Data)
+		a.Equal(MakeResourcesData(uint64(0)), upd[0].Data)
 	}
 }
 
@@ -2819,7 +2702,8 @@ func TestAccountOnlineQueries(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 	totals, err := AccountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 
@@ -3158,7 +3042,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 		Address: addrC,
 		newAcct: []BaseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-			baseVotingData: baseVotingData{VoteFirstValid: 500},
+			BaseVotingData: BaseVotingData{VoteFirstValid: 500},
 		}},
 		newStatus: []basics.Status{basics.Online},
 		updRound:  []uint64{2},
@@ -3170,7 +3054,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			Addr: addrD,
 			AccountData: BaseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 500},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 500},
 			},
 			Rowid: 1,
 		},
@@ -3188,13 +3072,13 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			Addr: addrE,
 			AccountData: BaseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 500},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 500},
 			},
 			Rowid: 2,
 		},
 		newAcct: []BaseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
-			baseVotingData: baseVotingData{VoteFirstValid: 600},
+			BaseVotingData: BaseVotingData{VoteFirstValid: 600},
 		}},
 		newStatus: []basics.Status{basics.Online},
 		updRound:  []uint64{4},
@@ -3251,7 +3135,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 			},
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 100},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 100},
 			},
 		},
 		updRound:  []uint64{1, 2},
@@ -3263,7 +3147,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 200},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 200},
 			},
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
@@ -3279,14 +3163,14 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 			Addr: addrC,
 			AccountData: BaseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 300},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 300},
 			},
 			Rowid: 1,
 		},
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 301},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 301},
 			},
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
@@ -3321,7 +3205,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
 	const maxRounds = 40 // any number
@@ -3427,10 +3312,10 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	err = accountsCreateTxTailTable(context.Background(), tx)
+	err = AccountsCreateTxTailTable(context.Background(), tx)
 	require.NoError(t, err)
 
-	// insert 1500 rounds and retain past 1001
+	// Insert 1500 rounds and retain past 1001
 	startRound := basics.Round(1)
 	endRound := basics.Round(1500)
 	roundData := make([][]byte, 1500)
@@ -3475,7 +3360,8 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
+	require.NoError(t, err)
 
 	updates := CompactOnlineAccountDeltas{}
 	addrA := ledgertesting.RandomAddress()
@@ -3486,14 +3372,14 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 100},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 100},
 			},
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
 			},
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 600},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 600},
 			},
 		},
 		updRound:  []uint64{1, 3, 6},
@@ -3505,11 +3391,11 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 300},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 300},
 			},
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
-				baseVotingData: baseVotingData{VoteFirstValid: 700},
+				BaseVotingData: BaseVotingData{VoteFirstValid: 700},
 			},
 		},
 		updRound:  []uint64{3, 7},
@@ -3599,7 +3485,7 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
+	err := AccountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
 	require.NoError(t, err)
 
 	for _, round := range []basics.Round{4, 6, 8} {
@@ -3711,7 +3597,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 
 		// this is the same seq as AccountsInitTest makes but it stops
 		// before the online accounts table creation to generate a trie and commit it
-		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = AccountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
 		require.NoError(t, err)
 
 		err = AccountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -3776,12 +3662,12 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, expectedRoot)
 
-	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
+	err = AccountsCreateOnlineAccountsTable(context.Background(), tx)
 	require.NoError(t, err)
 	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
 	require.NoError(t, err)
 
-	// get the new hash and ensure it does not match to the old one (data migrated)
+	// Get the new hash and ensure it does not match to the old one (data migrated)
 	mc, err := MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
 	trie, err := merkletrie.MakeTrie(mc, ledgercore.TrieMemoryConfig)

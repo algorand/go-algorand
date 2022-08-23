@@ -434,9 +434,9 @@ func BenchmarkUnmarshalTxTailRoundLease(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalbaseVotingData(t *testing.T) {
+func TestMarshalUnmarshalBaseVotingData(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := baseVotingData{}
+	v := BaseVotingData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -455,12 +455,12 @@ func TestMarshalUnmarshalbaseVotingData(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingbaseVotingData(t *testing.T) {
-	protocol.RunEncodingTest(t, &baseVotingData{})
+func TestRandomizedEncodingBaseVotingData(t *testing.T) {
+	protocol.RunEncodingTest(t, &BaseVotingData{})
 }
 
-func BenchmarkMarshalMsgbaseVotingData(b *testing.B) {
-	v := baseVotingData{}
+func BenchmarkMarshalMsgBaseVotingData(b *testing.B) {
+	v := BaseVotingData{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -468,8 +468,8 @@ func BenchmarkMarshalMsgbaseVotingData(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgbaseVotingData(b *testing.B) {
-	v := baseVotingData{}
+func BenchmarkAppendMsgBaseVotingData(b *testing.B) {
+	v := BaseVotingData{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -480,8 +480,8 @@ func BenchmarkAppendMsgbaseVotingData(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalbaseVotingData(b *testing.B) {
-	v := baseVotingData{}
+func BenchmarkUnmarshalBaseVotingData(b *testing.B) {
+	v := BaseVotingData{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

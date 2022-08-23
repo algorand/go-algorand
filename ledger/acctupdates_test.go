@@ -1191,7 +1191,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_ = accountdb.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_, err = accountdb.AccountsInitTest(tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
 	err = accountdb.AccountsAddNormalizedBalance(tx, proto)
@@ -1315,7 +1315,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 			addr := ledgertesting.RandomAddress()
 			acctData := accountdb.BaseAccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates.upsert(addr, accountdb.AccountDelta{NewAcct: acctData})
+			updates.Insert(accountdb.AccountDelta{Address: addr, NewAcct: acctData})
 			i++
 		}
 
@@ -1390,10 +1390,10 @@ func TestCompactDeltas(t *testing.T) {
 
 	require.Equal(t, accountDeltas[0].Len(), outAccountDeltas.Len())
 	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
-	require.Equal(t, accountDeltas[0].Len(), len(outAccountDeltas.misses))
+	require.Equal(t, accountDeltas[0].Len(), len(outAccountDeltas.Misses))
 
 	// check deltas with missing accounts
-	delta, _ := outAccountDeltas.get(addrs[0])
+	delta, _ := outAccountDeltas.Get(addrs[0])
 	require.Equal(t, accountdb.PersistedAccountData{}, delta.OldAcct)
 	require.NotEmpty(t, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
@@ -1401,12 +1401,12 @@ func TestCompactDeltas(t *testing.T) {
 	// check deltas without missing accounts
 	baseAccounts.Write(accountdb.PersistedAccountData{Addr: addrs[0], AccountData: accountdb.BaseAccountData{}})
 	outAccountDeltas = accountdb.MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
-	require.Equal(t, 0, len(outAccountDeltas.misses))
-	delta, _ = outAccountDeltas.get(addrs[0])
+	require.Equal(t, 0, len(outAccountDeltas.Misses))
+	delta, _ = outAccountDeltas.Get(addrs[0])
 	require.Equal(t, accountdb.PersistedAccountData{Addr: addrs[0]}, delta.OldAcct)
 	require.Equal(t, accountdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
-	baseAccounts.init(nil, 100, 80)
+	baseAccounts.Init(nil, 100, 80)
 
 	// add another round
 	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
@@ -1425,11 +1425,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, outAccountDeltas.Len())
 	require.Equal(t, 2, len(outCreatableDeltas))
 
-	delta, _ = outAccountDeltas.get(addrs[0])
+	delta, _ = outAccountDeltas.Get(addrs[0])
 	require.Equal(t, uint64(1), delta.OldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(2), delta.NAcctDeltas)
-	delta, _ = outAccountDeltas.get(addrs[3])
+	delta, _ = outAccountDeltas.Get(addrs[3])
 	require.Equal(t, uint64(0), delta.OldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(1), delta.NAcctDeltas)
@@ -1462,25 +1462,25 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 
 	outResourcesDeltas := accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
-	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	delta, _ := outResourcesDeltas.Get(addrs[0], 100)
 	require.NotEmpty(t, delta.NewResource)
 	require.True(t, !delta.NewResource.IsApp() && !delta.NewResource.IsAsset())
-	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.NewResource.ResourceFlags)
+	require.Equal(t, 1, int(delta.NewResource.ResourceFlags))
 
-	delta, _ = outResourcesDeltas.get(addrs[1], 101)
+	delta, _ = outResourcesDeltas.Get(addrs[1], 101)
 	require.NotEmpty(t, delta.NewResource)
 	require.True(t, !delta.NewResource.IsApp() && !delta.NewResource.IsAsset())
-	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.NewResource.ResourceFlags)
+	require.Equal(t, 1, int(delta.NewResource.ResourceFlags))
 
-	delta, _ = outResourcesDeltas.get(addrs[2], 102)
+	delta, _ = outResourcesDeltas.Get(addrs[2], 102)
 	require.NotEmpty(t, delta.NewResource)
 	require.True(t, !delta.NewResource.IsApp() && !delta.NewResource.IsAsset())
-	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.NewResource.ResourceFlags)
+	require.Equal(t, 1, int(delta.NewResource.ResourceFlags))
 
-	delta, _ = outResourcesDeltas.get(addrs[3], 103)
+	delta, _ = outResourcesDeltas.Get(addrs[3], 103)
 	require.NotEmpty(t, delta.NewResource)
 	require.True(t, !delta.NewResource.IsApp() && !delta.NewResource.IsAsset())
-	require.Equal(t, accountdb.resourceFlagsNotHolding, delta.NewResource.ResourceFlags)
+	require.Equal(t, 1, int(delta.NewResource.ResourceFlags))
 
 	// check actual data on non-empty input
 	accountDeltas = make([]ledgercore.AccountDeltas, 1)
@@ -1510,38 +1510,38 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
-	require.Equal(t, 6, len(outResourcesDeltas.misses))
-	require.Equal(t, 6, len(outResourcesDeltas.deltas))
+	require.Equal(t, 6, len(outResourcesDeltas.Misses))
+	require.Equal(t, 6, len(outResourcesDeltas.Deltas))
 
 	// check deltas with missing accounts
 
 	checkNewDeltas := func(outResourcesDeltas accountdb.CompactResourcesDeltas) {
-		delta, _ := outResourcesDeltas.get(addrs[0], 100)
+		delta, _ := outResourcesDeltas.Get(addrs[0], 100)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, appParams100.ApprovalProgram, delta.NewResource.ApprovalProgram)
 		// do not check delta.NAcctDeltas since checkNewDeltas func is reused and this entry gets modified
 
-		delta, _ = outResourcesDeltas.get(addrs[0], 200)
+		delta, _ = outResourcesDeltas.Get(addrs[0], 200)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, appLocalState200.KeyValue, delta.NewResource.GetAppLocalState().KeyValue)
 		require.Equal(t, int(1), delta.NAcctDeltas)
 
-		delta, _ = outResourcesDeltas.get(addrs[1], 101)
+		delta, _ = outResourcesDeltas.Get(addrs[1], 101)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, appParams101.ApprovalProgram, delta.NewResource.ApprovalProgram)
 		require.Equal(t, appLocalState101.KeyValue, delta.NewResource.GetAppLocalState().KeyValue)
 		require.Equal(t, int(1), delta.NAcctDeltas)
 
-		delta, _ = outResourcesDeltas.get(addrs[2], 102)
+		delta, _ = outResourcesDeltas.Get(addrs[2], 102)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, assetParams102.Total, delta.NewResource.Total)
 		require.Equal(t, int(1), delta.NAcctDeltas)
-		delta, _ = outResourcesDeltas.get(addrs[2], 202)
+		delta, _ = outResourcesDeltas.Get(addrs[2], 202)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, assetHolding202.Amount, delta.NewResource.GetAssetHolding().Amount)
 		require.Equal(t, int(1), delta.NAcctDeltas)
 
-		delta, _ = outResourcesDeltas.get(addrs[3], 103)
+		delta, _ = outResourcesDeltas.Get(addrs[3], 103)
 		require.NotEmpty(t, delta.NewResource)
 		require.Equal(t, assetParams103.Total, delta.NewResource.Total)
 		require.Equal(t, assetHolding103.Amount, delta.NewResource.GetAssetHolding().Amount)
@@ -1550,11 +1550,11 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	checkNewDeltas(outResourcesDeltas)
 	for i := int64(0); i < 4; i++ {
-		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
+		delta, idx := outResourcesDeltas.Get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
 		require.Equal(t, accountdb.PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
 		if i%2 == 0 {
-			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
+			delta, idx = outResourcesDeltas.Get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
 			require.Equal(t, accountdb.PersistedResourcesData{Aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
 		}
@@ -1569,16 +1569,16 @@ func TestCompactDeltasResources(t *testing.T) {
 	}
 
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
-	require.Equal(t, 0, len(outResourcesDeltas.misses))
-	require.Equal(t, 6, len(outResourcesDeltas.deltas))
+	require.Equal(t, 0, len(outResourcesDeltas.Misses))
+	require.Equal(t, 6, len(outResourcesDeltas.Deltas))
 
 	checkNewDeltas(outResourcesDeltas)
 	for i := int64(0); i < 4; i++ {
-		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
+		delta, idx := outResourcesDeltas.Get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
 		require.Equal(t, accountdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
 		if i%2 == 0 {
-			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
+			delta, idx = outResourcesDeltas.Get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
 			require.Equal(t, accountdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
 		}
@@ -1599,15 +1599,15 @@ func TestCompactDeltasResources(t *testing.T) {
 	baseResources.Write(accountdb.PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
-	require.Equal(t, 0, len(outResourcesDeltas.misses))
-	require.Equal(t, 7, len(outResourcesDeltas.deltas))
+	require.Equal(t, 0, len(outResourcesDeltas.Misses))
+	require.Equal(t, 7, len(outResourcesDeltas.Deltas))
 
 	checkNewDeltas(outResourcesDeltas)
-	delta, _ = outResourcesDeltas.get(addrs[0], 100)
+	delta, _ = outResourcesDeltas.Get(addrs[0], 100)
 	require.Equal(t, appLocalState100.KeyValue, delta.NewResource.GetAppLocalState().KeyValue)
 	require.Equal(t, int(2), delta.NAcctDeltas)
 
-	delta, _ = outResourcesDeltas.get(addrs[4], 104)
+	delta, _ = outResourcesDeltas.Get(addrs[4], 104)
 	require.Equal(t, appParams104.ApprovalProgram, delta.NewResource.GetAppParams().ApprovalProgram)
 	require.Equal(t, appLocalState204.KeyValue, delta.NewResource.GetAppLocalState().KeyValue)
 	require.Equal(t, int(1), delta.NAcctDeltas)

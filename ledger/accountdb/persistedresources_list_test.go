@@ -28,7 +28,7 @@ func (l *persistedResourcesDataList) getRoot() dataListNode {
 }
 
 func (l *persistedResourcesDataListNode) getNext() dataListNode {
-	// get rid of returning nil wrapped into an interface to let i = x.getNext(); i != nil work.
+	// Get rid of returning nil wrapped into an interface to let i = x.getNext(); i != nil work.
 	if l.next == nil {
 		return nil
 	}

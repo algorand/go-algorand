@@ -251,26 +251,23 @@ return`
 	commitRound(1, 3, l)
 
 	// dump accounts
-	var rowid int64
-	var dbRound basics.Round
-	var buf []byte
-	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
+	data, err := l.accts.accountsq.Lookup(creator)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(creator[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedCreatorBase, protocol.Encode(&data.AccountData))
+	resourceData, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorResource, buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedCreatorResource, protocol.Encode(&resourceData.Data))
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
+	data, err = l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userOptin[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedUserOptInBase, protocol.Encode(&data.AccountData))
+	resourceData, err = l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInResource, buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedUserOptInResource, protocol.Encode(&resourceData.Data))
 
 	pad, err := l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
@@ -279,20 +276,20 @@ return`
 	a.NoError(err)
 	a.Nil(prd.Data.GetAppLocalState().KeyValue)
 	ad, rnd, _, err := l.LookupLatest(userOptin)
-	a.Equal(dbRound, rnd)
+	a.Equal(basics.Round(4), rnd)
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
+	data, err = l.accts.accountsq.Lookup(userLocal)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userLocal[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedUserLocalBase, protocol.Encode(&data.AccountData))
+	resourceData, err = l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalResource, buf)
+	a.Equal(basics.Round(4), data.Round)
+	a.Equal(expectedUserLocalResource, protocol.Encode(&resourceData.Data))
 
-	ar, err := l.LookupApplication(dbRound, userLocal, appIdx)
+	ar, err := l.LookupApplication(basics.Round(4), userLocal, appIdx)
 	a.NoError(err)
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
@@ -761,7 +758,7 @@ return`
 	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.Addrid)
-	emptyResourceData := accountdb.makeResourcesData(0)
+	emptyResourceData := accountdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 
@@ -897,7 +894,7 @@ return`
 	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.Addrid)
-	emptyResourceData := accountdb.makeResourcesData(0)
+	emptyResourceData := accountdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 
