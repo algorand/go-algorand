@@ -25,8 +25,6 @@ jobs:
         with:
           path: crypto/libs
           key: libsodium-fork-v2-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-#      - name: clean go mod cache
-#        run: go clean -modcache
       - name: Build
         run: |
           export ALGORAND_DEADLOCK=enable
