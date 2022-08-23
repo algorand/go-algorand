@@ -25,6 +25,7 @@ jobs:
         with:
           path: crypto/libs
           key: libsodium-fork-v2-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - run: go env GOPROXY
       - name: Build
         run: |
           export ALGORAND_DEADLOCK=enable
