@@ -330,8 +330,7 @@ func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
 		}
 	}
 
-	// spread some asset around
-	// .. or just wait till constructAssetTxn()?
+	// Could distribute value here, but just waits till constructAssetTxn()
 	return
 }
 
