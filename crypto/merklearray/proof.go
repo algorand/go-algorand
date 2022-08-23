@@ -17,6 +17,8 @@
 package merklearray
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -83,7 +85,7 @@ func (p *SingleLeafProof) ToProof() *Proof {
 	return &p.Proof
 }
 
-// GetConcatenatedProof concats the verification path to a single slice
+// GetConcatenatedProof concatenates the verification path to a single slice
 // This function converts an empty element in the path (i.e occurs when the tree is not a full tree)
 // into a sequence of digest result of zero.
 func (p *SingleLeafProof) GetConcatenatedProof() []byte {
@@ -95,4 +97,34 @@ func (p *SingleLeafProof) GetConcatenatedProof() []byte {
 		}
 	}
 	return proofconcat
+}
+
+// ProofDataToSingleLeafProof receives serialized proof data and uses it to construct a proof object.
+func ProofDataToSingleLeafProof(hashTypeData string, treeDepth uint64, proofBytes []byte) (SingleLeafProof, error) {
+	hashType, err := crypto.UnmarshalHashType(hashTypeData)
+	if err != nil {
+		return SingleLeafProof{}, err
+	}
+
+	var proof SingleLeafProof
+
+	proof.HashFactory = crypto.HashFactory{HashType: hashType}
+	proof.TreeDepth = uint8(treeDepth)
+
+	digestSize := proof.HashFactory.NewHash().Size()
+	if len(proofBytes)%digestSize != 0 {
+		return SingleLeafProof{}, fmt.Errorf("proof bytes length is %d, which is not a multiple of "+
+			"digest size %d: %w", len(proofBytes), digestSize, ErrProofLengthDigestSizeMismatch)
+	}
+
+	var proofPath []crypto.GenericDigest
+	for len(proofBytes) > 0 {
+		d := make([]byte, digestSize)
+		copy(d[:], proofBytes)
+		proofPath = append(proofPath, d[:])
+		proofBytes = proofBytes[len(d):]
+	}
+
+	proof.Path = proofPath
+	return proof, nil
 }

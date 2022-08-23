@@ -24,23 +24,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// NOTE: Another (partial) implementation of `basics.Address` is in `data/abi`.
-//       The reason of not using this `Address` in `data/abi` is that:
-//       - `data/basics` has C dependencies (`go-algorand/crypto`)
-//       - `go-algorand-sdk` has dependency to `go-algorand` for `ABI`
-//       - if `go-algorand`'s ABI uses `basics.Address`, then it would be
-//         impossible to up the version of `go-algorand` in `go-algorand-sdk`
-
-// This is discussed in:
-// - ISSUE https://github.com/algorand/go-algorand/issues/3355
-// - PR https://github.com/algorand/go-algorand/pull/3375
-
-// There are two solutions:
-// - One is to refactoring `crypto.Digest`, `crypto.Hash` and `basics.Address`
-//   into packages that does not need `libsodium` crypto dependency
-// - The other is wrapping `libsodium` in a driver interface to make crypto
-//   package importable (even if `libsodium` does not exist)
-
 type (
 	// Address is a unique identifier corresponding to ownership of money
 	Address crypto.Digest

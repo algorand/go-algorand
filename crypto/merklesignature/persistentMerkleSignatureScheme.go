@@ -94,10 +94,10 @@ func (s *Secrets) Persist(store db.Accessor) error {
 	if s.ephemeralKeys == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
-	if s.Interval == 0 {
-		return fmt.Errorf("Secrets.Persist: %w", errIntervalZero)
+	if s.KeyLifetime == 0 {
+		return fmt.Errorf("Secrets.Persist: %w", ErrKeyLifetimeIsZero)
 	}
-	round := indexToRound(s.FirstValid, s.Interval, 0)
+	round := indexToRound(s.FirstValid, s.KeyLifetime, 0)
 	encodedKey := protocol.GetEncodingBuf()
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := InstallStateProofTable(tx) // assumes schema table already exists (created by partInstallDatabase)
@@ -121,7 +121,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 			if err != nil {
 				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
 			}
-			round += s.Interval
+			round += s.KeyLifetime
 		}
 
 		return nil

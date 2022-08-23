@@ -283,7 +283,7 @@ var createAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -362,7 +362,7 @@ var destroyAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -455,7 +455,7 @@ var configAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -540,7 +540,7 @@ var sendAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -611,7 +611,7 @@ var freezeAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -698,7 +698,7 @@ var optinAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}

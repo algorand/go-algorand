@@ -287,7 +287,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
 	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
 	{AssetSender, StackBytes, false, 0, 5, false,
-		"32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset."},
+		"32 byte address. Source of assets if Sender is the Asset's Clawback address."},
 	{AssetReceiver, StackBytes, false, 0, 5, false, "32 byte address"},
 	{AssetCloseTo, StackBytes, false, 0, 5, false, "32 byte address"},
 	{GroupIndex, StackUint64, false, 0, 0, false,
@@ -344,7 +344,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{LastLog, StackBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
 
 	// Not an effect. Just added after the effects fields.
-	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key commitment"},
+	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key"},
 
 	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
 	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories

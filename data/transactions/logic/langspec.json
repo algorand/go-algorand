@@ -1,6 +1,6 @@
 {
   "EvalMaxVersion": 7,
-  "LogicSigVersion": 6,
+  "LogicSigVersion": 7,
   "Ops": [
     {
       "Opcode": 0,
@@ -1285,7 +1285,7 @@
       "Returns": "B",
       "Size": 2,
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
-      "DocExtra": "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See \u003ca href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\"\u003eRFC 4648\u003c/a\u003e (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.\tThis opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
       "ImmediateNote": "{uint8 encoding index}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1297,8 +1297,8 @@
       "Args": "BB",
       "Returns": ".",
       "Size": 2,
-      "Doc": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
-      "DocExtra": "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+      "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
+      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
       "ImmediateNote": "{string return type}",
       "Groups": [
         "Byte Array Manipulation"
@@ -2285,6 +2285,7 @@
       "Returns": "BU",
       "Size": 2,
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+      "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
       "ImmediateNote": "{uint8 parameters index}",
       "Groups": [
         "Arithmetic"
@@ -2296,7 +2297,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
       "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"

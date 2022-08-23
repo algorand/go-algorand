@@ -92,6 +92,10 @@ type TransactionPool struct {
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
+
+	// stateproofOverflowed indicates that a stateproof transaction was allowed to
+	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
+	stateproofOverflowed bool
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -238,6 +242,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
+		pool.stateproofOverflowed = false
 		pool.pendingTxids = pool.rememberedTxids
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
@@ -270,12 +275,22 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 }
 
 // checkPendingQueueSize tests to see if we can grow the pending group transaction list
-// by adding txCount more transactions. The limits comes from the total number of transactions
+// by adding len(txnGroup) more transactions. The limits comes from the total number of transactions
 // and not from the total number of transaction groups.
 // As long as we haven't surpassed the size limit, we should be good to go.
-func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
+func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.SignedTxn) error {
 	pendingSize := pool.pendingTxIDsCount()
+	txCount := len(txnGroup)
 	if pendingSize+txCount > pool.txPoolMaxSize {
+		// Allow the state proof transaction to go over the txPoolMaxSize if it already didn't
+		if len(txnGroup) == 1 && txnGroup[0].Txn.Type == protocol.StateProofTx {
+			pool.pendingMu.Lock()
+			defer pool.pendingMu.Unlock()
+			if !pool.stateproofOverflowed {
+				pool.stateproofOverflowed = true
+				return nil
+			}
+		}
 		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
@@ -329,12 +344,12 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// Special case: the compact cert transaction, if issued from the
-	// special compact-cert-sender address, in a singleton group, pays
+	// Special case: the state proof transaction, if issued from the
+	// special state-proof-sender address, in a singleton group, pays
 	// no fee.
 	if len(txgroup) == 1 {
 		t := txgroup[0].Txn
-		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+		if t.Type == protocol.StateProofTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
 			return nil
 		}
 	}
@@ -356,7 +371,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
@@ -443,7 +458,7 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
@@ -771,6 +786,34 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	return
 }
 
+func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
+	stateProofStats := telemetryspec.StateProofStats{
+		ProvenWeight:   0,
+		SignedWeight:   txib.Txn.StateProofTxnFields.StateProof.SignedWeight,
+		NumReveals:     len(txib.Txn.StateProofTxnFields.StateProof.Reveals),
+		NumPosToReveal: len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal),
+		TxnSize:        encodedLen,
+	}
+
+	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	if err != nil {
+		return stateProofStats
+	}
+
+	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
+	votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
+	if err != nil {
+		return stateProofStats
+	}
+
+	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw
+	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
+
+	return stateProofStats
+}
+
 // AssembleBlock assembles a block for a given round, trying not to
 // take longer than deadline to finish.
 func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (assembled *ledgercore.ValidatedBlock, err error) {
@@ -816,6 +859,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 						}
 					}
 					stats.TotalLength += uint64(encodedLen)
+					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+					if txib.Txn.Type == protocol.StateProofTx {
+						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
+					}
 				}
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)

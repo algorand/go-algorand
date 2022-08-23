@@ -61,9 +61,9 @@ const LedgerFilenamePrefix = "ledger"
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
 
-// CompactCertFilename is the name of the compact certificate database file.
-// It is used to track in-progress compact certificates.
-const CompactCertFilename = "compactcert.sqlite"
+// StateProofFileName is the name of the state proof database file.
+// It is used to track in-progress state proofs.
+const StateProofFileName = "stateproof.sqlite"
 
 // ParticipationRegistryFilename is the name of the participation registry database file.
 // It is used for tracking participation key metadata.
