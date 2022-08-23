@@ -53,7 +53,7 @@ func init() {
 	testRand = rand.New(testSource)
 }
 
-func cryptoRandBytes(d []byte) {
+func testRandBytes(d []byte) {
 	// We don't need cryptographically strong random bytes for a
 	// unit test, we _do_ need deterministic 'random' bytes so
 	// that _sometimes_ a bloom filter doesn't fail on the data
@@ -69,7 +69,7 @@ func cryptoRandBytes(d []byte) {
 
 func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 	var secret [32]byte
-	cryptoRandBytes(secret[:])
+	testRandBytes(secret[:])
 	sk := crypto.GenerateSignatureSecrets(crypto.Seed(secret))
 	mock := mockPendingTxAggregate{
 		txns: make([]transactions.SignedTxn, txCount),
@@ -77,7 +77,7 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 
 	for i := 0; i < txCount; i++ {
 		var note [16]byte
-		cryptoRandBytes(note[:])
+		testRandBytes(note[:])
 		tx := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
