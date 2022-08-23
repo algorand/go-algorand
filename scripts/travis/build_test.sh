@@ -8,6 +8,7 @@
 #
 # Examples: scripts/travis/build_test.sh
 set -e
+set -x
 
 ALGORAND_DEADLOCK=enable
 export ALGORAND_DEADLOCK

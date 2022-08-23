@@ -19,7 +19,7 @@ ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
 if [ ! -f crypto/libs/${OS}/${ARCH}/lib/libsodium.a ]; then
   echo "Building libsodium-fork..."
-  make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
+  make -d crypto/libs/${OS}/${ARCH}/lib/libsodium.a
 fi
 
 
