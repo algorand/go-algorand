@@ -209,55 +209,107 @@ func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0].addr
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
 
-	txgroup := []transactions.SignedTxn{
-		{
-			Txn: transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: makeTxnHeader(sender),
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: sender,
-					Amount:   basics.MicroAlgos{Raw: 0},
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
 				},
-			},
-		},
-	}
+			}
 
-	_, _, err := s.Simulate(txgroup)
-	require.NoError(t, err)
+			if signed {
+				txn = txn.Txn.Sign(sender.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestOverspendPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0].addr
-	senderBalance := accounts[0].acctData.MicroAlgos
-	amount := senderBalance.Raw + 100
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
+			senderBalance := sender.acctData.MicroAlgos
+			amount := senderBalance.Raw + 100
 
-	txgroup := []transactions.SignedTxn{
-		{
-			Txn: transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: makeTxnHeader(sender),
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: sender,
-					Amount:   basics.MicroAlgos{Raw: amount}, // overspend
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: amount}, // overspend
+					},
 				},
-			},
-		},
-	}
+			}
 
-	_, _, err := s.Simulate(txgroup)
-	require.ErrorAs(t, err, &simulation.EvalFailureError{})
-	require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
+			if signed {
+				txn = txn.Txn.Sign(sender.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.ErrorAs(t, err, &simulation.EvalFailureError{})
+			require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
+		})
+	}
+}
+
+func TestAuthAddrTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
+			authority := accounts[1]
+
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				},
+				AuthAddr: authority.addr,
+			}
+
+			if signed {
+				txn = txn.Txn.Sign(authority.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.ErrorContains(t, err, fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.addr, authority.addr))
+		})
+	}
 }
 
 func TestCompactCertTxn(t *testing.T) {
