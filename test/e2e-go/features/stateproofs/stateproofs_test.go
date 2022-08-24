@@ -1204,8 +1204,8 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var accountSnapshotAtRound [100][]generatedV2.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == 18 { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
-			_, part, err := installParticipationKey(t, libgoalNodeClients[0], accountsAddresses[0], 0, 31)
+		if rnd == consensusParams.StateProofInterval +consensusParams.StateProofVotersLookback{ // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
+			_, part, err := installParticipationKey(t, libgoalNodeClients[0], accountsAddresses[0], 0, consensusParams.StateProofInterval*2-1)
 			r.NoError(err)
 			participations[0] = part
 			registerParticipationAndWait(t, libgoalNodeClients[0], participations[0])
@@ -1237,7 +1237,6 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 				r.NoError(err)
 				r.NotEqual(accountSnapshotAtRound[rnd][i].Amount, uint64(0))
 				r.Equal(rnd, accountSnapshotAtRound[rnd][i].Round, "could not capture the account at the target round. The machine might be too slow for this test")
-				fmt.Println(" add", accountSnapshotAtRound[rnd][i].Address, accountSnapshotAtRound[rnd][i].Amount, accountSnapshotAtRound[rnd][i].AmountWithoutPendingRewards)
 			}
 		}
 
@@ -1245,15 +1244,13 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
-			if rnd >= 32{
+			if rnd >= consensusParams.StateProofInterval*2{
 				// since account 0 would no longer be able to sign the state proof, its stake should
 				// be removed from the total stake in the commitment
-				fmt.Println("here", rnd)
 				total := totalSupplyAtRound[rnd-consensusParams.StateProofVotersLookback].OnlineMoney
 				total = total - accountSnapshotAtRound[rnd-consensusParams.StateProofVotersLookback][0].Amount
 				r.Equal(total, blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw)
 			} else {
-				fmt.Println("here2",rnd )
 				r.Equal(totalSupplyAtRound[rnd-consensusParams.StateProofVotersLookback].OnlineMoney, blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw)
 			}
 
