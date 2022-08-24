@@ -47,7 +47,7 @@ function runGoLint() {
         return 0
     fi
 
-    echo >&2 "golint must be clean.  Please run the following to list issues(${warningCount}):"
+    echo >&2 "golangci-lint must be clean.  Please run the following to list issues(${warningCount}):"
     echo >&2 " make lint"
 
     # run the linter again to output the actual issues
@@ -55,13 +55,10 @@ function runGoLint() {
     return 1
 }
 
-echo "Running go vet..."
-make vet
-
 echo "Running gofmt..."
 runGoFmt
 
-echo "Running golint..."
+echo "Running golangci-lint..."
 runGoLint
 
 echo "Running check_license..."
