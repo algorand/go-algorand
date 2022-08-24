@@ -542,8 +542,18 @@ func (d *Debugger) AfterInnerTxnGroup(ep *logic.EvalParams) error {
 	return nil
 }
 
-// BeforeAppEval setups new session and notifies frontends if any (DebuggerHook interface)
+// BeforeAppEval (DebuggerHook interface)
 func (d *Debugger) BeforeAppEval(state *logic.DebugState) error {
+	return d.beforeEval(state)
+}
+
+// BeforeLogicSigEval (DebuggerHook interface)
+func (d *Debugger) BeforeLogicSigEval(state *logic.DebugState) error {
+	return d.beforeEval(state)
+}
+
+// beforeEval sets up new session and notifies frontends if any, for both LogicSigs and Apps
+func (d *Debugger) beforeEval(state *logic.DebugState) error {
 	if d.innerTxnDepth > 0 {
 		return nil
 	}
@@ -618,8 +628,18 @@ func (d *Debugger) BeforeTealOp(state *logic.DebugState) error {
 	return nil
 }
 
-// AfterAppEval terminates session and notifies frontends if any (DebuggerHook interface)
+// AfterAppEval (DebuggerHook interface)
 func (d *Debugger) AfterAppEval(state *logic.DebugState) error {
+	return d.afterEval(state)
+}
+
+// AfterLogicSigEval (DebuggerHook interface)
+func (d *Debugger) AfterLogicSigEval(state *logic.DebugState) error {
+	return d.afterEval(state)
+}
+
+// afterEval terminates session and notifies frontends if any, for both LogicSigs and Apps
+func (d *Debugger) afterEval(state *logic.DebugState) error {
 	if d.innerTxnDepth > 0 {
 		return nil
 	}
