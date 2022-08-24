@@ -18,6 +18,7 @@ package pingpong
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -78,6 +79,7 @@ type PpConfig struct {
 	DeterministicKeys            bool
 	GeneratedAccountsCount       uint32
 	GeneratedAccountSampleMethod string
+	GeneratedAccountsOffset      uint32
 
 	WeightPayment     float64
 	WeightAsset       float64
@@ -168,4 +170,28 @@ func (cfg *PpConfig) SetDefaultWeights() {
 			cfg.WeightPayment = 1
 		}
 	}
+}
+
+var accountSampleMethods = []string{
+	"",
+	"random",
+	"sequential",
+}
+
+// Check returns an error if config is invalid.
+func (cfg *PpConfig) Check() error {
+	sampleOk := false
+	for _, v := range accountSampleMethods {
+		if v == cfg.GeneratedAccountSampleMethod {
+			sampleOk = true
+			break
+		}
+	}
+	if !sampleOk {
+		return fmt.Errorf("unknown GeneratedAccountSampleMethod: %s", cfg.GeneratedAccountSampleMethod)
+	}
+	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+cfg.NumPartAccounts > cfg.GeneratedAccountsCount) {
+		return fmt.Errorf("(GeneratedAccountsOffset %d) + (NumPartAccounts %d) > (GeneratedAccountsCount %d)", cfg.GeneratedAccountsOffset, cfg.NumPartAccounts, cfg.GeneratedAccountsCount)
+	}
+	return nil
 }

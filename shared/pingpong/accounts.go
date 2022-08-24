@@ -40,37 +40,52 @@ import (
 
 func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 	out := make(chan *crypto.SignatureSecrets)
-	go func() {
-		numAccounts := initCfg.NumPartAccounts
-		totalAccounts := initCfg.GeneratedAccountsCount
-		if totalAccounts < numAccounts*4 {
-			// simpler rand strategy for smaller totalAccounts
-			order := rand.Perm(int(totalAccounts))[:numAccounts]
-			for _, acct := range order {
-				var seed crypto.Seed
-				binary.LittleEndian.PutUint64(seed[:], uint64(acct))
-				out <- crypto.GenerateSignatureSecrets(seed)
-			}
-		} else {
-			// randomly select numAccounts from generatedAccountsCount
-			// better for generatedAccountsCount much bigger than numAccounts
-			selected := make(map[uint32]bool, numAccounts)
-			for uint32(len(selected)) < numAccounts {
-				acct := uint32(rand.Int31n(int32(totalAccounts)))
-				if selected[acct] {
-					continue // already picked this account
-				}
-				// generate deterministic secret key from integer ID
-				// same uint64 seed used as netdeploy/remote/deployedNetwork.go
-				var seed crypto.Seed
-				binary.LittleEndian.PutUint64(seed[:], uint64(acct))
-				out <- crypto.GenerateSignatureSecrets(seed)
-				selected[acct] = true
-			}
-		}
-		close(out)
-	}()
+	if initCfg.GeneratedAccountSampleMethod == "" || initCfg.GeneratedAccountSampleMethod == "random" {
+		go randomDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
+		go sequentialDeterministicAccounts(initCfg, out)
+	}
 	return out
+}
+
+func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	numAccounts := initCfg.NumPartAccounts
+	totalAccounts := initCfg.GeneratedAccountsCount
+	if totalAccounts < numAccounts*4 {
+		// simpler rand strategy for smaller totalAccounts
+		order := rand.Perm(int(totalAccounts))[:numAccounts]
+		for _, acct := range order {
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+		}
+	} else {
+		// randomly select numAccounts from generatedAccountsCount
+		// better for generatedAccountsCount much bigger than numAccounts
+		selected := make(map[uint32]bool, numAccounts)
+		for uint32(len(selected)) < numAccounts {
+			acct := uint32(rand.Int31n(int32(totalAccounts)))
+			if selected[acct] {
+				continue // already picked this account
+			}
+			// generate deterministic secret key from integer ID
+			// same uint64 seed used as netdeploy/remote/deployedNetwork.go
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+			selected[acct] = true
+		}
+	}
+	close(out)
+}
+
+func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for i := uint32(0); i < initCfg.NumPartAccounts; i++ {
+		acct := uint64(i) + uint64(initCfg.GeneratedAccountsOffset)
+		var seed crypto.Seed
+		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
 }
 
 // load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey

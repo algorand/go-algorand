@@ -378,9 +378,6 @@ var runCmd = &cobra.Command{
 		if !deterministicKeys && generatedAccountsCount > 0 {
 			reportErrorf("generatedAccountsCount requires deterministicKeys=true")
 		}
-		if deterministicKeys && generatedAccountSampleMethod != "random" {
-			reportErrorf("only random sampling currently supported")
-		}
 		if deterministicKeys && numAccounts > generatedAccountsCount {
 			reportErrorf("numAccounts must be <= generatedAccountsCount")
 		}
@@ -393,6 +390,10 @@ var runCmd = &cobra.Command{
 		}
 
 		cfg.SetDefaultWeights()
+		err = cfg.Check()
+		if err != nil {
+			reportErrorf("%v", err)
+		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
