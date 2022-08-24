@@ -370,6 +370,7 @@ func consensusUpgradesTo(a *require.Assertions, currentName, targetName protocol
 	currentVersion, has := Consensus[currentName]
 	a.True(has, "Consensus map should contain all references consensus versions: Missing '%v'", currentName)
 	for upgrade := range currentVersion.ApprovedUpgrades {
+		nameCheckFn(a, string(upgrade))
 		if upgrade == targetName {
 			return true
 		}
