@@ -272,6 +272,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
+          name: Save cached libsodium build
           key: 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
@@ -285,6 +286,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
+          name: Restore cached libsodium build
           keys:
             - 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 
