@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -125,8 +126,12 @@ func TestStateProofs(t *testing.T) {
 }
 
 func TestStateProofsMultiWallets(t *testing.T) {
-	t.Skip("this test is heavy and should be run manually")
 	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip()
+	}
+
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	configurableConsensus := make(config.ConsensusProtocols)
@@ -1161,6 +1166,11 @@ func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consens
 
 func TestStateProofCheckTotalStake(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip()
+	}
+
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -1204,7 +1214,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var accountSnapshotAtRound [100][]generatedV2.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == consensusParams.StateProofInterval +consensusParams.StateProofVotersLookback{ // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
+		if rnd == consensusParams.StateProofInterval+consensusParams.StateProofVotersLookback { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
 			_, part, err := installParticipationKey(t, libgoalNodeClients[0], accountsAddresses[0], 0, consensusParams.StateProofInterval*2-1)
 			r.NoError(err)
 			participations[0] = part
@@ -1228,7 +1238,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			totalSupply, err := libgoalClient.LedgerSupply()
 			r.NoError(err)
 
-			r.Equal(rnd, totalSupply.Round,"could not capture total stake at the target round. The machine might be too slow for this test")
+			r.Equal(rnd, totalSupply.Round, "could not capture total stake at the target round. The machine might be too slow for this test")
 			totalSupplyAtRound[rnd] = totalSupply
 
 			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)
@@ -1244,7 +1254,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
-			if rnd >= consensusParams.StateProofInterval*2{
+			if rnd >= consensusParams.StateProofInterval*2 {
 				// since account 0 would no longer be able to sign the state proof, its stake should
 				// be removed from the total stake in the commitment
 				total := totalSupplyAtRound[rnd-consensusParams.StateProofVotersLookback].OnlineMoney
