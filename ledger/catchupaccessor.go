@@ -370,11 +370,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		defer wg.Done()
 		hasCreatables := false
 		for _, accBal := range normalizedAccountBalances {
-			for _, res := range accBal.Resources {
-				if res.IsOwning() {
-					hasCreatables = true
-					break
-				}
+			if accBal.HasCreatables() {
+				hasCreatables = true
+				break
 			}
 		}
 		if hasCreatables {
@@ -424,7 +422,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
 	progress.ProcessedBytes += uint64(len(bytes))
 	for _, acctBal := range normalizedAccountBalances {
-		progress.TotalAccountHashes += uint64(len(acctBal.AccountHashes))
+		progress.TotalAccountHashes += uint64(acctBal.AccountHashesLen())
 	}
 
 	// not strictly required, but clean up the pointer when we're done.

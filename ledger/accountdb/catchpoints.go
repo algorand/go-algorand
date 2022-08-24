@@ -47,7 +47,7 @@ type EncodedBalanceRecordV6 struct {
 }
 
 // SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
-// encoding the Resources map below.
+// encoding the resources map below.
 type SortUint64 = basics.SortUint64
 
 // AccountHashBuilderV6 calculates the hash key used for the trie by combining the account Address and the account Data

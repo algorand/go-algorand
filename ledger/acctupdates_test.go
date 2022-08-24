@@ -1390,7 +1390,6 @@ func TestCompactDeltas(t *testing.T) {
 
 	require.Equal(t, accountDeltas[0].Len(), outAccountDeltas.Len())
 	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
-	require.Equal(t, accountDeltas[0].Len(), len(outAccountDeltas.Misses))
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.Get(addrs[0])
@@ -1401,7 +1400,6 @@ func TestCompactDeltas(t *testing.T) {
 	// check deltas without missing accounts
 	baseAccounts.Write(accountdb.PersistedAccountData{Addr: addrs[0], AccountData: accountdb.BaseAccountData{}})
 	outAccountDeltas = accountdb.MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
-	require.Equal(t, 0, len(outAccountDeltas.Misses))
 	delta, _ = outAccountDeltas.Get(addrs[0])
 	require.Equal(t, accountdb.PersistedAccountData{Addr: addrs[0]}, delta.OldAcct)
 	require.Equal(t, accountdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.NewAcct)
@@ -1510,8 +1508,7 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
-	require.Equal(t, 6, len(outResourcesDeltas.Misses))
-	require.Equal(t, 6, len(outResourcesDeltas.Deltas))
+	require.Equal(t, 6, outResourcesDeltas.Len())
 
 	// check deltas with missing accounts
 
@@ -1569,8 +1566,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	}
 
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
-	require.Equal(t, 0, len(outResourcesDeltas.Misses))
-	require.Equal(t, 6, len(outResourcesDeltas.Deltas))
+	require.Equal(t, 6, outResourcesDeltas.Len())
 
 	checkNewDeltas(outResourcesDeltas)
 	for i := int64(0); i < 4; i++ {
@@ -1599,8 +1595,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	baseResources.Write(accountdb.PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = accountdb.MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
-	require.Equal(t, 0, len(outResourcesDeltas.Misses))
-	require.Equal(t, 7, len(outResourcesDeltas.Deltas))
+	require.Equal(t, 7, outResourcesDeltas.Len())
 
 	checkNewDeltas(outResourcesDeltas)
 	delta, _ = outResourcesDeltas.Get(addrs[0], 100)

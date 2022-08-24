@@ -30,7 +30,7 @@ type cachedResourceData struct {
 	address basics.Address
 }
 
-// LRUResources provides a storage class for the most recently used Resources Data.
+// LRUResources provides a storage class for the most recently used resources Data.
 // It doesn't have any synchronization primitive on it's own and require to be
 // syncronized by the caller.
 type LRUResources struct {

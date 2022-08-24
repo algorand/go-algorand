@@ -275,12 +275,12 @@ type ResourceDelta struct {
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
 type CompactResourcesDeltas struct {
-	// actual account Deltas
-	Deltas []ResourceDelta
-	// cache for addr to Deltas index resolution
+	// actual account deltas
+	deltas []ResourceDelta
+	// cache for addr to deltas index resolution
 	cache map[ledgercore.AccountCreatable]int
-	// Misses holds indices of addresses for which old portion of delta needs to be loaded from disk
-	Misses []int
+	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
+	misses []int
 }
 
 type AccountDelta struct {
@@ -294,12 +294,12 @@ type AccountDelta struct {
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
 type CompactAccountDeltas struct {
-	// actual account Deltas
-	Deltas []AccountDelta
-	// cache for addr to Deltas index resolution
+	// actual account deltas
+	deltas []AccountDelta
+	// cache for addr to deltas index resolution
 	cache map[basics.Address]int
-	// Misses holds indices of addresses for which old portion of delta needs to be loaded from disk
-	Misses []int
+	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
+	misses []int
 }
 
 // OnlineAccountDelta track all changes of account state within a range,
@@ -316,11 +316,11 @@ type OnlineAccountDelta struct {
 }
 
 type CompactOnlineAccountDeltas struct {
-	// actual account Deltas
+	// actual account deltas
 	deltas []OnlineAccountDelta
-	// cache for addr to Deltas index resolution
+	// cache for addr to deltas index resolution
 	cache map[basics.Address]int
-	// Misses holds indices of addresses for which old portion of delta needs to be loaded from disk
+	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
 	misses []int
 }
 
@@ -361,17 +361,30 @@ type NormalizedAccountBalance struct {
 	address basics.Address
 	// accountData contains the BaseAccountData for that account.
 	accountData BaseAccountData
-	// Resources is a map, where the key is the creatable index, and the value is the resource data.
-	Resources map[basics.CreatableIndex]resourcesData
+	// resources is a map, where the key is the creatable index, and the value is the resource data.
+	resources map[basics.CreatableIndex]resourcesData
 	// encodedAccountData contains the BaseAccountData encoded bytes that are going to be written to the accountbase table.
 	encodedAccountData []byte
-	// AccountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
+	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
 	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
-	AccountHashes [][]byte
+	accountHashes [][]byte
 	// normalizedBalance contains the normalized balance for the account.
 	normalizedBalance uint64
 	// encodedResources provides the encoded form of the resources
 	encodedResources map[basics.CreatableIndex][]byte
+}
+
+func (n *NormalizedAccountBalance) HasCreatables() bool {
+	for _, res := range n.resources {
+		if res.IsOwning() {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *NormalizedAccountBalance) AccountHashesLen() int {
+	return len(n.accountHashes)
 }
 
 // PrepareNormalizedBalancesV5 converts an array of EncodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
@@ -398,14 +411,14 @@ func PrepareNormalizedBalancesV5(bals []EncodedBalanceRecordV5, proto config.Con
 		if err = accountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1)
-		normalizedAccountBalances[i].AccountHashes[0] = AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1)
+		normalizedAccountBalances[i].accountHashes[0] = AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
-			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]resourcesData, len(resources))
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(resources))
 			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
 		}
 		for _, resource := range resources {
-			normalizedAccountBalances[i].Resources[resource.aidx] = resource.resourcesData
+			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
 			normalizedAccountBalances[i].encodedResources[resource.aidx] = protocol.Encode(&resource.resourcesData)
 		}
 		normalizedAccountBalances[i].encodedAccountData = protocol.Encode(&normalizedAccountBalances[i].accountData)
@@ -428,10 +441,10 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].accountData.MicroAlgos,
 			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1+len(balance.Resources))
-		normalizedAccountBalances[i].AccountHashes[0] = AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
+		normalizedAccountBalances[i].accountHashes[0] = AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
 		if len(balance.Resources) > 0 {
-			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
 			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
 			resIdx := 0
 			for cidx, res := range balance.Resources {
@@ -448,8 +461,8 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 				} else {
 					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
 				}
-				normalizedAccountBalances[i].AccountHashes[resIdx+1] = ResourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
-				normalizedAccountBalances[i].Resources[basics.CreatableIndex(cidx)] = resData
+				normalizedAccountBalances[i].accountHashes[resIdx+1] = ResourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
 				resIdx++
 			}
@@ -459,7 +472,7 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 }
 
 // MakeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
-// data structure that contains all the resources Deltas changes. While doing that, the function eliminate any intermediate resources changes.
+// data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the ResourcesDeltas.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
 func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts, baseResources LRUResources) (outResourcesDeltas CompactResourcesDeltas) {
@@ -470,8 +483,8 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outResourcesDeltas.cache = make(map[ledgercore.AccountCreatable]int, size)
-	outResourcesDeltas.Deltas = make([]ResourceDelta, 0, size)
-	outResourcesDeltas.Misses = make([]int, 0, size)
+	outResourcesDeltas.deltas = make([]ResourceDelta, 0, size)
+	outResourcesDeltas.misses = make([]int, 0, size)
 
 	deltaRound := uint64(baseRound)
 	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
@@ -560,11 +573,11 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 	return
 }
 
-// ResourcesLoadOld updates the entries on the Deltas.OldResource map that matches the provided addresses.
+// ResourcesLoadOld updates the entries on the deltas.OldResource map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
 func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map[basics.Address]int64) (err error) {
-	if len(a.Misses) == 0 {
+	if len(a.misses) == 0 {
 		return nil
 	}
 	selectStmt, err := tx.Prepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
@@ -580,14 +593,14 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 	defer addrRowidStmt.Close()
 
 	defer func() {
-		a.Misses = nil
+		a.misses = nil
 	}()
 	var addrid int64
 	var aidx basics.CreatableIndex
 	var resDataBuf []byte
 	var ok bool
-	for _, missIdx := range a.Misses {
-		delta := a.Deltas[missIdx]
+	for _, missIdx := range a.misses {
+		delta := a.deltas[missIdx]
 		addr := delta.Address
 		aidx = delta.OldResource.Aidx
 		if delta.OldResource.Addrid != 0 {
@@ -640,25 +653,25 @@ func (a *CompactResourcesDeltas) Get(addr basics.Address, index basics.Creatable
 	if !ok {
 		return ResourceDelta{}, -1
 	}
-	return a.Deltas[idx], idx
+	return a.deltas[idx], idx
 }
 
 func (a *CompactResourcesDeltas) Len() int {
-	return len(a.Deltas)
+	return len(a.deltas)
 }
 
 func (a *CompactResourcesDeltas) GetByIdx(i int) ResourceDelta {
-	return a.Deltas[i]
+	return a.deltas[i]
 }
 
 // update replaces specific entry by idx
 func (a *CompactResourcesDeltas) update(idx int, delta ResourceDelta) {
-	a.Deltas[idx] = delta
+	a.deltas[idx] = delta
 }
 
 func (a *CompactResourcesDeltas) insert(delta ResourceDelta) int {
-	last := len(a.Deltas)
-	a.Deltas = append(a.Deltas, delta)
+	last := len(a.deltas)
+	a.deltas = append(a.deltas, delta)
 
 	if a.cache == nil {
 		a.cache = make(map[ledgercore.AccountCreatable]int)
@@ -668,16 +681,16 @@ func (a *CompactResourcesDeltas) insert(delta ResourceDelta) int {
 }
 
 func (a *CompactResourcesDeltas) insertMissing(delta ResourceDelta) {
-	a.Misses = append(a.Misses, a.insert(delta))
+	a.misses = append(a.misses, a.insert(delta))
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *CompactResourcesDeltas) updateOld(idx int, old PersistedResourcesData) {
-	a.Deltas[idx].OldResource = old
+	a.deltas[idx].OldResource = old
 }
 
 // MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
-// data structure that contains all the account Deltas changes. While doing that, the function eliminate any intermediate account changes.
+// data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
 func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts) (outAccountDeltas CompactAccountDeltas) {
@@ -688,8 +701,8 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 	size := accountDeltas[0].Len()*len(accountDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
-	outAccountDeltas.Deltas = make([]AccountDelta, 0, size)
-	outAccountDeltas.Misses = make([]int, 0, size)
+	outAccountDeltas.deltas = make([]AccountDelta, 0, size)
+	outAccountDeltas.misses = make([]int, 0, size)
 
 	deltaRound := uint64(baseRound)
 	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
@@ -734,11 +747,11 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	return
 }
 
-// AccountsLoadOld updates the entries on the Deltas.old map that matches the provided addresses.
+// AccountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
 func (a *CompactAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
-	if len(a.Misses) == 0 {
+	if len(a.misses) == 0 {
 		return nil
 	}
 	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
@@ -747,12 +760,12 @@ func (a *CompactAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	}
 	defer selectStmt.Close()
 	defer func() {
-		a.Misses = nil
+		a.misses = nil
 	}()
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
-	for _, idx := range a.Misses {
-		addr := a.Deltas[idx].Address
+	for _, idx := range a.misses {
+		addr := a.deltas[idx].Address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
@@ -786,25 +799,33 @@ func (a *CompactAccountDeltas) Get(addr basics.Address) (AccountDelta, int) {
 	if !ok {
 		return AccountDelta{}, -1
 	}
-	return a.Deltas[idx], idx
+	return a.deltas[idx], idx
 }
 
 func (a *CompactAccountDeltas) Len() int {
-	return len(a.Deltas)
+	return len(a.deltas)
 }
 
 func (a *CompactAccountDeltas) GetByIdx(i int) AccountDelta {
-	return a.Deltas[i]
+	return a.deltas[i]
+}
+
+func (a *CompactAccountDeltas) KnownAddresses() map[basics.Address]int64 {
+	knownAddresses := make(map[basics.Address]int64, a.Len())
+	for _, delta := range a.deltas {
+		knownAddresses[delta.OldAcct.Addr] = delta.OldAcct.Rowid
+	}
+	return knownAddresses
 }
 
 // update replaces specific entry by idx
 func (a *CompactAccountDeltas) update(idx int, delta AccountDelta) {
-	a.Deltas[idx] = delta
+	a.deltas[idx] = delta
 }
 
 func (a *CompactAccountDeltas) Insert(delta AccountDelta) int {
-	last := len(a.Deltas)
-	a.Deltas = append(a.Deltas, delta)
+	last := len(a.deltas)
+	a.deltas = append(a.deltas, delta)
 
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
@@ -815,12 +836,12 @@ func (a *CompactAccountDeltas) Insert(delta AccountDelta) int {
 
 func (a *CompactAccountDeltas) insertMissing(delta AccountDelta) {
 	idx := a.Insert(delta)
-	a.Misses = append(a.Misses, idx)
+	a.misses = append(a.misses, idx)
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *CompactAccountDeltas) updateOld(idx int, old PersistedAccountData) {
-	a.Deltas[idx].OldAcct = old
+	a.deltas[idx].OldAcct = old
 }
 
 func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
@@ -832,7 +853,7 @@ func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound
 }
 
 // MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
-// data structure that contains all the account Deltas changes. While doing that, the function eliminate any intermediate account changes.
+// data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts LRUOnlineAccounts) (outAccountDeltas CompactOnlineAccountDeltas) {
 	if len(accountDeltas) == 0 {
@@ -876,7 +897,7 @@ func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 	return
 }
 
-// AccountsLoadOld updates the entries on the Deltas.old map that matches the provided addresses.
+// AccountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
 func (a *CompactOnlineAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
@@ -998,7 +1019,7 @@ func WriteCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []Norm
 			return err
 		}
 		// write resources
-		for aidx := range balance.Resources {
+		for aidx := range balance.resources {
 			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
 			if err != nil {
 				return err
@@ -1023,7 +1044,7 @@ func WriteCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []Normal
 	}
 
 	for _, balance := range bals {
-		for _, hash := range balance.AccountHashes {
+		for _, hash := range balance.accountHashes {
 			result, err := insertStmt.ExecContext(ctx, hash[:])
 			if err != nil {
 				return err
@@ -1063,7 +1084,7 @@ func WriteCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []Nor
 	defer insertCreatorsStmt.Close()
 
 	for _, balance := range bals {
-		for aidx, resData := range balance.Resources {
+		for aidx, resData := range balance.resources {
 			if resData.IsOwning() {
 				// determine if it's an asset
 				if resData.IsAsset() {
@@ -3351,7 +3372,7 @@ func OnlineAccountsNewRound(
 	return
 }
 
-// AccountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided Deltas to the accounts / creatables.
+// AccountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func AccountsNewRoundImpl(
 	writer accountsWriter,

@@ -1357,12 +1357,12 @@ func (z *EncodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Resources")
+				err = msgp.WrapError(err, "struct-from-array", "resources")
 				return
 			}
 			if zb0005 > basics.MaxEncodedAccountDataSize {
 				err = msgp.ErrOverflow(uint64(zb0005), uint64(basics.MaxEncodedAccountDataSize))
-				err = msgp.WrapError(err, "struct-from-array", "Resources")
+				err = msgp.WrapError(err, "struct-from-array", "resources")
 				return
 			}
 			if zb0006 {
@@ -1376,12 +1376,12 @@ func (z *EncodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				zb0005--
 				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Resources")
+					err = msgp.WrapError(err, "struct-from-array", "resources")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Resources", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "resources", zb0001)
 					return
 				}
 				(*z).Resources[zb0001] = zb0002
@@ -1427,12 +1427,12 @@ func (z *EncodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Resources")
+					err = msgp.WrapError(err, "resources")
 					return
 				}
 				if zb0007 > basics.MaxEncodedAccountDataSize {
 					err = msgp.ErrOverflow(uint64(zb0007), uint64(basics.MaxEncodedAccountDataSize))
-					err = msgp.WrapError(err, "Resources")
+					err = msgp.WrapError(err, "resources")
 					return
 				}
 				if zb0008 {
@@ -1446,12 +1446,12 @@ func (z *EncodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					zb0007--
 					zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Resources")
+						err = msgp.WrapError(err, "resources")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Resources", zb0001)
+						err = msgp.WrapError(err, "resources", zb0001)
 						return
 					}
 					(*z).Resources[zb0001] = zb0002

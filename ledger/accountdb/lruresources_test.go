@@ -37,7 +37,7 @@ func TestLRUBasicResources(t *testing.T) {
 	baseRes.Init(logging.TestingLog(t), 10, 5)
 
 	resourcesNum := 50
-	// Write 50 Resources
+	// Write 50 resources
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := PersistedResourcesData{
@@ -49,7 +49,7 @@ func TestLRUBasicResources(t *testing.T) {
 		baseRes.Write(res, addr)
 	}
 
-	// verify that all these Resources are truly there.
+	// verify that all these resources are truly there.
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.Read(addr, basics.CreatableIndex(i))
@@ -112,7 +112,7 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 	testStarted := time.Now()
 	for {
 		baseRes.FlushPendingWrites()
-		// check if all Resources were loaded into "main" cache.
+		// check if all resources were loaded into "main" cache.
 		allResourcesLoaded := true
 		for i := 0; i < resourcesNum; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))

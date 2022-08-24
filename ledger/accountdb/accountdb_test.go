@@ -222,7 +222,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 
 		knownAddresses := make(map[basics.Address]int64)
-		for _, delta := range updatesCnt.Deltas {
+		for _, delta := range updatesCnt.deltas {
 			knownAddresses[delta.OldAcct.Addr] = delta.OldAcct.Rowid
 		}
 
@@ -348,26 +348,26 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			lastRound := uint64(len(accountDeltas) + 1)
 
 			outAccountDeltas := MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
-			require.Equal(t, 1, len(outAccountDeltas.Deltas))
-			require.Equal(t, AccountDelta{NewAcct: BaseAccountData{UpdateRound: lastRound}, NAcctDeltas: numAcctDeltas, Address: addr}, outAccountDeltas.Deltas[0])
-			require.Equal(t, 1, len(outAccountDeltas.Misses))
+			require.Equal(t, 1, len(outAccountDeltas.deltas))
+			require.Equal(t, AccountDelta{NewAcct: BaseAccountData{UpdateRound: lastRound}, NAcctDeltas: numAcctDeltas, Address: addr}, outAccountDeltas.deltas[0])
+			require.Equal(t, 1, len(outAccountDeltas.misses))
 
 			outResourcesDeltas := MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
-			require.Equal(t, 1, len(outResourcesDeltas.Deltas))
+			require.Equal(t, 1, len(outResourcesDeltas.deltas))
 			require.Equal(t,
 				ResourceDelta{
 					OldResource: PersistedResourcesData{Aidx: 100}, NewResource: MakeResourcesData(lastRound - 1),
 					NAcctDeltas: numResDeltas, Address: addr,
 				},
-				outResourcesDeltas.Deltas[0],
+				outResourcesDeltas.deltas[0],
 			)
-			require.Equal(t, 1, len(outAccountDeltas.Misses))
+			require.Equal(t, 1, len(outAccountDeltas.misses))
 
 			err = outAccountDeltas.AccountsLoadOld(tx)
 			require.NoError(t, err)
 
 			knownAddresses := make(map[basics.Address]int64)
-			for _, delta := range outAccountDeltas.Deltas {
+			for _, delta := range outAccountDeltas.deltas {
 				knownAddresses[delta.OldAcct.Addr] = delta.OldAcct.Rowid
 			}
 
@@ -820,7 +820,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 // upsert updates existing or inserts a new entry
 func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
 	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx}]; exist {
-		a.Deltas[idx] = delta
+		a.deltas[idx] = delta
 		return
 	}
 	a.insert(delta)
@@ -830,7 +830,7 @@ func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
 func (a *CompactAccountDeltas) upsertOld(old PersistedAccountData) {
 	addr := old.Addr
 	if idx, exist := a.cache[addr]; exist {
-		a.Deltas[idx].OldAcct = old
+		a.deltas[idx].OldAcct = old
 		return
 	}
 	a.Insert(AccountDelta{OldAcct: old, Address: old.Addr})
@@ -839,7 +839,7 @@ func (a *CompactAccountDeltas) upsertOld(old PersistedAccountData) {
 // upsert updates existing or inserts a new entry
 func (a *CompactAccountDeltas) upsert(addr basics.Address, delta AccountDelta) {
 	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
-		a.Deltas[idx] = delta
+		a.deltas[idx] = delta
 		return
 	}
 	a.Insert(delta)
@@ -933,11 +933,11 @@ func TestCompactAccountDeltas(t *testing.T) {
 // upsertOld updates existing or inserts a new partial entry with only old field filled
 func (a *CompactResourcesDeltas) upsertOld(addr basics.Address, old PersistedResourcesData) {
 	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: addr, Index: old.Aidx}]; exist {
-		a.Deltas[idx].OldResource = old
+		a.deltas[idx].OldResource = old
 		return
 	}
 	idx := a.insert(ResourceDelta{OldResource: old, Address: addr})
-	a.Deltas[idx].Address = addr
+	a.deltas[idx].Address = addr
 }
 func TestCompactResourceDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1448,7 +1448,7 @@ func TestResourcesDataSetData(t *testing.T) {
 		act
 	)
 
-	// apply Deltas encoded as deltaCode to a base resourcesData for both apps and assets
+	// apply deltas encoded as deltaCode to a base resourcesData for both apps and assets
 	apply := func(t *testing.T, base resourcesData, testType basics.CreatableType, pcode, hcode deltaCode) resourcesData {
 		if testType == basics.AssetCreatable {
 			var p ledgercore.AssetParamsDelta
@@ -2393,19 +2393,19 @@ func TestFactorialPerm(t *testing.T) {
 }
 
 func compactAccountDeltasPermutations(a *require.Assertions, cad CompactAccountDeltas) []CompactAccountDeltas {
-	a.Empty(cad.Misses)
+	a.Empty(cad.misses)
 
 	size := cad.Len()
 	result := make([]CompactAccountDeltas, 0, factorial(size))
 
 	perms := permHeap(size)
-	// remap existing Deltas to permutated one
+	// remap existing deltas to permutated one
 	for _, perm := range perms {
 		new := CompactAccountDeltas{}
 		new.cache = make(map[basics.Address]int, size)
-		new.Deltas = make([]AccountDelta, size)
+		new.deltas = make([]AccountDelta, size)
 		for i, k := range perm {
-			new.Deltas[k] = cad.Deltas[i]
+			new.deltas[k] = cad.deltas[i]
 		}
 		for key, i := range cad.cache {
 			new.cache[key] = perm[i]
@@ -2431,19 +2431,19 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 	result := make([]CompactResourcesDeltas, 0, factorial(size))
 
 	perms := permHeap(size)
-	// remap existing Deltas to permutated one
+	// remap existing deltas to permutated one
 	for _, perm := range perms {
 		new := CompactResourcesDeltas{}
 		new.cache = make(map[ledgercore.AccountCreatable]int, size)
-		new.Deltas = make([]ResourceDelta, size)
-		new.Misses = make([]int, len(crd.Misses))
+		new.deltas = make([]ResourceDelta, size)
+		new.misses = make([]int, len(crd.misses))
 		for i, k := range perm {
-			new.Deltas[k] = crd.Deltas[i]
+			new.deltas[k] = crd.deltas[i]
 		}
 		for key, i := range crd.cache {
 			new.cache[key] = perm[i]
 		}
-		copy(new.Misses, crd.Misses)
+		copy(new.misses, crd.misses)
 		result = append(result, new)
 	}
 
@@ -2461,7 +2461,7 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 
 // TestAccountUnorderedUpdates ensures rowid reuse in accountbase does not lead to
 // resources insertion problems.
-// This test simulates a problem found while testing resources Deltas on testnet:
+// This test simulates a problem found while testing resources deltas on testnet:
 //
 // unable to advance tracker db snapshot (16541781-16541801): db op failed:
 // addr RGJVDTZIFR7VIHI4QMSA6Y7H3FCHUXIBS5H26UKDGMWHALTMW3ZRGMNX3M addrid 515356, aidx 22045503, err: UNIQUE constraint failed
@@ -2471,9 +2471,9 @@ func CompactResourcesDeltasPermutations(a *require.Assertions, crd CompactResour
 // at 16541783 YF5 made a payment txn (one acct delta)
 // at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
 // at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
-// Because YF5 had modifications before RGJ, all its acct Deltas were compacted into a single entry before RGJ (delete, create)
+// Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
 // In the same time, the order in resources delta remained the same (opt-in, delete).
-// While processing acct Deltas (delete, create) SQLite reused on old rowid for new account.
+// While processing acct deltas (delete, create) SQLite reused on old rowid for new account.
 // Then this rowid was discovered as addrid for opt-in operation and the "UNIQUE constraint failed" error happened.
 func TestAccountUnorderedUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -2516,7 +2516,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	latestRound := basics.Round(16541801)
 
 	// we want to have all accounts to be found: addr1, observer existed, and addr2 non-existed
-	// this would have compact Deltas current and without missing entries
+	// this would have compact deltas current and without missing entries
 	var baseAccounts LRUAccounts
 	baseAccounts.Init(nil, 100, 80)
 
@@ -2531,7 +2531,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	baseAccounts.Write(PersistedAccountData{Addr: addr2})
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
-	a.Empty(acctDeltas.Misses)
+	a.Empty(acctDeltas.misses)
 	a.Equal(3, acctDeltas.Len())
 
 	// we want to have (addr1, aidx) and (observer, aidx)
@@ -2548,7 +2548,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	baseResources.Write(prd, observer)
 
 	resDeltas := MakeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
-	a.Equal(1, len(resDeltas.Misses)) // (addr2, aidx) does not exist
+	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(3, resDeltas.Len())       // (addr1, aidx), (observer, aidx) found
 
 	acctVariants := compactAccountDeltasPermutations(a, acctDeltas)
@@ -2623,7 +2623,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	baseAccounts.Write(PersistedAccountData{Addr: addr2}) // put an empty record for addr2 to Get rid of lookups
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
-	a.Empty(acctDeltas.Misses)
+	a.Empty(acctDeltas.misses)
 	a.Equal(3, acctDeltas.Len())
 
 	// we want to have (addr1, aidx) and (observer, aidx)
@@ -2637,7 +2637,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	baseResources.Write(prd, observer)
 
 	resDeltas := MakeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
-	a.Equal(1, len(resDeltas.Misses)) // (addr2, aidx) does not exist
+	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.Len())       // (addr1, aidx) found
 
 	updatedAccounts, updatedResources, err := AccountsNewRoundImpl(
