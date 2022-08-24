@@ -1467,7 +1467,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	now := time.Now()
 	expire := now.Add(5 * time.Second)
 	for {
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		if len(peer.sendBufferHighPrio)+len(peer.sendBufferBulk) == 0 {
 			break
 		}
