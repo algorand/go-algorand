@@ -140,7 +140,10 @@ func uint64ToBytes(num uint64) []byte {
 // We want to be careful that the Algod ledger does not move on to another round
 // so we confirm here that all ledger methods which implicitly access the current round
 // are overriden within the `simulatorLedger`.
-func TestNonOverridenDataLedgerMethodsUseRoundParamter(t *testing.T) {
+func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	l, _, _ := prepareSimulatorTest(t)
 
 	// methods overriden by `simulatorLedger``
@@ -206,55 +209,129 @@ func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0].addr
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
 
-	txgroup := []transactions.SignedTxn{
-		{
-			Txn: transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: makeTxnHeader(sender),
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: sender,
-					Amount:   basics.MicroAlgos{Raw: 0},
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
 				},
-			},
-		},
-	}
+			}
 
-	_, _, err := s.Simulate(txgroup)
-	require.NoError(t, err)
+			if signed {
+				txn = txn.Txn.Sign(sender.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestOverspendPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
+			senderBalance := sender.acctData.MicroAlgos
+			amount := senderBalance.Raw + 100
+
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: amount}, // overspend
+					},
+				},
+			}
+
+			if signed {
+				txn = txn.Txn.Sign(sender.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.ErrorAs(t, err, &simulation.EvalFailureError{})
+			require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
+		})
+	}
+}
+
+func TestAuthAddrTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, signed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
+			defer l.Close()
+			s := simulation.MakeSimulator(l)
+			sender := accounts[0]
+			authority := accounts[1]
+
+			txn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: makeTxnHeader(sender.addr),
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: sender.addr,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				},
+				AuthAddr: authority.addr,
+			}
+
+			if signed {
+				txn = txn.Txn.Sign(authority.sk)
+			}
+
+			txgroup := []transactions.SignedTxn{txn}
+
+			_, _, err := s.Simulate(txgroup)
+			require.ErrorContains(t, err, fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.addr, authority.addr))
+		})
+	}
+}
+
+func TestStateProofTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l, _, makeTxnHeader := prepareSimulatorTest(t)
 	defer l.Close()
 	s := simulation.MakeSimulator(l)
-	sender := accounts[0].addr
-	senderBalance := accounts[0].acctData.MicroAlgos
-	amount := senderBalance.Raw + 100
 
 	txgroup := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: makeTxnHeader(sender),
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: sender,
-					Amount:   basics.MicroAlgos{Raw: amount}, // overspend
-				},
+				Type:   protocol.StateProofTx,
+				Header: makeTxnHeader(transactions.StateProofSender),
+				// No need to fill out StateProofTxnFields, this should fail at signature verification
 			},
 		},
 	}
 
 	_, _, err := s.Simulate(txgroup)
-	require.ErrorAs(t, err, &simulation.EvalFailureError{})
-	require.ErrorContains(t, err, fmt.Sprintf("tried to spend {%d}", amount))
+	require.ErrorContains(t, err, "cannot simulate StateProof transactions")
 }
 
 func TestSimpleGroupTxn(t *testing.T) {
@@ -451,7 +528,7 @@ func TestSignatureCheck(t *testing.T) {
 		},
 	}
 
-	// should error without a signature
+	// should catch missing signature
 	_, missingSignatures, err := s.Simulate(txgroup)
 	require.NoError(t, err)
 	require.True(t, missingSignatures)

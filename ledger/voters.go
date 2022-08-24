@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -27,84 +28,95 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// The votersTracker maintains the Merkle tree for the most recent
-// commitments to online accounts for compact certificates.
+// The votersTracker maintains the vector commitment for the most recent
+// commitments to online accounts for state proofs.
 //
-// We maintain multiple Merkle trees: we might commit to a new Merkle tree in
-// block X, but we need the Merkle tree from block X-params.CompactCertBlocks
-// to build the compact certificate for block X.
+// We maintain multiple vector commitment: we might commit to a new VC in
+// block X, but we need the VC from block X-params.StateProofBlocks
+// to build the state proof for block X.
 //
 // votersTracker is kind-of like a tracker, but hangs off the acctupdates
 // rather than a direct ledger tracker.  We don't have an explicit interface
 // for such an "accounts tracker" yet, however.
 type votersTracker struct {
-	// round contains the top online accounts in a given round.
+	// votersForRoundCache contains the top online accounts in a given Round.
 	//
-	// To avoid increasing block latency, we include a Merkle commitment
+	// To avoid increasing block latency, we include a vector commitment
 	// to the top online accounts as of block X in the block header of
-	// block X+CompactCertVotersLookback.  This gives each node some time
-	// to construct this Merkle tree, before its root is needed in a block.
+	// block X+StateProofVotersLookback.  This gives each node some time
+	// to construct this vector commitment, before its root is needed in a block.
 	//
-	// This round map is indexed by the block X, using the terminology from
-	// the above example, to be used in X+CompactCertVotersLookback.
+	// This votersForRoundCache map is indexed by the block X, using the terminology from
+	// the above example, to be used in X+StateProofVotersLookback.
 	//
-	// We maintain round entries for two reasons:
+	// We maintain votersForRoundCache entries for two reasons:
 	//
 	// The first is to maintain the tree for an upcoming block -- that is,
 	// if X+Loookback<Latest.  The block evaluator can ask for the root of
 	// the tree to propose and validate a block.
 	//
-	// The second is to construct compact certificates.  Compact certificates
-	// are formed for blocks that are a multiple of CompactCertRounds, using
-	// the Merkle commitment to online accounts from the previous such block.
-	// Thus, we maintain X in the round map until we form a compact certificate
-	// for round X+CompactCertVotersLookback+CompactCertRounds.
-	round map[basics.Round]*ledgercore.VotersForRound
+	// The second is to construct state proof.  State proofs
+	// are formed for blocks that are a multiple of StateProofInterval, using
+	// the vector commitment to online accounts from the previous such block.
+	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
+	// for round X+StateProofVotersLookback+StateProofInterval.
+	//
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3
+	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
+	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
+	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
+	// to verify R-StateProofMaxRecoveryIntervals
+	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
+	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
+	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
-	l  ledgerForTracker
-	ao *onlineAccounts
+	l                     ledgerForTracker
+	onlineAccountsFetcher ledgercore.OnlineAccountsFetcher
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 }
 
-// votersRoundForCertRound computes the round number whose voting participants
-// will be used to sign the compact cert for certRnd.
-func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams) basics.Round {
-	// To form a compact certificate for round certRnd,
-	// we need a commitment to the voters CompactCertRounds
+// votersRoundForStateProofRound computes the round number whose voting participants
+// will be used to sign the state proof for stateProofRnd.
+func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.ConsensusParams) basics.Round {
+	// To form a state proof on period that ends on stateProofRnd,
+	// we need a commitment to the voters StateProofInterval rounds
 	// before that, and the voters information from
-	// CompactCertVotersLookback before that.
-	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
+	// StateProofVotersLookback before that.
+	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
 	vt.l = l
-	vt.ao = ao
-	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
+	vt.onlineAccountsFetcher = fetcher
 
-	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
+	latestRoundInLedger := l.Latest()
+	hdr, err := l.BlockHdr(latestRoundInLedger)
 	if err != nil {
 		return err
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+	startR := stateproof.GetOldestExpectedStateProof(&hdr)
+	startR = votersRoundForStateProofRound(startR, &proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
+			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
-	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
+	// we recreate the trees for old rounds. we stop at latestDbRound (where latestDbRound <= latestRoundInLedger) since
+	// future blocks would be given as part of the replay
+	for r := startR; r <= latestDbRound; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
 			return err
@@ -119,28 +131,27 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) er
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.round[r]
+	_, ok := vt.votersForRoundCache[r]
 	if ok {
 		// Already loaded.
 		return
 	}
 
 	proto := config.Consensus[hdr.CurrentProtocol]
-	if proto.CompactCertRounds == 0 {
-		// No compact certs.
+	if proto.StateProofInterval == 0 {
+		// No StateProofs.
 		return
 	}
 
 	tr := ledgercore.MakeVotersForRound()
 	tr.Proto = proto
 
-	vt.round[r] = tr
+	vt.votersForRoundCache[r] = tr
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
-		err := tr.LoadTree(onlineAccounts, hdr)
+		err := tr.LoadTree(vt.onlineAccountsFetcher, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
@@ -157,42 +168,63 @@ func (vt *votersTracker) close() {
 
 func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
-	if proto.CompactCertRounds == 0 {
-		// No compact certs.
+	if proto.StateProofInterval == 0 {
+		// No StateProofs
 		return
 	}
 
-	// Check if any blocks can be forgotten because the compact cert is available.
-	for r, tr := range vt.round {
-		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
-		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
-			delete(vt.round, r)
-		}
-	}
+	vt.removeOldVoters(hdr)
 
 	// This might be a block where we snapshot the online participants,
-	// to eventually construct a merkle tree for commitment in a later
+	// to eventually construct a vector commitment in a later
 	// block.
 	r := uint64(hdr.Round)
-	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
-		_, ok := vt.round[basics.Round(r)]
-		if ok {
-			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
-		} else {
-			vt.loadTree(hdr)
+	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
+		return
+	}
+
+	_, ok := vt.votersForRoundCache[basics.Round(r)]
+	if ok {
+		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
+	} else {
+		vt.loadTree(hdr)
+	}
+
+}
+
+// removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
+// voters would be removed if one of the two condition is met
+// 1 - Voters are for a round which was already been confirmed by stateproof
+// 2 - Voters are for a round which is older than the allowed recovery interval.
+// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
+// StateProofMaxRecoveryIntervals + 1
+// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
+//
+// It is possible to optimize this function and not to travers votersForRoundCache on every round.
+// Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
+// and check for deletion in every round.
+func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
+
+	for r, tr := range vt.votersForRoundCache {
+		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
+		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+
+		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
+		if stateProofRound < lowestStateProofRound {
+			delete(vt.votersForRoundCache, r)
 		}
 	}
 }
 
-// lowestRound() returns the lowest round state (blocks and accounts) needed by
+// lowestRound() returns the lowest votersForRoundCache state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
 // not delete account state before this round, so that after a restart, it's
 // possible to reconstruct the votersTracker.  If votersTracker does
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	minRound := base
-	for r := range vt.round {
+	for r := range vt.votersForRoundCache {
 		if r < minRound {
 			minRound = r
 		}
@@ -202,13 +234,13 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 
 // getVoters() returns the top online participants from round r.
 func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.round[r]
+	tr, ok := vt.votersForRoundCache[r]
 	if !ok {
-		// Not tracked: compact certs not enabled.
+		// Not tracked: stateproofs not enabled.
 		return nil, nil
 	}
 
-	// Wait for the Merkle tree to be constructed.
+	// Wait for the vc to be constructed.
 	err := tr.Wait()
 	if err != nil {
 		return nil, err

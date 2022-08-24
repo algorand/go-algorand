@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -56,7 +55,7 @@ func main() {
 		printExit("one or more of the required input arguments was not provided\n")
 	}
 
-	localDefaultsBytes, err := ioutil.ReadFile(*headerFileName)
+	localDefaultsBytes, err := os.ReadFile(*headerFileName)
 	if err != nil {
 		printExit("Unable to load file %s : %v", *headerFileName, err)
 	}
@@ -70,14 +69,14 @@ func main() {
 
 	localDefaultsBytes = append(localDefaultsBytes, autoDefaultsBytes...)
 
-	err = ioutil.WriteFile(*outputfilename, localDefaultsBytes, 0644)
+	err = os.WriteFile(*outputfilename, localDefaultsBytes, 0644)
 	if err != nil {
 		printExit("Unable to write file %s : %v", *outputfilename, err)
 	}
 
 	// generate an update json for the example as well.
 	autoDefaultsBytes = []byte(prettyPrint(config.AutogenLocal, "json"))
-	err = ioutil.WriteFile(*jsonExampleFileName, autoDefaultsBytes, 0644)
+	err = os.WriteFile(*jsonExampleFileName, autoDefaultsBytes, 0644)
 	if err != nil {
 		printExit("Unable to write file %s : %v", *jsonExampleFileName, err)
 	}

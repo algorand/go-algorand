@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -52,14 +51,14 @@ var signCmd = &cobra.Command{
 		seed := loadKeyfileOrMnemonic(signKeyfile, signMnemonic)
 		key := crypto.GenerateSignatureSecrets(seed)
 
-		txdata, err := ioutil.ReadFile(signTxfile)
+		txdata, err := os.ReadFile(signTxfile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read transactions from %s: %v\n", signTxfile, err)
 			os.Exit(1)
 		}
 
 		var outBytes []byte
-		dec := protocol.NewDecoderBytes(txdata)
+		dec := protocol.NewMsgpDecoderBytes(txdata)
 		for {
 			var stxn transactions.SignedTxn
 			err = dec.Decode(&stxn)
@@ -78,7 +77,7 @@ var signCmd = &cobra.Command{
 			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
-		err = ioutil.WriteFile(signOutfile, outBytes, 0600)
+		err = os.WriteFile(signOutfile, outBytes, 0600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot write signed transactions to %s: %v\n", signOutfile, err)
 			os.Exit(1)

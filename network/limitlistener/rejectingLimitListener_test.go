@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"testing"
@@ -57,7 +56,7 @@ func TestRejectingLimitListenerBasic(t *testing.T) {
 					return
 				}
 
-				io.Copy(ioutil.Discard, r.Body)
+				io.Copy(io.Discard, r.Body)
 				r.Body.Close()
 
 				queryCh <- nil

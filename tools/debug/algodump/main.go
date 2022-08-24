@@ -99,7 +99,7 @@ func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessa
 		data = fmt.Sprintf("proposal %s", shortdigest(crypto.Digest(p.Block.Hash())))
 
 	case protocol.TxnTag:
-		dec := protocol.NewDecoderBytes(msg.Data)
+		dec := protocol.NewMsgpDecoderBytes(msg.Data)
 		for {
 			var stx transactions.SignedTxn
 			err := dec.Decode(&stx)
@@ -140,7 +140,7 @@ func setDumpHandlers(n network.GossipNode) {
 
 	h := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: &dh},
-		{Tag: protocol.CompactCertSigTag, MessageHandler: &dh},
+		{Tag: protocol.StateProofSigTag, MessageHandler: &dh},
 		{Tag: protocol.MsgOfInterestTag, MessageHandler: &dh},
 		{Tag: protocol.MsgDigestSkipTag, MessageHandler: &dh},
 		{Tag: protocol.NetPrioResponseTag, MessageHandler: &dh},

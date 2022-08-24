@@ -109,6 +109,9 @@ byte 0x%s
 }
 
 func TestVrfVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	ep, _, _ := makeSampleEnv()
 	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
 	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")
@@ -157,9 +160,9 @@ byte 0x79de0699673571df1de8486718d06a3e7838f6831ec4ef3fb963788fbfb773b7
 byte 0xd76446a3393af3e2eefada16df80cc6a881a56f4cf41fa2ab4769c5708ce878d
 ecdsa_verify Secp256k1
 assert`, "int 1"},
-		{"vrf_verify", "", `byte 0x3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
+		{"vrf_verify", "", `byte 0x72
 byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
-byte 0x72
+byte 0x3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
 vrf_verify VrfAlgorand
 assert							// make sure we're testing success
 pop								// output`, "int 1"},
@@ -883,7 +886,7 @@ func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
 
 func benchmarkBn256(b *testing.B, source string) {
 	data := benchmarkBn256DataGenData(b)
-	ops, err := AssembleStringWithVersion(source, 7)
+	ops, err := AssembleStringWithVersion(source, pairingVersion)
 	require.NoError(b, err)
 	for i := 0; i < b.N; i++ {
 		data[i].programs = ops.Program
@@ -947,12 +950,15 @@ func BenchmarkBn256PairingRaw(b *testing.B) {
 }
 
 func BenchmarkBn256(b *testing.B) {
+	if pairingVersion > LogicVersion {
+		b.Skip()
+	}
 	b.Run("bn256 add", func(b *testing.B) {
 		benchmarkOperation(b, "byte 0x0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32", "dup; bn256_add", "pop; int 1")
 	})
 
 	b.Run("bn256 scalar mul", func(b *testing.B) {
-		source := `#pragma version 7
+		source := `
 arg 0
 arg 1
 bn256_scalar_mul
@@ -963,7 +969,7 @@ int 1
 	})
 
 	b.Run("bn256 pairing", func(b *testing.B) {
-		source := `#pragma version 7
+		source := `
 arg 2
 arg 3
 bn256_pairing
