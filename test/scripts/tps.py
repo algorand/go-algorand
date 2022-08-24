@@ -2,6 +2,8 @@
 #
 # Ask algod what its recent Transactions Per Second have been
 #
+# (Fetches first and last block around query range to parse block header info.)
+#
 # usage:
 #  python3 tps.py -r 10 --verbose $ALGORAND_DATA
 
@@ -57,7 +59,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
     ap.add_argument('-d', dest='algorand_data')
-    ap.add_argument('-r', '--rounds', type=int, help='number of rounds to calculate over')
+    ap.add_argument('-r', '--rounds', type=int, default=10, help='number of rounds to calculate over')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -69,6 +71,13 @@ def main():
     datadirs = args.data_dirs
     if args.algorand_data:
         datadirs = datadirs + [args.algorand_data]
+    if not datadirs:
+        ad = os.getenv('ALGORAND_DATA')
+        if ad:
+            datadirs.append(ad)
+    if not datadirs:
+        sys.stderr.write('no data dirs specified (positional file, -d AD, $ALGORAND_DATA)')
+        sys.exit(1)
 
     for adir in datadirs:
         algod = algod_client_for_dir(adir)
