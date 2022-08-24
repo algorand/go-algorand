@@ -137,12 +137,11 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return txnGroup(stxs, contextHdr, cache, ledger, nil)
 }
 
-// TxnGroupForDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
-func TxnGroupForDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
+// TxnGroupWithDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, while using a debugger.
+func TxnGroupWithDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
 	return txnGroup(stxs, contextHdr, cache, ledger, debugger)
 }
 
-// txnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
 func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifierDebugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 

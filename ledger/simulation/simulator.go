@@ -166,7 +166,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupForDebugger(txgroup, hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithDebugger(txgroup, hdr, nil, s.ledger, debugger)
 	if err != nil {
 		return false, InvalidTxGroupError{SimulatorError{err}}
 	}
