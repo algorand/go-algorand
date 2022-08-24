@@ -137,6 +137,15 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		return false, err
 	}
 
+	// Find and prep any transactions that are missing signatures. We will modify these transactions
+	// to pass signature verification, then restore the original signed transaction before
+	// evaluation.
+	//
+	// Note: currently we only support missing transaction signatures, but it should be possible to
+	// support unsigned delegated LogicSigs as well. A single-signature unsigned delegated LogicSig
+	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
+	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
+	// the signature.
 	missingSigs := make([]missingSigInfo, 0, len(txgroup))
 	for i, stxn := range txgroup {
 		if stxn.Txn.Type == protocol.StateProofTx {
@@ -148,9 +157,10 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 				authAddr: stxn.AuthAddr,
 			})
 
-			// Replace the signed txn with one signed by the proxySigner. This will allow the
-			// transaction to pass verification, and we will restore the original signed transaction
-			// before evaluation.
+			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
+			// raise an error, since the proxySigner's public key likely does not have authority
+			// over the sender's account, so we must restore the original signed transaction before
+			// evaluation.
 			txgroup[i] = stxn.Txn.Sign(proxySignerSecrets)
 		}
 	}
