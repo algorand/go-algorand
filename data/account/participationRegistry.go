@@ -79,13 +79,10 @@ type (
 		EffectiveFirst    basics.Round
 		EffectiveLast     basics.Round
 
-		StateProof *StateProofVerifier
+		StateProof *merklesignature.Verifier
 		VRF        *crypto.VRFSecrets
 		Voting     *crypto.OneTimeSignatureSecrets
 	}
-
-	// StateProofVerifier defined the type used for the stateproofs public key
-	StateProofVerifier merklesignature.Verifier
 
 	// StateProofKeys represents a set of ephemeral stateproof keys with their corresponding round
 	//msgp:allocbound StateProofKeys 1000
@@ -97,10 +94,10 @@ type (
 		ParticipationRecord
 	}
 
-	// StateProofRecordForRound contains participant's state proof secrets that corresponds to
+	// StateProofSecretsForRound contains participant's state proof secrets that corresponds to
 	// one specific round. In Addition, it also returns the participation metadata.
 	// If there are no secrets for the round a nil is returned in Stateproof field.
-	StateProofRecordForRound struct {
+	StateProofSecretsForRound struct {
 		ParticipationRecord
 
 		StateProofSecrets *merklesignature.Signer
@@ -145,10 +142,11 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		voting = r.Voting.Snapshot()
 	}
 
-	var stateProof *StateProofVerifier
+	var stateProof *merklesignature.Verifier
 	if r.StateProof != nil {
-		stateProof = &StateProofVerifier{}
-		copy(stateProof[:], r.StateProof[:])
+		stateProof = &merklesignature.Verifier{}
+		copy(stateProof.Commitment[:], r.StateProof.Commitment[:])
+		stateProof.KeyLifetime = r.StateProof.KeyLifetime
 	}
 
 	dupParticipation := ParticipationRecord{
@@ -231,6 +229,9 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
+	// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
+
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
 
@@ -246,8 +247,8 @@ type ParticipationRegistry interface {
 	// GetForRound fetches a record with voting secrets for a particular round.
 	GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
 
-	// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
-	GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error)
+	// GetStateProofSecretsForRound fetches a record with stateproof secrets for a particular round.
+	GetStateProofSecretsForRound(id ParticipationID, round basics.Round) (StateProofSecretsForRound, error)
 
 	// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
 	HasLiveKeys(from, to basics.Round) bool
@@ -343,6 +344,7 @@ const (
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
+	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<=?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -362,6 +364,7 @@ const (
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
+	deleteStateProofByPK   = `DELETE FROM StateProofKeys WHERE pk=?`
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
@@ -412,6 +415,22 @@ type participationDB struct {
 	flushTimeout time.Duration
 }
 
+// DeleteStateProofKeys is a non-blocking operation, responsible for removing state-proof keys from the DB.
+func (db *participationDB) DeleteStateProofKeys(id ParticipationID, round basics.Round) error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	if _, ok := db.cache[id]; !ok {
+		return ErrParticipationIDNotFound
+	}
+
+	db.writeQueue <- makeOpRequest(&deleteStateProofKeysOp{
+		ParticipationID: id,
+		round:           round,
+	})
+	return nil
+}
+
 type updatingParticipationRecord struct {
 	ParticipationRecord
 
@@ -444,6 +463,7 @@ func (db *participationDB) initializeCache() error {
 func (db *participationDB) writeThread() {
 	defer close(db.writeQueueDone)
 	var lastErr error
+
 	for op := range db.writeQueue {
 		if err := op.operation.apply(db); err != nil {
 			lastErr = err
@@ -501,11 +521,11 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		*voting = record.Voting.Snapshot()
 	}
 
-	var stateProofVeriferPtr *StateProofVerifier
+	var stateProofVerifierPtr *merklesignature.Verifier
 	if record.StateProofSecrets != nil {
-		stateProofVeriferPtr = &StateProofVerifier{}
-		copy(stateProofVeriferPtr[:], record.StateProofSecrets.GetVerifier()[:])
-
+		stateProofVerifierPtr = &merklesignature.Verifier{}
+		copy(stateProofVerifierPtr.Commitment[:], record.StateProofSecrets.GetVerifier().Commitment[:])
+		stateProofVerifierPtr.KeyLifetime = record.StateProofSecrets.GetVerifier().KeyLifetime
 	}
 
 	// update cache.
@@ -520,7 +540,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastStateProof:    0,
 		EffectiveFirst:    0,
 		EffectiveLast:     0,
-		StateProof:        stateProofVeriferPtr,
+		StateProof:        stateProofVerifierPtr,
 		Voting:            voting,
 		VRF:               vrf,
 	}
@@ -607,7 +627,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 
 		var lastVote sql.NullInt64
 		var lastBlockProposal sql.NullInt64
-		var lastCompactCertificate sql.NullInt64
+		var lastStateProof sql.NullInt64
 		var effectiveFirst sql.NullInt64
 		var effectiveLast sql.NullInt64
 
@@ -621,7 +641,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&rawStateProof,
 			&lastVote,
 			&lastBlockProposal,
-			&lastCompactCertificate,
+			&lastStateProof,
 			&effectiveFirst,
 			&effectiveLast,
 			&rawVoting,
@@ -647,8 +667,9 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
 			}
-			var stateProofVerifer StateProofVerifier
-			copy(stateProofVerifer[:], stateProof.GetVerifier()[:])
+			var stateProofVerifer merklesignature.Verifier
+			copy(stateProofVerifer.Commitment[:], stateProof.GetVerifier().Commitment[:])
+			stateProofVerifer.KeyLifetime = stateProof.GetVerifier().KeyLifetime
 			record.StateProof = &stateProofVerifer
 		}
 
@@ -669,8 +690,8 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			record.LastBlockProposal = basics.Round(lastBlockProposal.Int64)
 		}
 
-		if lastCompactCertificate.Valid {
-			record.LastStateProof = basics.Round(lastCompactCertificate.Int64)
+		if lastStateProof.Valid {
+			record.LastStateProof = basics.Round(lastStateProof.Int64)
 		}
 
 		if effectiveFirst.Valid {
@@ -740,20 +761,25 @@ func (db *participationDB) HasLiveKeys(from, to basics.Round) bool {
 	return false
 }
 
-// GetStateProofForRound returns the state proof data required to sign the compact certificate for this round
-func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
+// GetStateProofSecretsForRound returns the state proof data required to sign the compact certificate for this round
+func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, round basics.Round) (StateProofSecretsForRound, error) {
 	partRecord, err := db.GetForRound(id, round)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 
-	var result StateProofRecordForRound
+	var result StateProofSecretsForRound
 	result.ParticipationRecord = partRecord.ParticipationRecord
 	var rawStateProofKey []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
-		row := tx.QueryRow(selectStateProofKey, round, id[:])
-		err := row.Scan(&rawStateProofKey)
+		keyFirstValidRound, err := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
+		if err != nil {
+			return err
+		}
+
+		row := tx.QueryRow(selectStateProofKey, keyFirstValidRound, id[:])
+		err = row.Scan(&rawStateProofKey)
 		if err == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
@@ -763,13 +789,8 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 		return nil
 	})
-	switch err {
-	case nil:
-		// no error, continue
-	case ErrSecretNotFound: // not considered an error (yet), since some accounts may not have registered state proof yet
-		return result, nil
-	default:
-		return StateProofRecordForRound{}, err
+	if err != nil {
+		return StateProofSecretsForRound{}, fmt.Errorf("failed to fetch state proof for round %d: %w", round, err)
 	}
 
 	// Init stateproof fields after being able to retrieve key from database
@@ -779,7 +800,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 
 	var rawSignerContext []byte
@@ -793,11 +814,11 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 		return nil
 	})
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 	err = protocol.Decode(rawSignerContext, &result.StateProofSecrets.SignerContext)
 	if err != nil {
-		return StateProofRecordForRound{}, err
+		return StateProofSecretsForRound{}, err
 	}
 	return result, nil
 }

@@ -52,11 +52,6 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
-type debuggerForVerifier struct {
-	debugger          logic.DebuggerHook
-	ignoreMissingSigs bool
-}
-
 // GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
@@ -71,12 +66,13 @@ type GroupContext struct {
 	consensusParams  config.ConsensusParams
 	minAvmVersion    uint64
 	signedGroupTxns  []transactions.SignedTxn
-	verifierDebugger *debuggerForVerifier
+	ledger           logic.LedgerForSignature
+	verifierDebugger logic.DebuggerHook
 }
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, verifierDebugger *debuggerForVerifier) (*GroupContext, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifierDebugger logic.DebuggerHook) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -93,6 +89,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		consensusParams:  consensusParams,
 		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
+		ledger:           ledger,
 		verifierDebugger: verifierDebugger,
 	}, nil
 }
@@ -103,8 +100,6 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 		g.consensusVersion == other.consensusVersion &&
 		g.minAvmVersion == other.minAvmVersion
 }
-
-var errMissingSig = errors.New("signedtxn has no sig")
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
@@ -119,10 +114,7 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil
 	}
-	if err := batchVerifier.Verify(); err != nil {
-		return err
-	}
-	return nil
+	return batchVerifier.Verify()
 }
 
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
@@ -141,20 +133,19 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, nil)
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, ledger, nil)
 }
 
-// TxnGroupForDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, ignoring transactions which have no signature.
-func TxnGroupForDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, &debuggerForVerifier{debugger, true})
+// TxnGroupWithDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, while using a debugger.
+func TxnGroupWithDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, ledger, debugger)
 }
 
-// txnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
-func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifierDebugger *debuggerForVerifier) (groupCtx *GroupContext, err error) {
+func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifierDebugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier, verifierDebugger); err != nil {
+	if groupCtx, err = txnGroupBatchVerify(stxs, contextHdr, cache, ledger, batchVerifier, verifierDebugger); err != nil {
 		return nil, err
 	}
 
@@ -171,14 +162,14 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller's responsibility to call batchVerifier.verify()
-func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
-	return txnGroupBatchVerify(stxs, contextHdr, cache, verifier, nil)
+func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+	return txnGroupBatchVerify(stxs, contextHdr, cache, ledger, verifier, nil)
 }
 
-// txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data. If `ignoreMissingSigs` is true, then it will ignore transactions which have no signature.
+// txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller's responsibility to call batchVerifier.verify()
-func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier, verifierDebugger *debuggerForVerifier) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr, verifierDebugger)
+func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier, verifierDebugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger, verifierDebugger)
 	if err != nil {
 		return nil, err
 	}
@@ -188,15 +179,10 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	for i, stxn := range stxs {
 		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
 		if err != nil {
-			isIgnoredMissingSigError := errors.Is(err, errMissingSig) && verifierDebugger.ignoreMissingSigs
-			if !isIgnoredMissingSigError {
-				err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
-				return
-			}
-			// clear error since we're ignoring it
-			err = nil
+			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+			return
 		}
-		if stxn.Txn.Type != protocol.CompactCertTx {
+		if stxn.Txn.Type != protocol.StateProofTx {
 			minFeeCount++
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
@@ -221,7 +207,11 @@ func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 	return
 }
 
-func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig bool, hasLogicSig bool) {
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+	numSigs := 0
+	hasSig := false
+	hasMsig := false
+	hasLogicSig := false
 	if s.Sig != (crypto.Signature{}) {
 		numSigs++
 		hasSig = true
@@ -234,38 +224,17 @@ func identifySigs(s *transactions.SignedTxn) (numSigs uint, hasSig bool, hasMsig
 		numSigs++
 		hasLogicSig = true
 	}
-	return
-}
-
-// Special case: special sender address can issue special transaction
-// types (compact cert txn) without any signature.  The well-formed
-// check ensures that this transaction cannot pay any fee, and
-// cannot have any other interesting fields, except for the compact
-// cert payload.
-func isCompactCertSpecialCase(s *transactions.SignedTxn) bool {
-	return s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx
-}
-
-// TxnIsMissingSig returns true if the transaction is unsigned without reason, false otherwise.
-// Transactions are allowed to be unsigned if they are special cases, such as a compact cert transaction.
-func TxnIsMissingSig(s *transactions.SignedTxn) bool {
-	numSigs, _, _, _ := identifySigs(s)
-	return numSigs == 0 && !isCompactCertSpecialCase(s)
-}
-
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
-	if TxnIsMissingSig(s) {
-		return errMissingSig
-	}
-
-	numSigs, hasSig, hasMsig, hasLogicSig := identifySigs(s)
-
-	// if numSigs is 0 then we end early because this is a special case;
-	// otherwise it would have been caught by TxnIsMissingSig
 	if numSigs == 0 {
-		return nil
-	}
+		// Special case: special sender address can issue special transaction
+		// types (state proof txn) without any signature.  The well-formed
+		// check ensures that this transaction cannot pay any fee, and
+		// cannot have any other interesting fields, except for the state proof payload.
+		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
+			return nil
+		}
 
+		return errors.New("signedtxn has no sig")
+	}
 	if numSigs > 1 {
 		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 	}
@@ -284,7 +253,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return logicSigBatchVerify(s, txnIdx, groupCtx, batchVerifier)
+		return logicSigBatchVerify(s, txnIdx, groupCtx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -303,10 +272,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return nil
 	}
 
-	if err := batchVerifier.Verify(); err != nil {
-		return err
-	}
-	return nil
+	return batchVerifier.Verify()
 }
 
 // LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.
@@ -340,6 +306,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 		Proto:         &groupCtx.consensusParams,
 		TxnGroup:      txngroup,
 		MinAvmVersion: &groupCtx.minAvmVersion,
+		SigLedger:     groupCtx.ledger, // won't be needed for CheckSignature
 	}
 	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
@@ -382,7 +349,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 
 // logicSigBatchVerify checks that the signature is valid, executing the program.
 // it is the caller responsibility to call batchVerifier.verify()
-func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchverifier *crypto.BatchVerifier) error {
+func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err
@@ -395,7 +362,8 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		Proto:         &groupCtx.consensusParams,
 		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
 		MinAvmVersion: &groupCtx.minAvmVersion,
-		Debugger:      groupCtx.verifierDebugger.debugger,
+		SigLedger:     groupCtx.ledger,
+		Debugger:      groupCtx.verifierDebugger,
 	}
 	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {
@@ -417,7 +385,7 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 // a PaysetGroups may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHeader bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHeader bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (err error) {
 	if len(payset) == 0 {
 		return nil
 	}
@@ -454,7 +422,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 					batchVerifier := crypto.MakeBatchVerifierWithHint(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, batchVerifier)
+						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, ledger, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr

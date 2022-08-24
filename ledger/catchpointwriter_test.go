@@ -24,7 +24,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -56,7 +56,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
+	crypto.RandBytes(stateProofID.Commitment[:])
 
 	ad := basics.AccountData{
 		Status:             basics.NotParticipating,
@@ -65,7 +65,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		RewardedMicroAlgos: basics.MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
+		StateProofID:       stateProofID.Commitment,
 		VoteFirstValid:     basics.Round(0x1234123412341234),
 		VoteLastValid:      basics.Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,
@@ -211,7 +211,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
@@ -235,7 +235,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(fileName)
+	fileContent, err := os.ReadFile(fileName)
 	require.NoError(t, err)
 	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)
@@ -293,7 +293,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au, _ := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
@@ -358,7 +358,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(catchpointFilePath)
+	fileContent, err := os.ReadFile(catchpointFilePath)
 	require.NoError(t, err)
 	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)

@@ -59,13 +59,13 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 	}
 }
 
-func TestConsensusCompactCertParams(t *testing.T) {
+func TestConsensusStateProofParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for _, params := range Consensus {
-		if params.CompactCertRounds != 0 {
-			require.Equal(t, uint64(1<<16), (params.MaxKeyregValidPeriod+1)/params.CompactCertRounds,
-				"Validity period divided by CompactCertRounds should allow for no more than %d generated keys", 1<<16)
+		if params.StateProofInterval != 0 {
+			require.Equal(t, uint64(1<<16), (params.MaxKeyregValidPeriod+1)/params.StateProofInterval,
+				"Validity period divided by StateProofInterval should allow for no more than %d generated keys", 1<<16)
 		}
 	}
 }

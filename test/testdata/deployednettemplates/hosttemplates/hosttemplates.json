@@ -237,6 +237,12 @@
       "BaseConfiguration": "c5.4xlarge"
     },
     {
+      "Name": "AWS-US-EAST-2-m5d.xl",
+      "Provider": "AWS",
+      "Region": "us-east-2",
+      "BaseConfiguration": "m5d.xlarge"
+    },
+    {
       "Name": "AWS-US-EAST-2-m5d.2xl",
       "Provider": "AWS",
       "Region": "us-east-2",
