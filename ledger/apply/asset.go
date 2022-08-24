@@ -444,7 +444,7 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
 	}
 
-	// get the account to be frozen/unfrozen.
+	// Get the account to be frozen/unfrozen.
 	holding, ok, err := balances.GetAssetHolding(cf.FreezeAccount, cf.FreezeAsset)
 	if err != nil {
 		return err

@@ -22,8 +22,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/accountdb"
-	"github.com/algorand/go-algorand/ledger/blockdb"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +31,8 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/accountdb"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -439,7 +439,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wdb := c.ledger.TrackerDB().Wdb
 	rdb := c.ledger.TrackerDB().Rdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		// creating the Index can take a while, so ensure we don't generate false alerts for no good reason.
+		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(120*time.Second))
 		return accountdb.CreateCatchpointStagingHashesIndex(ctx, tx)
 	})

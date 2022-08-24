@@ -37,7 +37,7 @@ func TestLRUBasicResources(t *testing.T) {
 	baseRes.Init(logging.TestingLog(t), 10, 5)
 
 	resourcesNum := 50
-	// Write 50 resources
+	// write 50 resources
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := PersistedResourcesData{

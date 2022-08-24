@@ -64,7 +64,7 @@ type LoadedTransactionGroup struct {
 	// Accounts is a list of all the Accounts balance records that the transaction group refer to and are needed.
 	Accounts []LoadedAccountDataEntry
 
-	// the following four are the resources used by the account
+	// the following four are the Resources used by the account
 	Resources []LoadedResourcesEntry
 
 	// Err indicates whether any of the balances in this structure have failed to load. In case of an error, at least

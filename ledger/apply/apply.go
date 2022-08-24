@@ -33,9 +33,9 @@ type StateProofsApplier interface {
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
-// After a call to Put (or Move), future calls to get or Move will reflect the updated balance record(s)
+// After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
 type Balances interface {
-	// get looks up the account data for an address, ignoring application and asset data
+	// Get looks up the account data for an address, ignoring application and asset data
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
@@ -93,7 +93,7 @@ type Balances interface {
 	StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
-	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and get?
+	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
 	Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error
 
 	// Balances correspond to a Round, which mean that they also correspond

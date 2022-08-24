@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"encoding/hex"
-	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"

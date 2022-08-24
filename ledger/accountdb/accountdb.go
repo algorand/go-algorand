@@ -609,7 +609,7 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
 				if err != sql.ErrNoRows {
-					err = fmt.Errorf("base account cannot be Read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
+					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
 					return err
 
 				}

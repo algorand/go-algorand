@@ -130,7 +130,7 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log 
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to Read database schema version : %v", err)
+		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
 
 	tu := trackerDBSchemaInitializer{

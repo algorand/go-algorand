@@ -26,9 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/ledger/accountdb"
-	testing2 "github.com/algorand/go-algorand/ledger/testing"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -36,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -376,7 +374,7 @@ func TestVerifyCatchpoint(t *testing.T) {
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, _ := testing2.GenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ := ledgertesting.GenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 	const inMem = false
 	log := logging.TestingLog(b)
 	cfg := config.GetDefaultLocal()

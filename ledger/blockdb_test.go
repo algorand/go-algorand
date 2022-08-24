@@ -18,8 +18,6 @@ package ledger
 
 import (
 	"database/sql"
-	"github.com/algorand/go-algorand/ledger/blockdb"
-	testing2 "github.com/algorand/go-algorand/ledger/testing"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,6 +26,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/blockdb"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -106,8 +106,8 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := testing2.DbOpenTest(t, true)
-	testing2.SetDbLogging(t, dbs)
+	dbs, _ := ledgertesting.DbOpenTest(t, true)
+	ledgertesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -122,8 +122,8 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := testing2.DbOpenTest(t, true)
-	testing2.SetDbLogging(t, dbs)
+	dbs, _ := ledgertesting.DbOpenTest(t, true)
+	ledgertesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -144,8 +144,8 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := testing2.DbOpenTest(t, true)
-	testing2.SetDbLogging(t, dbs)
+	dbs, _ := ledgertesting.DbOpenTest(t, true)
+	ledgertesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()

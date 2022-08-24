@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/ledger/accountdb"
-
 	"github.com/algorand/go-algorand/protocol"
 )
 

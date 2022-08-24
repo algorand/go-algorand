@@ -50,7 +50,7 @@ type EncodedBalanceRecordV6 struct {
 // encoding the resources map below.
 type SortUint64 = basics.SortUint64
 
-// AccountHashBuilderV6 calculates the hash key used for the trie by combining the account Address and the account Data
+// AccountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
 func AccountHashBuilderV6(addr basics.Address, accountData *BaseAccountData, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	hashIntPrefix := accountData.UpdateRound
@@ -73,7 +73,7 @@ func AccountHashBuilderV6(addr basics.Address, accountData *BaseAccountData, enc
 	return hash[:]
 }
 
-// ResourcesHashBuilderV6 calculates the hash key used for the trie by combining the account Address and the account Data
+// ResourcesHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
 func ResourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// Write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
@@ -93,7 +93,7 @@ func ResourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, cty
 	return hash[:]
 }
 
-// AccountHashBuilder calculates the hash key used for the trie by combining the account Address and the account Data
+// AccountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
 func AccountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// Write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
@@ -166,7 +166,7 @@ func RemoveSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 
 		isEmpty, err := isDirEmpty(absSubdir)
 		if err != nil {
-			return fmt.Errorf("unable to Read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 		}
 		if isEmpty {
 			err = os.Remove(absSubdir)

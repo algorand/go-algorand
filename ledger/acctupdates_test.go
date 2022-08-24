@@ -30,14 +30,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/ledger/accountdb"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -502,7 +501,7 @@ func TestAcctUpdates(t *testing.T) {
 
 			checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount-1), accts, rewardsLevels, proto)
 
-			// lastCreatableID stores asset or app max used Index to get rid of conflicts
+			// lastCreatableID stores asset or app max used index to get rid of conflicts
 			lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 			knownCreatables := make(map[basics.CreatableIndex]bool)
 
@@ -892,7 +891,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	runtime.GC()
 }
 
-// The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
+// The TestAcctUpdatesUpdatesCorrectness conduct a correctness test for the accounts update in the following way -
 // Each account is initialized with 100 algos.
 // On every round, each account move variable amount of funds to an accumulating account.
 // The deltas for each accounts are picked by using the lookup method.
@@ -978,7 +977,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
 				require.NoError(t, err)
 				require.Equal(t, i-1, validThrough)
-				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account Index : %d\nRound number : %d", j, i)
+				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
 				fromAccountDataNew := fromAccountDataOld
 
@@ -1017,7 +1016,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					require.NoError(t, err)
 					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
 					// if we received no error, we want to make sure the reported amount is correct.
-					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account Index : %d\nRound number : %d", j, checkRound)
+					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
 					testback++
 					j--
 				}
@@ -1067,7 +1066,7 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 
 	// test configuration parameters
 
-	// pick the second largest Index for the app and asset
+	// pick the second largest index for the app and asset
 	// This is to make sure exactly one element is left out
 	// as a result of max Index
 	maxAss1 := basics.CreatableIndex(0)
@@ -1094,14 +1093,14 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 		}
 	}
 
-	// No limits. max asset Index, max app Index and max results have no effect
+	// No limits. max asset index, max app index and max results have no effect
 	// This is to make sure the deleted elements do not show up
 	maxAssetIdx := basics.AssetIndex(maxAss2)
 	maxAppIdx := basics.AppIndex(maxApp2)
 	maxResults := uint64(len(expected))
 	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
 
-	// Limit with max asset Index and max app Index (max results has no effect)
+	// Limit with max asset index and max app index (max results has no effect)
 	maxAssetIdx = basics.AssetIndex(maxAss1)
 	maxAppIdx = basics.AppIndex(maxApp1)
 	maxResults = uint64(len(expected))
@@ -1172,7 +1171,7 @@ func listAndCompare(t *testing.T,
 
 // TestListCreatables tests ListAssets and ListApplications
 // It tests with all elements in cache, all synced to database, and combination of both
-// It also tests the max results, max app Index and max asset Index
+// It also tests the max results, max app index and max asset index
 func TestListCreatables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1242,7 +1241,7 @@ func TestListCreatables(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT rowid, Address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1266,7 +1265,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB Address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf)
@@ -1997,7 +1996,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
 
-	// lastCreatableID stores asset or app max used Index to get rid of conflicts
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
@@ -2097,7 +2096,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 
 	testAcctUpdatesLookupRetry(t,
 		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
-			// grab any Address and data to use for call to lookup
+			// grab any address and data to use for call to lookup
 			var addr basics.Address
 			for a := range accts[rnd] {
 				addr = a
@@ -2118,7 +2117,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 
 	testAcctUpdatesLookupRetry(t,
 		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
-			// grab any Address and data to use for call to lookup
+			// grab any address and data to use for call to lookup
 			var addr basics.Address
 			var data basics.AccountData
 			for a, d := range accts[rnd] {

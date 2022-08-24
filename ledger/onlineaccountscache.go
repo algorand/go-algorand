@@ -18,9 +18,9 @@ package ledger
 
 import (
 	"container/list"
-	"github.com/algorand/go-algorand/ledger/accountdb"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 )
 
 // Worst case memory usage = 2500 * 320 * 150B = 120MB

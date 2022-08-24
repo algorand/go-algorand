@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"github.com/algorand/go-algorand/ledger/accountdb"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -179,7 +179,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	require.Equal(t, maxCacheSize-1, len(oac.accounts))
 	require.False(t, oac.full())
 
-	// write a new Address, check writeFrontIfExist after
+	// write a new address, check writeFrontIfExist after
 	addr := ledgertesting.RandomAddress()
 	written = oac.writeFront(addr, acct)
 	require.True(t, written)

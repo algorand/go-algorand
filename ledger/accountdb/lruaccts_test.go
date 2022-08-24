@@ -37,7 +37,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 	baseAcct.Init(logging.TestingLog(t), 10, 5)
 
 	accountsNum := 50
-	// Write 50 accounts
+	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
 		acct := PersistedAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),

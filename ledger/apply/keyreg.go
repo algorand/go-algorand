@@ -34,7 +34,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
 	}
 
-	// get the user's balance entry
+	// Get the user's balance entry
 	record, err := balances.Get(header.Sender, false)
 	if err != nil {
 		return err

@@ -526,7 +526,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	// Read all the balances in the database.
+	// read all the balances in the database.
 	bal, err2 := accountsAll(tx)
 	require.NoError(b, err2)
 	tx.Commit()
@@ -557,7 +557,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	qs, err := AccountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(b, err)
 
-	// Read all the balances in the database, shuffled
+	// read all the balances in the database, shuffled
 	addrs := make([]basics.Address, len(accounts))
 	pos := 0
 	for addr := range accounts {
@@ -626,7 +626,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		accountsAddress = make([][]byte, 0, totalStartupAccountsNumber+startupAcct)
 		accountsRowID = make([]int, 0, totalStartupAccountsNumber+startupAcct)
 
-		// Read all the accounts to obtain the addrs.
+		// read all the accounts to obtain the addrs.
 		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
 		require.NoError(b, err)
 		defer rows.Close()

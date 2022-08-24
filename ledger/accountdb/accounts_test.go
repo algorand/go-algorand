@@ -26,7 +26,7 @@ import (
 )
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT rowid, Address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -50,7 +50,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB Address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf)

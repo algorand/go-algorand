@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/accountdb"
 	"io"
 	"os"
 	"path/filepath"
@@ -39,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -1318,7 +1318,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
-						// we need to transalate the "addrid" into actual account Address so that
+						// we need to transalate the "addrid" into actual account address so that
 						// we can report the failure.
 						addr, err := accountdb.LookupAccountAddressFromAddressID(ctx, tx, acct.Addrid)
 						if err != nil {

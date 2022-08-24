@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-// LRUAccounts provides a storage class for the most recently used accounts Data.
+// LRUAccounts provides a storage class for the most recently used accounts data.
 // It doesn't have any synchronization primitive on it's own and require to be
 // syncronized by the caller.
 type LRUAccounts struct {
@@ -35,12 +35,12 @@ type LRUAccounts struct {
 	pendingAccounts chan PersistedAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
-	// pendingWritesWarnThreshold is the threshold beyond we would Write a warning for exceeding the number of pendingAccounts entries
+	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
 	pendingWritesWarnThreshold int
 }
 
 // Init initializes the LRUAccounts for use.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
 	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
@@ -49,8 +49,8 @@ func (m *LRUAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// Read the persistedAccountData object that the LRUAccounts has for the given Address.
-// thread locking semantics : Read lock
+// read the persistedAccountData object that the LRUAccounts has for the given Address.
+// thread locking semantics : read lock
 func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
@@ -59,7 +59,7 @@ func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has 
 }
 
 // FlushPendingWrites flushes the pending writes to the main LRUAccounts cache.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUAccounts) FlushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
@@ -75,7 +75,7 @@ func (m *LRUAccounts) FlushPendingWrites() {
 	}
 }
 
-// WritePending Write a single persistedAccountData entry to the pendingAccounts buffer.
+// WritePending writes a single persistedAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
 func (m *LRUAccounts) WritePending(acct PersistedAccountData) {
@@ -86,10 +86,10 @@ func (m *LRUAccounts) WritePending(acct PersistedAccountData) {
 }
 
 // Write a single persistedAccountData to the LRUAccounts cache.
-// when writing the entry, the Round number would be used to determine if it's a newer
+// when writing the entry, the round number would be used to determine if it's a newer
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUAccounts) Write(acctData PersistedAccountData) {
 	if el := m.accounts[acctData.Addr]; el != nil {
 		// already exists; is it a newer ?
@@ -104,9 +104,9 @@ func (m *LRUAccounts) Write(acctData PersistedAccountData) {
 	}
 }
 
-// Prune adjust the current size of the LRUAccounts cache, by dropping the least
+// Prune adjusts the current size of the LRUAccounts cache, by dropping the least
 // recently used entries.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUAccounts) Prune(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {

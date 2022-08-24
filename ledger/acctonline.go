@@ -317,7 +317,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 }
 
 func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
-	// Index that corresponds to the data at dbRound,
+	// index that corresponds to the data at dbRound,
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
@@ -355,7 +355,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	copy(deltas, ao.deltas[:offset])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
-	// Index that corresponds to the oldest round still in deltas
+	// index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		ao.accountsMu.RUnlock()
@@ -879,7 +879,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			}
 		}
 
-		// get the top N accounts from the candidate set, by inserting all of
+		// Get the top N accounts from the candidate set, by inserting all of
 		// the accounts into a heap and then pulling out N elements from the
 		// heap.
 		topHeap := &onlineTopHeap{

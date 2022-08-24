@@ -176,7 +176,7 @@ type AccountData struct {
 
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
-	// by the Index of the AssetID; the Creator is this account's address.
+	// by the index of the AssetID; the Creator is this account's address.
 	//
 	// An account with any asset in AssetParams cannot be
 	// closed, until the asset is destroyed.  An asset can

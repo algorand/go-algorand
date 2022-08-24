@@ -20,8 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/accountdb"
-	"github.com/algorand/go-algorand/ledger/blockdb"
 	"os"
 	"time"
 
@@ -34,7 +32,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -423,7 +423,7 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
-// look up a creator Address, setting ok to false if the query succeeded but no
+// look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
 func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
@@ -448,7 +448,7 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
-// ListAssets takes a maximum asset Index and maximum result length, and
+// ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
@@ -457,7 +457,7 @@ func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (r
 	return l.accts.ListAssets(maxAssetIdx, maxResults)
 }
 
-// ListApplications takes a maximum app Index and maximum result length, and
+// ListApplications takes a maximum app index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
@@ -467,7 +467,7 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 }
 
 // LookupLatest uses the accounts tracker to return the account state (including
-// resources) for a given Address, for the latest round. The returned account values
+// resources) for a given address, for the latest round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
 func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
@@ -482,7 +482,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 }
 
 // LookupAccount uses the accounts tracker to return the account state (without
-// resources) for a given Address, for a given round. The returned account values
+// resources) for a given address, for a given round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
 // The returned AccountData contains the rewards applied up to that round number,
 // and the additional withoutRewards return value contains the value before rewards

@@ -30,7 +30,7 @@ type cachedResourceData struct {
 	address basics.Address
 }
 
-// LRUResources provides a storage class for the most recently used resources Data.
+// LRUResources provides a storage class for the most recently used resources data.
 // It doesn't have any synchronization primitive on it's own and require to be
 // syncronized by the caller.
 type LRUResources struct {
@@ -48,12 +48,12 @@ type LRUResources struct {
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 
-	// pendingWritesWarnThreshold is the threshold beyond we would Write a warning for exceeding the number of pendingResources entries
+	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingResources entries
 	pendingWritesWarnThreshold int
 }
 
 // Init initializes the LRUResources for use.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUResources) Init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
 	m.resources = make(map[ledgercore.AccountCreatable]*persistedResourcesDataListNode, pendingWrites)
@@ -62,8 +62,8 @@ func (m *LRUResources) Init(log logging.Logger, pendingWrites int, pendingWrites
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// Read the persistedResourcesData object that the LRUResources has for the given Address and creatable Index.
-// thread locking semantics : Read lock
+// read the persistedResourcesData object that the LRUResources has for the given address and creatable index.
+// thread locking semantics : read lock
 func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (data PersistedResourcesData, has bool) {
 	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: aidx}]; el != nil {
 		return el.Value.PersistedResourcesData, true
@@ -71,8 +71,8 @@ func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (da
 	return PersistedResourcesData{}, false
 }
 
-// Read the persistedResourcesData object that the LRUResources has for the given Address.
-// thread locking semantics : Read lock
+// read the persistedResourcesData object that the LRUResources has for the given Address.
+// thread locking semantics : read lock
 func (m *LRUResources) ReadAll(addr basics.Address) (ret []PersistedResourcesData) {
 	for ac, pd := range m.resources {
 		if ac.Address == addr {
@@ -83,7 +83,7 @@ func (m *LRUResources) ReadAll(addr basics.Address) (ret []PersistedResourcesDat
 }
 
 // FlushPendingWrites flushes the pending writes to the main LRUResources cache.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUResources) FlushPendingWrites() {
 	pendingEntriesCount := len(m.pendingResources)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
@@ -99,7 +99,7 @@ func (m *LRUResources) FlushPendingWrites() {
 	}
 }
 
-// WritePending Write a single persistedAccountData entry to the pendingResources buffer.
+// WritePending writes a single persistedAccountData entry to the pendingResources buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
 func (m *LRUResources) WritePending(acct PersistedResourcesData, addr basics.Address) {
@@ -110,10 +110,10 @@ func (m *LRUResources) WritePending(acct PersistedResourcesData, addr basics.Add
 }
 
 // Write a single persistedAccountData to the LRUResources cache.
-// when writing the entry, the Round number would be used to determine if it's a newer
+// when writing the entry, the round number would be used to determine if it's a newer
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUResources) Write(resData PersistedResourcesData, addr basics.Address) {
 	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: resData.Aidx}]; el != nil {
 		// already exists; is it a newer ?
@@ -130,7 +130,7 @@ func (m *LRUResources) Write(resData PersistedResourcesData, addr basics.Address
 
 // Prune adjust the current size of the LRUResources cache, by dropping the least
 // recently used entries.
-// thread locking semantics : Write lock
+// thread locking semantics : write lock
 func (m *LRUResources) Prune(newSize int) (removed int) {
 	for {
 		if len(m.resources) <= newSize {

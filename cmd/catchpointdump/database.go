@@ -20,14 +20,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/accountdb"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/accountdb"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/util/db"
 )
 
