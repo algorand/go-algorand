@@ -1,8 +1,8 @@
-name: "Build workflow"
+name: "Build Windows"
 on:
   pull_request:
 jobs:
-  build-test-windows:
+  build-windows:
     runs-on: windows-2022
     defaults:
       run:
