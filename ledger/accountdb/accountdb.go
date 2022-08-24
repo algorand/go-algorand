@@ -473,7 +473,7 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 
 // MakeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
-// It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the ResourcesDeltas.
+// It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the ResourcesDeltas.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
 func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts, baseResources LRUResources) (outResourcesDeltas CompactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
@@ -498,7 +498,7 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 		deltaRound++
 		// assets
 		for _, res := range roundDelta.GetAllAssetResources() {
-			if prev, idx := outResourcesDeltas.Get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := ResourceDelta{
 					OldResource: prev.OldResource,
@@ -536,7 +536,7 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 
 		// application
 		for _, res := range roundDelta.GetAllAppResources() {
-			if prev, idx := outResourcesDeltas.Get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := ResourceDelta{
 					OldResource: prev.OldResource,
@@ -646,9 +646,9 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 	return
 }
 
-// Get returns accountDelta by address and its position.
+// get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *CompactResourcesDeltas) Get(addr basics.Address, index basics.CreatableIndex) (ResourceDelta, int) {
+func (a *CompactResourcesDeltas) get(addr basics.Address, index basics.CreatableIndex) (ResourceDelta, int) {
 	idx, ok := a.cache[ledgercore.AccountCreatable{Address: addr, Index: index}]
 	if !ok {
 		return ResourceDelta{}, -1
@@ -691,7 +691,7 @@ func (a *CompactResourcesDeltas) updateOld(idx int, old PersistedResourcesData) 
 
 // MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
+// It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 // As an optimization, accountDeltas is passed as a slice and must not be modified.
 func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts LRUAccounts) (outAccountDeltas CompactAccountDeltas) {
 	if len(accountDeltas) == 0 {
@@ -716,7 +716,7 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
-			if prev, idx := outAccountDeltas.Get(addr); idx != -1 {
+			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				updEntry := AccountDelta{
 					OldAcct:     prev.OldAcct,
 					NAcctDeltas: prev.NAcctDeltas + 1,
@@ -792,9 +792,9 @@ func (a *CompactAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	return
 }
 
-// Get returns accountDelta by address and its position.
+// get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *CompactAccountDeltas) Get(addr basics.Address) (AccountDelta, int) {
+func (a *CompactAccountDeltas) get(addr basics.Address) (AccountDelta, int) {
 	idx, ok := a.cache[addr]
 	if !ok {
 		return AccountDelta{}, -1
@@ -854,7 +854,7 @@ func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound
 
 // MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// It counts the number of changes each account Get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
+// It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts LRUOnlineAccounts) (outAccountDeltas CompactOnlineAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
@@ -943,7 +943,7 @@ func (a *CompactOnlineAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	return
 }
 
-// Get returns accountDelta by address and its position.
+// get returns accountDelta by address and its position.
 // if no such entry -1 returned
 func (a *CompactOnlineAccountDeltas) get(addr basics.Address) (OnlineAccountDelta, int) {
 	idx, ok := a.cache[addr]
@@ -3448,7 +3448,7 @@ func AccountsNewRoundImpl(
 	// on the second loop, we will perform update/insertion. when considering inserting, we would test the pendingResourcesDeletion to see
 	// if the said entry was scheduled to be deleted. If so, we would "upgrade" the Insert operation into an update operation.
 	// on the last loop, we would delete the remainder of the resource entries that were detected in loop #1 and were not upgraded in loop #2.
-	// the rationale behind this is that addrid might Get reused, and we need to ensure
+	// the rationale behind this is that addrid might get reused, and we need to ensure
 	// that at all times there are no two representations of the same entry in the resources table.
 	// ( which would trigger a constrain violation )
 	type resourceKey struct {
@@ -3785,7 +3785,7 @@ func OnlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
 
 			// restart the loop
 			// if there are some subsequent entries, they will deleted on the next iteration
-			// if no subsequent entries, the loop will reset the state and the latest entry does not Get deleted
+			// if no subsequent entries, the loop will reset the state and the latest entry does not get deleted
 			continue
 		}
 		// delete all subsequent entries

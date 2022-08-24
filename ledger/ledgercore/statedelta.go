@@ -702,3 +702,34 @@ func (ad *AccountDeltas) GetAllAppResources() []AppResourceRecord {
 func (ad *AccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 	return ad.assetResources
 }
+
+// CompactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
+// map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
+// It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
+func CompactCreatableDeltas(creatableDeltas []map[basics.CreatableIndex]ModifiedCreatable) (outCreatableDeltas map[basics.CreatableIndex]ModifiedCreatable) {
+	if len(creatableDeltas) == 0 {
+		return
+	}
+	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
+	outCreatableDeltas = make(map[basics.CreatableIndex]ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
+	for _, roundCreatable := range creatableDeltas {
+		for creatableIdx, creatable := range roundCreatable {
+			if prev, has := outCreatableDeltas[creatableIdx]; has {
+				outCreatableDeltas[creatableIdx] = ModifiedCreatable{
+					Ctype:   creatable.Ctype,
+					Created: creatable.Created,
+					Creator: creatable.Creator,
+					Ndeltas: prev.Ndeltas + 1,
+				}
+			} else {
+				outCreatableDeltas[creatableIdx] = ModifiedCreatable{
+					Ctype:   creatable.Ctype,
+					Created: creatable.Created,
+					Creator: creatable.Creator,
+					Ndeltas: 1,
+				}
+			}
+		}
+	}
+	return
+}

@@ -1296,7 +1296,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = accountdb.MakeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
 	dcc.CompactResourcesDeltas = accountdb.MakeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
-	dcc.compactCreatableDeltas = compactCreatableDeltas(au.creatableDeltas[:offset])
+	dcc.compactCreatableDeltas = ledgercore.CompactCreatableDeltas(au.creatableDeltas[:offset])
 
 	au.accountsMu.RUnlock()
 
@@ -1498,37 +1498,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 }
 
 func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
-// map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
-// It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
-func compactCreatableDeltas(creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-	if len(creatableDeltas) == 0 {
-		return
-	}
-	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
-	for _, roundCreatable := range creatableDeltas {
-		for creatableIdx, creatable := range roundCreatable {
-			if prev, has := outCreatableDeltas[creatableIdx]; has {
-				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
-					Ctype:   creatable.Ctype,
-					Created: creatable.Created,
-					Creator: creatable.Creator,
-					Ndeltas: prev.Ndeltas + 1,
-				}
-			} else {
-				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
-					Ctype:   creatable.Ctype,
-					Created: creatable.Created,
-					Creator: creatable.Creator,
-					Ndeltas: 1,
-				}
-			}
-		}
-	}
-	return
 }
 
 // latest returns the latest round

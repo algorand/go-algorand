@@ -879,7 +879,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			}
 		}
 
-		// Get the top N accounts from the candidate set, by inserting all of
+		// get the top N accounts from the candidate set, by inserting all of
 		// the accounts into a heap and then pulling out N elements from the
 		// heap.
 		topHeap := &onlineTopHeap{

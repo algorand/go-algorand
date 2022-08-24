@@ -37,7 +37,7 @@ func (l *persistedAccountDataList) getRoot() dataListNode {
 }
 
 func (l *persistedAccountDataListNode) getNext() dataListNode {
-	// Get rid of returning nil wrapped into an interface to let i = x.getNext(); i != nil work.
+	// get rid of returning nil wrapped into an interface to let i = x.getNext(); i != nil work.
 	if l.next == nil {
 		return nil
 	}

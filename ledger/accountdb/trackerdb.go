@@ -49,7 +49,7 @@ type trackerDBSchemaInitializer struct {
 
 	// schemaVersion contains current db version
 	schemaVersion int32
-	// vacuumOnStartup controls whether the accounts database would Get vacuumed on startup.
+	// vacuumOnStartup controls whether the accounts database would get vacuumed on startup.
 	vacuumOnStartup bool
 	// newDatabase indicates if the db is newly created
 	newDatabase bool
@@ -234,10 +234,10 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 //
 // As the first step of the upgrade, the above tables are being created if they do not already exists.
 // Following that, the assetcreators table is being altered by adding a new column to it (ctype).
-// Last, in case the database was just created, it would Get initialized with the following:
-// The accountbase would Get initialized with the au.initAccounts
-// The accounttotals would Get initialized to align with the initialization account added to accountbase
-// The acctrounds would Get updated to indicate that the balance matches round 0
+// Last, in case the database was just created, it would get initialized with the following:
+// The accountbase would get initialized with the au.initAccounts
+// The accounttotals would get initialized to align with the initialization account added to accountbase
+// The acctrounds would get updated to indicate that the balance matches round 0
 //
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
