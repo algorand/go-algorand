@@ -48,10 +48,14 @@ type Writer interface {
 type labelReference struct {
 	sourceLine int
 
-	// position of the opcode start that refers to the label
+	// position of the label reference
 	position int
 
 	label string
+
+	// starting and ending positions of the opcode containing the label reference.
+	// the ending position is exclusive: follows [l, r) convention
+	offsetPosition int
 }
 
 type constReference interface {
@@ -344,8 +348,8 @@ func (ops *OpStream) recordSourceLine() {
 }
 
 // referToLabel records an opcode label reference to resolve later
-func (ops *OpStream) referToLabel(pc int, label string) {
-	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
+func (ops *OpStream) referToLabel(pc int, label string, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label, offsetPosition})
 }
 
 type refineFunc func(pgm *ProgramKnowledge, immediates []string) (StackTypes, StackTypes)
@@ -827,11 +831,35 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
-	ops.referToLabel(ops.pending.Len(), args[0])
 	ops.pending.WriteByte(spec.Opcode)
+	ops.referToLabel(ops.pending.Len(), args[0], ops.pending.Len()+3)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
+	return nil
+}
+
+func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
+	numOffsets, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+
+	if len(args)-1 != int(numOffsets) {
+		return ops.errorf("switch operation requires %d labels but contains %d", numOffsets, len(args)-1)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	var scratch [binary.MaxVarintLen64]byte
+	vlen := binary.PutUvarint(scratch[:], numOffsets)
+	ops.pending.Write(scratch[:vlen])
+	opEndPos := ops.pending.Len() + 2*int(numOffsets)
+	for i := 1; i <= int(numOffsets); i++ {
+		ops.referToLabel(ops.pending.Len(), args[i], opEndPos)
+		// zero bytes will get replaced with actual offset in resolveLabels()
+		ops.pending.WriteByte(0)
+		ops.pending.WriteByte(0)
+	}
 	return nil
 }
 
@@ -1738,19 +1766,18 @@ func (ops *OpStream) resolveLabels() {
 			reported[lr.label] = true
 			continue
 		}
-		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
-		naturalPc := lr.position + 3
-		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+
+		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
-		jump := dest - naturalPc
+		jump := dest - lr.offsetPosition
 		if jump > 0x7fff {
 			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
-		raw[lr.position+1] = uint8(jump >> 8)
-		raw[lr.position+2] = uint8(jump & 0x0ff)
+		raw[lr.position] = uint8(jump >> 8)
+		raw[lr.position+1] = uint8(jump & 0x0ff)
 	}
 	ops.pending = *bytes.NewBuffer(raw)
 	ops.sourceLine = saved

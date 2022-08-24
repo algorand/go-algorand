@@ -184,6 +184,15 @@ func opBranch() OpDetails {
 	return d
 }
 
+func opSwitch() OpDetails {
+	d := opDefault()
+	d.asm = asmSwitch
+	d.check = checkSwitch
+	d.Size = 0
+	d.Immediates = []immediate{imm("uint", immInt), imm("target ...", immLabels)}
+	return d
+}
+
 func assembler(asm asmFunc) OpDetails {
 	d := opDefault()
 	d.asm = asm
@@ -288,6 +297,7 @@ const (
 	immBytes
 	immInts
 	immBytess // "ss" not a typo.  Multiple "bytes"
+	immLabels
 )
 
 type immediate struct {
@@ -596,6 +606,9 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	// switch on value
+	{0xe0, "switchi", opSwitchInt, proto("i:"), 8, opSwitch()},
 }
 
 type sortByOpcode []OpSpec

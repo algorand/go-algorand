@@ -1985,6 +1985,28 @@ func branchTarget(cx *EvalContext) (int, error) {
 	return target, nil
 }
 
+func branchSwitch(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
+	numOffsets, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
+	if numOffsets == 0 {
+		return 0, 0, fmt.Errorf("number of offsets must be greater than 0")
+	}
+	if branchIdx >= numOffsets {
+		return 0, 0, fmt.Errorf("provided branch index %d exceeds max offset index %d", branchIdx, numOffsets-1)
+	}
+
+	pos := uint64(cx.pc+1+bytesUsed) + (2 * branchIdx)
+	offset := int16(uint16(cx.program[pos])<<8 | uint16(cx.program[pos+1]))
+	target := (cx.pc + 1 + bytesUsed) + 2*int(numOffsets) + int(offset)
+
+	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,
+	// is okay and ends normally
+	if target > len(cx.program) || target < 0 {
+		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+	}
+
+	return target, numOffsets, nil
+}
+
 // checks any branch that is {op} {int16 be offset}
 func checkBranch(cx *EvalContext) error {
 	target, err := branchTarget(cx)
@@ -2000,6 +2022,34 @@ func checkBranch(cx *EvalContext) error {
 	cx.branchTargets[target] = true
 	return nil
 }
+
+// checks any branch that is {op} {int16 be offset}
+func checkSwitch(cx *EvalContext) error {
+	// first call to get the number of offsets, 0 is a safe choice because there must exist at least one label
+	_, numOffsets, err := branchSwitch(cx, 0)
+	if err != nil {
+		return err
+	}
+
+	_, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
+	opSize := 1 + bytesUsed + 2*int(numOffsets)
+	for branchIdx := uint64(0); branchIdx < numOffsets; branchIdx++ {
+		target, _, err := branchSwitch(cx, branchIdx)
+		if err != nil {
+			return err
+		}
+
+		if target < cx.pc+opSize {
+			// If a branch goes backwards, we should have already noted that an instruction began at that location.
+			if _, ok := cx.instructionStarts[target]; !ok {
+				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+			}
+		}
+		cx.branchTargets[target] = true
+	}
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3
@@ -2032,6 +2082,18 @@ func opBz(cx *EvalContext) error {
 
 func opB(cx *EvalContext) error {
 	target, err := branchTarget(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opSwitchInt(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	branchIdx := cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+	target, _, err := branchSwitch(cx, branchIdx)
 	if err != nil {
 		return err
 	}
