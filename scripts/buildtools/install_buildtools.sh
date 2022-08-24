@@ -87,7 +87,6 @@ if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
   exit 0
 fi
 
-install_go_module golang.org/x/lint golang.org/x/lint/golint
 install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
 install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp

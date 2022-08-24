@@ -35,8 +35,10 @@ linters-settings:
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
 
 issues:
-  # use these new lint checks on code since #2574
-  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57
+  # Work our way back over time to be clean against all these
+  # checkers.  If you'd like to contribute, raise the number after ~,
+  # run the linter and dig in.
+  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57~25
 
   # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false

@@ -94,6 +94,13 @@ type CatchpointCatchupAccessorImpl struct {
 
 	// log copied from ledger
 	log logging.Logger
+
+	acctResCnt catchpointAccountResourceCounter
+
+	// expecting next account to be a specific account
+	expectingSpecificAccount bool
+	// next expected balance account, empty address if not expecting specific account
+	nextExpectedAccount basics.Address
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
@@ -299,6 +306,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
 	var normalizedAccountBalances []normalizedAccountBalance
+	var expectingMoreEntries []bool
 
 	switch progress.Version {
 	default:
@@ -317,6 +325,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
@@ -330,10 +339,81 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
+		expectingMoreEntries = make([]bool, len(balances.Balances))
+		for i, balance := range balances.Balances {
+			expectingMoreEntries[i] = balance.ExpectingMoreEntries
+		}
 	}
 
 	if err != nil {
 		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
+	}
+
+	expectingSpecificAccount := c.expectingSpecificAccount
+	nextExpectedAccount := c.nextExpectedAccount
+
+	// keep track of number of resources processed for each account
+	for i, balance := range normalizedAccountBalances {
+		// missing resources for this account
+		if expectingSpecificAccount && balance.address != nextExpectedAccount {
+			return fmt.Errorf("processStagingBalances received incomplete chunks for account %v", nextExpectedAccount)
+		}
+
+		for _, resData := range balance.resources {
+			if resData.IsApp() && resData.IsOwning() {
+				c.acctResCnt.totalAppParams++
+			}
+			if resData.IsApp() && resData.IsHolding() {
+				c.acctResCnt.totalAppLocalStates++
+			}
+			if resData.IsAsset() && resData.IsOwning() {
+				c.acctResCnt.totalAssetParams++
+			}
+			if resData.IsAsset() && resData.IsHolding() {
+				c.acctResCnt.totalAssets++
+			}
+		}
+		// check that counted resources adds up for this account
+		if !expectingMoreEntries[i] {
+			if c.acctResCnt.totalAppParams != balance.accountData.TotalAppParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d appParams for account %v, expected %d",
+					c.acctResCnt.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAppParams,
+				)
+			}
+			if c.acctResCnt.totalAppLocalStates != balance.accountData.TotalAppLocalStates {
+				return fmt.Errorf(
+					"processStagingBalances received %d appLocalStates for account %v, expected %d",
+					c.acctResCnt.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAppLocalStates,
+				)
+			}
+			if c.acctResCnt.totalAssetParams != balance.accountData.TotalAssetParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d assetParams for account %v, expected %d",
+					c.acctResCnt.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAssetParams,
+				)
+			}
+			if c.acctResCnt.totalAssets != balance.accountData.TotalAssets {
+				return fmt.Errorf(
+					"processStagingBalances received %d assets for account %v, expected %d",
+					c.acctResCnt.totalAppParams,
+					balance.address,
+					balance.accountData.TotalAssets,
+				)
+			}
+			c.acctResCnt = catchpointAccountResourceCounter{}
+			nextExpectedAccount = basics.Address{}
+			expectingSpecificAccount = false
+		} else {
+			nextExpectedAccount = balance.address
+			expectingSpecificAccount = true
+		}
 	}
 
 	wg := sync.WaitGroup{}
@@ -349,9 +429,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			start := time.Now()
-			err := writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			durBalances = time.Since(start)
 			return err
 		})
@@ -431,6 +511,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// restore "normal" synchronous mode
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
+
+	c.expectingSpecificAccount = expectingSpecificAccount
+	c.nextExpectedAccount = nextExpectedAccount
 	return err
 }
 
