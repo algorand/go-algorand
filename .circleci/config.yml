@@ -227,13 +227,17 @@ commands:
       - prepare_go
       - restore_libsodium
       - restore_cache:
+          name: Restoring Go source cache
           keys:
             - 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
+          name: Restoring Go build/test cache
           keys:
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v4-{{ arch }}-'
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_NODE_INDEX }}
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-
+            - go-cache-v5-{{ arch }}-master-
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -246,13 +250,10 @@ commands:
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
+          name: Saving Go source cache
           key: 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - << parameters.build_dir >>/go/pkg/mod
-      - save_cache:
-          key: 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-          paths:
-            - tmp/go-cache
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -325,6 +326,11 @@ commands:
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
             gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+      - save_cache:
+          name: Saving Go build/test cache
+          key: go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_NODE_INDEX }}
+          paths:
+            - tmp/go-cache
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
