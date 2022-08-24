@@ -54,13 +54,15 @@ type catchpointWriter struct {
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
-	balancesChunk        catchpointFileBalancesChunkV6
-	balancesChunkNum     uint64
+	chunk                catchpointFileChunkV6
+	chunkNum             uint64
 	numAccountsProcessed uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
 	maxResourcesPerChunk int
+	accountsDone         bool
+	kvRows               *sql.Rows
 }
 
 type encodedBalanceRecordV5 struct {
@@ -75,7 +77,7 @@ type catchpointFileBalancesChunkV5 struct {
 	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-// SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
+// SortUint64 re-export this sort, which is implemented in basics, and being used by the msgp when
 // encoding the resources map below.
 type SortUint64 = basics.SortUint64
 
@@ -90,14 +92,32 @@ type encodedBalanceRecordV6 struct {
 	ExpectingMoreEntries bool `codec:"e"`
 }
 
-type catchpointFileBalancesChunkV6 struct {
-	_struct     struct{}                 `codec:",omitempty,omitemptyarray"`
+type encodedKVRecordV6 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Adjust these to be big enough for boxes, but not directly tied to box values.
+	Key   []byte `codec:"k,allocbound=128"`   // For boxes: "bx:<10 bytes><64 byte name>"
+	Value []byte `codec:"v,allocbound=32768"` // For boxes: MaxBoxSize
+}
+
+type catchpointFileChunkV6 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Balances    []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 	numAccounts uint64
+	KVs         []encodedKVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+}
+
+func (chunk catchpointFileChunkV6) empty() bool {
+	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	totalAccounts, err := totalAccounts(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	totalKVs, err := totalKVs(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,12 +136,14 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 	}
 	tar := tar.NewWriter(compressor)
 
+	accountChunks := (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
+	kvChunks := (totalKVs + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
 	res := &catchpointWriter{
 		ctx:                  ctx,
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
-		totalChunks:          (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		totalChunks:          accountChunks + kvChunks,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
@@ -144,9 +166,9 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		return
 	}
 
-	writerRequest := make(chan catchpointFileBalancesChunkV6, 1)
+	writerRequest := make(chan catchpointFileChunkV6, 1)
 	writerResponse := make(chan error, 2)
-	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum, cw.numAccountsProcessed)
+	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum, cw.numAccountsProcessed)
 	defer func() {
 		close(writerRequest)
 		// wait for the writerResponse to close.
@@ -168,7 +190,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			return
 		}
 
-		if len(cw.balancesChunk.Balances) == 0 {
+		if cw.chunk.empty() {
 			err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
@@ -189,14 +211,18 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		default:
 		}
 
-		// write to disk.
-		if len(cw.balancesChunk.Balances) > 0 {
-			cw.numAccountsProcessed += cw.balancesChunk.numAccounts
-			cw.balancesChunkNum++
-			writerRequest <- cw.balancesChunk
+		// send the chunk to asyncWriter channel
+		if !cw.chunk.empty() {
+			cw.numAccountsProcessed += cw.chunk.numAccounts
+			cw.chunkNum++
+			writerRequest <- cw.chunk
 			if cw.numAccountsProcessed == cw.totalAccounts {
 				cw.accountsIterator.Close()
-				// if we're done, wait for the writer to complete it's writing.
+				if cw.kvRows != nil {
+					cw.kvRows.Close()
+					cw.kvRows = nil
+				}
+				// if we're done, wait for the writer to complete its writing.
 				err, opened := <-writerResponse
 				if opened {
 					// we ran into an error. wait for the channel to close before returning with the error.
@@ -206,25 +232,25 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 				// channel is closed. we're done writing and no issues detected.
 				return false, nil
 			}
-			cw.balancesChunk.Balances = nil
+			cw.chunk = catchpointFileChunkV6{}
 		}
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64, initialNumAccounts uint64) {
+func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, initialChunkNum uint64, initialNumAccounts uint64) {
 	defer close(response)
-	balancesChunkNum := initialBalancesChunkNum
+	chunkNum := initialChunkNum
 	numAccountsProcessed := initialNumAccounts
-	for bc := range balances {
-		balancesChunkNum++
-		numAccountsProcessed += bc.numAccounts
-		if len(bc.Balances) == 0 {
+	for chk := range chunks {
+		chunkNum++
+		numAccountsProcessed += chk.numAccounts
+		if chk.empty() {
 			break
 		}
 
-		encodedChunk := protocol.Encode(&bc)
+		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.%d.msgpack", balancesChunkNum, cw.totalChunks),
+			Name: fmt.Sprintf("balances.%d.%d.msgpack", chunkNum, cw.totalChunks),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})
@@ -240,7 +266,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
 			cw.biggestChunkLen = chunkLen
 		}
-		if numAccountsProcessed == cw.totalAccounts {
+		if numAccountsProcessed == cw.totalAccounts { // Quits too soon. Consider KVs
 			cw.tar.Close()
 			cw.compressor.Close()
 			cw.file.Close()
@@ -256,9 +282,51 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, cw.balancesChunk.numAccounts, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
-	return
+// readDatabaseStep places the next chunk of records into cw.chunk. It yields
+// all the account chunks first, and then the kv chunks. Even if the accounts
+// are evenly divisible by BalancesPerCatchpointFileChunk, it muts not return an
+// empty chunk between accounts and kvs.
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) error {
+	if !cw.accountsDone {
+		balances, numAccounts, err := cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+		if err != nil {
+			return err
+		}
+		if len(balances) > 0 {
+			cw.chunk = catchpointFileChunkV6{Balances: balances, numAccounts: numAccounts}
+			return nil
+		}
+		// It might seem reasonable, but do not close accountsIterator here,
+		// else it will start over on the next iteration
+		// cw.accountsIterator.Close()
+		cw.accountsDone = true
+	}
+
+	// Create the *Rows iterator JIT
+	if cw.kvRows == nil {
+		rows, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+		if err != nil {
+			return err
+		}
+		cw.kvRows = rows
+	}
+
+	kvrs := make([]encodedKVRecordV6, 0, BalancesPerCatchpointFileChunk)
+	for cw.kvRows.Next() {
+		var k []byte
+		var v []byte
+		err := cw.kvRows.Scan(&k, &v)
+		if err != nil {
+			return err
+		}
+		record := encodedKVRecordV6{Key: k, Value: v}
+		kvrs = append(kvrs, record)
+		if len(kvrs) == BalancesPerCatchpointFileChunk {
+			break
+		}
+	}
+	cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+	return nil
 }
 
 // GetSize returns the number of bytes that have been written to the file.

@@ -73,6 +73,17 @@ type IncludedTransactions struct {
 	Intra     uint64 // the index of the transaction in the block
 }
 
+// A ValueDelta shows how the Data associated with a key in the kvstore has
+// changed.  However, OldData is elided during evaluation, and only filled in at
+// the conclusion of a block during the called to roundCowState.deltas()
+type ValueDelta struct {
+	// Data stores the most recent value (nil == deleted)
+	Data *string
+
+	// OldData stores the previous vlaue (nil == didn't exist)
+	OldData *string
+}
+
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
@@ -82,7 +93,7 @@ type StateDelta struct {
 	Accts AccountDeltas
 
 	// modified kv pairs (nil == delete)
-	KvMods map[string]*string
+	KvMods map[string]ValueDelta
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]IncludedTransactions
@@ -184,7 +195,7 @@ type AccountDeltas struct {
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
-		KvMods:   make(map[string]*string),
+		KvMods:   make(map[string]ValueDelta),
 		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
 		Txleases: make(map[Txlease]basics.Round),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them

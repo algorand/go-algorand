@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"errors"
@@ -27,14 +27,15 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
 
 // BenchmarkTxnTypes compares the execution time of various txn types
 func BenchmarkTxnTypes(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	benchConsensusRange(b, 30, 0, func(b *testing.B, ver int) {
-		l := newTestLedgerWithConsensusVersion(b, genBalances, consensusByNumber[ver])
+	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion) {
+		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
 		defer l.Close()
 
 		createasa := txntest.Txn{

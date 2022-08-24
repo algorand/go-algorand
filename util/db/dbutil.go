@@ -228,6 +228,12 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 				if !ok {
 					err = fmt.Errorf("%v", r)
 				}
+
+				buf := make([]byte, 16*1024)
+				stlen := runtime.Stack(buf, false)
+				errstr := string(buf[:stlen])
+				fmt.Printf("recovered panic in atomic: %s", errstr)
+
 			}
 		}()
 

@@ -52,8 +52,8 @@ func (m *MockCatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context
 	return nil
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (m *MockCatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
+// ProcessStagingBalances deserialize the given bytes as a temporary staging balances
+func (m *MockCatchpointCatchupAccessor) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
 	return nil
 }
 
