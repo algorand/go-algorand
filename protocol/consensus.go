@@ -189,7 +189,7 @@ const ConsensusV34 = ConsensusVersion(
 
 // ConsensusV35 updates the calculation of total stake in state proofs.
 const ConsensusV35 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/285eb74fb13a76b30219426799fa82bccbc311f2",
+	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
