@@ -234,18 +234,7 @@ commands:
       - checkout
       - prepare_go
       - restore_libsodium
-      - restore_cache:
-          name: Restoring Go source cache
-          keys:
-            - 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-      - restore_cache:
-          name: Restoring Go build/test cache
-          keys:
-            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_NODE_INDEX }}
-            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}
-            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-
-            - go-cache-v5-{{ arch }}-{{ .Branch }}-
-            - go-cache-v5-{{ arch }}-master-
+      - restore_go_caches
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -257,11 +246,41 @@ commands:
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
+      - save_go_caches
+
+  save_go_caches:
+    description: Cache Go source and build caches
+    parameters:
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    steps:
       - save_cache:
-          name: Saving Go source cache
-          key: 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          name: Saving Go mod source cache
+          key: go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
           paths:
             - << parameters.build_dir >>/go/pkg/mod
+      - save_cache:
+          name: Saving Go build cache
+          key: go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
+          paths:
+            - tmp/go-cache
+
+  restore_go_caches:
+    description: Restore Go source and build caches
+    steps:
+      - restore_cache:
+          name: Restoring Go mod source cache
+          keys:
+            - go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-mod-v5-{{ .Branch }}-
+            - go-mod-v5-master-
+      - restore_cache:
+          name: Restoring Go build cache
+          keys:
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-
+            - go-cache-v5-{{ arch }}-master-
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -336,11 +355,6 @@ commands:
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
             gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
-      - save_cache:
-          name: Saving Go build/test cache
-          key: go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_NODE_INDEX }}
-          paths:
-            - tmp/go-cache
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
