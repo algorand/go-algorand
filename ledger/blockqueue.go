@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/blockdb"
 	"sync"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/blockdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"

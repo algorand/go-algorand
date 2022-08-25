@@ -320,7 +320,7 @@ func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
 	int 0
 	store 0 // save loop var
 loop:
-	int 0  // acct ndex
+	int 0  // acct index
 	byte "012345678901234567890123456789012345678901234567890123456789ABC0"
 	int 63
 	load 0 // loop var
