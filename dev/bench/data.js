@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1661444314359,
+  "lastUpdate": 1661449358590,
   "repoUrl": "https://github.com/algorand/go-algorand",
   "entries": {
     "Go Benchmark": [
@@ -16848,6 +16848,114 @@ window.BENCHMARK_DATA = {
             "value": 563.3,
             "unit": "ns/op\t         4.000 extra/op\t     111 B/op\t       5 allocs/op",
             "extra": "2159935 times\n2 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "51567+cce@users.noreply.github.com",
+            "name": "cce",
+            "username": "cce"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5a81d99aa37d10db46cf7733444127fc9cbc23cb",
+          "message": "alphanet: merge build changes and consensus params (#4431)\n\n* add vAlpha1 consensus version\r\n* increase maxMessageLength to be greater than MaxTxnBytesPerBlock\r\n* set TxPoolSize 75K and 500ms ProposalAssemblyTime default\r\n* increase VerifiedTranscationsCacheSize to match TxPoolSize\r\n* Updated Alphanet topology to match betanet.\r\n* Added alphanet genesis.json file.\r\n* DevOps: Build Alphanet (#4132)\r\n* define vAlpha2 consensus parameters\r\n* If network is alphanet, then automatically adjust the DNS Bootstrap Id to \"alphanet.algodev.network\".\r\n* Updated algonet recipe genesis files to use a alpha1 protocol.\r\n* Updated algonet recipe genesis files to use a alpha2 protocol.\r\n* Fixing rpm package name\r\n* Distribute alphanet nodes to separate hosts.\r\n* Changed machine type from m5d.4xl to d5d.4xl.\r\n* Set genesis fee sync.\r\n* Added c5d.4xlarge to host templates file.\r\n* Updated recipe for algonet.\r\n* Increated alphanet NPN nodes from 4 to 8.\r\n* Increated alphanet NPN nodes from 8 to 10.\r\n* Recipe for alphanet network extension.\r\n* update VerifiedTranscationsCacheSize to 150k\r\n* define consensus version vAlpha3 (#4305)\r\n* Removed extra Relay nodes.\r\n* set txBacklogSize to 26000\r\n* add alpha3 and alpha4 consensus versions, same as v33 and v34\r\n* set genesis.json back to vFuture for non-alphanet recipes\r\n* set genesis.json to alpha4 for alphanet recipes\r\n* extend TestConsensusUpgrades to ensure official version names\r\n* TestConsensusUpgrades: additionally assert if final upgrade is a bad name\r\n\r\nCo-authored-by: John Lee <john.lee@algorand.com>\r\nCo-authored-by: egieseke <eric_gieseke@yahoo.com>\r\nCo-authored-by: Jack Smith <jack.smith@algorand.com>\r\nCo-authored-by: Jack <87339414+algojack@users.noreply.github.com>",
+          "timestamp": "2022-08-25T13:37:28-04:00",
+          "tree_id": "11c63c05a763a59f9e6da785ffde0089ec797742",
+          "url": "https://github.com/algorand/go-algorand/commit/5a81d99aa37d10db46cf7733444127fc9cbc23cb"
+        },
+        "date": 1661449357841,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkUintMath/dup",
+            "value": 42.13,
+            "unit": "ns/op\t         1.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "28530248 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1",
+            "value": 40.23,
+            "unit": "ns/op\t         1.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "29599156 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop",
+            "value": 80.14,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "15606319 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add",
+            "value": 82.34,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "14811722 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw",
+            "value": 100.3,
+            "unit": "ns/op\t         4.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "11982201 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub",
+            "value": 83.97,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "14572792 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul",
+            "value": 81.9,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "14813660 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw",
+            "value": 100.5,
+            "unit": "ns/op\t         4.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "11990282 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div",
+            "value": 90.85,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "13388185 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw",
+            "value": 136,
+            "unit": "ns/op\t         4.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "8662952 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw",
+            "value": 921.3,
+            "unit": "ns/op\t         8.000 extra/op\t     311 B/op\t      11 allocs/op",
+            "extra": "1299124 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt",
+            "value": 95.04,
+            "unit": "ns/op\t         2.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "12556315 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp",
+            "value": 120.2,
+            "unit": "ns/op\t         3.000 extra/op\t       7 B/op\t       0 allocs/op",
+            "extra": "9965438 times\n2 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw",
+            "value": 455.7,
+            "unit": "ns/op\t         4.000 extra/op\t     111 B/op\t       5 allocs/op",
+            "extra": "2630342 times\n2 procs"
           }
         ]
       }
