@@ -144,8 +144,8 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	return m.err
 }
 
-func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
-	return nil, false, m.err
+func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, []int, error) {
+	return nil, nil, m.err
 }
 
 func (m mockNode) DetailedSimulate(txgroup []transactions.SignedTxn) (simulation.SimulationResult, error) {
