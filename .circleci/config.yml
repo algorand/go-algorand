@@ -64,6 +64,18 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
+      - build_nightly:
+          name: << matrix.platform >>_build_nightly
+          matrix: &matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+
       - test:
           name: << matrix.platform >>_test
           matrix: &matrix-default
@@ -77,14 +89,10 @@ workflows:
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
-          matrix: &matrix-nightly
-            parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - integration:
@@ -98,8 +106,8 @@ workflows:
           name: << matrix.platform >>_integration_nightly
           matrix:
             <<: *matrix-nightly
-          filters:
-            <<: *filters-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_expect:
@@ -113,8 +121,8 @@ workflows:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
             <<: *matrix-nightly
-          filters:
-            <<: *filters-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
           context: slack-secrets
 
       - e2e_subs:
@@ -128,8 +136,8 @@ workflows:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
             <<: *matrix-nightly
-          filters:
-            <<: *filters-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
           context:
             - slack-secrets
             - aws-secrets
@@ -201,7 +209,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.17.9 --force
+            choco install -y golang --version=1.17.13 --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -228,7 +236,7 @@ commands:
       - restore_libsodium
       - restore_cache:
           keys:
-            - 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
             - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
@@ -246,7 +254,7 @@ commands:
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
-          key: 'go-mod-1.17.9-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
@@ -469,6 +477,29 @@ commands:
                     scripts/travis/test_release.sh
 
 jobs:
+  build_nightly:
+    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
+    parameters:
+      platform:
+        type: string
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - generic_build
+      - persist_to_workspace:
+          root: << parameters.build_dir >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
+
   test:
     parameters:
       platform:
