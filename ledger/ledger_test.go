@@ -2344,8 +2344,8 @@ int %d // 10001000
 	require.NoError(t, err)
 
 	blk.BlockHeader.Round++
-	blk.BlockHeader.TimeStamp += 1
-	blk.TxnCounter += 1
+	blk.BlockHeader.TimeStamp++
+	blk.TxnCounter++
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
