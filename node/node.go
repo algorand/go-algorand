@@ -533,14 +533,9 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatureIndexes []int, err error) {
+func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error) {
 	simulator := simulation.MakeSimulator(node.ledger)
 	return simulator.Simulate(txgroup)
-}
-
-func (node *AlgorandFullNode) DetailedSimulate(txgroup []transactions.SignedTxn) (result simulation.SimulationResult, err error) {
-	simulator := simulation.MakeSimulator(node.ledger)
-	return simulator.DetailedSimulate(txgroup)
 }
 
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).

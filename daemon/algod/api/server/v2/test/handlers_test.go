@@ -469,7 +469,7 @@ func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTra
 	require.Equal(t, expectedCode, rec.Code)
 }
 
-func TestSimulateTransaction(t *testing.T) {
+func TestPostSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -517,7 +517,7 @@ pop                             // []
 int 1                           // [1]
 `
 
-func TestDetailedSimulateTransaction(t *testing.T) {
+func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

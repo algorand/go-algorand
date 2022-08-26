@@ -453,6 +453,26 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulationTransactionGroupResult defines model for SimulationTransactionGroupResult.
+type SimulationTransactionGroupResult struct {
+
+	// TODO
+	FailureMessage *string `json:"failure-message,omitempty"`
+
+	// TODO
+	TxnResults []SimulationTransactionResult `json:"txn-results"`
+}
+
+// SimulationTransactionResult defines model for SimulationTransactionResult.
+type SimulationTransactionResult struct {
+
+	// TODO
+	MissingSignature *bool `json:"missing-signature,omitempty"`
+
+	// Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
+	TxnResult PendingTransactionResponse `json:"txn-result"`
+}
+
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -764,11 +784,14 @@ type PostTransactionsResponse struct {
 // SimulationResponse defines model for SimulationResponse.
 type SimulationResponse struct {
 
-	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage string `json:"failure-message"`
+	// A result object for each transaction group that was simulated.
+	TxnGroups []SimulationTransactionGroupResult `json:"txn-groups"`
 
-	// \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
-	MissingSignatures bool `json:"missing-signatures"`
+	// \[v\] The version of this response object.
+	Version uint64 `json:"version"`
+
+	// \[s\] Indicates whether the simulated transactions would have succeeded during an actual submission.
+	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse defines model for StateProofResponse.

@@ -2733,6 +2733,43 @@
         }
       }
     },
+    "SimulationTransactionGroupResult": {
+      "description": "TODO",
+      "type": "object",
+      "required": [
+        "txn-results"
+      ],
+      "properties": {
+        "txn-results": {
+          "description": "TODO",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionResult"
+          }
+        },
+        "failure-message": {
+          "description": "TODO",
+          "type": "string"
+        }
+      }
+    },
+    "SimulationTransactionResult": {
+      "description": "TODO",
+      "type": "object",
+      "required": [
+        "txn-result"
+      ],
+      "properties": {
+        "txn-result": {
+          "description": "TODO",
+          "$ref": "#/definitions/PendingTransactionResponse"
+        },
+        "missing-signature": {
+          "description": "TODO",
+          "type": "boolean"
+        }
+      }
+    },
     "StateProof": {
       "description": "Represents a state proof and its corresponding message",
       "type": "object",
@@ -3301,16 +3338,24 @@
       "schema": {
         "type": "object",
         "required": [
-          "failure-message",
-          "missing-signatures"
+          "version",
+          "txn-groups",
+          "would-succeed"
         ],
         "properties": {
-          "failure-message": {
-            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-            "type": "string"
+          "version": {
+            "description": "\\[v\\] The version of this response object.",
+            "type": "integer"
           },
-          "missing-signatures": {
-            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+          "txn-groups": {
+            "description": "A result object for each transaction group that was simulated.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/SimulationTransactionGroupResult"
+            }
+          },
+          "would-succeed": {
+            "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
             "type": "boolean"
           }
         }

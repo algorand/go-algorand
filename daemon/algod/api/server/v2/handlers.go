@@ -86,8 +86,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatureIndexes []int, err error)
-	DetailedSimulate(txgroup []transactions.SignedTxn) (result simulation.SimulationResult, err error)
+	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -864,7 +863,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	}
 
 	// Simulate transaction
-	simulationResult, err := v2.Node.DetailedSimulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(txgroup)
 	if err != nil {
 		var invalidTxErr *simulation.InvalidTxGroupError
 		switch {

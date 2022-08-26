@@ -144,14 +144,9 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	return m.err
 }
 
-func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, []int, error) {
-	return nil, nil, m.err
-}
-
-func (m mockNode) DetailedSimulate(txgroup []transactions.SignedTxn) (simulation.SimulationResult, error) {
-	// use actual DetailedSimulate
+func (m mockNode) Simulate(txgroup []transactions.SignedTxn) (simulation.Result, error) {
 	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
-	return simulator.DetailedSimulate(txgroup)
+	return simulator.Simulate(txgroup)
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {

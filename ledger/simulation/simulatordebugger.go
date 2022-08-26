@@ -59,7 +59,7 @@ func (ph *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) err
 type debuggerHook struct {
 	cursorDebuggerHook
 
-	result            *SimulationResult
+	result            *Result
 	evalDeltaSnapshot transactions.EvalDelta
 }
 

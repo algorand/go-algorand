@@ -198,12 +198,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-// Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, []int, error) {
-	return s.SimulateWithDebugger(txgroup, nil)
-}
-
-func (s Simulator) SimulateWithDebugger(txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, []int, error) {
+func (s Simulator) simulateWithDebugger(txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, []int, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return nil, nil, err
@@ -221,13 +216,13 @@ func (s Simulator) SimulateWithDebugger(txgroup []transactions.SignedTxn, debugg
 	return vb, missingSignatures, err
 }
 
-func (s Simulator) DetailedSimulate(txgroup []transactions.SignedTxn) (SimulationResult, error) {
+func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	simulatorDebugger := makeDebuggerHook(txgroup)
-	_, missingSigIndexes, err := s.SimulateWithDebugger(txgroup, &simulatorDebugger)
+	_, missingSigIndexes, err := s.simulateWithDebugger(txgroup, &simulatorDebugger)
 	if err != nil {
 		// if there was a non-evaluation error, return it
 		if !errors.As(err, &EvalFailureError{}) {
-			return SimulationResult{}, err
+			return Result{}, err
 		}
 
 		// otherwise add the failure message and location to the result

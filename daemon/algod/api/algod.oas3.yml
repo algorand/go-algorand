@@ -635,18 +635,26 @@
           "application/json": {
             "schema": {
               "properties": {
-                "failure-message": {
-                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                  "type": "string"
+                "txn-groups": {
+                  "description": "A result object for each transaction group that was simulated.",
+                  "items": {
+                    "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                  },
+                  "type": "array"
                 },
-                "missing-signatures": {
-                  "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                "version": {
+                  "description": "\\[v\\] The version of this response object.",
+                  "type": "integer"
+                },
+                "would-succeed": {
+                  "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
                   "type": "boolean"
                 }
               },
               "required": [
-                "failure-message",
-                "missing-signatures"
+                "txn-groups",
+                "version",
+                "would-succeed"
               ],
               "type": "object"
             }
@@ -1633,6 +1641,42 @@
         "required": [
           "pool-error",
           "txn"
+        ],
+        "type": "object"
+      },
+      "SimulationTransactionGroupResult": {
+        "description": "TODO",
+        "properties": {
+          "failure-message": {
+            "description": "TODO",
+            "type": "string"
+          },
+          "txn-results": {
+            "description": "TODO",
+            "items": {
+              "$ref": "#/components/schemas/SimulationTransactionResult"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-results"
+        ],
+        "type": "object"
+      },
+      "SimulationTransactionResult": {
+        "description": "TODO",
+        "properties": {
+          "missing-signature": {
+            "description": "TODO",
+            "type": "boolean"
+          },
+          "txn-result": {
+            "$ref": "#/components/schemas/PendingTransactionResponse"
+          }
+        },
+        "required": [
+          "txn-result"
         ],
         "type": "object"
       },
@@ -4631,18 +4675,26 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
-                    "failure-message": {
-                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                      "type": "string"
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                      },
+                      "type": "array"
                     },
-                    "missing-signatures": {
-                      "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                    "version": {
+                      "description": "\\[v\\] The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
                       "type": "boolean"
                     }
                   },
                   "required": [
-                    "failure-message",
-                    "missing-signatures"
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
                   ],
                   "type": "object"
                 }
