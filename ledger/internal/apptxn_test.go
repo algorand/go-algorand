@@ -3310,9 +3310,14 @@ func TestReloadWithTxns(t *testing.T) {
 		dl.fullBlock() // So that the `block` opcode has a block to inspect
 
 		lookHdr := txntest.Txn{
-			Type:            "appl",
-			Sender:          addrs[0],
-			ApprovalProgram: "txn FirstValid;  int 1;  -;  block BlkTimestamp",
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `
+			  txn FirstValid
+			  int 1
+			  -
+			  block BlkTimestamp
+`,
 		}
 
 		dl.fullBlock(&lookHdr)
