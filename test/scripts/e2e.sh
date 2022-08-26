@@ -187,9 +187,9 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         # get git commit hash
-        commitHash=$(git rev-parse --short HEAD)
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
-        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${COMMIT_HASH}/${CI_E2E_FILENAME}.tar.bz2"
+        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${COMMIT_HASH}/${CI_E2E_FILENAME}/.tar.bz2"
         popd
     fi
 
