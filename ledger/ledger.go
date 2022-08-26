@@ -167,6 +167,12 @@ func OpenLedger(
 	return l, nil
 }
 
+// ReloadLedger is exported for the benefit of tests in the internal
+// package. Revisit this when we rename / restructure that thing
+func (l *Ledger) ReloadLedger() error {
+	return l.reloadLedger()
+}
+
 func (l *Ledger) reloadLedger() error {
 	// similar to the Close function, we want to start by closing the blockQ first. The
 	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,

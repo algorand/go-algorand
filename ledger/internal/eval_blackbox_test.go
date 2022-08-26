@@ -900,6 +900,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV32, // unlimited assets and apps
 	protocol.ConsensusV33, // 320 rounds
 	protocol.ConsensusV34, // AVM v7, stateproofs
+	protocol.ConsensusV35, // stateproofs stake fix
 	protocol.ConsensusFuture,
 }
 
