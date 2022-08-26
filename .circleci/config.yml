@@ -27,7 +27,7 @@ executors:
   amd64_large:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
-    resource_class: large
+    resource_class: xlarge
   arm64_medium:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
@@ -35,7 +35,7 @@ executors:
   arm64_large:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
-    resource_class: arm.large
+    resource_class: arm.xlarge
   mac_amd64_medium:
     macos:
       xcode: 13.2.1
