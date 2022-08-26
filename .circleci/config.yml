@@ -1,3 +1,7 @@
+# Disclaimer:
+# * Unless otherwise specified, assume `resource_class` and `parallelism` values are cherry-picked values that provided a reasonable enough build-duration-to-cost tradeoff at the time of choosing.
+# * There's too many variables (architecture types, CircleCI concurrency limitations, parallel pipeline runs, source code changes) to feel confident we've found a best-fit configuration.
+
 version: 2.1
 
 orbs:
@@ -38,19 +42,19 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: medium
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 13.4.1
+      xcode: 13.2.1
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1
+    resource_class: algorand/macstadium-m1-macos11
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
@@ -64,17 +68,6 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      - build:
-          name: << matrix.platform >>_build
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
-
       - build_nightly:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
@@ -89,10 +82,14 @@ workflows:
 
       - test:
           name: << matrix.platform >>_test
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -106,8 +103,8 @@ workflows:
           name: << matrix.platform >>_integration
           matrix:
             <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -121,8 +118,8 @@ workflows:
           name: << matrix.platform >>_e2e_expect
           matrix:
             <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -136,8 +133,8 @@ workflows:
           name: << matrix.platform >>_e2e_subs
           matrix:
             <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -181,6 +178,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
           context:
             - slack-secrets
             - aws-secrets
@@ -216,7 +214,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.17.9 --force
+            choco install -y golang --version=1.17.13 --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -226,21 +224,29 @@ commands:
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
 
   generic_build:
-    description: Run basic build and store in workspace for re-use by different architectures
+    description: >
+      Run basic build.
+
+      If command execution time increases _appreciably_, revisit CI topology:
+      * Historically, the command executes _quickly_ (< 3m with resource class >= medium).
+      * Consequently, it's faster to embed the command in a combined build + test workflow rather than independent build and test workflows.
     parameters:
       build_dir:
         type: string
         default: << pipeline.parameters.build_dir >>
     steps:
+      - prepare_build_dir
+      - checkout
+      - prepare_go
       - restore_libsodium
       - restore_cache:
           keys:
-            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v3-{{ arch }}-'
+            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-'
+            - 'go-cache-v4-{{ arch }}-'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -253,20 +259,13 @@ commands:
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
-          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+          key: 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
           paths:
             - tmp/go-cache
-      - persist_to_workspace:
-          root: << parameters.build_dir >>
-          paths:
-            - project
-            - go
-            - gimme
-            - .gimme
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -277,7 +276,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
+          key: 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
 
@@ -291,7 +290,7 @@ commands:
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
+            - 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 
   generic_test:
     description: Run build tests from build workspace, for re-use by diferent architectures
@@ -313,17 +312,10 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
-      - restore_cache:
-          keys:
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v3-{{ arch }}-'
       - run:
           name: Run build tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -385,8 +377,6 @@ commands:
         type: string
         default: << pipeline.parameters.result_path >>
     steps:
-      - attach_workspace:
-          at: << parameters.build_dir >>
       - run: |
           mkdir -p << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml
@@ -440,9 +430,21 @@ commands:
           at: << parameters.result_path >>
       - run:
           name: Check if all tests were run
+          # Add to --ignored-tests when a test should _not_ be considered.
+          # * For example, E2E expect test runners (e.g. `TestAlgodWithExpect`)
+          # produce partitioned subtests.
+          # * The parent tests are deliberately _not_ partitioned.  By ignoring
+          # these tests, `check_tests.py` won't provide conflicting advice to
+          # partition the parent tests.
           command: |
             cat << parameters.result_path >>/<< parameters.result_subdir >>/**/testresults.json > << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
-            python3 scripts/buildtools/check_tests.py << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json
+            python3 scripts/buildtools/check_tests.py \
+              --tests-results-filepath << parameters.result_path >>/<< parameters.result_subdir >>/combined_testresults.json \
+              --ignored-tests \
+                TestAlgodWithExpect \
+                TestAlgohWithExpect \
+                TestGoalWithExpect \
+                TestTealdbgWithExpect
       - store_artifacts:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
@@ -480,29 +482,25 @@ commands:
                     scripts/travis/test_release.sh
 
 jobs:
-  build:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
-      - generic_build
-
   build_nightly:
+    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
     parameters:
       platform:
         type: string
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     steps:
-      - prepare_build_dir
-      - checkout
-      - prepare_go
       - generic_build
+      - persist_to_workspace:
+          root: << parameters.build_dir >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
       - slack/notify: &slack-fail-event
           event: fail
           template: basic_fail_1
@@ -513,10 +511,9 @@ jobs:
         type: string
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
+    parallelism: 32
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
@@ -531,15 +528,15 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify:
-          <<: *slack-fail-event
+      - slack/notify: &slack-fail-event
+          event: fail
+          template: basic_fail_1
 
   integration:
     parameters:
@@ -547,12 +544,11 @@ jobs:
         type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 2
+    parallelism: 16
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
@@ -568,8 +564,7 @@ jobs:
     environment:
       E2E_TEST_FILTER: "GO"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration_nightly
@@ -583,12 +578,11 @@ jobs:
         type: string
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 2
+    parallelism: 10
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
@@ -604,8 +598,7 @@ jobs:
     environment:
       E2E_TEST_FILTER: "EXPECT"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
@@ -622,8 +615,7 @@ jobs:
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs
@@ -642,8 +634,7 @@ jobs:
       # one of the platforms in the matrix.
       CI_KEEP_TEMP_PLATFORM: "amd64"
     steps:
-      - prepare_build_dir
-      - prepare_go
+      - generic_build
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs_nightly
@@ -661,7 +652,7 @@ jobs:
       - run:
           no_output_timeout: 45m
           command: |
-            #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export SKIP_GO_INSTALLATION=True
@@ -676,9 +667,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout
@@ -691,9 +682,9 @@ jobs:
     resource_class: small
     working_directory: << pipeline.parameters.build_dir >>/project
     parameters:
-      platform: # platform: ["amd64", "arm64", "mac_amd64"]
+      platform:
         type: string
-      job_type: # job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+      job_type:
         type: string
     steps:
       - checkout

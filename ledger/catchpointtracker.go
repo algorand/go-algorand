@@ -1038,7 +1038,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx)
+		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, DefaultMaxResourcesPerChunk)
 		if err != nil {
 			return
 		}
@@ -1293,7 +1293,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 
 	if rootHash.IsZero() {
 		ct.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := accountdb.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := accountdb.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize, DefaultMaxResourcesPerChunk)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0

@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -96,7 +95,7 @@ var addSigCmd = &cobra.Command{
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 
 		var outData []byte
-		dec := protocol.NewDecoderBytes(data)
+		dec := protocol.NewMsgpDecoderBytes(data)
 		for {
 			var stxn transactions.SignedTxn
 			err = dec.Decode(&stxn)
@@ -240,12 +239,12 @@ var mergeSigCmd = &cobra.Command{
 
 		var txnLists [][]transactions.SignedTxn
 		for _, arg := range args {
-			data, err := ioutil.ReadFile(arg)
+			data, err := os.ReadFile(arg)
 			if err != nil {
 				reportErrorf(fileReadError, arg, err)
 			}
 
-			dec := protocol.NewDecoderBytes(data)
+			dec := protocol.NewMsgpDecoderBytes(data)
 			var txns []transactions.SignedTxn
 			for {
 				var txn transactions.SignedTxn

@@ -44,6 +44,9 @@ type EncodedBalanceRecordV6 struct {
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
 	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
 	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
+
+	// flag indicating whether there are more records for the same account coming up
+	ExpectingMoreEntries bool `codec:"e"`
 }
 
 // SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when

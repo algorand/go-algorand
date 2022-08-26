@@ -3295,3 +3295,28 @@ done:
 		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
 	})
 }
+
+// TestReloadWithTxns confirms that the ledger can be reloaded from "disk" when
+// doing so requires replaying some interesting AVM txns.
+func TestReloadWithTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 34, 0, func(t *testing.T, ver int) {
+		fmt.Printf("testConsensus %d\n", ver)
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		dl.fullBlock() // So that the `block` opcode has a block to inspect
+
+		lookHdr := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "txn FirstValid;  int 1;  -;  block BlkTimestamp",
+		}
+
+		dl.fullBlock(&lookHdr)
+
+		dl.reloadLedgers()
+	})
+}

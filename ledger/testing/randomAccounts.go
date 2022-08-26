@@ -58,7 +58,7 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
-		data.VoteLastValid = 1000
+		data.VoteLastValid = 10000
 	case 1:
 		data.Status = basics.Offline
 		data.VoteLastValid = 0

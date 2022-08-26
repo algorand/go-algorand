@@ -518,7 +518,7 @@ func (z *catchpointFileBalancesChunkV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
-	var zb0002Mask uint8 /* 2 bits */
+	var zb0002Mask uint8 /* 3 bits */
 	if len((*z).Balances) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2

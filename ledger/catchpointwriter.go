@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/accountdb"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,6 +34,10 @@ const (
 	// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
+
+	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
+	// 300000 resources * 300B/resource => roughly max 100MB per chunk
+	DefaultMaxResourcesPerChunk = 300000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -40,32 +45,39 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
-	ctx              context.Context
-	tx               *sql.Tx
-	filePath         string
-	totalAccounts    uint64
-	totalChunks      uint64
-	file             *os.File
-	tar              *tar.Writer
-	compressor       io.WriteCloser
-	balancesChunk    catchpointFileBalancesChunkV6
-	balancesChunkNum uint64
-	writtenBytes     int64
-	biggestChunkLen  uint64
-	accountsIterator accountdb.EncodedAccountsBatchIter
+	ctx                  context.Context
+	tx                   *sql.Tx
+	filePath             string
+	totalAccounts        uint64
+	totalChunks          uint64
+	file                 *os.File
+	tar                  *tar.Writer
+	compressor           io.WriteCloser
+	balancesChunk        catchpointFileBalancesChunkV6
+	balancesChunkNum     uint64
+	numAccountsProcessed uint64
+	writtenBytes         int64
+	biggestChunkLen      uint64
+	accountsIterator     accountdb.EncodedAccountsBatchIter
+	maxResourcesPerChunk int
 }
 
 type catchpointFileBalancesChunkV5 struct {
-	_struct  struct{}                           `codec:",omitempty,omitemptyarray"`
+	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
 	Balances []accountdb.EncodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
+// SortUint64 re-export this sort, which is implmented in basics, and being used by the msgp when
+// encoding the resources map below.
+type SortUint64 = basics.SortUint64
+
 type catchpointFileBalancesChunkV6 struct {
-	_struct  struct{}                           `codec:",omitempty,omitemptyarray"`
-	Balances []accountdb.EncodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	_struct     struct{}                 `codec:",omitempty,omitemptyarray"`
+	Balances    []accountdb.EncodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	numAccounts uint64
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*catchpointWriter, error) {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	totalAccounts, err := accountdb.TotalAccounts(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -86,14 +98,15 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	tar := tar.NewWriter(compressor)
 
 	res := &catchpointWriter{
-		ctx:           ctx,
-		tx:            tx,
-		filePath:      filePath,
-		totalAccounts: totalAccounts,
-		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
-		file:          file,
-		compressor:    compressor,
-		tar:           tar,
+		ctx:                  ctx,
+		tx:                   tx,
+		filePath:             filePath,
+		totalAccounts:        totalAccounts,
+		totalChunks:          (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		file:                 file,
+		compressor:           compressor,
+		tar:                  tar,
+		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
 }
@@ -114,7 +127,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 	writerRequest := make(chan catchpointFileBalancesChunkV6, 1)
 	writerResponse := make(chan error, 2)
-	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum)
+	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum, cw.numAccountsProcessed)
 	defer func() {
 		close(writerRequest)
 		// wait for the writerResponse to close.
@@ -159,9 +172,10 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 		// write to disk.
 		if len(cw.balancesChunk.Balances) > 0 {
+			cw.numAccountsProcessed += cw.balancesChunk.numAccounts
 			cw.balancesChunkNum++
 			writerRequest <- cw.balancesChunk
-			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.totalChunks {
+			if cw.numAccountsProcessed == cw.totalAccounts {
 				cw.accountsIterator.Close()
 				// if we're done, wait for the writer to complete it's writing.
 				err, opened := <-writerResponse
@@ -178,11 +192,13 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64) {
+func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunkV6, response chan error, initialBalancesChunkNum uint64, initialNumAccounts uint64) {
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
+	numAccountsProcessed := initialNumAccounts
 	for bc := range balances {
 		balancesChunkNum++
+		numAccountsProcessed += bc.numAccounts
 		if len(bc.Balances) == 0 {
 			break
 		}
@@ -205,8 +221,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
 			cw.biggestChunkLen = chunkLen
 		}
-
-		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
+		if numAccountsProcessed == cw.totalAccounts {
 			cw.tar.Close()
 			cw.compressor.Close()
 			cw.file.Close()
@@ -223,7 +238,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, cw.balancesChunk.numAccounts, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 	return
 }
 

@@ -99,3 +99,11 @@ func ParseCatchpointLabel(label string) (round basics.Round, hash crypto.Digest,
 	err = nil
 	return
 }
+
+// CatchpointAccountResourceCounter keeps track of the resources processed for the current account
+type CatchpointAccountResourceCounter struct {
+	TotalAppParams      uint64
+	TotalAppLocalStates uint64
+	TotalAssetParams    uint64
+	TotalAssets         uint64
+}

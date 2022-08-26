@@ -96,6 +96,13 @@ type CatchpointCatchupAccessorImpl struct {
 
 	// log copied from ledger
 	log logging.Logger
+
+	acctResCnt ledgercore.CatchpointAccountResourceCounter
+
+	// expecting next account to be a specific account
+	expectingSpecificAccount bool
+	// next expected balance account, empty address if not expecting specific account
+	nextExpectedAccount basics.Address
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
@@ -301,6 +308,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
 	var normalizedAccountBalances []accountdb.NormalizedAccountBalance
+	var expectingMoreEntries []bool
 
 	switch progress.Version {
 	default:
@@ -319,6 +327,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = accountdb.PrepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
@@ -332,10 +341,79 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		normalizedAccountBalances, err = accountdb.PrepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
+		expectingMoreEntries = make([]bool, len(balances.Balances))
+		for i, balance := range balances.Balances {
+			expectingMoreEntries[i] = balance.ExpectingMoreEntries
+		}
 	}
 
 	if err != nil {
 		return fmt.Errorf("processStagingBalances failed to prepare normalized balances : %w", err)
+	}
+
+	expectingSpecificAccount := c.expectingSpecificAccount
+	nextExpectedAccount := c.nextExpectedAccount
+
+	// keep track of number of resources processed for each account
+	for i, balance := range normalizedAccountBalances {
+		// missing resources for this account
+		if expectingSpecificAccount && balance.Address() != nextExpectedAccount {
+			return fmt.Errorf("processStagingBalances received incomplete chunks for account %v", nextExpectedAccount)
+		}
+
+		totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets := balance.ResourcesCount()
+
+		c.acctResCnt.TotalAppParams += totalAppParams
+		c.acctResCnt.TotalAppLocalStates += totalAppLocalStates
+		c.acctResCnt.TotalAssetParams += totalAssetParams
+		c.acctResCnt.TotalAssets += totalAssets
+
+		expectedTotalAppParams,
+		expectedTotalAppLocalStates,
+		expectedTotalAssetParams,
+		expectedTotalAssets := balance.ExpectedResourcesCount()
+
+		// check that counted resources adds up for this account
+		if !expectingMoreEntries[i] {
+			if c.acctResCnt.TotalAppParams != expectedTotalAppParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d appParams for account %v, expected %d",
+					c.acctResCnt.TotalAppParams,
+					balance.Address(),
+					expectedTotalAppParams,
+				)
+			}
+			if c.acctResCnt.TotalAppLocalStates != expectedTotalAppLocalStates {
+				return fmt.Errorf(
+					"processStagingBalances received %d appLocalStates for account %v, expected %d",
+					c.acctResCnt.TotalAppParams,
+					balance.Address(),
+					expectedTotalAppLocalStates,
+				)
+			}
+			if c.acctResCnt.TotalAssetParams != expectedTotalAssetParams {
+				return fmt.Errorf(
+					"processStagingBalances received %d assetParams for account %v, expected %d",
+					c.acctResCnt.TotalAppParams,
+					balance.Address(),
+					expectedTotalAssetParams,
+				)
+			}
+			if c.acctResCnt.TotalAssets != expectedTotalAssets {
+				return fmt.Errorf(
+					"processStagingBalances received %d assets for account %v, expected %d",
+					c.acctResCnt.TotalAppParams,
+					balance.Address(),
+					expectedTotalAssets,
+				)
+			}
+			c.acctResCnt = ledgercore.CatchpointAccountResourceCounter{}
+			nextExpectedAccount = basics.Address{}
+			expectingSpecificAccount = false
+		} else {
+			nextExpectedAccount = balance.Address()
+			expectingSpecificAccount = true
+		}
 	}
 
 	wg := sync.WaitGroup{}
@@ -351,9 +429,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			start := time.Now()
-			err := accountdb.WriteCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			err = accountdb.WriteCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			durBalances = time.Since(start)
 			return err
 		})
@@ -431,6 +509,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// restore "normal" synchronous mode
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
+
+	c.expectingSpecificAccount = expectingSpecificAccount
+	c.nextExpectedAccount = nextExpectedAccount
 	return err
 }
 

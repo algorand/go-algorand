@@ -73,7 +73,7 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 	}
 
 	// 3. Attempt msgp - array of transactions
-	dec := protocol.NewDecoderBytes(data)
+	dec := protocol.NewMsgpDecoderBytes(data)
 	for {
 		var txn transactions.SignedTxn
 		err = dec.Decode(&txn)
@@ -124,7 +124,7 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 	}
 
 	// 3. Attempt msgp - a array of records
-	dec := protocol.NewDecoderBytes(data)
+	dec := protocol.NewMsgpDecoderBytes(data)
 	for {
 		var record basics.BalanceRecord
 		err = dec.Decode(&record)

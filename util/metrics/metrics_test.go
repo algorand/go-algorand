@@ -18,7 +18,7 @@ package metrics
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -65,7 +65,7 @@ func (p *MetricTest) createListener(endpoint string) int {
 
 func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	// read the entire request:
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}

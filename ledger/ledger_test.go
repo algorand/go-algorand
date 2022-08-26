@@ -1389,6 +1389,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
@@ -1485,6 +1486,7 @@ func TestLedgerReload(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -1683,11 +1685,13 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
 	lastBlock, err := l.Block(l.Latest())
+	require.NoError(t, err)
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
@@ -2190,6 +2194,170 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 }
 
+// TestLedgerReloadTxTailHistoryAccess checks txtail has MaxTxnLife + DeeperBlockHeaderHistory block headers
+// for TEAL after applying catchpoint.
+// Simulate catchpoints by the following:
+// 1. Say ledger is at version 6 (pre shorher deltas)
+// 2. Put 2000 empty blocks
+// 3. Reload and upgrade to version 7 (that's what catchpoint apply code does)
+// 4. Add 2001 block with a txn first=1001, last=2001 and block data access for 1000
+// 5. Expect the txn to be accepted
+func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const preReleaseDBVersion = 6
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+	}()
+
+	// reset tables and re-init again, similary to the catchpount apply code
+	// since the ledger has only genesis accounts, this recreates them
+	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err0 := accountdb.AccountsReset(ctx, tx)
+		if err0 != nil {
+			return err0
+		}
+		tp := accountdb.TrackerDBParams{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DBPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
+		}
+		_, err0 = accountdb.RunMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		if err0 != nil {
+			return err0
+		}
+
+		// trackers need new tables, create in order to allow commits
+		if err0 := accountdb.AccountsCreateOnlineAccountsTable(ctx, tx); err0 != nil {
+			return err0
+		}
+		if err0 := accountdb.AccountsCreateTxTailTable(ctx, tx); err0 != nil {
+			return err0
+		}
+		if err0 := accountdb.AccountsCreateOnlineRoundParamsTable(ctx, tx); err0 != nil {
+			return err0
+		}
+		if err0 := accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
+			return err0
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	var sender basics.Address
+	var key *crypto.SignatureSecrets
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			sender = addr
+			key = initKeys[addr]
+			break
+		}
+	}
+
+	roundToTimeStamp := func(rnd int) int64 {
+		return int64(rnd*1000 + rnd)
+	}
+
+	blk := genesisInitState.Block
+	maxBlocks := 2 * int(proto.MaxTxnLife) // 2000 blocks to add
+	for i := 1; i <= maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp = roundToTimeStamp(i)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(blk.BlockHeader.Round)
+		}
+	}
+
+	// drop new tables
+	// reloadLedger should migrate db properly
+	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var resetExprs = []string{
+			`DROP TABLE IF EXISTS onlineaccounts`,
+			`DROP TABLE IF EXISTS txtail`,
+			`DROP TABLE IF EXISTS onlineroundparamstail`,
+			`DROP TABLE IF EXISTS catchpointfirststageinfo`,
+		}
+		for _, stmt := range resetExprs {
+			_, err0 := tx.ExecContext(ctx, stmt)
+			if err0 != nil {
+				return err0
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	source := fmt.Sprintf(`#pragma version 7
+int %d // 1000
+block BlkTimestamp
+int %d // 10001000
+==
+`, proto.MaxTxnLife, roundToTimeStamp(int(proto.MaxTxnLife)))
+
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+	approvalProgram := ops.Program
+
+	clearStateProgram := []byte("\x07") // empty
+	appcreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		LocalStateSchema:  basics.StateSchema{NumUint: 1},
+	}
+
+	correctTxHeader := transactions.Header{
+		Sender:      sender,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  basics.Round(proto.MaxTxnLife + 1),
+		LastValid:   basics.Round(2*proto.MaxTxnLife + 1),
+		GenesisID:   genesisInitState.Block.GenesisID(),
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	appcreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: appcreateFields,
+	}
+
+	stx := sign(map[basics.Address]*crypto.SignatureSecrets{sender: key}, appcreate)
+	txib, err := blk.EncodeSignedTxn(stx, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += 1
+	blk.TxnCounter += 1
+	blk.Payset = append(blk.Payset, txib)
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	require.NoError(t, err)
+
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+
+	latest := l.Latest()
+	require.Equal(t, basics.Round(2*proto.MaxTxnLife+1), latest)
+}
+
 // TestLedgerMigrateV6ShrinkDeltas opens a ledger + dbV6, submits a bunch of txns,
 // then migrates db and reopens ledger, and checks that the state is correct
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
@@ -2666,6 +2834,7 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -2713,6 +2882,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -2772,6 +2942,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
