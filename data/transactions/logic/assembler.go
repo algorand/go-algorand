@@ -1725,31 +1725,43 @@ func (ops *OpStream) versionedCheckMacroNames() error {
 	return nil
 }
 
-func checkMacroName(macroName string, version uint64) error {
-	otherAllowedChars := [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '#': true, '!': true, '>': true, '<': true, ':': true, '=': true, '?': true}
-	for i := 0; i < len(macroName); i++ {
-		c := macroName[i]
-		if !unicode.IsLetter(rune(c)) && !unicode.IsDigit(rune(c)) && !otherAllowedChars[c] {
-			return fmt.Errorf("%s character not allowed in macro name", string(c))
+func checkMacroName(macroName string, version uint64, labels map[string]int) error {
+	otherAllowedChars := [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '#': true, '!': true, '>': true, '<': true, '=': true, '?': true, '_': true}
+	var firstRune rune
+	var secondRune rune
+	count := 0
+	for _, r := range macroName {
+		if count == 0 {
+			firstRune = r
+		} else if count == 1 {
+			secondRune = r
 		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !otherAllowedChars[r] {
+			return fmt.Errorf("%s character not allowed in macro name", string(r))
+		}
+		count++
 	}
-	firstChar := macroName[0]
-	lastChar := macroName[len(macroName)-1]
-	if firstChar == '-' && len(macroName) > 1 {
-		if unicode.IsDigit(rune(macroName[1])) {
+	if unicode.IsDigit(firstRune) {
+		return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+	}
+	if len(macroName) > 1 && (firstRune == '-' || firstRune == '+') {
+		if unicode.IsDigit(secondRune) {
 			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
 		}
 	}
-	if lastChar == ':' {
-		return fmt.Errorf("Macro names cannot end in colons: %s", macroName)
+	if macroName == "b64" || macroName == "base64" || strings.HasPrefix(macroName, "b64(") || strings.HasPrefix(macroName, "base64(") {
+		return fmt.Errorf("Cannot use base64 notation in macro name: %s", macroName)
 	}
-	if macroName == "b64" || macroName == "base64" {
-		return fmt.Errorf("Cannot use base 64 notation in macro name: %s", macroName)
+	if macroName == "b32" || macroName == "base32" || strings.HasPrefix(macroName, "b32(") || strings.HasPrefix(macroName, "base32(") {
+		return fmt.Errorf("Cannot use base32 notation in macro name: %s", macroName)
 	}
 	_, isTxnType := txnTypeMap[macroName]
 	_, isOnCompletion := onCompletionMap[macroName]
 	if isTxnType || isOnCompletion {
 		return fmt.Errorf("Named constants cannot be used as macro names: %s", macroName)
+	}
+	if _, ok := pseudoOps[macroName]; ok {
+		return fmt.Errorf("Macro names cannot be pseudo-ops: %s", macroName)
 	}
 	if version != assemblerNoVersion {
 		if _, ok := OpsByName[version][macroName]; ok {
@@ -1758,6 +1770,9 @@ func checkMacroName(macroName string, version uint64) error {
 		if fieldNames[version][macroName] {
 			return fmt.Errorf("Macro names cannot be field names: %s", macroName)
 		}
+	}
+	if _, ok := labels[macroName]; ok {
+		return fmt.Errorf("Labels cannot be used as macro names: %s", macroName)
 	}
 	return nil
 }
@@ -1770,7 +1785,7 @@ func (ops *OpStream) define(tokens []string) error {
 		return ops.errorf("define directive requires a name and body")
 	}
 	name := tokens[1]
-	err := checkMacroName(name, ops.Version)
+	err := checkMacroName(name, ops.Version, ops.labels)
 	if err != nil {
 		return ops.error(err)
 	}
