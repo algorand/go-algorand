@@ -66,7 +66,6 @@ issues:
     - "var-naming: don't use leading k in Go names"
 
   exclude-rules:
-    # Add all linters here -- Comment this block out for testing linters
     - path: _test\.go
       linters:
         - errcheck
@@ -79,6 +78,7 @@ issues:
         # - revive
         - staticcheck
         - typecheck
+    # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:
         - errcheck
