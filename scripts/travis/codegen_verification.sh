@@ -66,11 +66,13 @@ echo "Running gofmt..."
 
 echo "Running golangci-lint..."
 #runGoLint
+set -x
 "$GOPATH"/bin/golangci-lint --version
 which golangci-lint
 "$GOPATH"/bin/golangci-lint run -c .golangci.yml
 
 "Exiting because runGoLint didn't work properly." # REMOVE
+set +x
 exit 1 # REMOVE
 
 echo "Running check_license..."
