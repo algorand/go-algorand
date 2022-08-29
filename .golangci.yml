@@ -1,6 +1,6 @@
 run:
   timeout: 5m
-  tests: false
+  tests: true
   
 linters:
   # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
@@ -67,11 +67,23 @@ issues:
 
   exclude-rules:
     # Add all linters here -- Comment this block out for testing linters
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gofmt
+        - gosimple
+        - govet
+        - ineffassign
+        - misspell
+        - nolintlint
+        # - revive
+        - staticcheck
+        - typecheck
     - path: test/linttest/lintissues\.go
       linters:
         - errcheck
         - gofmt
-        - golint
+        - revive
         - govet
         - ineffassign
         - misspell

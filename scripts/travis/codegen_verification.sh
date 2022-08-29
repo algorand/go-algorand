@@ -41,42 +41,11 @@ function runGoFmt() {
     return 1
 }
 
-function runGoLint() {
-    "$GOPATH"/bin/golangci-lint run -c .golangci.yml > temp-golangci-lint-results.txt
-    echo "golangci-lint finished with exit code: {$?}"
-    echo "START OF temp-golangci-lint-results.txt"
-    cat temp-golangci-lint-results.txt
-    echo "END OF temp-golangci-lint-results.txt"
-    warningCount=$(cat temp-golangci-lint-results.txt | wc -l | tr -d ' ')
-    echo "warningCount is: ${warningCount}"
-    if [ "${warningCount}" = "0" ]; then
-        echo "Exiting golangci-lint successfully because warningCount = 0"
-        return 0
-    fi
-    echo "Golangci-lint errored out:"
-    cat temp-golangci-lint-results.txt >&2
-    echo >&2 "golangci-lint must be clean.  Please see above list issues(${warningCount}):"
-    echo >&2 "To replicate please run: make lint"
-
-    exit 1
-}
-
 echo "Running gofmt..."
-# runGoFmt # UNCOMMENT
+runGoFmt
 
 echo "Running golangci-lint..."
-#runGoLint
-set -x
-"$GOPATH"/bin/golangci-lint run
-echo "golangci-lint exited with: $?"
-sleep 5
 "$GOPATH"/bin/golangci-lint run -c .golangci.yml
-echo "golangci-lint exited with: $?"
-sleep 5
-
-echo "Exiting because runGoLint didn't fail properly." # REMOVE
-set +x
-exit 1 # REMOVE
 
 echo "Running check_license..."
 ./scripts/check_license.sh
