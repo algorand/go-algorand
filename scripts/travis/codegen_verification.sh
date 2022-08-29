@@ -27,26 +27,6 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 make gen SHORT_PART_PERIOD=1
 
-function runGoFmt() {
-    unformatted=$(gofmt -l .)
-    [ -z "$unformatted" ] && return 0
-
-    # Some files are not gofmt'd. Print message and fail.
-
-    echo >&2 "Go files must be formatted with gofmt. Please run:"
-    for fn in $unformatted; do
-        echo >&2 "  gofmt -w $PWD/$fn"
-    done
-
-    return 1
-}
-
-echo "Running gofmt..."
-runGoFmt
-
-echo "Running golangci-lint..."
-"$GOPATH"/bin/golangci-lint run -c .golangci.yml
-
 echo "Running check_license..."
 ./scripts/check_license.sh
 
