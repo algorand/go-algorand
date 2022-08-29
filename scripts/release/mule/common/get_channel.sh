@@ -2,7 +2,10 @@
 
 NETWORK="$1"
 
-if [ "$NETWORK" = betanet ]
+if [ "$NETWORK" = alphanet ]
+then
+    echo alpha
+elif [ "$NETWORK" = betanet ]
 then
     echo beta
 elif [ "$NETWORK" = mainnet ] || [ "$NETWORK" = testnet ]

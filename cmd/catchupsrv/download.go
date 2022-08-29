@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -138,7 +138,7 @@ func fetchBlock(server string, blk uint64) error {
 		return fmt.Errorf("HTTP response: %s", resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func fetchBlock(server string, blk uint64) error {
 		panic(err)
 	}
 
-	return ioutil.WriteFile(fn, body, 0666)
+	return os.WriteFile(fn, body, 0666)
 }
 
 func fetcher(server string, wg *sync.WaitGroup) {
