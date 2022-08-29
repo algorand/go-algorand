@@ -42,7 +42,8 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golangci-lint -c .golangci.yml | wc -l | tr -d ' ')
+    "$GOPATH"/bin/golangci-lint run -c .golangci.yml > temp-golangci-lint-results.txt
+    warningCount=$(cat temp-golangci-lint-results.txt | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
