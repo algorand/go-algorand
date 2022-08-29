@@ -68,8 +68,9 @@ echo "Running golangci-lint..."
 #runGoLint
 set -x
 "$GOPATH"/bin/golangci-lint --version
-
+sleep 5
 "$GOPATH"/bin/golangci-lint run -c .golangci.yml
+sleep 30
 
 "Exiting because runGoLint didn't work properly." # REMOVE
 set +x
