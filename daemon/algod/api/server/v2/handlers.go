@@ -827,7 +827,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	if !v2.Node.Config().EnableTransactionSimulator {
-		return ctx.String(http.StatusNotFound, "/transactions/simulate was not enabled in the configuration file by setting EnableTransactionSimulator to true")
+		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableTransactionSimulator to true", ctx.Request().URL.Path))
 	}
 
 	stat, err := v2.Node.Status()

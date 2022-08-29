@@ -112,11 +112,6 @@ func txnHasNoSignature(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank()
 }
 
-type missingSigInfo struct {
-	index    int
-	authAddr basics.Address
-}
-
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
 // private key.
 var proxySigner = crypto.PrivateKey{
@@ -137,46 +132,38 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		return false, err
 	}
 
-	// Find and prep any transactions that are missing signatures. We will modify these transactions
-	// to pass signature verification, then restore the original signed transaction before
-	// evaluation.
+	// Find and prep any transactions that are missing signatures. We will modify a copy of these
+	// transactions to pass signature verification. The modifications will not affect the input
+	// txgroup slice.
 	//
 	// Note: currently we only support missing transaction signatures, but it should be possible to
 	// support unsigned delegated LogicSigs as well. A single-signature unsigned delegated LogicSig
 	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
-	missingSigs := make([]missingSigInfo, 0, len(txgroup))
+	missingSigs := make([]int, 0, len(txgroup))
+	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
 	for i, stxn := range txgroup {
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return false, errors.New("cannot simulate StateProof transactions")
 		}
 		if txnHasNoSignature(stxn) {
-			missingSigs = append(missingSigs, missingSigInfo{
-				index:    i,
-				authAddr: stxn.AuthAddr,
-			})
+			missingSigs = append(missingSigs, i)
 
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
-			// over the sender's account, so we must restore the original signed transaction before
-			// evaluation.
-			txgroup[i] = stxn.Txn.Sign(proxySignerSecrets)
+			// over the sender's account. However, this will pass validation, since the signature
+			// itself is valid.
+			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+		} else {
+			txnsToVerify[i] = stxn
 		}
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupWithDebugger(txgroup, hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithDebugger(txnsToVerify, hdr, nil, s.ledger, debugger)
 	if err != nil {
 		return false, InvalidTxGroupError{SimulatorError{err}}
-	}
-
-	// Restore any transactions that were missing signatures
-	for _, missingSig := range missingSigs {
-		txgroup[missingSig.index] = transactions.SignedTxn{
-			Txn:      txgroup[missingSig.index].Txn,
-			AuthAddr: missingSig.authAddr,
-		}
 	}
 
 	return len(missingSigs) != 0, nil
