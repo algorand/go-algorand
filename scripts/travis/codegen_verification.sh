@@ -67,12 +67,14 @@ echo "Running gofmt..."
 echo "Running golangci-lint..."
 #runGoLint
 set -x
-"$GOPATH"/bin/golangci-lint --version
+"$GOPATH"/bin/golangci-lint run
+echo "golangci-lint exited with: $?"
 sleep 5
 "$GOPATH"/bin/golangci-lint run -c .golangci.yml
-sleep 30
+echo "golangci-lint exited with: $?"
+sleep 5
 
-"Exiting because runGoLint didn't work properly." # REMOVE
+echo "Exiting because runGoLint didn't fail properly." # REMOVE
 set +x
 exit 1 # REMOVE
 
