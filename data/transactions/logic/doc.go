@@ -193,6 +193,8 @@ var opDocByName = map[string]string{
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
+
+	"switchi": "branch to target at index A. Fail if index A is out of bound.",
 }
 
 // OpDoc returns a description of the op

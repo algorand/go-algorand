@@ -1411,3 +1411,11 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 | 0 | BlkSeed | []byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 
+## switchi n target[0] ... target[n-1]
+
+- Opcode: 0xe0 {varuint length} [{int16 branch offset big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch unconditionally to TARGET[A]. Fail if A is less than `n-1`
+- Availability: v8
+
+The `switchi` instruction opcode 0xe0 is followed `n`, the number of  targets, each of which are encoded as 2 byte values indicating the position of the target label relative to the end of the `switchi` instruction. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.

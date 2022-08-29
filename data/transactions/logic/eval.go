@@ -1985,7 +1985,7 @@ func branchTarget(cx *EvalContext) (int, error) {
 	return target, nil
 }
 
-func branchSwitch(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
+func switchTarget(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
 	numOffsets, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
 	if numOffsets == 0 {
 		return 0, 0, fmt.Errorf("number of offsets must be greater than 0")
@@ -2026,7 +2026,7 @@ func checkBranch(cx *EvalContext) error {
 // checks any branch that is {op} {int16 be offset}
 func checkSwitch(cx *EvalContext) error {
 	// first call to get the number of offsets, 0 is a safe choice because there must exist at least one label
-	_, numOffsets, err := branchSwitch(cx, 0)
+	_, numOffsets, err := switchTarget(cx, 0)
 	if err != nil {
 		return err
 	}
@@ -2034,7 +2034,7 @@ func checkSwitch(cx *EvalContext) error {
 	_, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
 	opSize := 1 + bytesUsed + 2*int(numOffsets)
 	for branchIdx := uint64(0); branchIdx < numOffsets; branchIdx++ {
-		target, _, err := branchSwitch(cx, branchIdx)
+		target, _, err := switchTarget(cx, branchIdx)
 		if err != nil {
 			return err
 		}
@@ -2093,7 +2093,7 @@ func opSwitchInt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	branchIdx := cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
-	target, _, err := branchSwitch(cx, branchIdx)
+	target, _, err := switchTarget(cx, branchIdx)
 	if err != nil {
 		return err
 	}
