@@ -2730,19 +2730,19 @@ itxn_submit
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &grouper)
 	vb = endBlock(t, l, eval)
-	grouperId := vb.Block().Payset[0].ApplicationID
+	grouperID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: grouperId.Address(),
+		Receiver: grouperID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   grouperId,
+		ApplicationID:   grouperID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}, {byte(transactions.OptInOC)}},
 		ForeignApps:     []basics.AppIndex{wasterID, innerID},
 	}
@@ -2750,7 +2750,7 @@ itxn_submit
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	gAcct := lookup(t, l, grouperId.Address())
+	gAcct := lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 
 	call.ApplicationArgs = [][]byte{{byte(transactions.CloseOutOC)}, {byte(transactions.ClearStateOC)}}
@@ -2760,7 +2760,7 @@ itxn_submit
 	require.Len(t, vb.Block().Payset, 0)
 
 	// Clearstate did not take effect, since the caller tried to shortchange the CSP
-	gAcct = lookup(t, l, grouperId.Address())
+	gAcct = lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 }
 
