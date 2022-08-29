@@ -1096,6 +1096,65 @@
         }
       }
     },
+    "/v2/transactions/simulate": {
+      "post": {
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded transaction to simulate",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/transactions/params": {
       "get": {
         "produces": [
@@ -3233,6 +3292,26 @@
           "txId": {
             "description": "encoding of the transaction hash.",
             "type": "string"
+          }
+        }
+      }
+    },
+    "SimulationResponse": {
+      "description": "Result of a transaction group simulation.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
           }
         }
       }

@@ -761,6 +761,16 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
+// SimulationResponse defines model for SimulationResponse.
+type SimulationResponse struct {
+
+	// \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage string `json:"failure-message"`
+
+	// \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
+	MissingSignatures bool `json:"missing-signatures"`
+}
+
 // StateProofResponse defines model for StateProofResponse.
 type StateProofResponse StateProof
 

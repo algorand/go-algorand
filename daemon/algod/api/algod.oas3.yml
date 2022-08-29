@@ -630,6 +630,30 @@
         },
         "description": "Transaction ID of the submission."
       },
+      "SimulationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "failure-message": {
+                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                  "type": "string"
+                },
+                "missing-signatures": {
+                  "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "failure-message",
+                "missing-signatures"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Result of a transaction group simulation."
+      },
       "StateProofResponse": {
         "content": {
           "application/json": {
@@ -4584,6 +4608,95 @@
           }
         },
         "summary": "Get a specific pending transaction."
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "operationId": "SimulateTransaction",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The byte encoded transaction to simulate",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "failure-message": {
+                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                      "type": "string"
+                    },
+                    "missing-signatures": {
+                      "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "failure-message",
+                    "missing-signatures"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Result of a transaction group simulation."
+          },
+          "400": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Malformed Algorand transaction"
+          },
+          "401": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
+        "x-codegen-request-body-name": "rawtxn"
       }
     },
     "/versions": {
