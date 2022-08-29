@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -73,7 +72,7 @@ type puppet struct {
 }
 
 func puppeteer(channel, jsonFile string) error {
-	jsonBytes, err := ioutil.ReadFile(jsonFile)
+	jsonBytes, err := os.ReadFile(jsonFile)
 	if err != nil {
 		return err
 	}
@@ -367,7 +366,7 @@ func (p *puppet) runStep(recipeStep recipeStep, timeout time.Duration) error {
 				outFile: os.Stdout,
 			}
 		} else {
-			output = ioutil.Discard
+			output = io.Discard
 		}
 
 		cmd.Stderr = &errorOutput

@@ -6,8 +6,9 @@ import argparse
 
 # Arguments parsing / help menu
 parser = argparse.ArgumentParser(description='Check test results for intentionally and unintentionally skipped tests, as well as tests that ran multiple times.')
-parser.add_argument('tests_results_filepath', metavar='RESULTS_FILE',
-    help='json format test results file path (e.g. /tmp/results/testresults.json)')
+parser.add_argument('--tests-results-filepath', metavar='RESULTS_FILE',
+    help='json format test results file path (e.g. /tmp/results/testresults.json)', required=True)
+parser.add_argument('--ignored-tests', nargs = '*', help='Exact test names to ignore during verification')
 args = parser.parse_args()
 
 # Go through the given file one json object at a time, and record into a dict
@@ -17,7 +18,10 @@ with open(args.tests_results_filepath) as f:
         testDict = json.loads(jsonObj)
         if 'Test' not in testDict:
             continue
-        
+
+        if args.ignored_tests and testDict['Test'] in args.ignored_tests:
+            continue
+
         fullTestName = testDict['Package'] + ' ' + testDict['Test']
         if fullTestName not in AllTestResults:
             AllTestResults[fullTestName] = {}

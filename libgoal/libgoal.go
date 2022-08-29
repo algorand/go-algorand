@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -968,7 +967,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
-	data, err := ioutil.ReadFile(keyfile)
+	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return
 	}

@@ -58,7 +58,7 @@ func main() {
 		// prevent requests for block #2 to go through.
 		if strings.HasSuffix(request.URL.String(), "/block/2") {
 			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte("webProxy prevents block 2 from serving"))
+			response.Write([]byte("webProxy prevents block 2 from serving")) //nolint:errcheck // don't care
 			return
 		}
 		if *webProxyLogFile != "" {

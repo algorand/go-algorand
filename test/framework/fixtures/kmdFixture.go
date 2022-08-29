@@ -17,7 +17,6 @@
 package fixtures
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,14 +132,14 @@ func (f *KMDFixture) SetupWithConfig(t TestingTB, config string) {
 	// Write a token
 	f.APIToken = defaultAPIToken
 	tokenFilepath := filepath.Join(f.kmdDir, "kmd.token")
-	err := ioutil.WriteFile(tokenFilepath, f.APIToken, 0640)
+	err := os.WriteFile(tokenFilepath, f.APIToken, 0640)
 	require.NoError(f.t, err)
 
 	if config == "" {
 		config = defaultConfig
 	}
 	configFilepath := filepath.Join(f.kmdDir, "kmd_config.json")
-	err = ioutil.WriteFile(configFilepath, []byte(config), 0640)
+	err = os.WriteFile(configFilepath, []byte(config), 0640)
 	require.NoError(f.t, err)
 
 	// Start kmd
@@ -197,7 +196,7 @@ func (f *KMDFixture) MakeWalletAndHandleToken() (handleToken string, err error) 
 func (f *KMDFixture) TestConfig(cfg []byte) error {
 	// Write the passed config
 	configFilepath := filepath.Join(f.kmdDir, "kmd_config.json")
-	err := ioutil.WriteFile(configFilepath, cfg, 0640)
+	err := os.WriteFile(configFilepath, cfg, 0640)
 	if err != nil {
 		return err
 	}

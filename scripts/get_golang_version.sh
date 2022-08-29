@@ -11,7 +11,7 @@
 # Our build task-runner `mule` will refer to this script and will automatically
 # build a new image whenever the version number has been changed.
 
-BUILD=1.17.9
+BUILD=1.17.13
  MIN=1.17
  GO_MOD_SUPPORT=1.17
 

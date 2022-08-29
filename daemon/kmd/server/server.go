@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -144,12 +143,12 @@ func (ws *WalletServer) releaseFileLock() error {
 // Write out a file containing the address kmd is listening on
 func (ws *WalletServer) writeStateFiles(netAddr string) (err error) {
 	// netPath file contains path to sock file
-	err = ioutil.WriteFile(ws.netPath, []byte(netAddr), 0640)
+	err = os.WriteFile(ws.netPath, []byte(netAddr), 0640)
 	if err != nil {
 		return
 	}
 	// pidPath file contains current process ID
-	err = ioutil.WriteFile(ws.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0640)
+	err = os.WriteFile(ws.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0640)
 	return
 }
 

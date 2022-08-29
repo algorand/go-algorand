@@ -1392,7 +1392,8 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	_, oa := newAcctUpdates(t, ml, conf)
 	defer oa.close()
 
-	top, _, err := oa.TopOnlineAccounts(0, 0, 2048)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	top, _, err := oa.TopOnlineAccounts(0, 0, 2048, &proto, 0)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 }
@@ -1437,7 +1438,8 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, _, err := oa.TopOnlineAccounts(0, 0, 5)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	top, _, err := oa.TopOnlineAccounts(0, 0, 5, &proto, 0)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1475,7 +1477,8 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 			time.Sleep(2 * time.Second)
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		top, _, err = oa.TopOnlineAccounts(2, 2, 5)
+
+		top, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
 		a.NoError(err)
 
 		accountToBeUpdated := allAccts[numAccts-1]
@@ -1528,7 +1531,8 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	defer oa.close()
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
-	top, _, err := oa.TopOnlineAccounts(0, 0, 5)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	top, _, err := oa.TopOnlineAccounts(0, 0, 5, &proto, 0)
 	a.NoError(err)
 	compareTopAccounts(a, top, allAccts)
 
@@ -1571,7 +1575,8 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 			})
 			stallingTracker.postCommitReleaseLock <- struct{}{}
 		}()
-		_, _, err = oa.TopOnlineAccounts(2, 2, 5)
+
+		_, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
 		a.Error(err)
 		a.Contains(err.Error(), "is behind in-memory round")
 
@@ -1680,7 +1685,8 @@ func (m *MicroAlgoOperations) Add(x, y basics.MicroAlgos) basics.MicroAlgos {
 }
 
 func compareOnlineTotals(a *require.Assertions, oa *onlineAccounts, rnd, voteRnd basics.Round, n uint64, expectedForRnd, expectedForVoteRnd basics.MicroAlgos) []*ledgercore.OnlineAccount {
-	top, onlineTotalVoteRnd, err := oa.TopOnlineAccounts(rnd, voteRnd, n)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	top, onlineTotalVoteRnd, err := oa.TopOnlineAccounts(rnd, voteRnd, n, &proto, 0)
 	a.NoError(err)
 	a.Equal(expectedForVoteRnd, onlineTotalVoteRnd)
 	onlineTotalsRnd, err := oa.onlineTotals(rnd)
