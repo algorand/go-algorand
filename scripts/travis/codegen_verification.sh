@@ -65,7 +65,8 @@ echo "Running gofmt..."
 # runGoFmt # UNCOMMENT
 
 echo "Running golangci-lint..."
-runGoLint
+#runGoLint
+"$GOPATH"/bin/golangci-lint run -c .golangci.yml
 
 "Exiting because runGoLint didn't work properly." # REMOVE
 exit 1 # REMOVE
