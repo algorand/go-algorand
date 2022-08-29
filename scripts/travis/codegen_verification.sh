@@ -62,13 +62,13 @@ function runGoLint() {
 }
 
 echo "Running gofmt..."
-runGoFmt
+# runGoFmt # UNCOMMENT
 
 echo "Running golangci-lint..."
 runGoLint
 
 "Exiting because runGoLint didn't work properly." # REMOVE
-exit 1
+exit 1 # REMOVE
 
 echo "Running check_license..."
 ./scripts/check_license.sh
