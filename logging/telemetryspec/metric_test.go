@@ -18,11 +18,13 @@ package telemetryspec
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
@@ -46,4 +48,41 @@ func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
 	bytes, err = json.Marshal(container)
 	require.NoError(t, err)
 	require.Equal(t, []byte("{\"ProcessingTime\":[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"), bytes)
+}
+
+func TestAssembleBlockStatsString(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var abs AssembleBlockStats
+	localType := reflect.TypeOf(abs)
+
+	// Empty StateProofStats will not be reported. Set a filed to check it printed
+	abs.StateProofStats.ProvenWeight = 1
+	absString := abs.String()
+	for f := 0; f < localType.NumField(); f++ {
+		field := localType.Field(f)
+		if field.Type.Kind() == reflect.Struct && field.Type.NumField() > 1 {
+			for nf := 0; nf < field.Type.NumField(); nf++ {
+				nestedField := field.Type.Field(nf)
+				require.Contains(t, absString, nestedField.Name)
+			}
+			continue
+		}
+		require.Contains(t, absString, field.Name)
+	}
+
+	// Make sure the StateProofStats is not reported if they are empty
+	abs.StateProofStats.ProvenWeight = 0
+	absString = abs.String()
+	for f := 0; f < localType.NumField(); f++ {
+		field := localType.Field(f)
+		if field.Name == "StateProofStats" {
+			for nf := 0; nf < field.Type.NumField(); nf++ {
+				nestedField := field.Type.Field(nf)
+				require.NotContains(t, absString, nestedField.Name)
+			}
+			continue
+		}
+		require.Contains(t, absString, field.Name)
+	}
 }

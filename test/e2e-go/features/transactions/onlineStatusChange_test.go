@@ -101,6 +101,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(initiallyOnline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 	offlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
 	a.NoError(err, "should be no errors when going offline")
 
@@ -112,6 +113,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(becomesNonparticipating, curRound, curRound+transactionValidityPeriod, transactionFee)
 		a.NoError(err, "should be able to make become-nonparticipating tx")
 		wh, err = client.GetUnencryptedWalletHandle()
+		a.NoError(err)
 		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
 		a.NoError(err, "should be  no errors when marking nonparticipating")
 	}
@@ -170,6 +172,7 @@ func TestCloseOnError(t *testing.T) {
 
 	var partkeyFile string
 	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir())
+	a.NoError(err)
 
 	// make a participation key for initiallyOffline
 	_, err = client.AddParticipationKey(partkeyFile)

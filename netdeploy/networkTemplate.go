@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -107,8 +107,8 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 			return
 		}
 
-		var files []os.FileInfo
-		files, err = ioutil.ReadDir(targetFolder)
+		var files []fs.DirEntry
+		files, err = os.ReadDir(targetFolder)
 		if err != nil {
 			return
 		}
