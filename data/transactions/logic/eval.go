@@ -717,7 +717,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 					derr = hook.AfterAppEval(cx.refreshDebugState(err))
 				}
 			}
-			if err == nil {
+			if err == nil && derr != nil {
 				err = fmt.Errorf("error while running debugger AfterLogicSigEval or AfterAppEval hook: %w", derr)
 			}
 		}
