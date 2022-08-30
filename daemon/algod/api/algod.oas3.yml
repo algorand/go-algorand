@@ -310,7 +310,7 @@
             "schema": {
               "properties": {
                 "block": {
-                  "description": "Block header data.",
+                  "description": "Block data.",
                   "properties": {},
                   "type": "object",
                   "x-algorand-format": "BlockHeader"
@@ -320,6 +320,10 @@
                   "properties": {},
                   "type": "object",
                   "x-algorand-format": "BlockCertificate"
+                },
+                "hash": {
+                  "description": "Hash of current block.",
+                  "type": "string"
                 }
               },
               "required": [
@@ -2590,7 +2594,7 @@
                 "schema": {
                   "properties": {
                     "block": {
-                      "description": "Block header data.",
+                      "description": "Block data.",
                       "properties": {},
                       "type": "object",
                       "x-algorand-format": "BlockHeader"
@@ -2600,6 +2604,10 @@
                       "properties": {},
                       "type": "object",
                       "x-algorand-format": "BlockCertificate"
+                    },
+                    "hash": {
+                      "description": "Hash of current block.",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -2612,7 +2620,7 @@
                 "schema": {
                   "properties": {
                     "block": {
-                      "description": "Block header data.",
+                      "description": "Block data.",
                       "properties": {},
                       "type": "object",
                       "x-algorand-format": "BlockHeader"
@@ -2622,6 +2630,10 @@
                       "properties": {},
                       "type": "object",
                       "x-algorand-format": "BlockCertificate"
+                    },
+                    "hash": {
+                      "description": "Hash of current block.",
+                      "type": "string"
                     }
                   },
                   "required": [

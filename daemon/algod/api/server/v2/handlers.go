@@ -581,8 +581,10 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
 		Block bookkeeping.Block `codec:"block"`
+		Hash  string            `codec:"hash"`
 	}{
 		Block: block,
+		Hash:  block.Hash().String(),
 	}
 
 	data, err := encode(handle, response)

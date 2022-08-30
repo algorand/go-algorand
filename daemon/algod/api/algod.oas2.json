@@ -3000,9 +3000,13 @@
         ],
         "properties": {
           "block": {
-            "description": "Block header data.",
+            "description": "Block data.",
             "type": "object",
             "x-algorand-format": "BlockHeader"
+          },
+          "hash": {
+            "description": "Hash of current block.",
+            "type": "string"
           },
           "cert": {
             "description": "Optional certificate object. This is only included when the format is set to message pack.",

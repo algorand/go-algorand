@@ -629,11 +629,14 @@ type AssetResponse Asset
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
 
-	// Block header data.
+	// Block data.
 	Block map[string]interface{} `json:"block"`
 
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
+
+	// Hash of current block.
+	Hash *string `json:"hash,omitempty"`
 }
 
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.

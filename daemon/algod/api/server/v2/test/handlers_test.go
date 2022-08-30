@@ -227,6 +227,39 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 5)
+
+	format := "json"
+	type resp struct {
+		Block map[string]interface{} `codec:"block"`
+		Hash  string                 `codec:"hash"`
+	}
+	var response1, response2 resp
+
+	a.NoError(handler.GetBlock(ctx, 1, generatedV2.GetBlockParams{Format: &format}))
+	a.Equal(200, responseRecorder.Code)
+	body1 := responseRecorder.Body.Bytes()
+	a.NoError(json.Unmarshal(body1, &response1))
+
+	ctx, responseRecorder = newReq(t)
+
+	a.NoError(handler.GetBlock(ctx, 2, generatedV2.GetBlockParams{Format: &format}))
+	a.Equal(200, responseRecorder.Code)
+	body2 := responseRecorder.Body.Bytes()
+	a.NoError(json.Unmarshal(body2, &response2))
+
+	// assert block 2's prev points to block 1's hash
+	a.IsType(response2.Block["prev"], string(""))
+	a.Equal(response2.Block["prev"].(string), response1.Hash)
+}
+
 func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
