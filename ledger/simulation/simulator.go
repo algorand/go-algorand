@@ -61,8 +61,24 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 
 type debuggerHook struct{}
 
+func (dh *debuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	return nil
+}
+
+func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	return nil
+}
+
+func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	return nil
+}
+
+func (dh *debuggerHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	return nil
+}
+
 func makeDebuggerHook() logic.DebuggerHook {
-	return debuggerHook{}
+	return &debuggerHook{}
 }
 
 // ==============================

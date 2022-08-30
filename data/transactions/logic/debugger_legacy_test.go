@@ -95,7 +95,7 @@ func TestWebDebuggerManual(t *testing.T) {
 		tx.SelectionPK[:],
 		tx.Note,
 	}
-	ep.Debugger = &WebDebuggerHook{URL: debugURL}
+	ep.Debugger = MakeLegacyDebuggerAdaptor(&WebDebuggerHook{URL: debugURL})
 	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 }
 

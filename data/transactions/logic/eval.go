@@ -706,15 +706,19 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
+		if cx.Debugger != nil {
 			var derr error
 			if cx.runModeFlags == modeSig {
-				derr = callAfterLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+				if hook, ok := cx.Debugger.(debuggerAfterLogicSigEvalHook); ok {
+					derr = hook.AfterLogicSigEval(cx.refreshDebugState(err))
+				}
 			} else {
-				derr = callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+				if hook, ok := cx.Debugger.(debuggerAfterAppEvalHook); ok {
+					derr = hook.AfterAppEval(cx.refreshDebugState(err))
+				}
 			}
 			if err == nil {
-				err = derr
+				err = fmt.Errorf("error while running debugger AfterLogicSigEval or AfterAppEval hook: %w", derr)
 			}
 		}
 	}()
@@ -747,27 +751,37 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 		var derr error
 		if cx.runModeFlags == modeSig {
-			derr = callBeforeLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			if hook, ok := cx.Debugger.(debuggerBeforeLogicSigEvalHook); ok {
+				derr = hook.BeforeLogicSigEval(cx.refreshDebugState(err))
+			}
 		} else {
-			derr = callBeforeAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
+			if hook, ok := cx.Debugger.(debuggerBeforeAppEvalHook); ok {
+				derr = hook.BeforeAppEval(cx.refreshDebugState(err))
+			}
 		}
 		if derr != nil {
-			return false, derr
+			return false, fmt.Errorf("error while running debugger BeforeLogicSigEval or BeforeAppEval hook: %w", derr)
 		}
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			if derr := callBeforeTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-				return false, derr
+		if cx.Debugger != nil {
+			if hook, ok := cx.Debugger.(debuggerBeforeTealOpHook); ok {
+				derr := hook.BeforeTealOp(cx.refreshDebugState(err))
+				if derr != nil {
+					return false, fmt.Errorf("error while running debugger BeforeTealOp hook: %w", derr)
+				}
 			}
 		}
 
 		err = cx.step()
 
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			if derr := callAfterTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-				return false, derr
+		if cx.Debugger != nil {
+			if hook, ok := cx.Debugger.(debuggerAfterTealOpHook); ok {
+				derr := hook.AfterTealOp(cx.refreshDebugState(err))
+				if derr != nil {
+					return false, fmt.Errorf("error while running debugger AfterTealOp hook: %w", derr)
+				}
 			}
 		}
 	}
@@ -4821,18 +4835,22 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
 
-	err := callBeforeInnerTxnGroupHookIfItExists(ep.Debugger, ep)
-	if err != nil {
-		return err
+	if ep.Debugger != nil {
+		err := ep.Debugger.BeforeInnerTxnGroup(ep)
+		if err != nil {
+			return fmt.Errorf("error while running debugger BeforeInnerTxnGroup hook: %w", err)
+		}
 	}
 
 	for i := range ep.TxnGroup {
-		err := CallBeforeTxnHookIfItExists(ep.Debugger, ep, i)
-		if err != nil {
-			return err
+		if ep.Debugger != nil {
+			err := ep.Debugger.BeforeTxn(ep, i)
+			if err != nil {
+				return fmt.Errorf("error while running debugger BeforeTxn hook: %w", err)
+			}
 		}
 
-		err = cx.Ledger.Perform(i, ep)
+		err := cx.Ledger.Perform(i, ep)
 		if err != nil {
 			return err
 		}
@@ -4840,9 +4858,11 @@ func opItxnSubmit(cx *EvalContext) error {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 
-		err = CallAfterTxnHookIfItExists(ep.Debugger, ep, i)
-		if err != nil {
-			return err
+		if ep.Debugger != nil {
+			err = ep.Debugger.AfterTxn(ep, i)
+			if err != nil {
+				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
+			}
 		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
@@ -4850,9 +4870,11 @@ func opItxnSubmit(cx *EvalContext) error {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	err = callAfterInnerTxnGroupHookIfItExists(ep.Debugger, ep)
-	if err != nil {
-		return err
+	if ep.Debugger != nil {
+		err := ep.Debugger.AfterInnerTxnGroup(ep)
+		if err != nil {
+			return fmt.Errorf("error while running debugger AfterInnerTxnGroup hook: %w", err)
+		}
 	}
 
 	return nil
