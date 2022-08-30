@@ -2782,5 +2782,30 @@ func TestMacros(t *testing.T) {
 		Expect{4, "Sender is defined as a macro but is a field name..."},
 		Expect{5, "Macro names cannot be field names: Sender"},
 	)
-
+	// macro names cannot begin with digits (including negative ones)
+	testLine(t, "#define 1hello one", AssemblerMaxVersion, "Cannot begin macro name with number: 1hello")
+	testLine(t, "#define -1hello negativeOne", AssemblerMaxVersion, "Cannot begin macro name with number: -1hello")
+	// macro names can't use base64/32 notation
+	testLine(t, "#define b64 AA", AssemblerMaxVersion, "Cannot use base64 notation in macro name: b64")
+	testLine(t, "#define base64 AA", AssemblerMaxVersion, "Cannot use base64 notation in macro name: base64")
+	testLine(t, "#define b32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: b32")
+	testLine(t, "#define base32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: base32")
+	// check both kinds of pseudo-ops to make sure they can't be used as macro names
+	testLine(t, "#define int 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: int")
+	testLine(t, "#define extract 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: extract")
+	// check labels to make sure they can't be used as macro names
+	testProg(t, `
+		coolLabel:
+		int 1
+		#define coolLabel 1`,
+		AssemblerMaxVersion,
+		Expect{4, "Labels cannot be used as macro names: coolLabel"},
+	)
+	testProg(t, `
+		#define coolLabel 1
+		coolLabel:
+		int 1`,
+		AssemblerMaxVersion,
+		Expect{3, "Cannot create label with same name as macro: coolLabel"},
+	)
 }
