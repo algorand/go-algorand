@@ -193,6 +193,43 @@ func TestFrameAccess(t *testing.T) {
         ==
 `, fpVersion)
 
+	testAccepts(t, `
+        b main
+  ijsum:
+        proto 2 1
+        pushn 2					// room for sum and one "local", a loop variable
+
+        frame_dig -2			// first arg
+        frame_bury 1			// initialize loop var
+   loop:
+        // test for loop exit
+        frame_dig 1				// loop var
+        frame_dig -1			// second arg
+        >
+        bnz break
+
+        // add loop var into sum
+        frame_dig 1
+        frame_dig 0				// the sum, to be returned
+        +
+        frame_bury 0
+
+        // inc the loop var
+        frame_dig 1
+        int 1
+        +
+        frame_bury 1
+        b loop
+  break:
+        retsub					// sum is sitting in frame_dig 0, which will end up ToS
+
+  main: int 2
+        int 8
+        callsub ijsum
+        int 35					// 2+3+4+5+6+7+8
+        ==
+`, fpVersion)
+
 	testPanics(t, `
         b main
    add: proto 2 1
