@@ -992,11 +992,17 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 `acct_params` Fields:
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | AcctBalance | uint64 | Account balance in microalgos |
-| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | AcctBalance | uint64 |      | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 |      | Minimum required blance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 3 | AcctTotalAppsCreated | uint64 | v8  |  |
+| 4 | AcctTotalAppsOptedIn | uint64 | v8  |  |
+| 5 | AcctTotalAssetsCreated | uint64 | v8  |  |
+| 6 | AcctTotalAssetsOptedIn | uint64 | v8  |  |
+| 7 | AcctTotalBoxes | uint64 | v8  |  |
+| 8 | AcctTotalBoxBytes | uint64 | v8  |  |
 
 
 ## min_balance

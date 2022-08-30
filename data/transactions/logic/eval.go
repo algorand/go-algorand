@@ -4366,6 +4366,19 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Uint = account.MinBalance(cx.Proto).Raw
 	case AcctAuthAddr:
 		value.Bytes = account.AuthAddr[:]
+
+	case AcctTotalAppsCreated:
+		value.Uint = account.TotalAppParams
+	case AcctTotalAppsOptedIn:
+		value.Uint = account.TotalAppLocalStates
+	case AcctTotalAssetsCreated:
+		value.Uint = account.TotalAssetParams
+	case AcctTotalAssetsOptedIn:
+		value.Uint = account.TotalAssets
+	case AcctTotalBoxes:
+		value.Uint = account.TotalBoxes
+	case AcctTotalBoxBytes:
+		value.Uint = account.TotalBoxBytes
 	}
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, boolToSV(account.MicroAlgos.Raw > 0))

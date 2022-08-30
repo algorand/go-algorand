@@ -1205,6 +1205,21 @@ const (
 	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
 	AcctAuthAddr
 
+	// AcctTotalAppsCreated is the number of apps created by this account
+	AcctTotalAppsCreated
+	// AcctTotalAppsOptedIn is the number of apps opted in by this account
+	AcctTotalAppsOptedIn
+	// AcctTotalAssetsCreated is the number of ASAs created by this account
+	AcctTotalAssetsCreated
+	// AcctTotalAssetsOptedIn is the number of ASAs opted in by this account (always includes AcctTotalAssetsCreated)
+	AcctTotalAssetsOptedIn
+	// AcctTotalBoxes is the number of boxes created by the app this account is associated with
+	AcctTotalBoxes
+	// AcctTotalBoxBytes is the number of bytes in all boxes of this app account
+	AcctTotalBoxBytes
+
+	// AcctTotalAppSchema - consider how to expose
+
 	invalidAcctParamsField // compile-time constant for number of fields
 )
 
@@ -1237,6 +1252,14 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
 	{AcctMinBalance, StackUint64, 6, "Minimum required blance for account, in microalgos"},
 	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
+
+	// expose (most of) the components of min balance
+	{AcctTotalAppsCreated, StackUint64, 8, ""},
+	{AcctTotalAppsOptedIn, StackUint64, 8, ""},
+	{AcctTotalAssetsCreated, StackUint64, 8, ""},
+	{AcctTotalAssetsOptedIn, StackUint64, 8, ""},
+	{AcctTotalBoxes, StackUint64, 8, ""},
+	{AcctTotalBoxBytes, StackUint64, 8, ""},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

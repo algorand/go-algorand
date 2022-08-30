@@ -1499,9 +1499,15 @@
       "ArgEnum": [
         "AcctBalance",
         "AcctMinBalance",
-        "AcctAuthAddr"
+        "AcctAuthAddr",
+        "AcctTotalAppsCreated",
+        "AcctTotalAppsOptedIn",
+        "AcctTotalAssetsCreated",
+        "AcctTotalAssetsOptedIn",
+        "AcctTotalBoxes",
+        "AcctTotalBoxBytes"
       ],
-      "ArgEnumTypes": "UUB",
+      "ArgEnumTypes": "UUBUUUUUU",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "Groups": [
