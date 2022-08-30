@@ -316,8 +316,8 @@ func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
 	return nil
 }
 
-func (d *testDbgHook) BeforeAppEval(cx *logic.EvalContext) error {
-	d.log = append(d.log, "beforeAppEval")
+func (d *testDbgHook) BeforeLogicEval(cx *logic.EvalContext) error {
+	d.log = append(d.log, "beforeLogicEval")
 	return nil
 }
 
@@ -341,8 +341,8 @@ func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error 
 	return nil
 }
 
-func (d *testDbgHook) AfterAppEval(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, "afterAppEval")
+func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
+	d.log = append(d.log, "afterLogicEval")
 	return nil
 }
 
@@ -451,19 +451,19 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 
 	expectedLog := flatten([][]string{
 		{"beforeTxn",
-			"beforeAppEval"},
+			"beforeLogicEval"},
 		tealOpLogs(9),
 		{"beforeTealOp",
 			"beforeInnerTxnGroup",
 			"beforeTxn",
-			"beforeAppEval"},
+			"beforeLogicEval"},
 		tealOpLogs(1),
-		{"afterAppEval",
+		{"afterLogicEval",
 			"afterTxn",
 			"afterInnerTxnGroup",
 			"afterTealOp"},
 		tealOpLogs(1),
-		{"afterAppEval",
+		{"afterLogicEval",
 			"afterTxn"},
 	})
 	require.Equal(t, expectedLog, testDbg.log)

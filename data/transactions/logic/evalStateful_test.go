@@ -191,9 +191,9 @@ pop
 bytec_0
 log
 `
-	tests := map[runMode]string{
-		modeSig: opcodesRunModeAny + opcodesRunModeSignature,
-		modeApp: opcodesRunModeAny + opcodesRunModeApplication,
+	tests := map[RunMode]string{
+		ModeSig: opcodesRunModeAny + opcodesRunModeSignature,
+		ModeApp: opcodesRunModeAny + opcodesRunModeApplication,
 	}
 
 	ep, tx, ledger := makeSampleEnv()
@@ -228,7 +228,7 @@ log
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
 			ep.TxnGroup[0].Txn.ApplicationID = 100
 			ep.TxnGroup[0].Txn.ForeignAssets = []basics.AssetIndex{5} // needed since v4
-			if mode == modeSig {
+			if mode == ModeSig {
 				testLogic(t, test, AssemblerMaxVersion, ep)
 			} else {
 				testApp(t, test, ep)
@@ -293,9 +293,9 @@ log
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	require.Equal(t, runMode(1), modeSig)
-	require.Equal(t, runMode(2), modeApp)
-	require.True(t, modeAny == modeSig|modeApp)
+	require.Equal(t, RunMode(1), ModeSig)
+	require.Equal(t, RunMode(2), ModeApp)
+	require.True(t, modeAny == ModeSig|ModeApp)
 	require.True(t, modeAny.Any())
 }
 
@@ -2402,7 +2402,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 
 	byName := OpsByName[LogicVersion]
-	for _, m := range []runMode{modeSig, modeApp} {
+	for _, m := range []RunMode{ModeSig, ModeApp} {
 		for name, spec := range byName {
 			// Only try an opcode in its modes
 			if (m & spec.Modes) == 0 {

@@ -2662,7 +2662,7 @@ int 1`,
 	// for more complex group transaction cases
 	type failureCase struct {
 		firstTxn    transactions.SignedTxn
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 	}
 
@@ -2672,7 +2672,7 @@ int 1`,
 				Type: protocol.PaymentTx,
 			},
 		},
-		runMode:     modeApp,
+		runMode:     ModeApp,
 		errContains: "can't use gload on non-app call txn with index 0",
 	}
 
@@ -2682,7 +2682,7 @@ int 1`,
 				Type: protocol.ApplicationCallTx,
 			},
 		},
-		runMode:     modeSig,
+		runMode:     ModeSig,
 		errContains: "gload not allowed in current mode",
 	}
 
@@ -2704,7 +2704,7 @@ int 1`,
 			}
 
 			switch failCase.runMode {
-			case modeApp:
+			case ModeApp:
 				testAppBytes(t, program, ep, failCase.errContains)
 			default:
 				testLogicBytes(t, program, ep, failCase.errContains, failCase.errContains)
@@ -4794,7 +4794,7 @@ func TestLog(t *testing.T) {
 	msg := strings.Repeat("a", 400)
 	failCases := []struct {
 		source      string
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 		// For cases where assembly errors, we manually put in the bytes
 		assembledBytes []byte
@@ -4802,44 +4802,44 @@ func TestLog(t *testing.T) {
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log; `, maxLogCalls+1)),
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:         `load 0; log`,
 			errContains:    "log arg 0 wanted []byte but got uint64",
-			runMode:        modeApp,
+			runMode:        ModeApp,
 			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
 			errContains: "log not allowed in current mode",
-			runMode:     modeSig,
+			runMode:     ModeSig,
 		},
 	}
 
 	for _, c := range failCases {
 		switch c.runMode {
-		case modeApp:
+		case ModeApp:
 			if c.assembledBytes == nil {
 				testApp(t, c.source, ep, c.errContains)
 			} else {

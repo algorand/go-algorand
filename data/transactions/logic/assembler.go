@@ -1604,7 +1604,7 @@ func (ops *OpStream) assemble(text string) error {
 			if ok {
 				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 				ops.recordSourceLine()
-				if spec.Modes == modeApp {
+				if spec.Modes == ModeApp {
 					ops.HasStatefulOps = true
 				}
 				args, returns := spec.Arg.Types, spec.Return.Types
@@ -2492,7 +2492,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			return
 		}
 		op := opsByOpcode[version][program[dis.pc]]
-		if op.Modes == modeApp {
+		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {

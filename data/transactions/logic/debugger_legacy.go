@@ -78,26 +78,12 @@ func (adaptor *legacyDebuggerAdaptor) AfterInnerTxnGroup(ep *EvalParams) error {
 	return nil
 }
 
-// BeforeLogicSigEval invokes the legacy debugger's Register hook
-func (adaptor *legacyDebuggerAdaptor) BeforeLogicSigEval(cx *EvalContext) error {
-	if adaptor.innerTxnDepth > 0 {
-		// only report updates for top-level transactions
-		// this is probably unnecessary to check for LogicSigs, but might as well be safe
-		return nil
-	}
-	return adaptor.register(cx)
-}
-
-// BeforeAppEval invokes the legacy debugger's Register hook
-func (adaptor *legacyDebuggerAdaptor) BeforeAppEval(cx *EvalContext) error {
+// BeforeLogicEval invokes the legacy debugger's Register hook
+func (adaptor *legacyDebuggerAdaptor) BeforeLogicEval(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		return nil
 	}
-	return adaptor.register(cx)
-}
-
-func (adaptor *legacyDebuggerAdaptor) register(cx *EvalContext) error {
 	adaptor.debugState = makeDebugState(cx)
 	return adaptor.debugger.Register(adaptor.refreshDebugState(cx, nil))
 }
@@ -111,18 +97,8 @@ func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
 }
 
-// AfterLogicSigEval invokes the legacy debugger's Complete hook
-func (adaptor *legacyDebuggerAdaptor) AfterLogicSigEval(cx *EvalContext, evalError error) error {
-	if adaptor.innerTxnDepth > 0 {
-		// only report updates for top-level transactions
-		// this is probably unnecessary to check for LogicSigs, but might as well be safe
-		return nil
-	}
-	return adaptor.debugger.Complete(adaptor.refreshDebugState(cx, evalError))
-}
-
-// AfterAppEval invokes the legacy debugger's Complete hook
-func (adaptor *legacyDebuggerAdaptor) AfterAppEval(cx *EvalContext, evalError error) error {
+// AfterLogicEval invokes the legacy debugger's Complete hook
+func (adaptor *legacyDebuggerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		return nil
@@ -201,7 +177,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&modeSig) != 0 && fs.mode == modeApp {
+		if (cx.runModeFlags&ModeSig) != 0 && fs.mode == ModeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
@@ -212,7 +188,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & modeApp) != 0 {
+	if (cx.runModeFlags & ModeApp) != 0 {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
@@ -333,7 +309,7 @@ func (adaptor *legacyDebuggerAdaptor) refreshDebugState(cx *EvalContext, evalErr
 	ds.OpcodeBudget = cx.remainingBudget()
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & modeApp) != 0 {
+	if (cx.runModeFlags & ModeApp) != 0 {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 

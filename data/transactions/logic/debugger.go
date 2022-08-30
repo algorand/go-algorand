@@ -18,78 +18,90 @@ package logic
 
 import "fmt"
 
-// DebuggerHook functions are called by eval function during TEAL program execution
-// if provided. The interface is empty because none of the hooks are required by default.
+// DebuggerHook functions are called by eval function during TEAL program execution, if a debugger
+// is provided.
 //
-// See `debuggerBeforeTxnHook`, `debuggerBeforeAppEvalHook`, etc. for supported
-// interface methods and refer to the lifecycle graph within the DebuggerHook interface definition for
-// the sequence in which hooks are called.
+// There are 4 required debugger hook functions:
+//   - BeforeTxn
+//   - AfterTxn
+//   - BeforeInnerTxnGroup
+//   - AfterInnerTxnGroup
 //
-// NOTE: Debugger hooks are passed by reference to DebugState and EvalParams and are not copies.
-// It is therefore the responsibility of the debugger hooks to not modify the state of the structs
-// passed to them. Additionally, hooks are responsible for copying the information
-// they need from the state and params structs. No guarantees are made that the referenced state
-// will not change between hook calls. This decision was made in an effort to reduce the performance
+// And 4 optional ones:
+//   - BeforeLogicEval
+//   - AfterLogicEval
+//   - BeforeTealOp
+//   - AfterTealOp
+//
+// Refer to the lifecycle graph below for the sequence in which hooks are called.
+//
+// See the interfaces `debuggerBeforeLogicEvalHook`, `debuggerAfterLogicEvalHook`, etc. for the
+// optional hook function definitions.
+//
+// NOTE: Arguments given to Debugger hooks (EvalParams and EvalContext) are passed by reference,
+// they are not copies. It is therefore the responsibility of the debugger hooks to NOT modify the
+// state of the structs passed to them. Additionally, hooks are responsible for copying the information
+// they need from the argument structs. No guarantees are made that the referenced state will not
+// change between hook calls. This decision was made in an effort to reduce the performance
 // impact of the debugger hooks.
+//
+//   LOGICSIG LIFECYCLE GRAPH
+//   ┌─────────────────────────┐
+//   │ LogicSig Evaluation     │
+//   ├─────────────────────────┤
+//   │ > BeforeLogicEval       │
+//   │                         │
+//   │  ┌───────────────────┐  │
+//   │  │ Teal Operation    │  │
+//   │  ├───────────────────┤  │
+//   │  │ > BeforeTealOp    │  │
+//   │  │                   │  │
+//   │  │ > AfterTealOp     │  │
+//   │  └───────────────────┘  │
+//   |   ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞   │
+//   │                         │
+//   │ > AfterLogicEval        │
+//   └─────────────────────────┘
+//
+//   APP LIFECYCLE GRAPH
+//   ┌────────────────────────────────────────────────┐
+//   │ Transaction Evaluation                         │
+//   ├────────────────────────────────────────────────┤
+//   │ > BeforeTxn                                    │
+//   │                                                │
+//   │  ┌──────────────────────────────────────────┐  │
+//   │  │ ? App Call                               │  │
+//   │  ├──────────────────────────────────────────┤  │
+//   │  │ > BeforeLogicEval                        │  │
+//   │  │                                          │  │
+//   │  │  ┌────────────────────────────────────┐  │  │
+//   │  │  │ Teal Operation                     │  │  │
+//   │  │  ├────────────────────────────────────┤  │  │
+//   │  │  │ > BeforeTealOp                     │  │  │
+//   │  │  │  ┌──────────────────────────────┐  │  │  │
+//   │  │  │  │ ? Inner Transaction Group    │  │  │  │
+//   │  │  │  ├──────────────────────────────┤  │  │  │
+//   │  │  │  │ > BeforeInnerTxnGroup        │  │  │  │
+//   │  │  │  │  ┌────────────────────────┐  │  │  │  │
+//   │  │  │  │  │ Transaction Evaluation │  │  │  │  │
+//   │  │  │  │  ├────────────────────────┤  │  │  │  │
+//   │  │  │  │  │ ...                    │  │  │  │  │
+//   │  │  │  │  └────────────────────────┘  │  │  │  │
+//   │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │
+//   │  │  │  │                              │  │  │  │
+//   │  │  │  │ > AfterInnerTxnGroup         │  │  │  │
+//   │  │  │  └──────────────────────────────┘  │  │  │
+//   │  │  │ > AfterTealOp                      │  │  │
+//   │  │  └────────────────────────────────────┘  │  │
+//   │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │
+//   │  │                                          │  │
+//   │  │ > AfterLogicEval                         │  │
+//   │  └──────────────────────────────────────────┘  │
+//   |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │
+//   │                                                │
+//   │ > AfterTxn                                     │
+//   └────────────────────────────────────────────────┘
 type DebuggerHook interface {
-
-	// LOGICSIG LIFECYCLE GRAPH
-	// ┌─────────────────────────┐
-	// │ LogicSig Evaluation     │
-	// ├─────────────────────────┤
-	// │ > BeforeLogicSigEval    │
-	// │                         │
-	// │  ┌───────────────────┐  │
-	// │  │ Teal Operation    │  │
-	// │  ├───────────────────┤  │
-	// │  │ > BeforeTealOp    │  │
-	// │  │                   │  │
-	// │  │ > AfterTealOp     │  │
-	// │  └───────────────────┘  │
-	// |   ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞   │
-	// │                         │
-	// │ > AfterLogicSigEval     │
-	// └─────────────────────────┘
-
-	// APP LIFECYCLE GRAPH
-	// ┌────────────────────────────────────────────────┐
-	// │ Transaction Evaluation                         │
-	// ├────────────────────────────────────────────────┤
-	// │ > BeforeTxn                                    │
-	// │                                                │
-	// │  ┌──────────────────────────────────────────┐  │
-	// │  │ ? App Call                               │  │
-	// │  ├──────────────────────────────────────────┤  │
-	// │  │ > BeforeAppEval                          │  │
-	// │  │                                          │  │
-	// │  │  ┌────────────────────────────────────┐  │  │
-	// │  │  │ Teal Operation                     │  │  │
-	// │  │  ├────────────────────────────────────┤  │  │
-	// │  │  │ > BeforeTealOp                     │  │  │
-	// │  │  │  ┌──────────────────────────────┐  │  │  │
-	// │  │  │  │ ? Inner Transaction Group    │  │  │  │
-	// │  │  │  ├──────────────────────────────┤  │  │  │
-	// │  │  │  │ > BeforeInnerTxnGroup        │  │  │  │
-	// │  │  │  │  ┌────────────────────────┐  │  │  │  │
-	// │  │  │  │  │ Transaction Evaluation │  │  │  │  │
-	// │  │  │  │  ├────────────────────────┤  │  │  │  │
-	// │  │  │  │  │ ...                    │  │  │  │  │
-	// │  │  │  │  └────────────────────────┘  │  │  │  │
-	// │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │
-	// │  │  │  │                              │  │  │  │
-	// │  │  │  │ > AfterInnerTxnGroup         │  │  │  │
-	// │  │  │  └──────────────────────────────┘  │  │  │
-	// │  │  │ > AfterTealOp                      │  │  │
-	// │  │  └────────────────────────────────────┘  │  │
-	// │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │
-	// │  │                                          │  │
-	// │  │ > AfterAppEval                           │  │
-	// │  └──────────────────────────────────────────┘  │
-	// |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │
-	// │                                                │
-	// │ > AfterTxn                                     │
-	// └────────────────────────────────────────────────┘
-
 	// BeforeTxn is called before a transaction is executed.
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
 	BeforeTxn(ep *EvalParams, groupIndex int) error
@@ -107,78 +119,42 @@ type DebuggerHook interface {
 	AfterInnerTxnGroup(ep *EvalParams) error
 }
 
-type debuggerBeforeAppEvalHook interface {
-	// BeforeAppEval is called before the app is evaluated.
-	// This hook is similar to BeforeTxn, but includes debug state information instead of eval params.
-	BeforeAppEval(cx *EvalContext) error
+type debuggerBeforeLogicEvalHook interface {
+	// BeforeLogicEval is called before an app or LogicSig is evaluated.
+	BeforeLogicEval(cx *EvalContext) error
 }
 
-type debuggerAfterAppEvalHook interface {
-	// AfterAppEval is called after the app has been evaluated.
-	AfterAppEval(cx *EvalContext, evalError error) error
-}
-
-type debuggerBeforeLogicSigEvalHook interface {
-	// BeforeLogicSigEval is called before the LogicSig is evaluated.
-	// This hook is similar to BeforeAppEval, but indicates the start of a LogicSig's evaluation instead.
-	BeforeLogicSigEval(cx *EvalContext) error
-}
-
-type debuggerAfterLogicSigEvalHook interface {
-	// AfterLogicSigEval is called after the LogicSig is evaluated.
-	AfterLogicSigEval(cx *EvalContext, evalError error) error
-}
-
-func callBeforeEvalHookIfItExists(dh DebuggerHook, cx *EvalContext) error {
+func callBeforeLogicHookIfItExists(dh DebuggerHook, cx *EvalContext) error {
 	if dh == nil {
 		return nil
 	}
-	if cx.runModeFlags == modeSig {
-		hook, ok := dh.(debuggerBeforeLogicSigEvalHook)
-		if !ok {
-			return nil
-		}
-		err := hook.BeforeLogicSigEval(cx)
-		if err != nil {
-			return fmt.Errorf("error while running debugger BeforeLogicSigEval hook: %w", err)
-		}
-		return nil
-	}
-
-	hook, ok := dh.(debuggerBeforeAppEvalHook)
+	hook, ok := dh.(debuggerBeforeLogicEvalHook)
 	if !ok {
 		return nil
 	}
-	err := hook.BeforeAppEval(cx)
+	err := hook.BeforeLogicEval(cx)
 	if err != nil {
-		return fmt.Errorf("error while running debugger BeforeAppEval hook: %w", err)
+		return fmt.Errorf("error while running debugger BeforeLogicEval hook: %w", err)
 	}
 	return nil
 }
 
-func callAfterEvalHookIfItExists(dh DebuggerHook, cx *EvalContext, evalError error) error {
+type debuggerAfterLogicEvalHook interface {
+	// AfterLogicEval is called after an app or LogicSig is evaluated.
+	AfterLogicEval(cx *EvalContext, evalError error) error
+}
+
+func callAfterLogicHookIfItExists(dh DebuggerHook, cx *EvalContext, evalError error) error {
 	if dh == nil {
 		return nil
 	}
-	if cx.runModeFlags == modeSig {
-		hook, ok := dh.(debuggerAfterLogicSigEvalHook)
-		if !ok {
-			return nil
-		}
-		err := hook.AfterLogicSigEval(cx, evalError)
-		if err != nil {
-			return fmt.Errorf("error while running debugger AfterLogicSigEval hook: %w", err)
-		}
-		return nil
-	}
-
-	hook, ok := dh.(debuggerAfterAppEvalHook)
+	hook, ok := dh.(debuggerAfterLogicEvalHook)
 	if !ok {
 		return nil
 	}
-	err := hook.AfterAppEval(cx, evalError)
+	err := hook.AfterLogicEval(cx, evalError)
 	if err != nil {
-		return fmt.Errorf("error while running debugger AfterAppEval hook: %w", err)
+		return fmt.Errorf("error while running debugger AfterLogicEval hook: %w", err)
 	}
 	return nil
 }

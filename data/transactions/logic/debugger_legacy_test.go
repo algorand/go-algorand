@@ -114,7 +114,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	t.Run("logic", func(t *testing.T) {
+	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
 		testDbg := testLegacyDbgHook{}
 		ep := defaultEvalParams(nil)
