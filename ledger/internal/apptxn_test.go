@@ -2479,7 +2479,7 @@ func TestInnerClearState(t *testing.T) {
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &inner)
 	vb := endBlock(t, l, eval)
-	innerId := vb.Block().Payset[0].ApplicationID
+	innerID := vb.Block().Payset[0].ApplicationID
 
 	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
 	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
@@ -2498,33 +2498,33 @@ itxn_begin
  itxn_field OnCompletion
 itxn_submit
 `),
-		ForeignApps: []basics.AppIndex{innerId},
+		ForeignApps: []basics.AppIndex{innerID},
 	}
 
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &outer)
 	vb = endBlock(t, l, eval)
-	outerId := vb.Block().Payset[0].ApplicationID
+	outerID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: outerId.Address(),
+		Receiver: outerID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   outerId,
+		ApplicationID:   outerID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{innerId},
+		ForeignApps:     []basics.AppIndex{innerID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	outerAcct := lookup(t, l, outerId.Address())
+	outerAcct := lookup(t, l, outerID.Address())
 	require.Len(t, outerAcct.AppLocalStates, 1)
 	require.Equal(t, outerAcct.TotalAppSchema, basics.StateSchema{
 		NumUint:      2,
@@ -2536,7 +2536,7 @@ itxn_submit
 	txn(t, l, eval, &call)
 	endBlock(t, l, eval)
 
-	outerAcct = lookup(t, l, outerId.Address())
+	outerAcct = lookup(t, l, outerID.Address())
 	require.Empty(t, outerAcct.AppLocalStates)
 	require.Empty(t, outerAcct.TotalAppSchema)
 
@@ -2567,7 +2567,7 @@ b top
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &badCallee)
 	vb := endBlock(t, l, eval)
-	badId := vb.Block().Payset[0].ApplicationID
+	badID := vb.Block().Payset[0].ApplicationID
 
 	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
 	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
@@ -2603,33 +2603,33 @@ bnz skip						// Don't do budget checking during optin
  assert
 skip:
 `),
-		ForeignApps: []basics.AppIndex{badId},
+		ForeignApps: []basics.AppIndex{badID},
 	}
 
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &outer)
 	vb = endBlock(t, l, eval)
-	outerId := vb.Block().Payset[0].ApplicationID
+	outerID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: outerId.Address(),
+		Receiver: outerID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   outerId,
+		ApplicationID:   outerID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{badId},
+		ForeignApps:     []basics.AppIndex{badID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	outerAcct := lookup(t, l, outerId.Address())
+	outerAcct := lookup(t, l, outerID.Address())
 	require.Len(t, outerAcct.AppLocalStates, 1)
 
 	// When doing a clear state, `call` checks that budget wasn't stolen
@@ -2639,7 +2639,7 @@ skip:
 	endBlock(t, l, eval)
 
 	// Clearstate took effect, despite failure from infinite loop
-	outerAcct = lookup(t, l, outerId.Address())
+	outerAcct = lookup(t, l, outerID.Address())
 	require.Empty(t, outerAcct.AppLocalStates)
 }
 
@@ -2697,8 +2697,8 @@ log
 	eval := nextBlock(t, l)
 	txns(t, l, eval, &inner, &waster)
 	vb := endBlock(t, l, eval)
-	innerId := vb.Block().Payset[0].ApplicationID
-	wasterId := vb.Block().Payset[1].ApplicationID
+	innerID := vb.Block().Payset[0].ApplicationID
+	wasterID := vb.Block().Payset[1].ApplicationID
 
 	// Grouper is a simple app that will invoke the given apps (in
 	// ForeignApps[0,1]) as a group, with the given OnCompletion (in
@@ -2730,27 +2730,27 @@ itxn_submit
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &grouper)
 	vb = endBlock(t, l, eval)
-	grouperId := vb.Block().Payset[0].ApplicationID
+	grouperID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: grouperId.Address(),
+		Receiver: grouperID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   grouperId,
+		ApplicationID:   grouperID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}, {byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{wasterId, innerId},
+		ForeignApps:     []basics.AppIndex{wasterID, innerID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	gAcct := lookup(t, l, grouperId.Address())
+	gAcct := lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 
 	call.ApplicationArgs = [][]byte{{byte(transactions.CloseOutOC)}, {byte(transactions.ClearStateOC)}}
@@ -2760,7 +2760,7 @@ itxn_submit
 	require.Len(t, vb.Block().Payset, 0)
 
 	// Clearstate did not take effect, since the caller tried to shortchange the CSP
-	gAcct = lookup(t, l, grouperId.Address())
+	gAcct = lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 }
 
@@ -3293,5 +3293,30 @@ done:
 		vb = dl.fullBlock(&fund0, &fund1, &callA, &callB)
 
 		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
+	})
+}
+
+// TestReloadWithTxns confirms that the ledger can be reloaded from "disk" when
+// doing so requires replaying some interesting AVM txns.
+func TestReloadWithTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 34, 0, func(t *testing.T, ver int) {
+		fmt.Printf("testConsensus %d\n", ver)
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		dl.fullBlock() // So that the `block` opcode has a block to inspect
+
+		lookHdr := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "txn FirstValid;  int 1;  -;  block BlkTimestamp",
+		}
+
+		dl.fullBlock(&lookHdr)
+
+		dl.reloadLedgers()
 	})
 }

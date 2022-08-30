@@ -125,8 +125,9 @@ func main() {
 	var publicKeys []basics.Address
 	addKey := func(mnemonic string) {
 		seed := loadMnemonic(mnemonic)
-		privateKeys = append(privateKeys, crypto.GenerateSignatureSecrets(seed))
-		publicKeys = append(publicKeys, basics.Address(privateKeys[0].SignatureVerifier))
+		secrets := crypto.GenerateSignatureSecrets(seed)
+		privateKeys = append(privateKeys, secrets)
+		publicKeys = append(publicKeys, basics.Address(secrets.SignatureVerifier))
 	}
 	if cfg.AccountMnemonic != "" { // one mnemonic provided
 		addKey(cfg.AccountMnemonic)
