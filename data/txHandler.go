@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -66,6 +67,9 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
+
+	txRequests map[transactions.Txid]*requestedTxn
+	// TODO: keep a prio-heap of open requests sorted by expiration
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -99,7 +103,18 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
-		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
+		{
+			Tag:            protocol.TxnTag,
+			MessageHandler: network.HandlerFunc(handler.processIncomingTxn),
+		},
+		{
+			Tag:            protocol.TxnAdvertiseTag,
+			MessageHandler: network.HandlerFunc(handler.processIncomingTxnAdvertise),
+		},
+		{
+			Tag:            protocol.TxnRequestTag,
+			MessageHandler: network.HandlerFunc(handler.processIncomingTxnRequest),
+		},
 	})
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
@@ -194,6 +209,68 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
+const peerTxn2Key = "tx3"
+
+type tx3Data struct {
+	enabled bool
+}
+
+func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
+	txpd := net.GetPeerData(npeer, peerTxn2Key)
+	if txpd != nil {
+		out, ok := txpd.(*tx3Data)
+		if ok {
+			return out
+		}
+	}
+	peer, ok := npeer.(network.UnicastPeer)
+	if ok {
+		version := peer.Version()
+		if version == "3" {
+			// TODO: this logic needs to change before network.ProtocolVersion advances beyond "3"
+			out = &tx3Data{enabled: true}
+			net.SetPeerData(npeer, peerTxn2Key, out)
+			return out
+		}
+	}
+	out = &tx3Data{enabled: false}
+	net.SetPeerData(npeer, peerTxn2Key, out)
+	return out
+}
+
+func (handler *TxHandler) smarterTxnBroadcast(wi *txBacklogMsg) {
+	verifiedTxGroup := wi.unverifiedTxGroup
+	net := wi.rawmsg.Net
+	peers := net.GetPeers()
+	var blob []byte
+	var id transactions.Txid
+	var txid []byte
+	for _, npeer := range peers {
+		if npeer == wi.rawmsg.Sender {
+			continue
+		}
+		peer, ok := npeer.(network.UnicastPeer)
+		if !ok {
+			continue
+		}
+		txpd := net.GetPeerData(npeer, peerTxn2Key)
+		if txpd == nil {
+			// not a tx3 protocol client, broadcast txn
+			if blob == nil {
+				blob = reencode(verifiedTxGroup)
+			}
+			peer.Unicast(handler.ctx, blob, protocol.TxnTag)
+		} else {
+			// tx3 protocol
+			if txid == nil {
+				id = verifiedTxGroup[0].ID()
+				txid = id[:]
+			}
+			peer.Unicast(handler.ctx, txid, protocol.TxnAdvertiseTag)
+		}
+	}
+}
+
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	tx := arg.(*txBacklogMsg)
@@ -258,6 +335,70 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
+}
+
+type requestedTxn struct {
+	//txid          transactions.Txid
+	requestedFrom []network.Peer
+	advertisedBy  []network.Peer
+	requestedAt   time.Time
+}
+
+// we can be lazy responding to advertise offers
+const requestExpiration = time.Millisecond * 900
+
+func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	var txid transactions.Txid
+	copy(txid[:], rawmsg.Data)
+	_, _, found := handler.txPool.Lookup(txid)
+	if found {
+		// we already have it, nothing to do
+		return network.OutgoingMessage{}
+	}
+	req, ok := handler.txRequests[txid]
+	if !ok {
+		req = new(requestedTxn)
+		handler.txRequests[txid] = req
+		req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
+	} else {
+		req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
+		now := time.Now()
+		if now.Sub(req.requestedAt) < requestExpiration {
+			// no new request
+			return network.OutgoingMessage{}
+		}
+	}
+	// peer, ok := rawmsg.Sender.(network.UnicastPeer)
+	// if !ok {
+	// 	// nothing to do
+	// 	return network.OutgoingMessage{}
+	// }
+	req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
+	return network.OutgoingMessage{
+		Action:  network.Respond,
+		Tag:     protocol.TxnRequestTag,
+		Payload: rawmsg.Data,
+	}
+	//peer.Unicast(handler.ctx, rawmsg.Data, protocol.TxnRequestTag)
+}
+func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	var txid transactions.Txid
+	copy(txid[:], rawmsg.Data)
+	tx, _, found := handler.txPool.Lookup(txid)
+	if found {
+		they := []transactions.SignedTxn{
+			tx,
+		}
+		return network.OutgoingMessage{
+			Action:  network.Respond,
+			Tag:     protocol.TxnTag,
+			Payload: reencode(they),
+		}
+	}
+	// TODO: add NACK message to protocol so they can ask another node?
+	// But really, this should never happen. We advertised it. We should have it. (Unless it just got committed to a block?) ((TODO: search most recent block for txn by txid?))
+	logging.Base().Error("request for txid we don't have: %s", txid.String())
+	return network.OutgoingMessage{}
 }
 
 // checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already committed, and
