@@ -674,7 +674,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		if evalOpts.PaysetHint > maxPaysetHint {
 			evalOpts.PaysetHint = maxPaysetHint
 		}
-		fmt.Println("paysetHint", evalOpts.PaysetHint)
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
@@ -948,7 +947,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
-				fmt.Printf("ErrNoSpace: size %v + %v > %v\n", eval.blockTxBytes, groupTxBytes, eval.maxTxnBytesPerBlock)
 				return ledgercore.ErrNoSpace
 			}
 		}
@@ -977,7 +975,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	//fmt.Println("append Payset len", len(eval.block.Payset), "txibs len", len(txibs))
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
