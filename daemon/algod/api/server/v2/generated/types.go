@@ -635,7 +635,7 @@ type BlockResponse struct {
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 
-	// Hash of current block.
+	// Hash of current block. This is not included when the format is set to message pack.
 	Hash *string `json:"hash,omitempty"`
 }
 

@@ -3005,7 +3005,7 @@
             "x-algorand-format": "BlockHeader"
           },
           "hash": {
-            "description": "Hash of current block.",
+            "description": "Hash of current block. This is not included when the format is set to message pack.",
             "type": "string"
           },
           "cert": {
