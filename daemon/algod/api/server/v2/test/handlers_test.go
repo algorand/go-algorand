@@ -257,6 +257,13 @@ func TestGetBlockHash(t *testing.T) {
 
 	// assert block 2's prev points to block 1's hash
 	a.IsType(response2.Block["prev"], string(""))
+	t.Log("block 1 hash", response1.Hash)
+	t.Log("block 2 hash", response2.Hash)
+	t.Log("block 2 prev", response2.Block["prev"].(string))
+	a.NotContains(response1.Hash, "AAAAAAAA")
+	a.NotContains(response2.Hash, "AAAAAAAA")
+	a.NotEmpty(response2.Block["prev"])
+	a.NotEmpty(response1.Hash)
 	a.Equal(response2.Block["prev"].(string), response1.Hash)
 }
 
