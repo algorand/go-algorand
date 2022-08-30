@@ -347,8 +347,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(err)
 	minFee, minBal, err := fixture.MinFeeAndBalance(curStatus.LastRound)
 	r.NoError(err)
-	deadline := curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	blk, err := client.Block(curStatus.LastRound)
 	r.NoError(err)
@@ -373,8 +372,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 
 	curStatus, err = client.Status()
 	r.NoError(err)
-	deadline = curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
 

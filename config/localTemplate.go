@@ -451,7 +451,7 @@ type Local struct {
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
-	MaxAcctLookback uint64 `version[23]:"8"`
+	MaxAcctLookback uint64 `version[23]:"4"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -477,6 +477,8 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 			return "devnet.algodev.network"
 		} else if network == Betanet {
 			return "betanet.algodev.network"
+		} else if network == Alphanet {
+			return "alphanet.algodev.network"
 		}
 	}
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)

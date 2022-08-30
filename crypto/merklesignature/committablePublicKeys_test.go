@@ -92,5 +92,5 @@ func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	internal2 := calculateHashOnInternalNode(k1hash, k3hash)
 
 	root := calculateHashOnInternalNode(internal1, internal2)
-	a.Equal(root, signer.GetVerifier()[:])
+	a.Equal(root, signer.GetVerifier().Commitment[:])
 }

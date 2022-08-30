@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -62,7 +62,7 @@ func (r *promMetricFetcher) getMetric(query string) (results []promValueResult, 
 		return nil, fmt.Errorf("http error code received %v", resp.StatusCode)
 	}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}

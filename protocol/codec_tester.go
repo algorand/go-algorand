@@ -17,9 +17,7 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -147,11 +145,11 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 		return nil
 	})
 	for _, packageFile := range packageFiles {
-		fileBytes, err := ioutil.ReadFile(packageFile)
+		fileBytes, err := os.ReadFile(packageFile)
 		if err != nil {
 			continue
 		}
-		if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) != -1 {
+		if strings.Contains(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) {
 			// message pack alloc bound definition was found.
 			return true
 		}
@@ -230,7 +228,13 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v.SetUint(rand.Uint64())
+		if strings.HasSuffix(datapath, "/HashType") &&
+			strings.HasSuffix(v.Type().PkgPath(), "go-algorand/crypto") && v.Type().Name() == "HashType" {
+			// generate value that will avoid protocol.ErrInvalidObject from HashType.Validate()
+			v.SetUint(rand.Uint64() % 3) // 3 is crypto.MaxHashType
+		} else {
+			v.SetUint(rand.Uint64())
+		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
@@ -243,6 +247,12 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
+	case reflect.Ptr:
+		v.Set(reflect.New(v.Type().Elem()))
+		err := randomizeValue(reflect.Indirect(v), datapath, tag, remainingChanges, seenTypes)
+		if err != nil {
+			return err
+		}
 	case reflect.Struct:
 		st := v.Type()
 		if !seenTypes[st] {
@@ -352,7 +362,11 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		err = os.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	e1 := EncodeMsgp(v0.(msgp.Marshaler))
@@ -360,8 +374,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 
 	// for debug, write out the encodings to a file
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/e1", e1, 0666)
-		ioutil.WriteFile("/tmp/e2", e2, 0666)
+		err = os.WriteFile("/tmp/e1", e1, 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/e2", e2, 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	if !reflect.DeepEqual(e1, e2) {
@@ -382,8 +402,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
-		ioutil.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+		err = os.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	// At this point, it might be that v differs from v1 and v2,
@@ -402,8 +428,14 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	ee2 := EncodeReflect(v1)
 
 	if debugCodecTester {
-		ioutil.WriteFile("/tmp/ee1", ee1, 0666)
-		ioutil.WriteFile("/tmp/ee2", ee2, 0666)
+		err = os.WriteFile("/tmp/ee1", ee1, 0666)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile("/tmp/ee2", ee2, 0666)
+		if err != nil {
+			return err
+		}
 	}
 
 	if !reflect.DeepEqual(e1, ee1) {
@@ -427,15 +459,7 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			t.Skip()
 			return
 		}
-		if err == nil {
-			continue
-		}
 
-		// some objects might appen to the original error additional info.
-		// we ensure that invalidObject error is not failing the test.
-		if errors.As(err, &ErrInvalidObject) {
-			continue
-		}
 		require.NoError(t, err)
 	}
 }

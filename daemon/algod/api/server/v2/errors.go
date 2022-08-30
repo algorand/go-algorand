@@ -34,7 +34,7 @@ var (
 	errFailedToParseSourcemap                  = "failed to parse sourcemap"
 	errFailedToEncodeResponse                  = "failed to encode response"
 	errInternalFailure                         = "internal failure"
-	errNoTxnSpecified                          = "no transaction ID was specified"
+	errNoValidTxnSpecified                     = "no valid transaction ID was specified"
 	errInvalidHashType                         = "invalid hash type"
 	errTransactionNotFound                     = "could not find the transaction in the transaction pool or in the last 1000 confirmed rounds"
 	errServiceShuttingDown                     = "operation aborted as server is shutting down"
@@ -44,4 +44,5 @@ var (
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
+	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
 )

@@ -282,7 +282,7 @@ func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipati
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
 			SelectionPK:  vrfSecrets.PK,
-			StateProofPK: *signer.GetVerifier(),
+			StateProofPK: signer.GetVerifier().Commitment,
 			VoteFirst:    0,
 			VoteLast:     100,
 		},

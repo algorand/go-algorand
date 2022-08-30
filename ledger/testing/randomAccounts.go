@@ -58,7 +58,7 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
-		data.VoteLastValid = 1000
+		data.VoteLastValid = 10000
 	case 1:
 		data.Status = basics.Offline
 		data.VoteLastValid = 0
@@ -214,7 +214,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 	} else {
 		data.VoteID = crypto.OneTimeSignatureVerifier{}
 		data.SelectionID = crypto.VRFVerifier{}
-		data.StateProofID = merklesignature.Verifier{}
+		data.StateProofID = merklesignature.Commitment{}
 		data.VoteFirstValid = 0
 		data.VoteLastValid = 0
 		data.VoteKeyDilution = 0

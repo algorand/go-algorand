@@ -35,6 +35,8 @@ func TestBuilderSanity(t *testing.T) {
 	a.Equal(uint64(len(keys)), numOfKeys)
 
 	s, err := keys[0].SignBytes([]byte{0})
+	a.NoError(err)
+
 	v := keys[0].GetVerifyingKey()
 	err = v.VerifyBytes([]byte{0}, s)
 	a.NoError(err)

@@ -42,26 +42,23 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$("$GOPATH"/bin/golangci-lint -c .golangci.yml | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
 
-    echo >&2 "golint must be clean.  Please run the following to list issues(${warningCount}):"
+    echo >&2 "golangci-lint must be clean.  Please run the following to list issues(${warningCount}):"
     echo >&2 " make lint"
 
     # run the linter again to output the actual issues
-    "$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) >&2
+    "$GOPATH"/bin/golangci-lint -c .golangci.yml >&2
     return 1
 }
-
-echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
 
-echo "Running golint..."
+echo "Running golangci-lint..."
 runGoLint
 
 echo "Running check_license..."
@@ -78,6 +75,7 @@ GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
 echo "Updating TEAL Specs"
+touch data/transactions/logic/fields_string.go # ensure rebuild
 make -C data/transactions/logic
 
 echo "Regenerate REST server"

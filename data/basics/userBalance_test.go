@@ -109,7 +109,7 @@ func makeString(len int) string {
 func getSampleAccountData() AccountData {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Verifier
+	var stateProofID merklesignature.Commitment
 	crypto.RandBytes(stateProofID[:])
 
 	return AccountData{

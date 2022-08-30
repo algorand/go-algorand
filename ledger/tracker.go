@@ -437,7 +437,10 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			if !ok {
 				return
 			}
-			tr.commitRound(commit)
+			err := tr.commitRound(commit)
+			if err != nil {
+				tr.log.Warnf("Could not commit round: %w", err)
+			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
 			drained := false
@@ -550,8 +553,9 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	}
 
 	accLedgerEval := accountUpdatesLedgerEvaluator{
-		au: tr.accts,
-		ao: tr.acctsOnline,
+		au:   tr.accts,
+		ao:   tr.acctsOnline,
+		tail: tr.tail,
 	}
 
 	if lastBalancesRound < lastestBlockRound {

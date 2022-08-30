@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -344,50 +343,57 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with which compact
-	// certificates are generated.  Every round that is a multiple
-	// of CompactCertRounds, the block header will include a Merkle
+	// StateProofInterval defines the frequency with which state
+	// proofs are generated.  Every round that is a multiple
+	// of StateProofInterval, the block header will include a vector
 	// commitment to the set of online accounts (that can vote after
-	// another CompactCertRounds rounds), and that block will be signed
-	// (forming a compact certificate) by the voters from the previous
-	// such Merkle tree commitment.  A value of zero means no compact
-	// certificates.
-	CompactCertRounds uint64
+	// another StateProofInterval rounds), and that block will be signed
+	// (forming a state proof) by the voters from the previous
+	// such vector commitment.  A value of zero means no state proof.
+	StateProofInterval uint64
 
-	// CompactCertTopVoters is a bound on how many online accounts get to
-	// participate in forming the compact certificate, by including the
-	// top CompactCertTopVoters accounts (by normalized balance) into the
-	// Merkle commitment.
-	CompactCertTopVoters uint64
+	// StateProofTopVoters is a bound on how many online accounts get to
+	// participate in forming the state proof, by including the
+	// top StateProofTopVoters accounts (by normalized balance) into the
+	// vector commitment.
+	StateProofTopVoters uint64
 
-	// CompactCertVotersLookback is the number of blocks we skip before
-	// publishing a Merkle commitment to the online accounts.  Namely,
-	// if block number N contains a Merkle commitment to the online
-	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// StateProofVotersLookback is the number of blocks we skip before
+	// publishing a vector commitment to the online accounts.  Namely,
+	// if block number N contains a vector commitment to the online
+	// accounts (which, incidentally, means N%StateProofInterval=0),
 	// then the balances reflected in that commitment must come from
-	// block N-CompactCertVotersLookback.  This gives each node some
-	// time (CompactCertVotersLookback blocks worth of time) to
-	// construct this Merkle tree, so as to avoid placing the
-	// construction of this Merkle tree (and obtaining the requisite
+	// block N-StateProofVotersLookback.  This gives each node some
+	// time (StateProofVotersLookback blocks worth of time) to
+	// construct this vector commitment, so as to avoid placing the
+	// construction of this vector commitment (and obtaining the requisite
 	// accounts and balances) in the critical path.
-	CompactCertVotersLookback uint64
+	StateProofVotersLookback uint64
 
-	// CompactCertWeightThreshold specifies the fraction of top voters weight
-	// that must sign the message (block header) for security.  The compact
-	// certificate ensures this threshold holds; however, forming a valid
-	// compact certificate requires a somewhat higher number of signatures,
-	// and the more signatures are collected, the smaller the compact cert
+	// StateProofWeightThreshold specifies the fraction of top voters weight
+	// that must sign the message (block header) for security.  The state
+	// proof ensures this threshold holds; however, forming a valid
+	// state proof requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the state proof
 	// can be.
 	//
 	// This threshold can be thought of as the maximum fraction of
-	// malicious weight that compact certificates defend against.
+	// malicious weight that state proofs defend against.
 	//
-	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
-	CompactCertWeightThreshold uint32
+	// The threshold is computed as StateProofWeightThreshold/(1<<32).
+	StateProofWeightThreshold uint32
 
-	// CompactCertSecKQ is the security parameter (k+q) for the compact
-	// certificate scheme.
-	CompactCertSecKQ uint64
+	// StateProofStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
+	StateProofStrengthTarget uint64
+
+	// StateProofMaxRecoveryIntervals represents the number of state proof intervals that the network will try to catch-up with.
+	// When the difference between the latest state proof and the current round will be greater than value, Nodes will
+	// release resources allocated for creating state proofs.
+	StateProofMaxRecoveryIntervals uint64
+
+	// StateProofExcludeTotalWeightWithRewards specifies whether to subtract rewards from excluded online accounts along with
+	// their account balances.
+	StateProofExcludeTotalWeightWithRewards bool
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
@@ -592,7 +598,7 @@ func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) 
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
 	return err
 }
 
@@ -1147,38 +1153,94 @@ func initConsensusProtocols() {
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
 	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
 
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v32
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v33 := v32
+	v33.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// Make the accounts snapshot for round X at X-CatchpointLookback
-	vFuture.CatchpointLookback = 320
+	// order to guarantee all nodes produce catchpoint at the same round.
+	v33.CatchpointLookback = 320
 
 	// Require MaxTxnLife + X blocks and headers preserved by a node
-	vFuture.DeeperBlockHeaderHistory = 1
+	v33.DeeperBlockHeaderHistory = 1
 
-	// Enable compact certificates.
-	vFuture.CompactCertRounds = 256
-	vFuture.CompactCertTopVoters = 1024 * 1024
-	vFuture.CompactCertVotersLookback = 16
-	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.CompactCertSecKQ = 128
+	v33.MaxTxnBytesPerBlock = 5 * 1024 * 1024
 
-	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.MinInnerApplVersion = 4
+	Consensus[protocol.ConsensusV33] = v33
 
-	vFuture.UnifyInnerTxIDs = true
+	// v32 can be upgraded to v33, with an update delay of 7 days ( see calculation above )
+	v32.ApprovedUpgrades[protocol.ConsensusV33] = 140000
 
-	vFuture.EnableSHA256TxnCommitmentHeader = true
-	vFuture.EnableOnlineAccountCatchpoints = true
+	v34 := v33
+	v34.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.UnfundedSenders = true
+	// Enable state proofs.
+	v34.StateProofInterval = 256
+	v34.StateProofTopVoters = 1024
+	v34.StateProofVotersLookback = 16
+	v34.StateProofWeightThreshold = (1 << 32) * 30 / 100
+	v34.StateProofStrengthTarget = 256
+	v34.StateProofMaxRecoveryIntervals = 10
 
-	vFuture.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
-	vFuture.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+	v34.LogicSigVersion = 7
+	v34.MinInnerApplVersion = 4
+
+	v34.UnifyInnerTxIDs = true
+
+	v34.EnableSHA256TxnCommitmentHeader = true
+	v34.EnableOnlineAccountCatchpoints = true
+
+	v34.UnfundedSenders = true
+
+	v34.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
+
+	Consensus[protocol.ConsensusV34] = v34
+
+	v35 := v34
+	v35.StateProofExcludeTotalWeightWithRewards = true
+
+	v35.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	Consensus[protocol.ConsensusV35] = v35
+
+	// v33 and v34 can be upgraded to v35, with an update delay of 12h:
+	// 10046 = (12 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down a bit :
+	v33.ApprovedUpgrades[protocol.ConsensusV35] = 10000
+	v34.ApprovedUpgrades[protocol.ConsensusV35] = 10000
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v35
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
+
+	// vAlphaX versions are an separate series of consensus parameters and versions for alphanet
+	vAlpha1 := v32
+	vAlpha1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
+	vAlpha1.MaxTxnBytesPerBlock = 5000000
+	Consensus[protocol.ConsensusVAlpha1] = vAlpha1
+
+	vAlpha2 := vAlpha1
+	vAlpha2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vAlpha2.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+	vAlpha2.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+	Consensus[protocol.ConsensusVAlpha2] = vAlpha2
+	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
+
+	// vAlpha3 and vAlpha4 use the same parameters as v33 and v34
+	vAlpha3 := v33
+	vAlpha3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha3] = vAlpha3
+	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
+
+	vAlpha4 := v34
+	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
+	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

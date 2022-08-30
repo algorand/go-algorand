@@ -1,8 +1,8 @@
-name: "Build workflow"
+name: "Build Windows"
 on:
   pull_request:
 jobs:
-  build-test-windows:
+  build-windows:
     runs-on: windows-2022
     defaults:
       run:
@@ -14,14 +14,20 @@ jobs:
           update: true
           path-type: inherit
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Install golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.17.9'
-      - name: Build Test
+          go-version: "1.17.13"
+      - name: Restore libsodium from cache
+        id: cache-libsodium
+        uses: actions/cache@v3
+        with:
+          path: crypto/libs
+          key: libsodium-fork-v2-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Build
         run: |
           export ALGORAND_DEADLOCK=enable
           export SKIP_GO_INSTALLATION=True

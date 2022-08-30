@@ -68,7 +68,7 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 	store := createTestDB(a)
 	defer store.Close()
 
-	firstValid := uint64(1)
+	firstValid := uint64(0)
 	LastValid := uint64(5000)
 
 	interval := uint64(256)
@@ -81,17 +81,12 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 	err = newMss.RestoreAllSecrets(*store)
 	a.NoError(err)
 
-	for i := uint64(1); i < LastValid; i++ {
+	for i := uint64(0); i < LastValid; i++ {
 		key1 := mss.GetKey(i)
 		key2 := newMss.GetKey(i)
-		if i%interval == 0 {
-			a.NotNil(key1)
-			a.NotNil(key2)
-			a.Equal(*key1, *key2)
-			continue
-		}
-		a.Nil(key1)
-		a.Nil(key2)
+		a.NotNil(key1)
+		a.NotNil(key2)
+		a.Equal(*key1, *key2)
 	}
 
 	// make sure we exercise the path of the database being upgraded, but then

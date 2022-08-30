@@ -8,7 +8,6 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
-export GOPROXY := direct
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
@@ -86,7 +85,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
@@ -100,15 +99,12 @@ fix: build
 	$(GOPATH1)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golint ./...
-
-vet:
-	go vet ./...
+	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml 
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: vet fix lint fmt
+sanity: fix lint fmt
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -248,6 +244,9 @@ $(GOPATH1)/bin/%:
 test: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
+benchcheck: build
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
+
 fulltest: build-race
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
@@ -328,7 +327,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

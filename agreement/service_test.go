@@ -1968,7 +1968,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
