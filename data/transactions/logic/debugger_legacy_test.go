@@ -154,7 +154,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 
 		require.Equal(t, 1, testDbg.register)
 		require.Equal(t, 1, testDbg.complete)
-		require.Equal(t, 11, testDbg.update)
+		require.Equal(t, 27, testDbg.update)
 		require.Len(t, testDbg.state.Stack, 1)
 	})
 }

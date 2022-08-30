@@ -35,6 +35,23 @@ dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram
 itxn_submit
+
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 1
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_next
+int pay
+itxn_field TypeEnum
+int 2
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_submit
+
 int 1
 `
 
@@ -44,6 +61,7 @@ type testDbgHook struct {
 
 	beforeLogicEvalCalls int
 	afterLogicEvalCalls  int
+	logicEvalModes       []RunMode
 
 	beforeTealOpCalls int
 	afterTealOpCalls  int
@@ -64,6 +82,7 @@ func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int) error {
 
 func (d *testDbgHook) BeforeLogicEval(cx *EvalContext) error {
 	d.beforeLogicEvalCalls++
+	d.logicEvalModes = append(d.logicEvalModes, cx.RunMode())
 	return nil
 }
 
@@ -110,6 +129,7 @@ func TestDebuggerHook(t *testing.T) {
 
 		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
 		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeSig}, testDbg.logicEvalModes)
 
 		require.Equal(t, 35, testDbg.beforeTealOpCalls)
 		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
@@ -132,6 +152,7 @@ func TestDebuggerHook(t *testing.T) {
 
 		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
 		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp}, testDbg.logicEvalModes)
 
 		require.Equal(t, 35, testDbg.beforeTealOpCalls)
 		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
@@ -152,19 +173,21 @@ func TestDebuggerHook(t *testing.T) {
 		ep.Debugger = &testDbg
 		testApp(t, innerTxnTestProgram, ep)
 
-		// called for the inner transaction, not the top-level one
-		require.Equal(t, 1, testDbg.beforeTxnCalls)
-		require.Equal(t, 1, testDbg.afterTxnCalls)
+		// only called for the inner transaction in this test, not the top-level one
+		require.Equal(t, 3, testDbg.beforeTxnCalls)
+		require.Equal(t, 3, testDbg.afterTxnCalls)
 
 		require.Equal(t, 2, testDbg.beforeLogicEvalCalls)
 		require.Equal(t, 2, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp, ModeApp}, testDbg.logicEvalModes)
 
-		appCallTealOps := 11
+		appCallTealOps := 27
 		innerAppCallTealOps := 1
 		require.Equal(t, appCallTealOps+innerAppCallTealOps, testDbg.beforeTealOpCalls)
 		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-		require.Equal(t, 1, testDbg.beforeInnerTxnGroupCalls)
-		require.Equal(t, 1, testDbg.afterInnerTxnGroupCalls)
+		// two groups of inner transactions were issued
+		require.Equal(t, 2, testDbg.beforeInnerTxnGroupCalls)
+		require.Equal(t, 2, testDbg.afterInnerTxnGroupCalls)
 	})
 }

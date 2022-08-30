@@ -81,7 +81,7 @@ func (adaptor *legacyDebuggerAdaptor) AfterInnerTxnGroup(ep *EvalParams) error {
 // BeforeLogicEval invokes the legacy debugger's Register hook
 func (adaptor *legacyDebuggerAdaptor) BeforeLogicEval(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
-		// only report updates for top-level transactions
+		// only report updates for top-level transactions, for backwards compatibility
 		return nil
 	}
 	adaptor.debugState = makeDebugState(cx)
@@ -91,7 +91,7 @@ func (adaptor *legacyDebuggerAdaptor) BeforeLogicEval(cx *EvalContext) error {
 // BeforeTealOp invokes the legacy debugger's Update hook
 func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
-		// only report updates for top-level transactions
+		// only report updates for top-level transactions, for backwards compatibility
 		return nil
 	}
 	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
@@ -100,7 +100,7 @@ func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 // AfterLogicEval invokes the legacy debugger's Complete hook
 func (adaptor *legacyDebuggerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {
-		// only report updates for top-level transactions
+		// only report updates for top-level transactions, for backwards compatibility
 		return nil
 	}
 	return adaptor.debugger.Complete(adaptor.refreshDebugState(cx, evalError))
