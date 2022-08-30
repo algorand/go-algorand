@@ -51,6 +51,7 @@ type PpConfig struct {
 	NumAsset        uint32
 	MinAccountAsset uint64
 	NumApp          uint32
+	NumBox          uint32
 	NumAppOptIn     uint32
 	AppProgOps      uint32
 	AppProgHashes   uint32
@@ -84,6 +85,7 @@ var DefaultConfig = PpConfig{
 	NumAsset:        0,
 	MinAccountAsset: 10000000,
 	NumApp:          0,
+	NumBox:          0,
 	AppProgOps:      0,
 	AppProgHashes:   0,
 	AppProgHashSize: "sha256",

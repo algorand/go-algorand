@@ -1050,10 +1050,17 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 			}
 			accounts = accounts[1:]
 		}
-		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, nil)
+
+		var boxRefs []transactions.BoxRef
+		for i := uint32(0); i < cfg.NumBox; i++ {
+			boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+		}
+
+		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
 		if err != nil {
 			return
 		}
+
 		txn.Note = noteField[:]
 		txn.Lease = lease
 		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)

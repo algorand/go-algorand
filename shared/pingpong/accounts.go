@@ -446,7 +446,48 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return ops.Program
 }
 
-func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32, numBoxes uint32) ([]byte, string) {
+	if numBoxes != 0 {
+		prologue := `#pragma version 8
+			txn ApplicationID
+			bz done
+		`
+		createBoxes := `
+			byte "%d"
+			int 16
+			box_create
+			pop
+		`
+		updateBoxes := `
+			byte "%d"
+			int 0
+			byte "1"
+			box_replace
+		`
+		done := `
+			done:
+			int 1
+			return
+		`
+
+		progParts := []string{prologue}
+		for i := uint32(0); i < numBoxes; i++ {
+			progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+		}
+		for i := uint32(0); i < numBoxes; i++ {
+			progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
+		}
+		progParts = append(progParts, done)
+
+		// assemble
+		progAsm := strings.Join(progParts, "\n")
+		ops, err := logic.AssembleString(progAsm)
+		if err != nil {
+			panic(err)
+		}
+		return ops.Program, progAsm
+	}
+
 	prologueSize := uint32(2 + 3 + 2 + 1 + 1 + 3)
 	prologue := `#pragma version 2
 		txn ApplicationID
@@ -702,7 +743,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 	}
 
 	// generate app program with roughly some number of operations
-	prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
+	prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys, cfg.NumBox)
 	if !cfg.Quiet {
 		fmt.Printf("generated program: \n%s\n", asm)
 	}
@@ -724,7 +765,6 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		var senders []string
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
-
 			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
@@ -840,6 +880,31 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				}
 			}
 		}
+	}
+
+	// fund apps if necessary, currently only needed for boxes
+	if cfg.NumBox > 0 {
+		var srcFunds uint64
+		srcFunds, err = client.GetBalance(cfg.SrcAccount)
+		if err != nil {
+			return
+		}
+
+		for _, aidx := range aidxs {
+			appAddr := basics.AppIndex(aidx).Address()
+			mbr := 150000 + proto.BoxFlatMinBalance*uint64(cfg.NumBox) + proto.BoxByteMinBalance*1024*uint64(cfg.NumBox)
+
+			var txn transactions.Transaction
+			txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, accounts[cfg.SrcAccount])
+			if err != nil {
+				return
+			}
+
+			srcFunds -= mbr
+			srcFunds -= txn.Fee.Raw
+		}
+
+		accounts[cfg.SrcAccount].setBalance(srcFunds)
 	}
 
 	return
