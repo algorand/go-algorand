@@ -1749,10 +1749,11 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
 		}
 	}
-	if macroName == "b64" || macroName == "base64" || strings.HasPrefix(macroName, "b64(") || strings.HasPrefix(macroName, "base64(") {
+	// Note parentheses are not allowed characters, so we don't have to check for b64(AAA) syntax
+	if macroName == "b64" || macroName == "base64" {
 		return fmt.Errorf("Cannot use base64 notation in macro name: %s", macroName)
 	}
-	if macroName == "b32" || macroName == "base32" || strings.HasPrefix(macroName, "b32(") || strings.HasPrefix(macroName, "base32(") {
+	if macroName == "b32" || macroName == "base32" {
 		return fmt.Errorf("Cannot use base32 notation in macro name: %s", macroName)
 	}
 	_, isTxnType := txnTypeMap[macroName]
