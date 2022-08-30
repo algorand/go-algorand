@@ -316,12 +316,12 @@ func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
 	return nil
 }
 
-func (d *testDbgHook) BeforeAppEval(state *logic.DebugState) error {
+func (d *testDbgHook) BeforeAppEval(cx *logic.EvalContext) error {
 	d.log = append(d.log, "beforeAppEval")
 	return nil
 }
 
-func (d *testDbgHook) BeforeTealOp(state *logic.DebugState) error {
+func (d *testDbgHook) BeforeTealOp(cx *logic.EvalContext) error {
 	d.log = append(d.log, "beforeTealOp")
 	return nil
 }
@@ -336,12 +336,12 @@ func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
 	return nil
 }
 
-func (d *testDbgHook) AfterTealOp(state *logic.DebugState) error {
+func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error {
 	d.log = append(d.log, "afterTealOp")
 	return nil
 }
 
-func (d *testDbgHook) AfterAppEval(state *logic.DebugState) error {
+func (d *testDbgHook) AfterAppEval(cx *logic.EvalContext, evalError error) error {
 	d.log = append(d.log, "afterAppEval")
 	return nil
 }
