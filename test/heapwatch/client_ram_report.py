@@ -1,6 +1,27 @@
 #!/usr/bin/env python3
+# Copyright (C) 2019-2022 Algorand, Inc.
+# This file is part of go-algorand
+#
+# go-algorand is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# go-algorand is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+#
+###
+#
+# Process heap profiles (*.heap) collected from heapWatch.py
+# Create a report on `algod` RAM usage
 
 import argparse
+import configparser
 import csv
 import glob
 import json
@@ -83,6 +104,43 @@ def get_heap_inuse_totals(dirpath):
     return cached
 
 
+def maybe_load_tf_nicks(args):
+    tf_inventory_path = os.path.join(args.dir, 'terraform-inventory.host')
+    if not os.path.exists(tf_inventory_path):
+        return None
+    tf_inventory = configparser.ConfigParser(allow_no_value=True)
+    tf_inventory.read(tf_inventory_path)
+    ip_to_name = {}
+    for k, sub in tf_inventory.items():
+        if k.startswith('name_'):
+            nick = k[5:]
+            for ip in sub:
+                if ip in ip_to_name:
+                    logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
+                ip_to_name[ip] = nick
+    return ip_to_name
+
+
+def hostports_to_nicks(args, hostports):
+    ip_to_nick = maybe_load_tf_nicks(args)
+    if not ip_to_nick:
+        return hostports
+    out = []
+    for hp in hostports:
+        hit = None
+        for ip, nick in ip_to_nick.items():
+            if ip in hp:
+                if hit is None:
+                    hit = nick
+                else:
+                    logger.warning('nick collision in ip=%r, hit=%r nick=%r', ip, hit, nick)
+                    hit = nick
+        if not hit:
+            hit = hp
+        out.append(hit)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('-d', '--dir', required=True, help='dir path to find /*.metrics in')
@@ -109,7 +167,7 @@ def main():
                 whens.add(ts)
         whens = sorted(whens)
         nodes = sorted(heap_totals.keys())
-        writer.writerow(['when','dt','round'] + nodes)
+        writer.writerow(['when','dt','round'] + hostports_to_nicks(args, nodes))
         first = None
         for ts in whens:
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
