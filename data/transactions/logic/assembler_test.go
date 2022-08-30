@@ -2797,11 +2797,15 @@ func TestMacros(t *testing.T) {
 	testProg(t, `
 		coolLabel:
 		int 1
-		#define coolLabel 1
-	`, AssemblerMaxVersion, Expect{4, "Labels cannot be used as macro names: coolLabel"})
+		#define coolLabel 1`,
+		AssemblerMaxVersion,
+		Expect{4, "Labels cannot be used as macro names: coolLabel"},
+	)
 	testProg(t, `
 		#define coolLabel 1
 		coolLabel:
-		int 1
-	`, AssemblerMaxVersion, Expect{3, "Cannot create label with same name as macro: coolLabel"})
+		int 1`,
+		AssemblerMaxVersion,
+		Expect{3, "Cannot create label with same name as macro: coolLabel"},
+	)
 }
