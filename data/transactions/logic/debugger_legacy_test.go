@@ -85,6 +85,80 @@ func TestWebDebuggerManual(t *testing.T) {
 	testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 }
 
+type testLegacyDbgHook struct {
+	register int
+	update   int
+	complete int
+	state    *DebugState
+}
+
+func (d *testLegacyDbgHook) Register(state *DebugState) error {
+	d.register++
+	d.state = state
+	return nil
+}
+
+func (d *testLegacyDbgHook) Update(state *DebugState) error {
+	d.update++
+	d.state = state
+	return nil
+}
+
+func (d *testLegacyDbgHook) Complete(state *DebugState) error {
+	d.complete++
+	d.state = state
+	return nil
+}
+
+func TestLegacyDebuggerHook(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("logic", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testLegacyDbgHook{}
+		ep := defaultEvalParams(nil)
+		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
+
+		require.Equal(t, 1, testDbg.register)
+		require.Equal(t, 1, testDbg.complete)
+		require.Equal(t, 35, testDbg.update)
+		require.Len(t, testDbg.state.Stack, 1)
+	})
+
+	t.Run("simple app", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testLegacyDbgHook{}
+		ep := defaultEvalParams(nil)
+		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		testApp(t, legacyDebuggerTestProgram, ep)
+
+		require.Equal(t, 1, testDbg.register)
+		require.Equal(t, 1, testDbg.complete)
+		require.Equal(t, 35, testDbg.update)
+		require.Len(t, testDbg.state.Stack, 1)
+	})
+
+	t.Run("app with inner txns", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testLegacyDbgHook{}
+		ep, tx, ledger := MakeSampleEnv()
+
+		// Establish 888 as the app id, and fund it.
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+
+		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		testApp(t, innerTxnTestProgram, ep)
+
+		require.Equal(t, 1, testDbg.register)
+		require.Equal(t, 1, testDbg.complete)
+		require.Equal(t, 11, testDbg.update)
+		require.Len(t, testDbg.state.Stack, 1)
+	})
+}
+
 func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -173,29 +247,29 @@ func TestParseCallstack(t *testing.T) {
 	require.Equal(t, expectedCallFrames, cfs)
 }
 
-// func TestCallStackUpdate(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+func TestCallStackUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// 	expectedCallFrames := []CallFrame{
-// 		{
-// 			FrameLine: 2,
-// 			LabelName: "label1",
-// 		},
-// 		{
-// 			FrameLine: 5,
-// 			LabelName: "label2",
-// 		},
-// 	}
+	expectedCallFrames := []CallFrame{
+		{
+			FrameLine: 2,
+			LabelName: "label1",
+		},
+		{
+			FrameLine: 5,
+			LabelName: "label2",
+		},
+	}
 
-// 	testDbg := testDbgHook{}
-// 	ep := defaultEvalParams(nil)
-// 	ep.Debugger = &testDbg
-// 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
+	testDbg := testLegacyDbgHook{}
+	ep := defaultEvalParams(nil)
+	ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 
-// 	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
-// 	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
-// 	require.Greater(t, testDbg.beforeTealOpCalls, 1)
-// 	require.Len(t, testDbg.state.Stack, 1)
-// 	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
-// }
+	require.Equal(t, 1, testDbg.register)
+	require.Equal(t, 1, testDbg.complete)
+	require.Greater(t, testDbg.update, 1)
+	require.Len(t, testDbg.state.Stack, 1)
+	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
+}
