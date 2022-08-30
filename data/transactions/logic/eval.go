@@ -525,9 +525,6 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-
-	// Stores state & disassembly for the optional debugger
-	debugState *DebugState
 }
 
 // StackType describes the type of a value on the operand stack
@@ -706,20 +703,9 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil {
-			var derr error
-			if cx.runModeFlags == modeSig {
-				if hook, ok := cx.Debugger.(debuggerAfterLogicSigEvalHook); ok {
-					derr = hook.AfterLogicSigEval(cx.refreshDebugState(err))
-				}
-			} else {
-				if hook, ok := cx.Debugger.(debuggerAfterAppEvalHook); ok {
-					derr = hook.AfterAppEval(cx.refreshDebugState(err))
-				}
-			}
-			if err == nil && derr != nil {
-				err = fmt.Errorf("error while running debugger AfterLogicSigEval or AfterAppEval hook: %w", derr)
-			}
+		derr := callAfterEvalHookIfItExists(cx.Debugger, cx, err)
+		if err == nil && derr != nil {
+			err = derr
 		}
 	}()
 
@@ -746,43 +732,22 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	if cx.Debugger != nil {
-		cx.debugState = makeDebugState(cx)
-
-		var derr error
-		if cx.runModeFlags == modeSig {
-			if hook, ok := cx.Debugger.(debuggerBeforeLogicSigEvalHook); ok {
-				derr = hook.BeforeLogicSigEval(cx.refreshDebugState(err))
-			}
-		} else {
-			if hook, ok := cx.Debugger.(debuggerBeforeAppEvalHook); ok {
-				derr = hook.BeforeAppEval(cx.refreshDebugState(err))
-			}
-		}
-		if derr != nil {
-			return false, fmt.Errorf("error while running debugger BeforeLogicSigEval or BeforeAppEval hook: %w", derr)
-		}
+	err = callBeforeEvalHookIfItExists(cx.Debugger, cx)
+	if err != nil {
+		return false, err
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil {
-			if hook, ok := cx.Debugger.(debuggerBeforeTealOpHook); ok {
-				derr := hook.BeforeTealOp(cx.refreshDebugState(err))
-				if derr != nil {
-					return false, fmt.Errorf("error while running debugger BeforeTealOp hook: %w", derr)
-				}
-			}
+		err = callBeforeTealOpHookIfItExists(cx.Debugger, cx)
+		if err != nil {
+			return false, err
 		}
 
 		err = cx.step()
 
-		if cx.Debugger != nil {
-			if hook, ok := cx.Debugger.(debuggerAfterTealOpHook); ok {
-				derr := hook.AfterTealOp(cx.refreshDebugState(err))
-				if derr != nil {
-					return false, fmt.Errorf("error while running debugger AfterTealOp hook: %w", derr)
-				}
-			}
+		derr := callAfterTealOpHookIfItExists(cx.Debugger, cx, err)
+		if err == nil && derr != nil {
+			return false, derr
 		}
 	}
 	if err != nil {

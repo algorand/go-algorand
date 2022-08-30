@@ -16,6 +16,8 @@
 
 package logic
 
+import "fmt"
+
 // DebuggerHook functions are called by eval function during TEAL program execution
 // if provided. The interface is empty because none of the hooks are required by default.
 //
@@ -108,31 +110,115 @@ type DebuggerHook interface {
 type debuggerBeforeAppEvalHook interface {
 	// BeforeAppEval is called before the app is evaluated.
 	// This hook is similar to BeforeTxn, but includes debug state information instead of eval params.
-	BeforeAppEval(state *DebugState) error
+	BeforeAppEval(cx *EvalContext) error
 }
 
 type debuggerAfterAppEvalHook interface {
 	// AfterAppEval is called after the app has been evaluated.
-	AfterAppEval(state *DebugState) error
+	AfterAppEval(cx *EvalContext, evalError error) error
 }
 
 type debuggerBeforeLogicSigEvalHook interface {
 	// BeforeLogicSigEval is called before the LogicSig is evaluated.
 	// This hook is similar to BeforeAppEval, but indicates the start of a LogicSig's evaluation instead.
-	BeforeLogicSigEval(state *DebugState) error
+	BeforeLogicSigEval(cx *EvalContext) error
 }
 
 type debuggerAfterLogicSigEvalHook interface {
 	// AfterLogicSigEval is called after the LogicSig is evaluated.
-	AfterLogicSigEval(state *DebugState) error
+	AfterLogicSigEval(cx *EvalContext, evalError error) error
+}
+
+func callBeforeEvalHookIfItExists(dh DebuggerHook, cx *EvalContext) error {
+	if dh == nil {
+		return nil
+	}
+	if cx.runModeFlags == modeSig {
+		hook, ok := dh.(debuggerBeforeLogicSigEvalHook)
+		if !ok {
+			return nil
+		}
+		err := hook.BeforeLogicSigEval(cx)
+		if err != nil {
+			return fmt.Errorf("error while running debugger BeforeLogicSigEval hook: %w", err)
+		}
+		return nil
+	}
+
+	hook, ok := dh.(debuggerBeforeAppEvalHook)
+	if !ok {
+		return nil
+	}
+	err := hook.BeforeAppEval(cx)
+	if err != nil {
+		return fmt.Errorf("error while running debugger BeforeAppEval hook: %w", err)
+	}
+	return nil
+}
+
+func callAfterEvalHookIfItExists(dh DebuggerHook, cx *EvalContext, evalError error) error {
+	if dh == nil {
+		return nil
+	}
+	if cx.runModeFlags == modeSig {
+		hook, ok := dh.(debuggerAfterLogicSigEvalHook)
+		if !ok {
+			return nil
+		}
+		err := hook.AfterLogicSigEval(cx, evalError)
+		if err != nil {
+			return fmt.Errorf("error while running debugger AfterLogicSigEval hook: %w", err)
+		}
+		return nil
+	}
+
+	hook, ok := dh.(debuggerAfterAppEvalHook)
+	if !ok {
+		return nil
+	}
+	err := hook.AfterAppEval(cx, evalError)
+	if err != nil {
+		return fmt.Errorf("error while running debugger AfterAppEval hook: %w", err)
+	}
+	return nil
 }
 
 type debuggerBeforeTealOpHook interface {
 	// BeforeTealOp is called before the op is evaluated
-	BeforeTealOp(state *DebugState) error
+	BeforeTealOp(cx *EvalContext) error
+}
+
+func callBeforeTealOpHookIfItExists(dh DebuggerHook, cx *EvalContext) error {
+	if dh == nil {
+		return nil
+	}
+	hook, ok := dh.(debuggerBeforeTealOpHook)
+	if !ok {
+		return nil
+	}
+	err := hook.BeforeTealOp(cx)
+	if err != nil {
+		return fmt.Errorf("error while running debugger BeforeTealOp hook: %w", err)
+	}
+	return nil
 }
 
 type debuggerAfterTealOpHook interface {
 	// AfterTealOp is called after the op has been evaluated
-	AfterTealOp(state *DebugState) error
+	AfterTealOp(cx *EvalContext, evalError error) error
+}
+
+func callAfterTealOpHookIfItExists(dh DebuggerHook, cx *EvalContext, evalError error) error {
+	if dh == nil {
+		return nil
+	}
+	hook, ok := dh.(debuggerAfterTealOpHook)
+	if !ok {
+		return nil
+	}
+	err := hook.AfterTealOp(cx, evalError)
+	if err != nil {
+		return fmt.Errorf("error while running debugger AfterTealOp hook: %w", err)
+	}
+	return nil
 }

@@ -47,6 +47,7 @@ type LegacyDebuggerHook interface {
 type legacyDebuggerAdaptor struct {
 	debugger      LegacyDebuggerHook
 	innerTxnDepth int
+	debugState    *DebugState
 }
 
 // MakeLegacyDebuggerAdaptor creates an adaptor that externally adheres to the DebuggerHook
@@ -78,50 +79,55 @@ func (adaptor *legacyDebuggerAdaptor) AfterInnerTxnGroup(ep *EvalParams) error {
 }
 
 // BeforeLogicSigEval invokes the legacy debugger's Register hook
-func (adaptor *legacyDebuggerAdaptor) BeforeLogicSigEval(state *DebugState) error {
+func (adaptor *legacyDebuggerAdaptor) BeforeLogicSigEval(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		// this is probably unnecessary to check for LogicSigs, but might as well be safe
 		return nil
 	}
-	return adaptor.debugger.Register(state)
+	return adaptor.register(cx)
 }
 
 // BeforeAppEval invokes the legacy debugger's Register hook
-func (adaptor *legacyDebuggerAdaptor) BeforeAppEval(state *DebugState) error {
+func (adaptor *legacyDebuggerAdaptor) BeforeAppEval(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		return nil
 	}
-	return adaptor.debugger.Register(state)
+	return adaptor.register(cx)
+}
+
+func (adaptor *legacyDebuggerAdaptor) register(cx *EvalContext) error {
+	adaptor.debugState = makeDebugState(cx)
+	return adaptor.debugger.Register(adaptor.refreshDebugState(cx, nil))
 }
 
 // BeforeTealOp invokes the legacy debugger's Update hook
-func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(state *DebugState) error {
+func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		return nil
 	}
-	return adaptor.debugger.Update(state)
+	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
 }
 
 // AfterLogicSigEval invokes the legacy debugger's Complete hook
-func (adaptor *legacyDebuggerAdaptor) AfterLogicSigEval(state *DebugState) error {
+func (adaptor *legacyDebuggerAdaptor) AfterLogicSigEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		// this is probably unnecessary to check for LogicSigs, but might as well be safe
 		return nil
 	}
-	return adaptor.debugger.Complete(state)
+	return adaptor.debugger.Complete(adaptor.refreshDebugState(cx, evalError))
 }
 
 // AfterAppEval invokes the legacy debugger's Complete hook
-func (adaptor *legacyDebuggerAdaptor) AfterAppEval(state *DebugState) error {
+func (adaptor *legacyDebuggerAdaptor) AfterAppEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {
 		// only report updates for top-level transactions
 		return nil
 	}
-	return adaptor.debugger.Complete(state)
+	return adaptor.debugger.Complete(adaptor.refreshDebugState(cx, evalError))
 }
 
 // WebDebuggerHook represents a connection to tealdbg
@@ -301,8 +307,8 @@ func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
 	return callFrames
 }
 
-func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
-	ds := cx.debugState
+func (adaptor *legacyDebuggerAdaptor) refreshDebugState(cx *EvalContext, evalError error) *DebugState {
+	ds := adaptor.debugState
 
 	// Update pc, line, error, stack, scratch space, callstack,
 	// and opcode budget

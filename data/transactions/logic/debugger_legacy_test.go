@@ -173,29 +173,29 @@ func TestParseCallstack(t *testing.T) {
 	require.Equal(t, expectedCallFrames, cfs)
 }
 
-func TestCallStackUpdate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+// func TestCallStackUpdate(t *testing.T) {
+// 	partitiontest.PartitionTest(t)
+// 	t.Parallel()
 
-	expectedCallFrames := []CallFrame{
-		{
-			FrameLine: 2,
-			LabelName: "label1",
-		},
-		{
-			FrameLine: 5,
-			LabelName: "label2",
-		},
-	}
+// 	expectedCallFrames := []CallFrame{
+// 		{
+// 			FrameLine: 2,
+// 			LabelName: "label1",
+// 		},
+// 		{
+// 			FrameLine: 5,
+// 			LabelName: "label2",
+// 		},
+// 	}
 
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
+// 	testDbg := testDbgHook{}
+// 	ep := defaultEvalParams(nil)
+// 	ep.Debugger = &testDbg
+// 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 
-	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
-	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
-	require.Greater(t, testDbg.beforeTealOpCalls, 1)
-	require.Len(t, testDbg.state.Stack, 1)
-	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
-}
+// 	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
+// 	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
+// 	require.Greater(t, testDbg.beforeTealOpCalls, 1)
+// 	require.Len(t, testDbg.state.Stack, 1)
+// 	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
+// }
