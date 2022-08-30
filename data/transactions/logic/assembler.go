@@ -224,12 +224,12 @@ type OpStream struct {
 
 	intc         []uint64       // observed ints in code. We'll put them into a intcblock
 	intcRefs     []intReference // references to int pseudo-op constants, used for optimization
-	hasIntcBlock bool           // prevent prepending intcblock because asm has one
+	cntIntcBlock int            // prevent prepending intcblock because asm has one
 	hasPseudoInt bool           // were any `int` pseudo ops used?
 
 	bytec         [][]byte        // observed bytes in code. We'll put them into a bytecblock
 	bytecRefs     []byteReference // references to byte/addr pseudo-op constants, used for optimization
-	hasBytecBlock bool            // prevent prepending bytecblock because asm has one
+	cntBytecBlock int             // prevent prepending bytecblock because asm has one
 	hasPseudoByte bool            // were any `byte` (or equivalent) pseudo ops used?
 
 	// tracks information we know to be true at the point being assembled
@@ -411,7 +411,7 @@ func (ops *OpStream) IntLiteral(val uint64) {
 	}
 
 	if !found {
-		if ops.hasIntcBlock {
+		if ops.cntIntcBlock > 0 {
 			ops.errorf("int %d used without %d in intcblock", val, val)
 		}
 		constIndex = uint(len(ops.intc))
@@ -464,7 +464,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 		}
 	}
 	if !found {
-		if ops.hasBytecBlock {
+		if ops.cntBytecBlock > 0 {
 			ops.errorf("byte/addr/method used without value in bytecblock")
 		}
 		constIndex = uint(len(ops.bytec))
@@ -482,12 +482,27 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("int needs one argument")
 	}
 
-	if ops.hasIntcBlock && ops.Version >= backBranchEnabledVersion {
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntIntcBlock > 0 && ops.Version >= backBranchEnabledVersion {
 		// We don't understand control-flow, so use pushint
 		ops.warnf("int %s used with explicit intcblock. must pushint", args[0])
 		pushint := OpsByName[ops.Version]["pushint"]
 		return asmPushInt(ops, &pushint, args)
 	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntIntcBlock > 1 {
+		pushint, ok := OpsByName[ops.Version]["pushint"]
+		if ok {
+			return asmPushInt(ops, &pushint, args)
+		}
+		return ops.errorf("int %s used with manual intcblocks. Use intc.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// intcblock dominates the current instruction. If so, we could use it.
 
 	// check txn type constants
 	i, ok := txnTypeMap[args[0]]
@@ -717,12 +732,29 @@ func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
-	if ops.hasBytecBlock && ops.Version >= backBranchEnabledVersion {
+
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntBytecBlock > 0 && ops.Version >= backBranchEnabledVersion {
 		// We don't understand control-flow, so use pushbytes
 		ops.warnf("byte %s used with explicit bytecblock. must pushbytes", args[0])
 		pushbytes := OpsByName[ops.Version]["pushbytes"]
 		return asmPushBytes(ops, &pushbytes, args)
 	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntBytecBlock > 1 {
+		pushbytes, ok := OpsByName[ops.Version]["pushbytes"]
+		if ok {
+			return asmPushBytes(ops, &pushbytes, args)
+		}
+		return ops.errorf("byte %s used with manual bytecblocks. Use bytec.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// bytecblock dominates the current instruction. If so, we could use it.
+
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
@@ -777,12 +809,14 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 	}
 	if !ops.known.deadcode {
+		// If we previously processed an `int`, we thought we could insert our
+		// own intcblock, but now we see a manual one.
 		if ops.hasPseudoInt {
 			ops.error("intcblock following int")
 		}
 		ops.intcRefs = nil
 		ops.intc = ivals
-		ops.hasIntcBlock = true
+		ops.cntIntcBlock++
 	}
 
 	return nil
@@ -813,12 +847,14 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(bv)
 	}
 	if !ops.known.deadcode {
+		// If we previously processed a pseudo `byte`, we thought we could
+		// insert our own bytecblock, but now we see a manual one.
 		if ops.hasPseudoByte {
 			ops.error("bytecblock following byte/addr/method")
 		}
 		ops.bytecRefs = nil
 		ops.bytec = bvals
-		ops.hasBytecBlock = true
+		ops.cntBytecBlock++
 	}
 	return nil
 }
@@ -1680,22 +1716,12 @@ func (ops *OpStream) assemble(text string) error {
 		ops.error(err)
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in v1
+	// backward compatibility: do not allow jumps past last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
 				ops.errorf("label %#v is too far away", label)
 			}
-		}
-	}
-
-	// Before back branches, the pseudo ops can and do complain during first pass
-	if ops.Version >= backBranchEnabledVersion {
-		if ops.hasIntcBlock && ops.hasPseudoInt {
-			ops.error("program has int instruction with a manual intcblock")
-		}
-		if ops.hasBytecBlock && ops.hasPseudoByte {
-			ops.error("program has byte instruction with a manual bytecblock")
 		}
 	}
 
@@ -1850,7 +1876,7 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
 func (ops *OpStream) optimizeIntcBlock() error {
-	if ops.hasIntcBlock {
+	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
@@ -1893,7 +1919,7 @@ func (ops *OpStream) optimizeIntcBlock() error {
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
 func (ops *OpStream) optimizeBytecBlock() error {
-	if ops.hasBytecBlock {
+	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
@@ -2068,7 +2094,7 @@ func (ops *OpStream) prependCBlocks() []byte {
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 && !ops.hasIntcBlock {
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
 		prebytes.WriteByte(OpsByName[ops.Version]["intcblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
@@ -2077,7 +2103,7 @@ func (ops *OpStream) prependCBlocks() []byte {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 && !ops.hasBytecBlock {
+	if len(ops.bytec) > 0 && ops.cntBytecBlock == 0 {
 		prebytes.WriteByte(OpsByName[ops.Version]["bytecblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])

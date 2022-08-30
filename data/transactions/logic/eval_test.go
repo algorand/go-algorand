@@ -897,6 +897,9 @@ func TestBytecTooFar(t *testing.T) {
 }
 
 func TestManualCBlockEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	// TestManualCBlock in assembler_test.go demonstrates that these will use
 	// an inserted constant block.
 	testAccepts(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", 2)

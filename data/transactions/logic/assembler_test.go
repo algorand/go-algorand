@@ -952,6 +952,51 @@ func TestManualCBlocks(t *testing.T) {
 	require.EqualValues(t, ops.Program[4], 0x44)
 }
 
+func TestManualCBlocksPreBackBranch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Before backbranch enabled, the assembler is willing to assemble an `int`
+	// reference after an intcblock as an intc. It uses the most recent seen
+	// non-deadcode intcblock, so it *could* be wrong.
+	testProg(t, "intcblock 10 20; int 10;", backBranchEnabledVersion-1)
+	// By the same token, assembly complains if that intcblock doesn't have the
+	// constant. In v3, and v3 only, it *could* pushint.
+	testProg(t, "intcblock 10 20; int 30;", backBranchEnabledVersion-1, Expect{1, "int 30 used..."})
+
+	// Since the second intcblock is dead, the `int 10` "sees" the first block, not the second
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1,
+		Expect{1, "int 3 used..."})
+
+	// Here, the intcblock in effect is unknowable, better to force the user to
+	// use intc (unless pushint is available to save the day).
+
+	// backBranchEnabledVersion-1 contains pushint
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1)
+
+	// backBranchEnabledVersion-2 does not
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-2,
+		Expect{1, "int 10 used with manual intcblocks. Use intc."})
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-2,
+		Expect{1, "int 3 used with manual intcblocks. Use intc."})
+
+	// REPEAT ABOVE, BUT FOR BYTE BLOCKS
+
+	testProg(t, "bytecblock 0x10 0x20; byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; byte 0x30;", backBranchEnabledVersion-1, Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1,
+		Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x10 used with manual bytecblocks. Use bytec."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x03 used with manual bytecblocks. Use bytec."})
+}
+
 func TestAssembleOptimizedConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
