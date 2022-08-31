@@ -25,7 +25,6 @@ type Tag string
 // are encoded using a comma separator (see network/msgOfInterest.go).
 // The tags must be 2 bytes long.
 const (
-	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"
 	MsgOfInterestTag   Tag = "MI"
 	MsgDigestSkipTag   Tag = "MS"

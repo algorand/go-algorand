@@ -477,6 +477,19 @@ func (wp *wsPeer) readLoop() {
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		// the remaining valid tags: no special handling here
+		case protocol.AgreementVoteTag:
+		case protocol.NetPrioResponseTag:
+		case protocol.PingTag:
+		case protocol.PingReplyTag:
+		case protocol.ProposalPayloadTag:
+		case protocol.StateProofSigTag:
+		case protocol.TxnTag:
+		case protocol.UniCatchupReqTag:
+		case protocol.UniEnsBlockReqTag:
+		case protocol.VoteBundleTag:
+		default: // catch and ignore unrecognized tags, rather than queueing them to be ignored
+			continue
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
