@@ -17,15 +17,22 @@
 package stateproof
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-var schema = []string{
+const (
 	// sigs tracks signatures used to build a state proofs, for
 	// rounds that have not formed a state proofs yet.
 	//
@@ -35,14 +42,45 @@ var schema = []string{
 	//
 	// Signatures produced by this node are special because we broadcast
 	// them early; other signatures are retransmitted later on.
-	`CREATE TABLE IF NOT EXISTS sigs (
+	createSigsTable = `CREATE TABLE IF NOT EXISTS sigs (
 		sprnd integer,
 		signer blob,
 		sig blob,
 		from_this_node integer,
-		UNIQUE (sprnd, signer))`,
+		UNIQUE (sprnd, signer))`
 
-	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
+	createSigsIdx = `CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`
+
+	// builders table stored a serialization of each BuilderForRound data, without the sigs (stored separately)
+	// This table is only used when the TODO flag is specified in startup (relay nodes only)
+	createBuildersTable = `CREATE TABLE IF NOT EXISTS builders (
+    	round INTEGER PRIMARY KEY NOT NULL,
+    	builder BLOB NOT NULL
+    )`
+
+	insertBuilderForRound = `INSERT INTO builders (round,builder) VALUES (?,?)`
+
+	selectBuilderForRound = `SELECT builder FROM builders WHERE round=?`
+)
+
+// dbSchemaUpgrade0 initialize the tables.
+func dbSchemaUpgrade0(_ context.Context, tx *sql.Tx, _ bool) error {
+	_, err := tx.Exec(createSigsTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(createSigsIdx)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(createBuildersTable)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type pendingSig struct {
@@ -51,17 +89,21 @@ type pendingSig struct {
 	fromThisNode bool
 }
 
-func initDB(tx *sql.Tx) error {
-	for i, tableCreate := range schema {
-		_, err := tx.Exec(tableCreate)
-		if err != nil {
-			return fmt.Errorf("could not state proof table %d: %v", i, err)
-		}
+func makeStateProofDB(accessor db.Accessor) error {
+	migrations := []db.Migration{
+		dbSchemaUpgrade0,
+	}
+
+	err := db.Initialize(accessor, migrations)
+	if err != nil {
+		accessor.Close()
+		return fmt.Errorf("unable to initialize participation registry database: %w", err)
 	}
 
 	return nil
 }
 
+//#region Sig Operations
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
 	_, err := tx.Exec("INSERT INTO sigs (sprnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
 		rnd,
@@ -121,3 +163,60 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 	return res, rows.Err()
 }
+
+//#endregion
+
+//#region Builders Operations
+
+// PersistentBuilder is a wrapper containing only the necessary stateproof.builder data required
+// for database persistence.
+type PersistentBuilder struct {
+	_struct     struct{}                  `codec:",omitempty,omitemptyarray"`
+	Builder     *stateproof.Builder       `codec:"bld"`
+	VotersHdr   bookkeeping.BlockHeader   `codec:"hdr"`
+	Message     stateproofmsg.Message     `codec:"msg"`
+	AddrToPos   map[basics.Address]uint64 `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
+	TotalWeight basics.MicroAlgos         `codec:"algo"`
+}
+
+func (pb *PersistentBuilder) Init(b *builder) {
+	pb.Builder = b.Builder
+	pb.VotersHdr = b.votersHdr
+	pb.Message = b.message
+	pb.AddrToPos = b.voters.AddrToPos
+	pb.TotalWeight = b.voters.TotalWeight
+}
+
+func (pb *PersistentBuilder) ToBuilder() *builder {
+	voters := ledgercore.MakeVotersForRound()
+	proto := config.Consensus[pb.VotersHdr.CurrentProtocol]
+	voters.Initialize(proto, pb.Builder.Participants, pb.Builder.Parttree, pb.AddrToPos)
+
+	return &builder{
+		Builder:   pb.Builder,
+		message:   pb.Message,
+		votersHdr: pb.VotersHdr,
+		voters:    voters,
+	}
+}
+
+func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
+	var pb PersistentBuilder
+	pb.Init(b)
+
+	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
+	return err
+}
+
+func getBuilder(tx *sql.Tx, rnd basics.Round) (*builder, error) {
+	var pb PersistentBuilder
+	row := tx.QueryRow(selectBuilderForRound, rnd)
+	err := row.Scan(&pb)
+	if err != nil {
+		return &builder{}, fmt.Errorf("getBuilder: builder for round %d not found in database: %w", rnd, err)
+	}
+
+	return pb.ToBuilder(), nil
+}
+
+//#endregion

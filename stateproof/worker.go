@@ -18,7 +18,6 @@ package stateproof
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -89,9 +88,7 @@ func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(spw.db)
 	if err != nil {
 		spw.log.Warnf("spw.Start(): initDB: %v", err)
 		return

@@ -34,18 +34,22 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
+const StateProofTopVoters = 1024 // Should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
+
 // Builder keeps track of signatures on a message and eventually produces
 // a state proof for that message.
 type Builder struct {
-	data           MessageHash
-	round          uint64
-	sigs           []sigslot // Indexed by pos in participants
-	signedWeight   uint64    // Total weight of signatures so far
-	participants   []basics.Participant
-	parttree       *merklearray.Tree
-	lnProvenWeight uint64
-	provenWeight   uint64
-	strengthTarget uint64
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Data           MessageHash          `codec:"data"`
+	Round          uint64               `codec:"rnd"`
+	sigs           []sigslot            // Indexed by pos in Participants
+	signedWeight   uint64               // Total weight of signatures so far
+	Participants   []basics.Participant `codec:"parts,allocbound=StateProofTopVoters"`
+	Parttree       *merklearray.Tree    `codec:"parttree"`
+	LnProvenWeight uint64               `codec:"lnprv"`
+	ProvenWeight   uint64               `codec:"prv"`
+	StrengthTarget uint64               `codec:"str"`
 	cachedProof    *StateProof
 }
 
@@ -58,15 +62,15 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 	}
 
 	b := &Builder{
-		data:           data,
-		round:          round,
+		Data:           data,
+		Round:          round,
 		sigs:           make([]sigslot, npart),
 		signedWeight:   0,
-		participants:   part,
-		parttree:       parttree,
-		lnProvenWeight: lnProvenWt,
-		provenWeight:   provenWeight,
-		strengthTarget: strengthTarget,
+		Participants:   part,
+		Parttree:       parttree,
+		LnProvenWeight: lnProvenWt,
+		ProvenWeight:   provenWeight,
+		StrengthTarget: strengthTarget,
 		cachedProof:    nil,
 	}
 
@@ -86,11 +90,11 @@ func (b *Builder) Present(pos uint64) (bool, error) {
 // IsValid verifies that the participant along with the signature can be inserted to the builder.
 // verifySig can be set to false when the signature is already verified (e.g. loaded from the DB)
 func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig bool) error {
-	if pos >= uint64(len(b.participants)) {
-		return fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.participants))
+	if pos >= uint64(len(b.Participants)) {
+		return fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.Participants))
 	}
 
-	p := b.participants[pos]
+	p := b.Participants[pos]
 
 	if p.Weight == 0 {
 		return fmt.Errorf("builder.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
@@ -101,7 +105,7 @@ func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig 
 		if err := sig.ValidateSaltVersion(merklesignature.SchemeSaltVersion); err != nil {
 			return err
 		}
-		if err := p.PK.VerifyBytes(b.round, b.data[:], sig); err != nil {
+		if err := p.PK.VerifyBytes(b.Round, b.Data[:], sig); err != nil {
 			return err
 		}
 	}
@@ -118,7 +122,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 		return ErrPositionAlreadyPresent
 	}
 
-	p := b.participants[pos]
+	p := b.Participants[pos]
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
@@ -130,7 +134,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 
 // Ready returns whether the state proof is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.cachedProof != nil || b.signedWeight > b.provenWeight
+	return b.cachedProof != nil || b.signedWeight > b.ProvenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -175,7 +179,7 @@ func (b *Builder) Build() (*StateProof, error) {
 	}
 
 	if !b.Ready() {
-		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
+		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.ProvenWeight)
 	}
 
 	// Commit to the sigs array
@@ -197,17 +201,17 @@ func (b *Builder) Build() (*StateProof, error) {
 		MerkleSignatureSaltVersion: merklesignature.SchemeSaltVersion,
 	}
 
-	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.strengthTarget)
+	nr, err := numReveals(b.signedWeight, b.LnProvenWeight, b.StrengthTarget)
 	if err != nil {
 		return nil, err
 	}
 
 	choice := coinChoiceSeed{
-		partCommitment: b.parttree.Root(),
-		lnProvenWeight: b.lnProvenWeight,
+		partCommitment: b.Parttree.Root(),
+		lnProvenWeight: b.LnProvenWeight,
 		sigCommitment:  s.SigCommit,
 		signedWeight:   s.SignedWeight,
-		data:           b.data,
+		data:           b.Data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)
@@ -221,8 +225,8 @@ func (b *Builder) Build() (*StateProof, error) {
 			return nil, err
 		}
 
-		if pos >= uint64(len(b.participants)) {
-			return nil, fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.participants))
+		if pos >= uint64(len(b.Participants)) {
+			return nil, fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.Participants))
 		}
 
 		revealsSequence[j] = pos
@@ -236,7 +240,7 @@ func (b *Builder) Build() (*StateProof, error) {
 		// Generate the reveal for pos
 		s.Reveals[pos] = Reveal{
 			SigSlot: b.sigs[pos].sigslotCommit,
-			Part:    b.participants[pos],
+			Part:    b.Participants[pos],
 		}
 
 		proofPositions = append(proofPositions, pos)
@@ -247,7 +251,7 @@ func (b *Builder) Build() (*StateProof, error) {
 		return nil, err
 	}
 
-	partProofs, err := b.parttree.Prove(proofPositions)
+	partProofs, err := b.Parttree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
