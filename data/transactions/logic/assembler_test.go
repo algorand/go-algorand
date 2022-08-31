@@ -771,6 +771,7 @@ func TestOpBytes(t *testing.T) {
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
 			require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+			testProg(t, "byte 0x7; len", v, Expect{1, "...odd length hex string"})
 		})
 	}
 }
