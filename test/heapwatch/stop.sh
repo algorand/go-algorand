@@ -34,4 +34,4 @@ fi
 
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
-python3 "${REPO_ROOT}/test/heapwatch/metrics_delta.py" '--nick-lre=relay:relay\d+' '--nick-lre=pn:node\d+' -d "${TESTDIR}/heaps"
+python3 "${REPO_ROOT}/test/heapwatch/metrics_delta.py" '--nick-lre=relay:relay\d+|Primary\d*' '--nick-lre=pn:[nN]ode\d+' -d "${TESTDIR}/heaps"
