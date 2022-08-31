@@ -17,6 +17,9 @@ import (
 type simpleDebugger struct {
 	beforeTxnCalls int
 	afterTxnCalls  int
+
+	beforeInnerTxnGroupCalls   int
+	afterInnerTxnTxnGroupCalls int
 }
 
 func (d *simpleDebugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
@@ -25,6 +28,15 @@ func (d *simpleDebugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
 }
 func (d *simpleDebugger) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
 	d.afterTxnCalls++
+	return nil
+}
+
+func (d *simpleDebugger) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	d.beforeInnerTxnGroupCalls++
+	return nil
+}
+func (d *simpleDebugger) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	d.afterInnerTxnTxnGroupCalls++
 	return nil
 }
 
@@ -54,11 +66,11 @@ func TestSimulateWithDebugger(t *testing.T) {
 		},
 	}
 
-	// ALSO GENERAL TODO: satisfy review dog: https://github.com/algorand/go-algorand/runs/8006484689?check_suite_focus=true
-
 	debugger := simpleDebugger{}
 	_, _, err := s.simulateWithDebugger(txgroup, &debugger)
 	require.NoError(t, err)
 	require.Equal(t, 1, debugger.beforeTxnCalls)
 	require.Equal(t, 1, debugger.afterTxnCalls)
+	require.Zero(t, debugger.beforeInnerTxnGroupCalls)
+	require.Zero(t, debugger.afterInnerTxnTxnGroupCalls)
 }

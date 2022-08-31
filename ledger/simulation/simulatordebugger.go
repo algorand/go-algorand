@@ -100,6 +100,10 @@ func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
 	return dh.populateInnerTransactions(ep.TxnGroup)
 }
 
+func (dh *debuggerHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	return nil
+}
+
 func (dh *debuggerHook) saveApplyData(applyData transactions.ApplyData) error {
 	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.cursor)
 	if err != nil {
@@ -130,6 +134,16 @@ func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {
 	return nil
 }
 
-func (dh *debuggerHook) BeforeTealOp(state *logic.DebugState) error {
-	return dh.saveEvalDelta(state.EvalDelta)
+func (dh *debuggerHook) BeforeLogicEval(cx *logic.EvalContext) error {
+	return nil
+}
+
+func (dh *debuggerHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
+	return nil
+}
+
+func (dh *debuggerHook) BeforeTealOp(cx *logic.EvalContext) error {
+	// TODO: only do this for apps, not LogicSig evals
+	groupIndex := 0 // TODO: get actual group index from cx
+	return dh.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta)
 }

@@ -946,19 +946,23 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := logic.CallBeforeTxnHookIfItExists(debugger, evalParams, gi)
+		if debugger != nil {
+			err := debugger.BeforeTxn(evalParams, gi)
+			if err != nil {
+				return fmt.Errorf("error while running debugger BeforeTxn hook: %w", err)
+			}
+		}
+
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
 
-		err = eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
-		if err != nil {
-			return err
-		}
-
-		err = logic.CallAfterTxnHookIfItExists(debugger, evalParams, gi)
-		if err != nil {
-			return err
+		if debugger != nil {
+			err = debugger.AfterTxn(evalParams, gi)
+			if err != nil {
+				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
+			}
 		}
 
 		txibs = append(txibs, txib)

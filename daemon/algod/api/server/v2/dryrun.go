@@ -116,7 +116,6 @@ type dryrunDebugReceiver struct {
 	lines         []string
 	history       []generated.DryrunState
 	scratchActive []bool
-	innerTxnDepth uint
 }
 
 func (ddr *dryrunDebugReceiver) updateScratch() {
@@ -182,50 +181,24 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 	return st
 }
 
-// BeforeInnerTxnGroup is fired immediately before beginning evaluation of a group of inner transactions (DebuggerHook interface)
-// We track the inner transaction depth so that the existing evaluation hooks do not execute for inner transactions,
-// in order to maintain backward compabitility.
-func (ddr *dryrunDebugReceiver) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	ddr.innerTxnDepth++
-	return nil
-}
-
-// AfterInnerTxnGroup is fired immediately after evaluation of a group of inner transactions (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	ddr.innerTxnDepth--
-	return nil
-}
-
-// BeforeAppEval is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) BeforeAppEval(state *logic.DebugState) error {
-	if ddr.innerTxnDepth > 0 {
-		return nil
-	}
-
+// Register is fired on program creation (LegacyDebuggerHook interface)
+func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
 	return nil
 }
 
-// BeforeTealOp is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) BeforeTealOp(state *logic.DebugState) error {
-	if ddr.innerTxnDepth > 0 {
-		return nil
-	}
-
+// Update is fired on every step (LegacyDebuggerHook interface)
+func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
 	return nil
 }
 
-// AfterAppEval is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) AfterAppEval(state *logic.DebugState) error {
-	if ddr.innerTxnDepth > 0 {
-		return nil
-	}
-
-	return ddr.BeforeTealOp(state)
+// Complete is called when the program exits (LegacyDebuggerHook interface)
+func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
+	return ddr.Update(state)
 }
 
 type dryrunLedger struct {
@@ -444,7 +417,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
+			ep.Debugger = logic.MakeLegacyDebuggerAdaptor(&debug)
 			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
@@ -528,7 +501,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				ep.Debugger = logic.MakeLegacyDebuggerAdaptor(&debug)
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {

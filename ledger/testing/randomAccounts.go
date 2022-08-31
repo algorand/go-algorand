@@ -36,16 +36,12 @@ var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c
 
 // PoolAddr returns a copy of the test pool address
 func PoolAddr() basics.Address {
-	var addr basics.Address
-	copy(addr[:], testPoolAddr[:])
-	return addr
+	return testPoolAddr
 }
 
 // SinkAddr returns a copy of the test sink address
 func SinkAddr() basics.Address {
-	var addr basics.Address
-	copy(addr[:], testSinkAddr[:])
-	return addr
+	return testSinkAddr
 }
 
 // RandomAddress generates a random address

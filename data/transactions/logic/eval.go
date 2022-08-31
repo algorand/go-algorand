@@ -418,28 +418,31 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 type evalFunc func(cx *EvalContext) error
 type checkFunc func(cx *EvalContext) error
 
-type runMode uint64
+// RunMode is a bitset of logic evaluation modes.
+// There are currently two such modes: Signature and Application.
+type RunMode uint64
 
 const (
-	// modeSig is LogicSig execution
-	modeSig runMode = 1 << iota
+	// ModeSig is LogicSig execution
+	ModeSig RunMode = 1 << iota
 
-	// modeApp is application/contract execution
-	modeApp
+	// ModeApp is application/contract execution
+	ModeApp
 
 	// local constant, run in any mode
-	modeAny = modeSig | modeApp
+	modeAny = ModeSig | ModeApp
 )
 
-func (r runMode) Any() bool {
+// Any checks if this mode bitset represents any evaluation mode
+func (r RunMode) Any() bool {
 	return r == modeAny
 }
 
-func (r runMode) String() string {
+func (r RunMode) String() string {
 	switch r {
-	case modeSig:
+	case ModeSig:
 		return "Signature"
-	case modeApp:
+	case ModeApp:
 		return "Application"
 	case modeAny:
 		return "Any"
@@ -482,7 +485,7 @@ type EvalContext struct {
 	*EvalParams
 
 	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags runMode
+	runModeFlags RunMode
 
 	// the index of the transaction being evaluated
 	groupIndex int
@@ -525,9 +528,11 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
+}
 
-	// Stores state & disassembly for the optional debugger
-	debugState *DebugState
+// RunMode returns the evaluation context's mode (signature or application)
+func (cx *EvalContext) RunMode() RunMode {
+	return cx.runModeFlags
 }
 
 // StackType describes the type of a value on the operand stack
@@ -638,7 +643,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: modeApp,
+		runModeFlags: ModeApp,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 		appID:        aid,
@@ -680,7 +685,7 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: modeSig,
+		runModeFlags: ModeSig,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
@@ -706,16 +711,9 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			var derr error
-			if cx.runModeFlags == modeSig {
-				derr = callAfterLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
-			} else {
-				derr = callAfterAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
-			}
-			if err == nil {
-				err = derr
-			}
+		derr := callAfterLogicHookIfItExists(cx.Debugger, cx, err)
+		if err == nil && derr != nil {
+			err = derr
 		}
 	}()
 
@@ -742,33 +740,22 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	if cx.Debugger != nil {
-		cx.debugState = makeDebugState(cx)
-
-		var derr error
-		if cx.runModeFlags == modeSig {
-			derr = callBeforeLogicSigEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
-		} else {
-			derr = callBeforeAppEvalHookIfItExists(cx.Debugger, cx.refreshDebugState(err))
-		}
-		if derr != nil {
-			return false, derr
-		}
+	err = callBeforeLogicHookIfItExists(cx.Debugger, cx)
+	if err != nil {
+		return false, err
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			if derr := callBeforeTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-				return false, derr
-			}
+		err = callBeforeTealOpHookIfItExists(cx.Debugger, cx)
+		if err != nil {
+			return false, err
 		}
 
 		err = cx.step()
 
-		if cx.Debugger != nil { // we wrap with this check to avoid running cx.refreshDebugState on nil debugger
-			if derr := callAfterTealOpHookIfItExists(cx.Debugger, cx.refreshDebugState(err)); derr != nil {
-				return false, derr
-			}
+		derr := callAfterTealOpHookIfItExists(cx.Debugger, cx, err)
+		if err == nil && derr != nil {
+			return false, derr
 		}
 	}
 	if err != nil {
@@ -799,17 +786,17 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
 func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, modeApp)
+	return check(program, params, ModeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, modeSig)
+	return check(params.TxnGroup[gi].Lsig.Logic, params, ModeSig)
 }
 
-func check(program []byte, params *EvalParams, mode runMode) (err error) {
+func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -911,7 +898,7 @@ func boolToSV(x bool) stackValue {
 }
 
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == modeSig {
+	if cx.runModeFlags == ModeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -2320,7 +2307,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == modeSig {
+		if cx.runModeFlags == ModeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -2588,7 +2575,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == modeSig {
+			if cx.runModeFlags == ModeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)
@@ -4821,18 +4808,22 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
 
-	err := callBeforeInnerTxnGroupHookIfItExists(ep.Debugger, ep)
-	if err != nil {
-		return err
+	if ep.Debugger != nil {
+		err := ep.Debugger.BeforeInnerTxnGroup(ep)
+		if err != nil {
+			return fmt.Errorf("error while running debugger BeforeInnerTxnGroup hook: %w", err)
+		}
 	}
 
 	for i := range ep.TxnGroup {
-		err := CallBeforeTxnHookIfItExists(ep.Debugger, ep, i)
-		if err != nil {
-			return err
+		if ep.Debugger != nil {
+			err := ep.Debugger.BeforeTxn(ep, i)
+			if err != nil {
+				return fmt.Errorf("error while running debugger BeforeTxn hook: %w", err)
+			}
 		}
 
-		err = cx.Ledger.Perform(i, ep)
+		err := cx.Ledger.Perform(i, ep)
 		if err != nil {
 			return err
 		}
@@ -4840,9 +4831,11 @@ func opItxnSubmit(cx *EvalContext) error {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 
-		err = CallAfterTxnHookIfItExists(ep.Debugger, ep, i)
-		if err != nil {
-			return err
+		if ep.Debugger != nil {
+			err = ep.Debugger.AfterTxn(ep, i)
+			if err != nil {
+				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
+			}
 		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
@@ -4850,9 +4843,11 @@ func opItxnSubmit(cx *EvalContext) error {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	err = callAfterInnerTxnGroupHookIfItExists(ep.Debugger, ep)
-	if err != nil {
-		return err
+	if ep.Debugger != nil {
+		err := ep.Debugger.AfterInnerTxnGroup(ep)
+		if err != nil {
+			return fmt.Errorf("error while running debugger AfterInnerTxnGroup hook: %w", err)
+		}
 	}
 
 	return nil

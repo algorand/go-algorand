@@ -17,8 +17,6 @@
 package logic
 
 import (
-	"encoding/base64"
-	"os"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,45 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testProgram string = `intcblock 0 1 1 1 1 5 100
-bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
-bytec 0
-sha256
-keccak256
-sha512_256
-len
-intc_0
-+
-intc_1
--
-intc_2
-/
-intc_3
-*
-intc 4
-<
-intc_1
->
-intc_1
-<=
-intc_1
->=
-intc_1
-&&
-intc_1
-||
-bytec_1
-bytec_2
-!=
-bytec_3
-bytec 4
-!=
-&&
-&&
-`
-
 // byte 0x068101 is `#pragma version 6; int 1;`
-var innerTxnTestProgram string = `itxn_begin
+const innerTxnTestProgram string = `itxn_begin
 int appl
 itxn_field TypeEnum
 int NoOp
@@ -74,102 +35,79 @@ dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram
 itxn_submit
+
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 1
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_next
+int pay
+itxn_field TypeEnum
+int 2
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_submit
+
 int 1
 `
 
-func TestWebDebuggerManual(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
-	if len(debugURL) == 0 {
-		t.Skip("this must be run manually")
-	}
-
-	ep, tx, _ := makeSampleEnv()
-	ep.TxnGroup[0].Lsig.Args = [][]byte{
-		tx.Sender[:],
-		tx.Receiver[:],
-		tx.CloseRemainderTo[:],
-		tx.VotePK[:],
-		tx.SelectionPK[:],
-		tx.Note,
-	}
-	ep.Debugger = &WebDebuggerHook{URL: debugURL}
-	testLogic(t, testProgram, AssemblerMaxVersion, ep)
-}
-
 type testDbgHook struct {
-	beforeLogicSigEvalCalls  int
-	afterLogicSigEvalCalls   int
-	beforeTxnCalls           int
-	beforeAppEvalCalls       int
-	beforeTealOpCalls        int
+	beforeTxnCalls int
+	afterTxnCalls  int
+
+	beforeLogicEvalCalls int
+	afterLogicEvalCalls  int
+	logicEvalModes       []RunMode
+
+	beforeTealOpCalls int
+	afterTealOpCalls  int
+
 	beforeInnerTxnGroupCalls int
 	afterInnerTxnGroupCalls  int
-	afterTealOpCalls         int
-	afterAppEvalCalls        int
-	afterTxnCalls            int
-	state                    *DebugState
-}
-
-func (d *testDbgHook) BeforeLogicSigEval(state *DebugState) error {
-	d.beforeLogicSigEvalCalls++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) AfterLogicSigEval(state *DebugState) error {
-	d.afterLogicSigEvalCalls++
-	d.state = state
-	return nil
 }
 
 func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
 	d.beforeTxnCalls++
-	d.state = ep.caller.debugState
-	return nil
-}
-
-func (d *testDbgHook) BeforeAppEval(state *DebugState) error {
-	d.beforeAppEvalCalls++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) BeforeTealOp(state *DebugState) error {
-	d.beforeTealOpCalls++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) BeforeInnerTxnGroup(ep *EvalParams) error {
-	d.beforeInnerTxnGroupCalls++
-	d.state = ep.caller.debugState
-	return nil
-}
-
-func (d *testDbgHook) AfterInnerTxnGroup(ep *EvalParams) error {
-	d.afterInnerTxnGroupCalls++
-	d.state = ep.caller.debugState
-	return nil
-}
-
-func (d *testDbgHook) AfterTealOp(state *DebugState) error {
-	d.afterTealOpCalls++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) AfterAppEval(state *DebugState) error {
-	d.afterAppEvalCalls++
-	d.state = state
 	return nil
 }
 
 func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int) error {
 	d.afterTxnCalls++
-	d.state = ep.caller.debugState
+	return nil
+}
+
+func (d *testDbgHook) BeforeLogicEval(cx *EvalContext) error {
+	d.beforeLogicEvalCalls++
+	d.logicEvalModes = append(d.logicEvalModes, cx.RunMode())
+	return nil
+}
+
+func (d *testDbgHook) AfterLogicEval(cx *EvalContext, evalError error) error {
+	d.afterLogicEvalCalls++
+	return nil
+}
+
+func (d *testDbgHook) BeforeTealOp(cx *EvalContext) error {
+	d.beforeTealOpCalls++
+	return nil
+}
+
+func (d *testDbgHook) AfterTealOp(cx *EvalContext, evalError error) error {
+	d.afterTealOpCalls++
+	return nil
+}
+
+func (d *testDbgHook) BeforeInnerTxnGroup(ep *EvalParams) error {
+	d.beforeInnerTxnGroupCalls++
+	return nil
+}
+
+func (d *testDbgHook) AfterInnerTxnGroup(ep *EvalParams) error {
+	d.afterInnerTxnGroupCalls++
 	return nil
 }
 
@@ -177,201 +115,79 @@ func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testApp(t, testProgram, ep)
+	t.Run("logicsig", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testDbgHook{}
+		ep := defaultEvalParams(nil)
+		ep.Debugger = &testDbg
+		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 
-	// these should not be called because beforeTxn and afterTxn hooks
-	// are called within ledger evaluation, not logic.
-	require.Equal(t, 0, testDbg.beforeTxnCalls)
-	require.Equal(t, 0, testDbg.afterTxnCalls)
+		// these should not be called because beforeTxn and afterTxn hooks
+		// are called within ledger evaluation, not logic.
+		require.Zero(t, testDbg.beforeTxnCalls)
+		require.Zero(t, testDbg.afterTxnCalls)
 
-	require.Equal(t, 0, testDbg.beforeLogicSigEvalCalls)
-	require.Equal(t, 0, testDbg.afterLogicSigEvalCalls)
+		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
+		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeSig}, testDbg.logicEvalModes)
 
-	require.Equal(t, 1, testDbg.beforeAppEvalCalls)
-	require.Equal(t, 1, testDbg.afterAppEvalCalls)
+		require.Equal(t, 35, testDbg.beforeTealOpCalls)
+		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-	require.Greater(t, testDbg.beforeTealOpCalls, 1)
-	require.Greater(t, testDbg.afterTealOpCalls, 1)
-	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+		require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
+		require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+	})
 
-	require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
-	require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+	t.Run("simple app", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testDbgHook{}
+		ep := defaultEvalParams(nil)
+		ep.Debugger = &testDbg
+		testApp(t, legacyDebuggerTestProgram, ep)
 
-	require.Len(t, testDbg.state.Stack, 1)
-}
+		// these should not be called because beforeTxn and afterTxn hooks
+		// are called within ledger evaluation, not logic.
+		require.Zero(t, testDbg.beforeTxnCalls)
+		require.Zero(t, testDbg.afterTxnCalls)
 
-func TestDebuggerHooksLogicSig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
+		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp}, testDbg.logicEvalModes)
 
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testLogic(t, testProgram, AssemblerMaxVersion, ep)
+		require.Equal(t, 35, testDbg.beforeTealOpCalls)
+		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-	// these should not be called because beforeTxn and afterTxn hooks
-	// are called within ledger evaluation, not logic.
-	require.Equal(t, 0, testDbg.beforeTxnCalls)
-	require.Equal(t, 0, testDbg.afterTxnCalls)
+		require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
+		require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+	})
 
-	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
-	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
+	t.Run("app with inner txns", func(t *testing.T) {
+		t.Parallel()
+		testDbg := testDbgHook{}
+		ep, tx, ledger := MakeSampleEnv()
 
-	require.Equal(t, 0, testDbg.beforeAppEvalCalls)
-	require.Equal(t, 0, testDbg.afterAppEvalCalls)
+		// Establish 888 as the app id, and fund it.
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
 
-	require.Greater(t, testDbg.beforeTealOpCalls, 1)
-	require.Greater(t, testDbg.afterTealOpCalls, 1)
-	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+		ep.Debugger = &testDbg
+		testApp(t, innerTxnTestProgram, ep)
 
-	require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
-	require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+		// only called for the inner transaction in this test, not the top-level one
+		require.Equal(t, 3, testDbg.beforeTxnCalls)
+		require.Equal(t, 3, testDbg.afterTxnCalls)
 
-	require.Len(t, testDbg.state.Stack, 1)
-}
+		require.Equal(t, 2, testDbg.beforeLogicEvalCalls)
+		require.Equal(t, 2, testDbg.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp, ModeApp}, testDbg.logicEvalModes)
 
-func TestDebuggerHookInnerTxns(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+		appCallTealOps := 27
+		innerAppCallTealOps := 1
+		require.Equal(t, appCallTealOps+innerAppCallTealOps, testDbg.beforeTealOpCalls)
+		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
 
-	testDbg := testDbgHook{}
-	ep, tx, ledger := MakeSampleEnv()
-
-	// Establish 888 as the app id, and fund it.
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
-
-	ep.Debugger = &testDbg
-	testApp(t, innerTxnTestProgram, ep)
-
-	require.Equal(t, testDbg.beforeAppEvalCalls, 2)
-	require.Equal(t, testDbg.afterAppEvalCalls, 2)
-
-	appCallTealOps := 11
-	innerAppCallTealOps := 1
-	require.Equal(t, testDbg.beforeTealOpCalls, appCallTealOps+innerAppCallTealOps)
-	require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
-
-	require.Equal(t, 1, testDbg.beforeInnerTxnGroupCalls)
-	require.Equal(t, 1, testDbg.afterInnerTxnGroupCalls)
-
-	require.Len(t, testDbg.state.Stack, 1)
-}
-
-func TestLineToPC(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	dState := DebugState{
-		Disassembly: "abc\ndef\nghi",
-		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
-	}
-	pc := dState.LineToPC(0)
-	require.Equal(t, 0, pc)
-
-	pc = dState.LineToPC(1)
-	require.Equal(t, 1, pc)
-
-	pc = dState.LineToPC(2)
-	require.Equal(t, 2, pc)
-
-	pc = dState.LineToPC(3)
-	require.Equal(t, 3, pc)
-
-	pc = dState.LineToPC(4)
-	require.Equal(t, 0, pc)
-
-	pc = dState.LineToPC(-1)
-	require.Equal(t, 0, pc)
-
-	pc = dState.LineToPC(0x7fffffff)
-	require.Equal(t, 0, pc)
-
-	dState.PCOffset = []PCOffset{}
-	pc = dState.LineToPC(1)
-	require.Equal(t, 0, pc)
-
-	dState.PCOffset = []PCOffset{{PC: 1, Offset: 0}}
-	pc = dState.LineToPC(1)
-	require.Equal(t, 0, pc)
-}
-
-func TestValueDeltaToValueDelta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	vDelta := basics.ValueDelta{
-		Action: basics.SetUintAction,
-		Bytes:  "some string",
-		Uint:   uint64(0xffffffff),
-	}
-	ans := valueDeltaToValueDelta(&vDelta)
-	require.Equal(t, vDelta.Action, ans.Action)
-	require.NotEqual(t, vDelta.Bytes, ans.Bytes)
-	require.Equal(t, base64.StdEncoding.EncodeToString([]byte(vDelta.Bytes)), ans.Bytes)
-	require.Equal(t, vDelta.Uint, ans.Uint)
-}
-
-var testCallStackProgram string = `intcblock 1
-callsub label1
-intc_0
-label1:
-callsub label2
-label2:
-intc_0
-`
-
-func TestParseCallstack(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	expectedCallFrames := []CallFrame{
-		{
-			FrameLine: 1,
-			LabelName: "label1",
-		},
-		{
-			FrameLine: 4,
-			LabelName: "label2",
-		},
-	}
-
-	dState := DebugState{
-		Disassembly: testCallStackProgram,
-		PCOffset:    []PCOffset{{PC: 1, Offset: 18}, {PC: 4, Offset: 30}, {PC: 7, Offset: 45}, {PC: 8, Offset: 65}, {PC: 11, Offset: 88}},
-	}
-	callstack := []int{4, 8}
-
-	cfs := dState.parseCallstack(callstack)
-	require.Equal(t, expectedCallFrames, cfs)
-}
-
-func TestCallStackUpdate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	expectedCallFrames := []CallFrame{
-		{
-			FrameLine: 2,
-			LabelName: "label1",
-		},
-		{
-			FrameLine: 5,
-			LabelName: "label2",
-		},
-	}
-
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
-
-	require.Equal(t, 1, testDbg.beforeLogicSigEvalCalls)
-	require.Equal(t, 1, testDbg.afterLogicSigEvalCalls)
-	require.Greater(t, testDbg.beforeTealOpCalls, 1)
-	require.Len(t, testDbg.state.Stack, 1)
-	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
+		// two groups of inner transactions were issued
+		require.Equal(t, 2, testDbg.beforeInnerTxnGroupCalls)
+		require.Equal(t, 2, testDbg.afterInnerTxnGroupCalls)
+	})
 }

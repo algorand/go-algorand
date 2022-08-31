@@ -537,7 +537,7 @@ var GlobalFieldNames [invalidGlobalField]string
 type globalFieldSpec struct {
 	field   GlobalField
 	ftype   StackType
-	mode    runMode
+	mode    RunMode
 	version uint64
 	doc     string
 }
@@ -556,7 +556,7 @@ func (fs globalFieldSpec) Version() uint64 {
 }
 func (fs globalFieldSpec) Note() string {
 	note := fs.doc
-	if fs.mode == modeApp {
+	if fs.mode == ModeApp {
 		note = addExtra(note, "Application mode only.")
 	}
 	// There are no Signature mode only globals
@@ -572,21 +572,21 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{GroupSize, StackUint64, modeAny, 0,
 		"Number of transactions in this atomic transaction group. At least 1"},
 	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
-	{Round, StackUint64, modeApp, 2, "Current round number"},
-	{LatestTimestamp, StackUint64, modeApp, 2,
+	{Round, StackUint64, ModeApp, 2, "Current round number"},
+	{LatestTimestamp, StackUint64, ModeApp, 2,
 		"Last confirmed block UNIX timestamp. Fails if negative"},
-	{CurrentApplicationID, StackUint64, modeApp, 2, "ID of current application executing"},
-	{CreatorAddress, StackBytes, modeApp, 3,
+	{CurrentApplicationID, StackUint64, ModeApp, 2, "ID of current application executing"},
+	{CreatorAddress, StackBytes, ModeApp, 3,
 		"Address of the creator of the current application"},
-	{CurrentApplicationAddress, StackBytes, modeApp, 5,
+	{CurrentApplicationAddress, StackBytes, ModeApp, 5,
 		"Address that the current application controls"},
 	{GroupID, StackBytes, modeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
 	{OpcodeBudget, StackUint64, modeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},
-	{CallerApplicationID, StackUint64, modeApp, 6,
+	{CallerApplicationID, StackUint64, ModeApp, 6,
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
-	{CallerApplicationAddress, StackBytes, modeApp, 6,
+	{CallerApplicationAddress, StackBytes, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
 }
 
