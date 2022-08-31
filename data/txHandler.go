@@ -241,12 +241,16 @@ func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 func (handler *TxHandler) smarterTxnBroadcast(wi *txBacklogMsg) {
 	verifiedTxGroup := wi.unverifiedTxGroup
 	net := wi.rawmsg.Net
+	sender := wi.rawmsg.Sender
+	TxnBroadcast(handler.ctx, net, verifiedTxGroup, sender)
+}
+
+func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup []transactions.SignedTxn, sender network.Peer) (err error) {
 	peers := net.GetPeers()
 	var blob []byte
-	var id transactions.Txid
 	var txid []byte
 	for _, npeer := range peers {
-		if npeer == wi.rawmsg.Sender {
+		if npeer == sender {
 			continue
 		}
 		peer, ok := npeer.(network.UnicastPeer)
@@ -259,16 +263,19 @@ func (handler *TxHandler) smarterTxnBroadcast(wi *txBacklogMsg) {
 			if blob == nil {
 				blob = reencode(verifiedTxGroup)
 			}
-			peer.Unicast(handler.ctx, blob, protocol.TxnTag)
+			err = peer.Unicast(ctx, blob, protocol.TxnTag)
 		} else {
 			// tx3 protocol
 			if txid == nil {
-				id = verifiedTxGroup[0].ID()
-				txid = id[:]
+				for i := range verifiedTxGroup {
+					id := verifiedTxGroup[i].ID()
+					txid = append(txid, (id[:])...)
+				}
 			}
-			peer.Unicast(handler.ctx, txid, protocol.TxnAdvertiseTag)
+			err = peer.Unicast(ctx, txid, protocol.TxnAdvertiseTag)
 		}
 	}
+	return nil
 }
 
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
@@ -338,7 +345,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 }
 
 type requestedTxn struct {
-	//txid          transactions.Txid
+	//txid transactions.Txid // always present as key of map
 	requestedFrom []network.Peer
 	advertisedBy  []network.Peer
 	requestedAt   time.Time
@@ -348,51 +355,67 @@ type requestedTxn struct {
 const requestExpiration = time.Millisecond * 900
 
 func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	var request []byte
 	var txid transactions.Txid
-	copy(txid[:], rawmsg.Data)
-	_, _, found := handler.txPool.Lookup(txid)
-	if found {
-		// we already have it, nothing to do
-		return network.OutgoingMessage{}
+	numids := len(rawmsg.Data) / len(txid)
+	if numids*len(txid) != len(rawmsg.Data) {
+		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		return network.OutgoingMessage{Action: network.Disconnect}
 	}
-	req, ok := handler.txRequests[txid]
-	if !ok {
-		req = new(requestedTxn)
-		handler.txRequests[txid] = req
-		req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
-	} else {
-		req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
-		now := time.Now()
-		if now.Sub(req.requestedAt) < requestExpiration {
-			// no new request
-			return network.OutgoingMessage{}
+	for i := 0; i < numids; i++ {
+		copy(txid[:], rawmsg.Data[len(txid)*i:])
+		_, _, found := handler.txPool.Lookup(txid)
+		if found {
+			// we already have it, nothing to do
+			continue
+		}
+		req, ok := handler.txRequests[txid]
+		if !ok {
+			req = new(requestedTxn)
+			handler.txRequests[txid] = req
+			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
+		} else {
+			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
+			now := time.Now()
+			if now.Sub(req.requestedAt) < requestExpiration {
+				// no new request
+				continue
+			}
+		}
+		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
+		request = append(request, (txid[:])...)
+	}
+	if len(request) != 0 {
+		return network.OutgoingMessage{
+			Action:  network.Respond,
+			Tag:     protocol.TxnRequestTag,
+			Payload: request,
 		}
 	}
-	// peer, ok := rawmsg.Sender.(network.UnicastPeer)
-	// if !ok {
-	// 	// nothing to do
-	// 	return network.OutgoingMessage{}
-	// }
-	req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
-	return network.OutgoingMessage{
-		Action:  network.Respond,
-		Tag:     protocol.TxnRequestTag,
-		Payload: rawmsg.Data,
-	}
-	//peer.Unicast(handler.ctx, rawmsg.Data, protocol.TxnRequestTag)
+	return network.OutgoingMessage{}
 }
 func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	var txid transactions.Txid
-	copy(txid[:], rawmsg.Data)
-	tx, _, found := handler.txPool.Lookup(txid)
-	if found {
-		they := []transactions.SignedTxn{
-			tx,
+	numids := len(rawmsg.Data) / len(txid)
+	if numids*len(txid) != len(rawmsg.Data) {
+		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		return network.OutgoingMessage{Action: network.Disconnect}
+	}
+	response := make([]transactions.SignedTxn, numids)
+	numFound := 0
+	for i := 0; i < numids; i++ {
+		copy(txid[:], rawmsg.Data[len(txid)*i:])
+		tx, _, found := handler.txPool.Lookup(txid)
+		if found {
+			response[i] = tx
+			numFound++
 		}
+	}
+	if numFound != 0 {
 		return network.OutgoingMessage{
 			Action:  network.Respond,
 			Tag:     protocol.TxnTag,
-			Payload: reencode(they),
+			Payload: reencode(response),
 		}
 	}
 	// TODO: add NACK message to protocol so they can ask another node?
