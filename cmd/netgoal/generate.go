@@ -469,6 +469,7 @@ func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
 	data := gen.DefaultGenesis
+	// TODO: set data.LastPartKeyRound to something other than 3000000
 	totalWallets := wallets + npnHosts
 	data.Wallets = make([]gen.WalletData, totalWallets)
 	participatingNodeStake := big.NewRat(int64(100), int64(wallets))

@@ -16,7 +16,8 @@ fi
 
 mkdir -p "${TESTROOT}"
 
-netgoal generate --nodes 8 --relays 3 -r "${TESTROOT}" -o "${TESTROOT}"/netgoal.json --template goalnet -w 15
+netgoal generate --nodes 8 --relays 3 -r "${TESTROOT}" -o "${TESTROOT}"/netgoal_a.json --template goalnet -w 15
+jq .Genesis.LastPartKeyRound=5000 < "${TESTROOT}"/netgoal_a.json > "${TESTROOT}"/netgoal.json
 
 TESTDIR="${TESTROOT}"/net
 
@@ -35,10 +36,10 @@ python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-he
 echo "$!" > .heapWatch.pid
 
 # TODO: other pingpong modes
-pingpong run -d "${TESTDIR}/node1" --tps 20 --run 0 &
+pingpong run -d "${TESTDIR}/node1" --tps 20 --refresh 9999 &
 
 echo "$!" > .pingpong1.pid
 
-pingpong run -d "${TESTDIR}/node2" --tps 20 --run 0 &
+pingpong run -d "${TESTDIR}/node2" --tps 20 --refresh 9999 &
 
 echo "$!" > .pingpong2.pid

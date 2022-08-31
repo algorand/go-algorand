@@ -31,3 +31,7 @@ if [ -f .heapWatch.pid ]; then
     kill -9 $(cat .heapWatch.pid) || true
     rm -f .heapWatch.pid
 fi
+
+REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
+
+python3 "${REPO_ROOT}/test/heapwatch/metrics_delta.py" '--nick-lre=relay:relay\d+' '--nick-lre=pn:node\d+' -d "${TESTDIR}/heaps"
