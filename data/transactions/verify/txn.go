@@ -72,7 +72,7 @@ type GroupContext struct {
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifierDebugger logic.DebuggerHook) (*GroupContext, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -90,7 +90,6 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
 		ledger:           ledger,
-		verifierDebugger: verifierDebugger,
 	}, nil
 }
 
@@ -169,10 +168,11 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 // txnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller's responsibility to call batchVerifier.verify()
 func txnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier, verifierDebugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger, verifierDebugger)
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger)
 	if err != nil {
 		return nil, err
 	}
+	groupCtx.verifierDebugger = verifierDebugger
 
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)

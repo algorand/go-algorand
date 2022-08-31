@@ -18,6 +18,7 @@ package verify
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -114,7 +116,7 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil, nil)
+	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
 	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
 	require.NoError(t, Txn(&stxn, 0, groupCtx), "generateTestObjects generated a bad signedtxn")
@@ -135,7 +137,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
 		if Txn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -157,7 +159,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
 		if Txn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -202,7 +204,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 		},
 	}
 
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil, nil)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil)
 	require.NoError(t, err)
 
 	err = Txn(&stxn, 0, groupCtx)
@@ -256,10 +258,147 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil)
 		require.NoError(t, err)
 		Txn(&st, 0, groupCtx)
 	}
+}
+
+type testDbgHook struct {
+	log []string
+}
+
+func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.log = append(d.log, "beforeTxn")
+	return nil
+}
+
+func (d *testDbgHook) BeforeLogicEval(cx *logic.EvalContext) error {
+	d.log = append(d.log, fmt.Sprintf("beforeLogicEval %s", cx.RunMode()))
+	return nil
+}
+
+func (d *testDbgHook) BeforeTealOp(cx *logic.EvalContext) error {
+	d.log = append(d.log, "beforeTealOp")
+	return nil
+}
+
+func (d *testDbgHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+	d.log = append(d.log, "beforeInnerTxnGroup")
+	return nil
+}
+
+func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+	d.log = append(d.log, "afterInnerTxnGroup")
+	return nil
+}
+
+func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error {
+	d.log = append(d.log, "afterTealOp")
+	return nil
+}
+
+func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
+	d.log = append(d.log, fmt.Sprintf("afterLogicEval %s", cx.RunMode()))
+	return nil
+}
+
+func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+	d.log = append(d.log, "afterTxn")
+	return nil
+}
+
+func TestTxnGroupWithDebugger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	account := keypair()
+	accountAddr := basics.Address(account.SignatureVerifier)
+
+	// `#pragma version 6; int 1;`
+	program1 := []byte{0x06, 0x81, 0x01}
+	program1Addr := basics.Address(logic.HashProgram(program1))
+
+	// `#pragma version 6; byte "test"; pop; int 1;`
+	program2 := []byte{0x06, 0x80, 0x04, 0x74, 0x65, 0x73, 0x74, 0x48, 0x81, 0x01}
+	program2Addr := basics.Address(logic.HashProgram(program2))
+
+	makeHeader := func(sender basics.Address) transactions.Header {
+		return transactions.Header{
+			Sender:     sender,
+			FirstValid: 0,
+			LastValid:  10,
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
+		}
+	}
+
+	lsigPay := transactions.SignedTxn{
+		Lsig: transactions.LogicSig{
+			Logic: program1,
+		},
+		Txn: transactions.Transaction{
+			Type:   protocol.PaymentTx,
+			Header: makeHeader(program1Addr),
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: accountAddr,
+			},
+		},
+	}
+
+	normalSigPay := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: makeHeader(accountAddr),
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApprovalProgram:   program1,
+			ClearStateProgram: program1,
+		},
+	}
+
+	lsigAppCall := transactions.SignedTxn{
+		Lsig: transactions.LogicSig{
+			Logic: program2,
+		},
+		Txn: transactions.Transaction{
+			Type:   protocol.ApplicationCallTx,
+			Header: makeHeader(program2Addr),
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApprovalProgram:   program2,
+				ClearStateProgram: program2,
+			},
+		},
+	}
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(lsigPay.Txn), crypto.HashObj(normalSigPay), crypto.HashObj(lsigAppCall.Txn)}
+	groupID := crypto.HashObj(group)
+	lsigPay.Txn.Group = groupID
+	normalSigPay.Group = groupID
+	lsigAppCall.Txn.Group = groupID
+
+	txgroup := []transactions.SignedTxn{
+		lsigPay,
+		normalSigPay.Sign(account),
+		lsigAppCall,
+	}
+
+	testDbg := &testDbgHook{}
+
+	groupCtx, err := TxnGroupWithDebugger(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, testDbg)
+	require.NoError(t, err)
+	require.Equal(t, testDbg, groupCtx.verifierDebugger)
+
+	expectedLog := []string{
+		"beforeLogicEval Signature",   // first txn start
+		"beforeTealOp", "afterTealOp", // first txn LogicSig: 1 op
+		"afterLogicEval Signature", // first txn end
+		// nothing for second txn (not signed with a LogicSig)
+		"beforeLogicEval Signature",                                                                 // third txn start
+		"beforeTealOp", "afterTealOp", "beforeTealOp", "afterTealOp", "beforeTealOp", "afterTealOp", // third txn LogicSig: 3 ops
+		"afterLogicEval Signature", //third txn end
+	}
+	require.Equal(t, expectedLog, testDbg.log)
 }
 
 func TestPaysetGroups(t *testing.T) {
@@ -422,7 +561,7 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil, nil)
+		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
 			err := Txn(&txn, i, groupCtx)

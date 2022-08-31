@@ -312,12 +312,12 @@ type testDbgHook struct {
 }
 
 func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.log = append(d.log, "beforeTxn")
+	d.log = append(d.log, fmt.Sprintf("beforeTxn %s", ep.TxnGroup[groupIndex].Txn.Type))
 	return nil
 }
 
 func (d *testDbgHook) BeforeLogicEval(cx *logic.EvalContext) error {
-	d.log = append(d.log, "beforeLogicEval")
+	d.log = append(d.log, fmt.Sprintf("beforeLogicEval %s", cx.RunMode()))
 	return nil
 }
 
@@ -327,12 +327,12 @@ func (d *testDbgHook) BeforeTealOp(cx *logic.EvalContext) error {
 }
 
 func (d *testDbgHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, "beforeInnerTxnGroup")
+	d.log = append(d.log, fmt.Sprintf("beforeInnerTxnGroup %d", len(ep.TxnGroup)))
 	return nil
 }
 
 func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, "afterInnerTxnGroup")
+	d.log = append(d.log, fmt.Sprintf("afterInnerTxnGroup %d", len(ep.TxnGroup)))
 	return nil
 }
 
@@ -342,12 +342,12 @@ func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error 
 }
 
 func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, "afterLogicEval")
+	d.log = append(d.log, fmt.Sprintf("afterLogicEval %s", cx.RunMode()))
 	return nil
 }
 
 func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.log = append(d.log, "afterTxn")
+	d.log = append(d.log, fmt.Sprintf("afterTxn %s", ep.TxnGroup[groupIndex].Txn.Type))
 	return nil
 }
 
@@ -380,6 +380,23 @@ dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram
 itxn_submit
+
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 1
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_next
+int pay
+itxn_field TypeEnum
+int 2
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_submit
+
 int 1
 `
 
@@ -389,7 +406,7 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	innerAppID := 1
+	innerAppID := 3
 	innerAppAddress := basics.AppIndex(innerAppID).Address()
 	balances := genesisInitState.Accounts
 	balances[innerAppAddress] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
@@ -414,6 +431,9 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 	require.NoError(t, err, ops.Errors)
 	prog := ops.Program
 
+	// `#pragma version 6; int 1;`
+	basicProgram := []byte{0x06, 0x81, 0x01}
+
 	genHash := l.GenesisHash()
 	header := transactions.Header{
 		Sender:      addrs[0],
@@ -423,48 +443,96 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 		GenesisHash: genHash,
 	}
 
-	// Call an inner transaction app
-	appCallTxn := transactions.Transaction{
+	// a basic app call
+	basicAppCallTxn := transactions.Transaction{
 		Type:   protocol.ApplicationCallTx,
 		Header: header,
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApplicationID:     0,
-			ApprovalProgram:   prog,
-			ClearStateProgram: prog,
-			LocalStateSchema: basics.StateSchema{
-				NumUint:      0,
-				NumByteSlice: 0,
-			},
-			GlobalStateSchema: basics.StateSchema{
-				NumUint:      0,
-				NumByteSlice: 0,
-			},
+			ApprovalProgram:   basicProgram,
+			ClearStateProgram: basicProgram,
 		},
 	}
 
-	stxn := appCallTxn.Sign(keys[0])
-	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{stxn})
+	// a non-app call txn
+	payTxn := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: header,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addrs[0],
+		},
+	}
+
+	// an app call that spawns inner txns
+	innerAppCallTxn := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApprovalProgram:   prog,
+			ClearStateProgram: prog,
+		},
+	}
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(basicAppCallTxn), crypto.HashObj(payTxn), crypto.HashObj(innerAppCallTxn)}
+	groupID := crypto.HashObj(group)
+	basicAppCallTxn.Group = groupID
+	payTxn.Group = groupID
+	innerAppCallTxn.Group = groupID
+
+	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+		basicAppCallTxn.Sign(keys[0]),
+		payTxn.Sign(keys[0]),
+		innerAppCallTxn.Sign(keys[0]),
+	})
 
 	testDbg := &testDbgHook{}
 	err = eval.TransactionGroupWithDebugger(txgroup, testDbg)
 	require.NoError(t, err)
 
 	expectedLog := flatten([][]string{
-		{"beforeTxn",
-			"beforeLogicEval"},
-		tealOpLogs(9),
-		{"beforeTealOp",
-			"beforeInnerTxnGroup",
-			"beforeTxn",
-			"beforeLogicEval"},
+		{
+			"beforeTxn appl", // start basicAppCallTxn
+			"beforeLogicEval Application",
+		},
 		tealOpLogs(1),
-		{"afterLogicEval",
-			"afterTxn",
-			"afterInnerTxnGroup",
-			"afterTealOp"},
+		{
+			"afterLogicEval Application",
+			"afterTxn appl",  // end basicAppCallTxn
+			"beforeTxn pay",  // start payTxn
+			"afterTxn pay",   // end payTxn
+			"beforeTxn appl", // start innerAppCallTxn
+			"beforeLogicEval Application",
+		},
+		tealOpLogs(10),
+		{
+			"beforeTealOp",
+			"beforeInnerTxnGroup 1", // start first itxn group
+			"beforeTxn appl",
+			"beforeLogicEval Application",
+		},
 		tealOpLogs(1),
-		{"afterLogicEval",
-			"afterTxn"},
+		{
+			"afterLogicEval Application",
+			"afterTxn appl",
+			"afterInnerTxnGroup 1", // end first itxn group
+			"afterTealOp",
+		},
+		tealOpLogs(14),
+		{
+			"beforeTealOp",
+			"beforeInnerTxnGroup 2", // start second itxn group
+			"beforeTxn pay",
+			"afterTxn pay",
+			"beforeTxn pay",
+			"afterTxn pay",
+			"afterInnerTxnGroup 2", // end second itxn group
+			"afterTealOp",
+		},
+		tealOpLogs(1),
+		{
+			"afterLogicEval Application",
+			"afterTxn appl", // end innerAppCallTxn
+		},
 	})
 	require.Equal(t, expectedLog, testDbg.log)
 }
