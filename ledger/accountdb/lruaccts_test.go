@@ -39,7 +39,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 	accountsNum := 50
 	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
-		acct := PersistedAccountData{
+		acct := persistedAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
 			Rowid:       int64(i),
@@ -64,7 +64,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, PersistedAccountData{}, acct)
+		require.Equal(t, persistedAccountData{}, acct)
 	}
 
 	baseAcct.Prune(accountsNum / 2)
@@ -83,7 +83,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 			require.Equal(t, int64(i), acct.Rowid)
 		} else {
 			require.False(t, has)
-			require.Equal(t, PersistedAccountData{}, acct)
+			require.Equal(t, persistedAccountData{}, acct)
 		}
 	}
 }
@@ -98,7 +98,7 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
-			acct := PersistedAccountData{
+			acct := persistedAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
 				Rowid:       int64(i),
@@ -150,7 +150,7 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 	baseAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
-			acct := PersistedAccountData{
+			acct := persistedAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
 				Rowid:       int64(i),
@@ -176,7 +176,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 	baseAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
-		acct := PersistedAccountData{
+		acct := persistedAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
 			Rowid:       int64(i),
@@ -203,7 +203,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, PersistedAccountData{}, acct)
+		require.Equal(t, persistedAccountData{}, acct)
 	}
 }
 
@@ -220,7 +220,7 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 const baseAccountsPendingAccountsBufferSize = 100000
 const baseAccountsPendingAccountsWarnThreshold = 85000
 
-func benchLruWrite(b *testing.B, fillerAccounts []PersistedAccountData, accounts []PersistedAccountData) {
+func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts []persistedAccountData) {
 	b.ResetTimer()
 	b.StopTimer()
 	var baseAcct LRUAccounts
@@ -236,22 +236,22 @@ func benchLruWrite(b *testing.B, fillerAccounts []PersistedAccountData, accounts
 	}
 }
 
-func fillLRUAccounts(baseAcct LRUAccounts, fillerAccounts []PersistedAccountData) LRUAccounts {
+func fillLRUAccounts(baseAcct LRUAccounts, fillerAccounts []persistedAccountData) LRUAccounts {
 	for _, account := range fillerAccounts {
 		baseAcct.Write(account)
 	}
 	return baseAcct
 }
 
-func generatePersistedAccountData(startRound, endRound int) []PersistedAccountData {
-	accounts := make([]PersistedAccountData, endRound-startRound)
+func generatePersistedAccountData(startRound, endRound int) []persistedAccountData {
+	accounts := make([]persistedAccountData, endRound-startRound)
 	buffer := make([]byte, 4)
 
 	for i := startRound; i < endRound; i++ {
 		binary.BigEndian.PutUint32(buffer, uint32(i))
 		digest := crypto.Hash(buffer)
 
-		accounts[i-startRound] = PersistedAccountData{
+		accounts[i-startRound] = persistedAccountData{
 			Addr:        basics.Address(digest),
 			Round:       basics.Round(i + startRound),
 			Rowid:       int64(i),

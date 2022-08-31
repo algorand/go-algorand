@@ -28,9 +28,9 @@ type LRUAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	accountsList *persistedAccountDataList
-	// accounts provides fast access to the various elements in the list by using the account Address
+	// accounts provides fast access to the various elements in the list by using the account address
 	accounts map[basics.Address]*persistedAccountDataListNode
-	// pendingAccounts are used as a way to avoid taking a Write-lock. When the caller needs to "materialize" these,
+	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call FlushPendingWrites and these would be merged into the accounts/accountsList
 	pendingAccounts chan PersistedAccountData
 	// log interface; used for logging the threshold event.
@@ -49,13 +49,13 @@ func (m *LRUAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the LRUAccounts has for the given Address.
+// read the persistedAccountData object that the LRUAccounts has for the given address.
 // thread locking semantics : read lock
 func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
 	}
-	return PersistedAccountData{}, false
+	return &persistedAccountData{}, false
 }
 
 // FlushPendingWrites flushes the pending writes to the main LRUAccounts cache.
@@ -91,16 +91,24 @@ func (m *LRUAccounts) WritePending(acct PersistedAccountData) {
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *LRUAccounts) Write(acctData PersistedAccountData) {
-	if el := m.accounts[acctData.Addr]; el != nil {
+	if el := m.accounts[acctData.Addr()]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&acctData) {
+		if (*el.Value).before(&acctData) {
 			// we update with a newer version.
 			el.Value = &acctData
 		}
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.Addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.Addr()] = m.accountsList.pushFront(&acctData)
+	}
+}
+
+// Write a slice of persistedAccountData to the LRUAccounts cache.
+// thread locking semantics : write lock
+func (m *LRUAccounts) WriteAccounts(updatedPersistedAccounts UpdatedAccounts) {
+	for _, persistedAcct := range updatedPersistedAccounts.data {
+		m.Write(persistedAcct)
 	}
 }
 
@@ -113,7 +121,7 @@ func (m *LRUAccounts) Prune(newSize int) (removed int) {
 			break
 		}
 		back := m.accountsList.back()
-		delete(m.accounts, back.Value.Addr)
+		delete(m.accounts, (*back.Value).Addr())
 		m.accountsList.remove(back)
 		removed++
 	}

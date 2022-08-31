@@ -27,7 +27,7 @@ type accountsDbQueries interface {
 	LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error)
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
 	LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error)
-	Lookup(addr basics.Address) (data PersistedAccountData, err error)
+	Lookup(addr basics.Address) (data persistedAccountData, err error)
 	Close()
 }
 

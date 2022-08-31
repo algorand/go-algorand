@@ -861,11 +861,11 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			// use a cache of the most recent account state.
 			ad = macct.data
 			foundAccount = true
-		} else if pad, has := au.baseAccounts.Read(addr); has && pad.Round == currentDbRound {
+		} else if pad, has := au.baseAccounts.Read(addr); has && pad.Round() == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.WritePending(pad)
-			ad = pad.AccountData.GetLedgerCoreAccountData()
+			ad = pad.AccountData().GetLedgerCoreAccountData()
 			foundAccount = true
 		}
 
@@ -914,11 +914,11 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			if err != nil {
 				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
-			if persistedData.Round == currentDbRound {
-				if persistedData.Rowid != 0 {
+			if persistedData.Round() == currentDbRound {
+				if persistedData.Rowid() != 0 {
 					// if we read actual data return it
 					au.baseAccounts.WritePending(persistedData)
-					ad = persistedData.AccountData.GetLedgerCoreAccountData()
+					ad = persistedData.AccountData().GetLedgerCoreAccountData()
 				} else {
 					ad = ledgercore.AccountData{}
 				}
@@ -929,11 +929,11 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				}
 			}
 
-			if persistedData.Round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.Round, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
+			if persistedData.Round() < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.Round(), currentDbRound)
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: persistedData.Round(), memoryRound: currentDbRound}
 			}
-			if persistedData.Round > currentDbRound {
+			if persistedData.Round() > currentDbRound {
 				goto tryAgain
 			}
 		}
@@ -1125,7 +1125,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.WritePending(macct)
-			return macct.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
+			return macct.AccountData().GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
 		if synchronized {
@@ -1141,19 +1141,19 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		if err != nil {
 			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
 		}
-		if persistedData.Round == currentDbRound {
-			if persistedData.Rowid != 0 {
+		if persistedData.Round() == currentDbRound {
+			if persistedData.Rowid() != 0 {
 				// if we read actual data return it
 				au.baseAccounts.WritePending(persistedData)
-				return persistedData.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
+				return persistedData.AccountData().GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// otherwise return empty
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 		if synchronized {
-			if persistedData.Round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.Round, currentDbRound)
-				return ledgercore.AccountData{}, basics.Round(0), "", 0, &StaleDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
+			if persistedData.Round() < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.Round(), currentDbRound)
+				return ledgercore.AccountData{}, basics.Round(0), "", 0, &StaleDatabaseRoundError{databaseRound: persistedData.Round(), memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1162,8 +1162,8 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.Round, currentDbRound)
-			return ledgercore.AccountData{}, basics.Round(0), "", 0, &MismatchingDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.Round(), currentDbRound)
+			return ledgercore.AccountData{}, basics.Round(0), "", 0, &MismatchingDatabaseRoundError{databaseRound: persistedData.Round(), memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1433,9 +1433,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for _, persistedAcct := range dcc.updatedPersistedAccounts {
-		au.baseAccounts.Write(persistedAcct)
-	}
+	au.baseAccounts.WriteAccounts(dcc.updatedPersistedAccounts)
 
 	for addr, deltas := range dcc.updatedPersistedResources {
 		for _, persistedRes := range deltas {
@@ -1492,7 +1490,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	if dcc.updateStats {
 		dcc.stats.StartRound = uint64(dbRound)
 		dcc.stats.RoundsCount = offset
-		dcc.stats.UpdatedAccountsCount = uint64(len(dcc.updatedPersistedAccounts))
+		dcc.stats.UpdatedAccountsCount = uint64(dcc.updatedPersistedAccounts.Count)
 		dcc.stats.UpdatedCreatablesCount = uint64(len(dcc.compactCreatableDeltas))
 
 		dcc.stats.UpdatedResourcesCount = 0

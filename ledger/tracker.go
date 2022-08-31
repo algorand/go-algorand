@@ -246,7 +246,7 @@ type deferredCommitContext struct {
 	CompactResourcesDeltas accountdb.CompactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []accountdb.PersistedAccountData
+	updatedPersistedAccounts  accountdb.UpdatedAccounts
 	updatedPersistedResources map[basics.Address][]accountdb.PersistedResourcesData
 
 	compactOnlineAccountDeltas     accountdb.CompactOnlineAccountDeltas

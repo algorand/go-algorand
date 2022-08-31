@@ -62,7 +62,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		expected := ledgercore.ToAccountData(data)
 		pad, err := aq.Lookup(addr)
 		require.NoError(t, err)
-		d := pad.AccountData.GetLedgerCoreAccountData()
+		d := pad.AccountData().GetLedgerCoreAccountData()
 		require.Equal(t, d, expected)
 
 		switch d.Status {
@@ -223,7 +223,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		knownAddresses := make(map[basics.Address]int64)
 		for _, delta := range updatesCnt.deltas {
-			knownAddresses[delta.OldAcct.Addr] = delta.OldAcct.Rowid
+			knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.Rowid()
 		}
 
 		err = resourceUpdatesCnt.ResourcesLoadOld(tx, knownAddresses)
@@ -238,7 +238,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		updatedAccts, updatesResources, err := AccountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
-		require.Equal(t, updatesCnt.Len(), len(updatedAccts))
+		require.Equal(t, updatesCnt.Len(), updatedAccts.Count)
 		numResUpdates := 0
 		for _, rs := range updatesResources {
 			numResUpdates += len(rs)
@@ -368,7 +368,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			knownAddresses := make(map[basics.Address]int64)
 			for _, delta := range outAccountDeltas.deltas {
-				knownAddresses[delta.OldAcct.Addr] = delta.OldAcct.Rowid
+				knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.Rowid()
 			}
 
 			err = outResourcesDeltas.ResourcesLoadOld(tx, knownAddresses)
@@ -376,10 +376,10 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			updatedAccts, updatesResources, err := AccountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
-			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
+			require.Equal(t, 1, updatedAccts.Count) // we store empty even for deleted accounts
 			require.Equal(t,
-				PersistedAccountData{Addr: addr, Round: basics.Round(lastRound)},
-				updatedAccts[0],
+				persistedAccountData{addr: addr, round: basics.Round(lastRound)},
+				updatedAccts.data[0],
 			)
 
 			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
@@ -827,13 +827,13 @@ func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *CompactAccountDeltas) upsertOld(old PersistedAccountData) {
-	addr := old.Addr
+func (a *CompactAccountDeltas) upsertOld(old persistedAccountData) {
+	addr := old.Addr()
 	if idx, exist := a.cache[addr]; exist {
 		a.deltas[idx].OldAcct = old
 		return
 	}
-	a.Insert(AccountDelta{OldAcct: old, Address: old.Addr})
+	a.Insert(AccountDelta{OldAcct: old, Address: old.Addr()})
 }
 
 // upsert updates existing or inserts a new entry
@@ -898,15 +898,15 @@ func TestCompactDeltas(t *testing.T) {
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, PersistedAccountData{}, delta.OldAcct)
+	require.Equal(t, persistedAccountData{}, delta.OldAcct)
 	require.NotEmpty(t, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// check deltas without missing accounts
-	baseAccounts.Write(PersistedAccountData{Addr: addrs[0], AccountData: BaseAccountData{}})
+	baseAccounts.Write(persistedAccountData{addr: addrs[0], accountData: BaseAccountData{}})
 	outAccountDeltas = MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, PersistedAccountData{Addr: addrs[0]}, delta.OldAcct)
+	require.Equal(t, persistedAccountData{addr: addrs[0]}, delta.OldAcct)
 	require.Equal(t, BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.Init(nil, 100, 80)
@@ -920,8 +920,8 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.Write(PersistedAccountData{Addr: addrs[0], AccountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	baseAccounts.Write(PersistedAccountData{Addr: addrs[3], AccountData: BaseAccountData{}})
+	baseAccounts.Write(persistedAccountData{addr: addrs[0], accountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.Write(persistedAccountData{addr: addrs[3], accountData: BaseAccountData{}})
 	outAccountDeltas = MakeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = ledgercore.CompactCreatableDeltas(creatableDeltas)
 
@@ -929,11 +929,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, len(outCreatableDeltas))
 
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, uint64(1), delta.OldAcct.AccountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(1), delta.OldAcct.AccountData().MicroAlgos.Raw)
 	require.Equal(t, uint64(3), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(2), delta.NAcctDeltas)
 	delta, _ = outAccountDeltas.get(addrs[3])
-	require.Equal(t, uint64(0), delta.OldAcct.AccountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(0), delta.OldAcct.AccountData().MicroAlgos.Raw)
 	require.Equal(t, uint64(8), delta.NewAcct.MicroAlgos.Raw)
 	require.Equal(t, int(1), delta.NAcctDeltas)
 
@@ -995,7 +995,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, data.Address)
 	a.Equal(sample2, data)
 
-	old1 := PersistedAccountData{Addr: addr, AccountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := persistedAccountData{addr: addr, accountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.Len())
 	data = ad.GetByIdx(0)
@@ -1003,7 +1003,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(AccountDelta{NewAcct: sample2.NewAcct, OldAcct: old1, Address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := PersistedAccountData{Addr: addr1, AccountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := persistedAccountData{addr: addr1, accountData: BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.Len())
 	data = ad.GetByIdx(0)
@@ -1011,7 +1011,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(AccountDelta{NewAcct: sample2.NewAcct, OldAcct: old1, Address: addr}, data)
 
 	data = ad.GetByIdx(1)
-	a.Equal(addr1, data.OldAcct.Addr)
+	a.Equal(addr1, data.OldAcct.Addr())
 	a.Equal(AccountDelta{OldAcct: old2, Address: addr1}, data)
 
 	// apply old on empty delta object, expect no changes
@@ -2462,7 +2462,7 @@ func (m *mockAccountWriter) setResource(addr basics.Address, cidx basics.Creatab
 	return nil
 }
 
-func (m *mockAccountWriter) lookup(addr basics.Address) (pad PersistedAccountData, ok bool, err error) {
+func (m *mockAccountWriter) lookup(addr basics.Address) (pad persistedAccountData, ok bool, err error) {
 	rowid, ok := m.addresses[addr]
 	if !ok {
 		return
@@ -2472,9 +2472,9 @@ func (m *mockAccountWriter) lookup(addr basics.Address) (pad PersistedAccountDat
 		err = fmt.Errorf("not found %s", addr.String())
 		return
 	}
-	pad.AccountData.SetCoreAccountData(&data)
-	pad.Addr = addr
-	pad.Rowid = rowid
+	pad.AccountData().SetCoreAccountData(&data)
+	pad.addr = addr
+	pad.rowid = rowid
 	return
 }
 
@@ -2797,7 +2797,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	a.NoError(err)
 	a.True(ok)
 	baseAccounts.Write(pad)
-	baseAccounts.Write(PersistedAccountData{Addr: addr2})
+	baseAccounts.Write(persistedAccountData{addr: addr2})
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
 	a.Empty(acctDeltas.misses)
@@ -2889,7 +2889,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.NoError(err)
 	a.True(ok)
 	baseAccounts.Write(pad)
-	baseAccounts.Write(PersistedAccountData{Addr: addr2}) // put an empty record for addr2 to get rid of lookups
+	baseAccounts.Write(persistedAccountData{addr: addr2}) // put an empty record for addr2 to get rid of lookups
 
 	acctDeltas := MakeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
 	a.Empty(acctDeltas.misses)
@@ -2921,9 +2921,9 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	addressesToCheck := map[basics.Address]bool{addr1: true, addr2: true}
 	matches := 0
 	for _, upd := range updatedAccounts {
-		if addressesToCheck[upd.Addr] {
-			a.Equal(int64(0), upd.Rowid)
-			a.Empty(upd.AccountData)
+		if addressesToCheck[upd.Addr()] {
+			a.Equal(int64(0), upd.Rowid())
+			a.Empty(upd.AccountData())
 			matches++
 		}
 	}
@@ -3061,7 +3061,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		updatedAccts, _, err := AccountsNewRound(tx, updatesCnt, CompactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
 		require.NoError(t, err)
-		require.Equal(t, updatesCnt.Len(), len(updatedAccts))
+		require.Equal(t, updatesCnt.Len(), updatedAccts.Count)
 
 		updatedOnlineAccts, err := OnlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 		require.NoError(t, err)

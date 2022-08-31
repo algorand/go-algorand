@@ -41,7 +41,7 @@ type LRUResources struct {
 	// resources provides fast access to the various elements in the list by using the account Address
 	resources map[ledgercore.AccountCreatable]*persistedResourcesDataListNode
 
-	// pendingResources are used as a way to avoid taking a Write-lock. When the caller needs to "materialize" these,
+	// pendingResources are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call FlushPendingWrites and these would be merged into the resources/resourcesList
 	pendingResources chan cachedResourceData
 
@@ -71,7 +71,7 @@ func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (da
 	return PersistedResourcesData{}, false
 }
 
-// read the persistedResourcesData object that the LRUResources has for the given Address.
+// read the persistedResourcesData object that the LRUResources has for the given address.
 // thread locking semantics : read lock
 func (m *LRUResources) ReadAll(addr basics.Address) (ret []PersistedResourcesData) {
 	for ac, pd := range m.resources {
