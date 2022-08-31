@@ -31,6 +31,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts, totals ledgercore.AccountTotals) {
+	updates := ledgercore.MakeAccountDeltas(1)
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	delta.Accts.MergeAccounts(updates)
+	delta.Totals = totals
+	ao.newBlock(blk, delta)
+}
+
+func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64) {
+	a.Equal(expectedSize, uint64(len(ao.voters.votersForRoundCache)))
+	for _, v := range ao.voters.votersForRoundCache {
+		err := v.Wait()
+		a.NoError(err)
+		a.NotZero(v.TotalWeight)
+		a.NotZero(len(v.Participants))
+		a.NotZero(v.Tree.NumOfElements)
+	}
+}
+
 func makeRandomOnlineAccounts(numberOfAccounts uint64) map[basics.Address]basics.AccountData {
 	res := make(map[basics.Address]basics.AccountData)
 
@@ -50,25 +69,6 @@ func makeRandomOnlineAccounts(numberOfAccounts uint64) map[basics.Address]basics
 	}
 
 	return res
-}
-
-func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts, totals ledgercore.AccountTotals) {
-	updates := ledgercore.MakeAccountDeltas(1)
-	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-	delta.Accts.MergeAccounts(updates)
-	delta.Totals = totals
-	ao.newBlock(blk, delta)
-}
-
-func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64) {
-	a.Equal(expectedSize, uint64(len(ao.voters.votersForRoundCache)))
-	for _, v := range ao.voters.votersForRoundCache {
-		err := v.Wait()
-		a.NoError(err)
-		a.NotZero(v.TotalWeight)
-		a.NotZero(len(v.Participants))
-		a.NotZero(v.Tree.NumOfElements)
-	}
 }
 
 func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
