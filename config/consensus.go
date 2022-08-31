@@ -391,6 +391,10 @@ type ConsensusParams struct {
 	// release resources allocated for creating state proofs.
 	StateProofMaxRecoveryIntervals uint64
 
+	// StateProofExcludeTotalWeightWithRewards specifies whether to subtract rewards from excluded online accounts along with
+	// their account balances.
+	StateProofExcludeTotalWeightWithRewards bool
+
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
@@ -1191,19 +1195,52 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV34] = v34
 
-	// v33 can be upgraded to v34, with an update delay of 12h:
+	v35 := v34
+	v35.StateProofExcludeTotalWeightWithRewards = true
+
+	v35.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	Consensus[protocol.ConsensusV35] = v35
+
+	// v33 and v34 can be upgraded to v35, with an update delay of 12h:
 	// 10046 = (12 * 60 * 60 / 4.3)
 	// for the sake of future manual calculations, we'll round that down a bit :
-	v33.ApprovedUpgrades[protocol.ConsensusV34] = 10000
+	v33.ApprovedUpgrades[protocol.ConsensusV35] = 10000
+	v34.ApprovedUpgrades[protocol.ConsensusV35] = 10000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v34
+	vFuture := v35
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
+
+	// vAlphaX versions are an separate series of consensus parameters and versions for alphanet
+	vAlpha1 := v32
+	vAlpha1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
+	vAlpha1.MaxTxnBytesPerBlock = 5000000
+	Consensus[protocol.ConsensusVAlpha1] = vAlpha1
+
+	vAlpha2 := vAlpha1
+	vAlpha2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vAlpha2.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
+	vAlpha2.MaxTxnBytesPerBlock = 5 * 1024 * 1024
+	Consensus[protocol.ConsensusVAlpha2] = vAlpha2
+	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
+
+	// vAlpha3 and vAlpha4 use the same parameters as v33 and v34
+	vAlpha3 := v33
+	vAlpha3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha3] = vAlpha3
+	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
+
+	vAlpha4 := v34
+	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
+	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

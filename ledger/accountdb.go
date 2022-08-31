@@ -2154,7 +2154,8 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 
 		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
-		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife)
+		deeperBlockHistory := basics.Round(config.Consensus[latestHdr.CurrentProtocol].DeeperBlockHeaderHistory)
+		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
 			firstRound++

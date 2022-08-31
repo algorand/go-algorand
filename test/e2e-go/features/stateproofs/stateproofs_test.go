@@ -17,10 +17,12 @@
 package stateproofs
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,6 +36,8 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -122,8 +126,12 @@ func TestStateProofs(t *testing.T) {
 }
 
 func TestStateProofsMultiWallets(t *testing.T) {
-	t.Skip("this test is heavy and should be run manually")
 	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip()
+	}
+
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	configurableConsensus := make(config.ConsensusProtocols)
@@ -1154,4 +1162,141 @@ func getWellformedSPTransaction(round uint64, genesisHash crypto.Digest, consens
 	require.NoError(t, err)
 
 	return stxn
+}
+
+func TestStateProofCheckTotalStake(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip()
+	}
+
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	r := require.New(fixtures.SynchronizedTest(t))
+
+	configurableConsensus := make(config.ConsensusProtocols)
+	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
+	consensusParams := getDefaultStateProofConsensusParams()
+	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofStrengthTarget = 3
+	consensusParams.AgreementFilterTimeout = 1000 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1000 * time.Millisecond
+	consensusParams.SeedLookback = 2
+	consensusParams.SeedRefreshInterval = 8
+	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	configurableConsensus[consensusVersion] = consensusParams
+
+	var fixture fixtures.RestClientFixture
+	pNodes := 5
+	expectedNumberOfStateProofs := uint64(4)
+	fixture.SetConsensus(configurableConsensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+
+	defer fixture.Shutdown()
+
+	// Get node libgoal clients in order to update their participation keys
+	libgoalNodeClients := make([]libgoal.Client, pNodes, pNodes)
+	accountsAddresses := make([]string, pNodes, pNodes)
+	for i := 0; i < pNodes; i++ {
+		nodeName := fmt.Sprintf("Node%d", i)
+		libgoalNodeClients[i] = fixture.GetLibGoalClientForNamedNode(nodeName)
+		parts, err := libgoalNodeClients[i].GetParticipationKeys()
+		r.NoError(err)
+		accountsAddresses[i] = parts[0].Address
+	}
+
+	participations := make([]account.Participation, pNodes, pNodes)
+	var lastStateProofBlock bookkeeping.Block
+	libgoalClient := fixture.LibGoalClient
+
+	var totalSupplyAtRound [100]v1.Supply
+	var accountSnapshotAtRound [100][]generatedV2.Account
+
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+		if rnd == consensusParams.StateProofInterval+consensusParams.StateProofVotersLookback { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
+			_, part, err := installParticipationKey(t, libgoalNodeClients[0], accountsAddresses[0], 0, consensusParams.StateProofInterval*2-1)
+			r.NoError(err)
+			participations[0] = part
+			registerParticipationAndWait(t, libgoalNodeClients[0], participations[0])
+		}
+
+		//send a dummy payment transaction.
+		paymentSender{
+			from:   accountFetcher{nodeName: "Node3", accountNumber: 0},
+			to:     accountFetcher{nodeName: "Node4", accountNumber: 0},
+			amount: 1,
+		}.sendPayment(r, &fixture, rnd)
+
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
+		r.NoError(err)
+
+		// this is the round in we take a snapshot of the account balances.
+		// We would use this snapshot later on to compare the weights on the state proof, and to make sure that
+		// the totalWeight commitment is correct
+		if ((rnd + 2) % consensusParams.StateProofInterval) == 0 {
+			totalSupply, err := libgoalClient.LedgerSupply()
+			r.NoError(err)
+
+			r.Equal(rnd, totalSupply.Round, "could not capture total stake at the target round. The machine might be too slow for this test")
+			totalSupplyAtRound[rnd] = totalSupply
+
+			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)
+			for i := 0; i < pNodes; i++ {
+				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformationV2(accountsAddresses[i], false)
+				r.NoError(err)
+				r.NotEqual(accountSnapshotAtRound[rnd][i].Amount, uint64(0))
+				r.Equal(rnd, accountSnapshotAtRound[rnd][i].Round, "could not capture the account at the target round. The machine might be too slow for this test")
+			}
+		}
+
+		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if (rnd % consensusParams.StateProofInterval) == 0 {
+			if rnd >= consensusParams.StateProofInterval*2 {
+				// since account 0 would no longer be able to sign the state proof, its stake should
+				// be removed from the total stake in the commitment
+				total := totalSupplyAtRound[rnd-consensusParams.StateProofVotersLookback].OnlineMoney
+				total = total - accountSnapshotAtRound[rnd-consensusParams.StateProofVotersLookback][0].Amount
+				r.Equal(total, blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw)
+			} else {
+				r.Equal(totalSupplyAtRound[rnd-consensusParams.StateProofVotersLookback].OnlineMoney, blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw)
+			}
+
+			// Special case: bootstrap validation with the first block
+			// that has a merkle root.
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
+			}
+		}
+
+		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+
+			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound, expectedNumberOfStateProofs)
+
+			accountSnapshot := accountSnapshotAtRound[stateProofMsg.LastAttestedRound-consensusParams.StateProofInterval-consensusParams.StateProofVotersLookback]
+
+			// once the state proof is accepted we want to make sure that the weight
+			for _, v := range stateProof.Reveals {
+				found := false
+				for i := 0; i < len(accountSnapshot); i++ {
+					if bytes.Compare(v.Part.PK.Commitment[:], *accountSnapshot[i].Participation.StateProofKey) == 0 {
+						r.Equal(v.Part.Weight, accountSnapshot[i].Amount)
+						found = true
+						break
+					}
+				}
+				r.True(found)
+			}
+			nextStateProofBlock, err := fixture.LibGoalClient.BookkeepingBlock(nextStateProofRound)
+			r.NoError(err)
+			lastStateProofBlock = nextStateProofBlock
+		}
+	}
+
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }

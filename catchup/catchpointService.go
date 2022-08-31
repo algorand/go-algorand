@@ -488,10 +488,14 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	// pick the lookback with the greater of either (MaxTxnLife+DeeperBlockHeaderHistory)
-	// or MaxBalLookback
+	// pick the lookback with the greater of
+	// either (MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback) or MaxBalLookback
+	// Explanation:
+	// 1. catchpoint snapshots accounts at round X-CatchpointLookback
+	// 2. replay starts from X-CatchpointLookback+1
+	// 3. transaction evaluation at Y requires block up to MaxTxnLife+DeeperBlockHeaderHistory back from Y
 	proto := config.Consensus[topBlock.CurrentProtocol]
-	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory + proto.CatchpointLookback
 	if lookback < proto.MaxBalLookback {
 		lookback = proto.MaxBalLookback
 	}
