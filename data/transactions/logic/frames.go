@@ -23,7 +23,7 @@ import (
 
 func opProto(cx *EvalContext) error {
 	if !cx.fromCallsub {
-		return fmt.Errorf("proto executed in normal flow")
+		return fmt.Errorf("proto was executed without a callsub")
 	}
 	cx.fromCallsub = false
 	nargs := int(cx.program[cx.pc+1])
