@@ -48,119 +48,171 @@ func TestCursorDebuggerHooks(t *testing.T) {
 		AfterInnerTxnGroup
 	)
 
+	type step struct {
+		action       Hook
+		expectedPath TxnPath
+	}
+
 	type testCase struct {
-		name           string
-		timeline       []Hook
-		expectedCursor TxnPath
+		name              string
+		timeline          []step
+		expectedPathAtEnd TxnPath
 	}
 
 	testCases := []testCase{
 		{
-			name:           "empty",
-			timeline:       []Hook{},
-			expectedCursor: TxnPath{},
+			name:              "empty",
+			timeline:          []step{},
+			expectedPathAtEnd: TxnPath{},
 		},
 		{
 			name: "single txn",
-			timeline: []Hook{
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0},
+		},
+		{
+			name: "two txns",
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
+				{action: BeforeTxn, expectedPath: TxnPath{1}},
+				{action: AfterTxn, expectedPath: TxnPath{1}},
+			},
+		},
+		{
+			name: "many txns",
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
+				{action: BeforeTxn, expectedPath: TxnPath{1}},
+				{action: AfterTxn, expectedPath: TxnPath{1}},
+				{action: BeforeTxn, expectedPath: TxnPath{2}},
+				{action: AfterTxn, expectedPath: TxnPath{2}},
+				{action: BeforeTxn, expectedPath: TxnPath{3}},
+				{action: AfterTxn, expectedPath: TxnPath{3}},
+				{action: BeforeTxn, expectedPath: TxnPath{4}},
+				{action: AfterTxn, expectedPath: TxnPath{4}},
+			},
 		},
 		{
 			name: "single txn with inner txn",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0, 0},
 		},
 		{
 			name: "single txn with multiple serial inner txns",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0, 1},
 		},
 		{
 			name: "single txn with 2 serial inner txns with another inner txn in the second one",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0, 1, 0},
 		},
 		{
 			name: "single txn with 2 serial inner txns with 2 serial inner txns in the second one",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1, 1}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1, 1}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0, 1, 1},
 		},
 		{
 			name: "single txn with 2 serial inner txns with an inner txn in the first one and 2 serial inner txns in the second one",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
-				AfterTxn,
-				AfterInnerTxnGroup,
-				AfterTxn,
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeTxn,
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0, 1}},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 2}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{0, 2, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{0, 2, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0, 2}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
 			},
-			expectedCursor: TxnPath{0, 2, 0},
 		},
 		{
-			name: "cursor is empty at the end of the timeline",
-			timeline: []Hook{
-				BeforeTxn,
-				BeforeInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				BeforeInnerTxnGroup,
-				AfterInnerTxnGroup,
-				AfterInnerTxnGroup,
-				AfterInnerTxnGroup,
-				AfterTxn,
+			name: "second txn with deep inners",
+			timeline: []step{
+				{action: BeforeTxn, expectedPath: TxnPath{0}},
+				{action: AfterTxn, expectedPath: TxnPath{0}},
+				{action: BeforeTxn, expectedPath: TxnPath{1}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{1, 0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{1, 0, 0}},
+				{action: BeforeInnerTxnGroup},
+				{action: BeforeTxn, expectedPath: TxnPath{1, 0, 0, 0}},
+				{action: AfterTxn, expectedPath: TxnPath{1, 0, 0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{1, 0, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{1, 0}},
+				{action: AfterInnerTxnGroup},
+				{action: AfterTxn, expectedPath: TxnPath{1}},
 			},
-			expectedCursor: TxnPath{},
 		},
 	}
 
@@ -175,20 +227,31 @@ func TestCursorDebuggerHooks(t *testing.T) {
 			ep := logic.EvalParams{}
 			groupIndex := 0
 
-			for _, h := range tc.timeline {
-				switch h {
+			for _, step := range tc.timeline {
+				switch step.action {
 				case BeforeTxn:
 					hook.BeforeTxn(&ep, groupIndex)
 				case AfterTxn:
 					hook.AfterTxn(&ep, groupIndex)
 				case BeforeInnerTxnGroup:
+					hook.BeforeInnerTxnGroup(&ep)
 				case AfterInnerTxnGroup:
+					hook.AfterInnerTxnGroup(&ep)
 				default:
-					t.Fatalf("unexpected timeline hook: %d", h)
+					t.Fatalf("unexpected timeline hook: %d", step.action)
+				}
+				if step.expectedPath != nil {
+					switch step.action {
+					case BeforeInnerTxnGroup, AfterInnerTxnGroup:
+						t.Fatalf("Path is unspecified for hook: %d", step.action)
+					}
+					require.Equal(t, step.expectedPath, hook.cursor)
 				}
 			}
 
-			require.Equal(t, tc.expectedCursor, hook.cursor)
+			if tc.expectedPathAtEnd != nil {
+				require.Equal(t, tc.expectedPathAtEnd, hook.cursor)
+			}
 		})
 	}
 }

@@ -20,9 +20,9 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-// This is a "transaction path": e.g. [0, 0, 1] means the second inner txn of the first inner txn of the first txn.
+// TxnPath is a "transaction path": e.g. [0, 0, 1] means the second inner txn of the first inner txn of the first txn.
 // You can use this transaction path to find the txn data in the `TxnResults` list.
-type TxnPath = []uint64
+type TxnPath []uint64
 
 // ==============================
 // > Transaction Results
