@@ -35,6 +35,7 @@ import (
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
 func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
+	// TODO: fetch builder from DB if exists
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -71,9 +72,10 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	var res builder
-	res.votersHdr = votersHdr
-	res.voters = voters
-	res.message = msg
+	res.VotersHdr = votersHdr
+	res.AddrToPos = voters.AddrToPos
+	res.Proto = voters.Proto
+	res.Message = msg
 	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
 		uint64(hdr.Round),
 		provenWeight,
@@ -84,6 +86,7 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
+	// TODO: insert new Builder to DB (would have returned earlier if existed)
 	return res, nil
 }
 
@@ -119,7 +122,7 @@ func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 	spw.builders[rnd] = builderForRound
 
 	for _, sig := range sigs {
-		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
+		pos, ok := builderForRound.AddrToPos[sig.signer]
 		if !ok {
 			spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
 			continue
@@ -210,7 +213,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		spw.log.Infof("spw.handleSig: starts gathering signatures for round %d", sfa.Round)
 	}
 
-	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
+	pos, ok := builderForRound.AddrToPos[sfa.SignerAddress]
 	if !ok {
 		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.SignerAddress, sfa.Round)
 	}
@@ -393,7 +396,7 @@ func (spw *Worker) tryBroadcast() {
 	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
 		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := verify.AcceptableStateProofWeight(&b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(&b.VotersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue
@@ -415,11 +418,11 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
-		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
+		stxn.Txn.LastValid = firstValid + basics.Round(b.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofTxnFields.StateProof = *sp
-		stxn.Txn.StateProofTxnFields.Message = b.message
+		stxn.Txn.StateProofTxnFields.Message = b.Message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: broadcasting state proof txn for %d: %v", rnd, err)

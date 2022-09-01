@@ -14,9 +14,9 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestMarshalUnmarshalPersistentBuilder(t *testing.T) {
+func TestMarshalUnmarshalbuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := PersistentBuilder{}
+	v := builder{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -35,12 +35,12 @@ func TestMarshalUnmarshalPersistentBuilder(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingPersistentBuilder(t *testing.T) {
-	protocol.RunEncodingTest(t, &PersistentBuilder{})
+func TestRandomizedEncodingbuilder(t *testing.T) {
+	protocol.RunEncodingTest(t, &builder{})
 }
 
-func BenchmarkMarshalMsgPersistentBuilder(b *testing.B) {
-	v := PersistentBuilder{}
+func BenchmarkMarshalMsgbuilder(b *testing.B) {
+	v := builder{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -48,8 +48,8 @@ func BenchmarkMarshalMsgPersistentBuilder(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgPersistentBuilder(b *testing.B) {
-	v := PersistentBuilder{}
+func BenchmarkAppendMsgbuilder(b *testing.B) {
+	v := builder{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -60,8 +60,8 @@ func BenchmarkAppendMsgPersistentBuilder(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalPersistentBuilder(b *testing.B) {
-	v := PersistentBuilder{}
+func BenchmarkUnmarshalbuilder(b *testing.B) {
+	v := builder{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

@@ -22,11 +22,11 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -34,11 +34,14 @@ import (
 )
 
 type builder struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	*stateproof.Builder
 
-	voters    *ledgercore.VotersForRound
-	votersHdr bookkeeping.BlockHeader
-	message   stateproofmsg.Message
+	AddrToPos map[basics.Address]uint64 `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
+	Proto     config.ConsensusParams    `codec:"proto"`
+	VotersHdr bookkeeping.BlockHeader   `codec:"hdr"`
+	Message   stateproofmsg.Message     `codec:"msg"`
 }
 
 // Worker builds state proofs, by broadcasting

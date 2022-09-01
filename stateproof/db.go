@@ -21,13 +21,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -167,56 +162,20 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 //#endregion
 
 //#region Builders Operations
-
-// PersistentBuilder is a wrapper containing only the necessary stateproof.builder data required
-// for database persistence.
-type PersistentBuilder struct {
-	_struct     struct{}                  `codec:",omitempty,omitemptyarray"`
-	Builder     *stateproof.Builder       `codec:"bld"`
-	VotersHdr   bookkeeping.BlockHeader   `codec:"hdr"`
-	Message     stateproofmsg.Message     `codec:"msg"`
-	AddrToPos   map[basics.Address]uint64 `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
-	TotalWeight basics.MicroAlgos         `codec:"algo"`
-}
-
-func (pb *PersistentBuilder) Init(b *builder) {
-	pb.Builder = b.Builder
-	pb.VotersHdr = b.votersHdr
-	pb.Message = b.message
-	pb.AddrToPos = b.voters.AddrToPos
-	pb.TotalWeight = b.voters.TotalWeight
-}
-
-func (pb *PersistentBuilder) ToBuilder() *builder {
-	voters := ledgercore.MakeVotersForRound()
-	proto := config.Consensus[pb.VotersHdr.CurrentProtocol]
-	voters.Initialize(proto, pb.Builder.Participants, pb.Builder.Parttree, pb.AddrToPos)
-
-	return &builder{
-		Builder:   pb.Builder,
-		message:   pb.Message,
-		votersHdr: pb.VotersHdr,
-		voters:    voters,
-	}
-}
-
 func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
-	var pb PersistentBuilder
-	pb.Init(b)
-
 	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
 	return err
 }
 
 func getBuilder(tx *sql.Tx, rnd basics.Round) (*builder, error) {
-	var pb PersistentBuilder
+	var b builder
 	row := tx.QueryRow(selectBuilderForRound, rnd)
-	err := row.Scan(&pb)
+	err := row.Scan(&b)
 	if err != nil {
 		return &builder{}, fmt.Errorf("getBuilder: builder for round %d not found in database: %w", rnd, err)
 	}
 
-	return pb.ToBuilder(), nil
+	return &b, nil
 }
 
 //#endregion

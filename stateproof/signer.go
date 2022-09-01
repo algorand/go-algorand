@@ -85,6 +85,8 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 }
 
 func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
+	// TODO: check if the signature already exists in the database, and if so - return.
+
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
 		return
