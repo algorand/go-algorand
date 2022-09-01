@@ -31,16 +31,16 @@ goal network start -r "${TESTDIR}"
 sleep 2
 
 # TODO: other pingpong modes
-pingpong run -d "${TESTDIR}/node1" --tps 20 --refresh 9999 &
+pingpong run -d "${TESTDIR}/node1" --tps 20 --refresh 9999 --quiet &
 
 echo "$!" > .pingpong1.pid
 
-pingpong run -d "${TESTDIR}/node2" --tps 20 --refresh 9999 &
+pingpong run -d "${TESTDIR}/node2" --tps 20 --refresh 9999 --quiet &
 
 echo "$!" > .pingpong2.pid
 
 mkdir -p "${TESTDIR}/heaps"
-python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* --runtime 910 > "${TESTDIR}/heaps/watch.log"
+python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* --runtime 910 > "${TESTDIR}/heaps/watch.log" 2>&1
 
 for i in .pingpong*.pid; do
     kill $(cat $i) || true

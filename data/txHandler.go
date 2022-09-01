@@ -68,12 +68,14 @@ type TxHandler struct {
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 
+	relayMessages bool
+
 	txRequests map[transactions.Txid]*requestedTxn
 	// TODO: keep a prio-heap of open requests sorted by expiration
 }
 
 // MakeTxHandler makes a new handler for transaction messages
-func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) *TxHandler {
+func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool, cfg *config.Local) *TxHandler {
 
 	if txPool == nil {
 		logging.Base().Fatal("MakeTxHandler: txPool is nil on initialization")
@@ -94,6 +96,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
+		relayMessages:         cfg.NetAddress != "" || cfg.ForceRelayMessages,
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -207,7 +210,13 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 
 	// TODO: at this point we need to either send TX data or Ta txid advertisement depending on what protocol the peer is
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
+	// handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
+	if handler.relayMessages {
+		err = TxnBroadcast(handler.ctx, handler.net, verifiedTxGroup, wi.rawmsg.Sender)
+		if err != nil {
+			logging.Base().Infof("unable to pin transaction: %v", err)
+		}
+	}
 }
 
 const peerTxn2Key = "tx3"

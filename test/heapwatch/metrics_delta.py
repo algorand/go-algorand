@@ -575,8 +575,16 @@ class nodestats:
         txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
         rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
         totalDt = prevtime - firstTime
-        self.tps = txnCount / totalDt
-        self.blockTime = totalDt / rounds
+        if totalDt == 0:
+            logger.warning('%s across %d files 0 dt', self.nick, len(metrics_files))
+            self.tps = 0
+        else:
+            self.tps = txnCount / totalDt
+        if rounds == 0:
+            logger.warning('%s across %d files 0 rounds', self.nick, len(metrics_files))
+            self.blockTime = 0
+        else:
+            self.blockTime = totalDt / rounds
         if writer and self.txBpsList:
             writer.writerow([])
             for bsum, msg in sorted([(bsum,msg) for msg,bsum in self.txPSums.items()]):
