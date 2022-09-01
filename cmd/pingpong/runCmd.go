@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
@@ -116,7 +115,7 @@ var runCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Make a cache dir for wallet handle tokens
-		cacheDir, err := ioutil.TempDir("", "pingpong")
+		cacheDir, err := os.MkdirTemp("", "pingpong")
 		if err != nil {
 			reportErrorf("Cannot make temp dir: %v\n", err)
 		}
@@ -263,7 +262,7 @@ var runCmd = &cobra.Command{
 		}
 
 		if logicProg != "" {
-			cfg.Program, err = ioutil.ReadFile(logicProg)
+			cfg.Program, err = os.ReadFile(logicProg)
 			if err != nil {
 				reportErrorf("Error opening logic program: %v\n", err)
 			}

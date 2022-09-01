@@ -40,7 +40,6 @@ import (
 
 // commitRoundNext schedules a commit with as many rounds as possible
 func commitRoundNext(l *Ledger) {
-	// maxAcctLookback := l.trackers.cfg.MaxAcctLookback
 	maxAcctLookback := 320
 	commitRoundLookback(basics.Round(maxAcctLookback), l)
 }

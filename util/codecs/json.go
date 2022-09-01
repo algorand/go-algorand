@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -79,7 +78,7 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	// When done, ensure last value line doesn't include comma
 	// Write string array to file.
 
-	file, err := ioutil.TempFile("", "encsndv")
+	file, err := os.CreateTemp("", "encsndv")
 	if err != nil {
 		return err
 	}
@@ -94,7 +93,7 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	}
 
 	// Read lines from encoded file into string array
-	content, err := ioutil.ReadFile(name)
+	content, err := os.ReadFile(name)
 	if err != nil {
 		return err
 	}

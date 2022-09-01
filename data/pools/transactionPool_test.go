@@ -1432,11 +1432,17 @@ func TestStateProofLogging(t *testing.T) {
 		lines = append(lines, scanner.Text())
 	}
 	fmt.Println(lines[len(lines)-1])
+	// Verify that the StateProofNextRound is added when there are no transactions
+	var int1, nextRound uint64
+	var str1 string
+	partsNext := strings.Split(lines[len(lines)-10], "TransactionsLoopStartTime:")
+	fmt.Sscanf(partsNext[1], "%d, StateProofNextRound:%d, %s", &int1, &nextRound, &str1)
+	require.Equal(t, int(512), int(nextRound))
+
 	parts := strings.Split(lines[len(lines)-1], "StateProofNextRound:")
 
 	// Verify the Metrics is correct
-	var nextRound, pWeight, signedWeight, numReveals, posToReveal, txnSize uint64
-	var str1 string
+	var pWeight, signedWeight, numReveals, posToReveal, txnSize uint64
 	fmt.Sscanf(parts[1], "%d, ProvenWeight:%d, SignedWeight:%d, NumReveals:%d, NumPosToReveal:%d, TxnSize:%d\"%s",
 		&nextRound, &pWeight, &signedWeight, &numReveals, &posToReveal, &txnSize, &str1)
 	require.Equal(t, uint64(768), nextRound)

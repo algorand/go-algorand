@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -30,10 +31,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts) {
+func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts, totals ledgercore.AccountTotals) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	delta.Accts.MergeAccounts(updates)
+	delta.Totals = totals
 	ao.newBlock(blk, delta)
+}
+
+func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64) {
+	a.Equal(expectedSize, uint64(len(ao.voters.votersForRoundCache)))
+	for _, v := range ao.voters.votersForRoundCache {
+		err := v.Wait()
+		a.NoError(err)
+		a.NotZero(v.TotalWeight)
+		a.NotZero(len(v.Participants))
+		a.NotZero(v.Tree.NumOfElements)
+	}
+}
+
+func makeRandomOnlineAccounts(numberOfAccounts uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+
+	for i := uint64(0); i < numberOfAccounts; i++ {
+		var data basics.AccountData
+
+		// Avoid overflowing totals
+		data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+
+		data.Status = basics.Online
+		data.VoteLastValid = 10000000
+
+		data.VoteFirstValid = 0
+		data.RewardsBase = 0
+
+		res[ledgertesting.RandomAddress()] = data
+	}
+
+	return res
 }
 
 func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
@@ -44,7 +79,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	numOfIntervals := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals - 1
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -64,15 +99,18 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
 
-	a.Equal(numOfIntervals, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, numOfIntervals)
 	a.Equal(basics.Round(intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block := randomBlock(basics.Round(i))
@@ -84,13 +122,13 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	stateTracking.StateProofNextRound = basics.Round((numOfIntervals - 1) * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, ao)
+	addBlockToAccountsUpdate(block.block, ao, totals)
 
 	// the tracker should have 3 entries
 	//  - voters to confirm the numOfIntervals - 1 th interval
 	//  - voters to confirm the numOfIntervals th interval
 	//  - voters to confirm the numOfIntervals + 1  th interval
-	a.Equal(uint64(3), uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, 3)
 	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block = randomBlock(basics.Round(i))
@@ -98,9 +136,9 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	stateTracking.StateProofNextRound = basics.Round(numOfIntervals * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, ao)
+	addBlockToAccountsUpdate(block.block, ao, totals)
 
-	a.Equal(uint64(2), uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, 2)
 	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
@@ -112,7 +150,7 @@ func TestLimitVoterTracker(t *testing.T) {
 	recoveryIntervalForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -131,6 +169,9 @@ func TestLimitVoterTracker(t *testing.T) {
 	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
 
 	i := uint64(1)
 
@@ -141,33 +182,33 @@ func TestLimitVoterTracker(t *testing.T) {
 	for ; i < intervalForTest*(recoveryIntervalForTests+2); i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
 
 	// the votersForRoundCache should contains recoveryIntervalForTests+2 elements:
 	// recoveryIntervalForTests  - since this is the recovery interval
 	// + 1 - since votersForRoundCache would contain the votersForRound for the next state proof to come
 	// + 1 - in order to confirm recoveryIntervalForTests number of state proofs we need recoveryIntervalForTests + 1 headers (for the commitment)
-	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// after adding the round intervalForTest*(recoveryIntervalForTests+3)+1 we expect the voter tracker to remove voters
 	for ; i < intervalForTest*(recoveryIntervalForTests+3)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
 
-	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*2-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// after adding the round intervalForTest*(recoveryIntervalForTests+3)+1 we expect the voter tracker to remove voters
 	for ; i < intervalForTest*(recoveryIntervalForTests+4)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
-	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// if the last round of the intervalForTest has not been added to the ledger the votersTracker would
@@ -175,17 +216,17 @@ func TestLimitVoterTracker(t *testing.T) {
 	for ; i < intervalForTest*(recoveryIntervalForTests+5); i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
-	a.Equal(recoveryIntervalForTests+3, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, recoveryIntervalForTests+3)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	for ; i < intervalForTest*(recoveryIntervalForTests+5)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
-	a.Equal(recoveryIntervalForTests+2, uint64(len(ao.voters.votersForRoundCache)))
+	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*4-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
@@ -196,7 +237,7 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -216,11 +257,14 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
 	i := uint64(1)
 	for ; i < (intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao)
+		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
 
 	top, err := ao.voters.getVoters(basics.Round(intervalForTest - lookbackForTest))
