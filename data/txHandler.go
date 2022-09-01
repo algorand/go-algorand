@@ -284,11 +284,11 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 			if txid == nil {
 				for i := range verifiedTxGroup {
 					id := verifiedTxGroup[i].ID()
+					logging.Base().Infof("send Ta %s", id.String())
 					txid = append(txid, (id[:])...)
 				}
 			}
 			err = peer.Unicast(ctx, txid, protocol.TxnAdvertiseTag)
-			logging.Base().Info("sent Ta")
 		} else {
 			// not a tx3 protocol client, broadcast txn
 			if blob == nil {
@@ -392,6 +392,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	handler.txRequestsMu.Lock()
+	now := time.Now()
 	for i := 0; i < numids; i++ {
 		copy(txid[:], rawmsg.Data[len(txid)*i:])
 		_, _, found := handler.txPool.Lookup(txid)
@@ -410,7 +411,6 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 		} else {
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
-			now := time.Now()
 			if now.Sub(req.requestedAt) < requestExpiration {
 				// no new request
 				logging.Base().Infof("Ta already req %s", txid.String())
@@ -419,6 +419,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		}
 		logging.Base().Infof("Ta req %s", txid.String())
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
+		req.requestedAt = now
 		request = append(request, (txid[:])...)
 	}
 	handler.txRequestsMu.Unlock()
