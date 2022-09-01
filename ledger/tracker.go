@@ -555,8 +555,9 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	}
 
 	accLedgerEval := accountUpdatesLedgerEvaluator{
-		au: tr.accts,
-		ao: tr.acctsOnline,
+		au:   tr.accts,
+		ao:   tr.acctsOnline,
+		tail: tr.tail,
 	}
 
 	if lastBalancesRound < lastestBlockRound {

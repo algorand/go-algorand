@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -102,7 +101,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	for i := 0; i < filesToCreate; i++ {
 		fileName := filepath.Join(CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
-		err = ioutil.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
+		err = os.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database

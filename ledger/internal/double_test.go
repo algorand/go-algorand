@@ -152,6 +152,11 @@ func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source s
 	return appIndex
 }
 
+func (dl *DoubleLedger) reloadLedgers() {
+	require.NoError(dl.t, dl.generator.ReloadLedger())
+	require.NoError(dl.t, dl.validator.ReloadLedger())
+}
+
 func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.ValidatedBlock) {
 	bl := vb.Block()
 	msg := bl.MarshalMsg(nil)

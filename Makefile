@@ -8,7 +8,6 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
-export GOPROXY := direct
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
@@ -100,15 +99,12 @@ fix: build
 	$(GOPATH1)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golint ./...
-
-vet:
-	go vet ./...
+	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml 
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: vet fix lint fmt
+sanity: fix lint fmt
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -331,7 +327,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

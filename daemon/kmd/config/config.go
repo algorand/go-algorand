@@ -18,7 +18,7 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/util/codecs"
@@ -103,7 +103,7 @@ func (k KMDConfig) Validate() error {
 func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	cfg = defaultConfig(dataDir)
 	configFilename := filepath.Join(dataDir, kmdConfigFilename)
-	dat, err := ioutil.ReadFile(configFilename)
+	dat, err := os.ReadFile(configFilename)
 	// If there is no config file, then return the default configuration, and dump the default config to disk
 	if err != nil {
 		exampleFilename := filepath.Join(dataDir, kmdConfigExampleFilename)
