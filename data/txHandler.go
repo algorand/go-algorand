@@ -367,6 +367,11 @@ const requestExpiration = time.Millisecond * 900
 func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	var request []byte
 	var txid transactions.Txid
+	peer, ok := rawmsg.Sender.(network.UnicastPeer)
+	if !ok {
+		logging.Base().Errorf("Ta Sender not UnicastPeer")
+		return network.OutgoingMessage{}
+	}
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
 		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
@@ -402,16 +407,19 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		request = append(request, (txid[:])...)
 	}
 	if len(request) != 0 {
-		// TODO: Respond is wrong, use UNicast
-		return network.OutgoingMessage{
-			Action:  network.Respond,
-			Tag:     protocol.TxnRequestTag,
-			Payload: request,
+		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
+		if err != nil {
+			logging.Base().Errorf("Ta req err, %v", err)
 		}
 	}
 	return network.OutgoingMessage{}
 }
 func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	peer, ok := rawmsg.Sender.(network.UnicastPeer)
+	if !ok {
+		logging.Base().Errorf("Tr Sender not UnicastPeer")
+		return network.OutgoingMessage{}
+	}
 	var txid transactions.Txid
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
@@ -432,10 +440,9 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 		}
 	}
 	if numFound != 0 {
-		return network.OutgoingMessage{
-			Action:  network.Respond,
-			Tag:     protocol.TxnTag,
-			Payload: reencode(response),
+		err := peer.Unicast(handler.ctx, reencode(response), protocol.TxnTag)
+		if err != nil {
+			logging.Base().Errorf("Tr res err, %v", err)
 		}
 	}
 	// TODO: add NACK message to protocol so they can ask another node?
