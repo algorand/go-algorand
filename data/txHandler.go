@@ -24,8 +24,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -70,7 +72,9 @@ type TxHandler struct {
 
 	relayMessages bool
 
-	txRequests map[transactions.Txid]*requestedTxn
+	txRequests   map[transactions.Txid]*requestedTxn
+	txRequestsMu deadlock.Mutex
+	// TODO: age-out txRequests, remove txids that have been committed more than N (probably 2) rounds ago, remove txns no longer valid range
 	// TODO: keep a prio-heap of open requests sorted by expiration
 }
 
@@ -368,6 +372,7 @@ type requestedTxn struct {
 	requestedFrom []network.Peer
 	advertisedBy  []network.Peer
 	requestedAt   time.Time
+	LastValid     basics.Round
 }
 
 // we can be lazy responding to advertise offers
@@ -386,6 +391,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
+	handler.txRequestsMu.Lock()
 	for i := 0; i < numids; i++ {
 		copy(txid[:], rawmsg.Data[len(txid)*i:])
 		_, _, found := handler.txPool.Lookup(txid)
@@ -415,6 +421,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
 		request = append(request, (txid[:])...)
 	}
+	handler.txRequestsMu.Unlock()
 	if len(request) != 0 {
 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
 		if err != nil {
