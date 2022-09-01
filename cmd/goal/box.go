@@ -78,7 +78,7 @@ var appBoxInfoCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorInvalidBoxName, boxName)
 		}
-		if bytes.Compare(box.Name, boxNameBytes) != 0 {
+		if !bytes.Equal(box.Name, boxNameBytes) {
 			reportErrorf(errorBoxNameMismatch, box.Name, boxNameBytes)
 		}
 		reportInfof("Name:  %s", boxName)
