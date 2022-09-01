@@ -228,7 +228,7 @@ class summary:
         maxs = []
         means = []
         for nick, ns in self.nodes.items():
-            if len(ns.txPool) < 2:
+            if len(ns.txPool) < 3:
                 continue
             # skip the first two while the system could still count as warming up
             txp = ns.txPool[2:]
