@@ -116,6 +116,7 @@ func (handler *TxHandler) Start() {
 			MessageHandler: network.HandlerFunc(handler.processIncomingTxnRequest),
 		},
 	})
+	logging.Base().Info("txHandler Start")
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
 }
@@ -230,8 +231,13 @@ func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 			// TODO: this logic needs to change before network.ProtocolVersion advances beyond "3"
 			out = &tx3Data{enabled: true}
 			net.SetPeerData(npeer, peerTxn2Key, out)
+			logging.Base().Infof("peer %p is version 3!", peer)
 			return out
+		} else {
+			logging.Base().Infof("peer %p is version %s", peer, version)
 		}
+	} else {
+		logging.Base().Infof("peer %p is not UnicastPeer", peer)
 	}
 	out = &tx3Data{enabled: false}
 	net.SetPeerData(npeer, peerTxn2Key, out)
@@ -246,7 +252,8 @@ func (handler *TxHandler) smarterTxnBroadcast(wi *txBacklogMsg) {
 }
 
 func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup []transactions.SignedTxn, sender network.Peer) (err error) {
-	peers := net.GetPeers()
+	peers := net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)
+	logging.Base().Infof("txHandler TxnBroadcast, sender=%p, %d peeers", sender, len(peers))
 	var blob []byte
 	var txid []byte
 	for _, npeer := range peers {
@@ -255,16 +262,11 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 		}
 		peer, ok := npeer.(network.UnicastPeer)
 		if !ok {
+			logging.Base().Info("peer is not UnicastPeer")
 			continue
 		}
-		txpd := net.GetPeerData(npeer, peerTxn2Key)
-		if txpd == nil {
-			// not a tx3 protocol client, broadcast txn
-			if blob == nil {
-				blob = reencode(verifiedTxGroup)
-			}
-			err = peer.Unicast(ctx, blob, protocol.TxnTag)
-		} else {
+		txpd := tx3Check(net, npeer)
+		if txpd.enabled {
 			// tx3 protocol
 			if txid == nil {
 				for i := range verifiedTxGroup {
@@ -273,6 +275,14 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 				}
 			}
 			err = peer.Unicast(ctx, txid, protocol.TxnAdvertiseTag)
+			logging.Base().Info("sent Ta")
+		} else {
+			// not a tx3 protocol client, broadcast txn
+			if blob == nil {
+				blob = reencode(verifiedTxGroup)
+			}
+			err = peer.Unicast(ctx, blob, protocol.TxnTag)
+			logging.Base().Info("sent TX")
 		}
 	}
 	return nil
@@ -367,10 +377,14 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		_, _, found := handler.txPool.Lookup(txid)
 		if found {
 			// we already have it, nothing to do
+			logging.Base().Infof("Ta already have %s", txid.String())
 			continue
 		}
 		req, ok := handler.txRequests[txid]
 		if !ok {
+			if handler.txRequests == nil {
+				handler.txRequests = make(map[transactions.Txid]*requestedTxn)
+			}
 			req = new(requestedTxn)
 			handler.txRequests[txid] = req
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
@@ -379,13 +393,16 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 			now := time.Now()
 			if now.Sub(req.requestedAt) < requestExpiration {
 				// no new request
+				logging.Base().Infof("Ta already req %s", txid.String())
 				continue
 			}
 		}
+		logging.Base().Infof("Ta req %s", txid.String())
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
 		request = append(request, (txid[:])...)
 	}
 	if len(request) != 0 {
+		// TODO: Respond is wrong, use UNicast
 		return network.OutgoingMessage{
 			Action:  network.Respond,
 			Tag:     protocol.TxnRequestTag,
@@ -409,6 +426,9 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 		if found {
 			response[i] = tx
 			numFound++
+			logging.Base().Infof("Tr %s", txid.String())
+		} else {
+			logging.Base().Infof("Tr MISSING %s", txid.String())
 		}
 	}
 	if numFound != 0 {
@@ -420,7 +440,7 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 	}
 	// TODO: add NACK message to protocol so they can ask another node?
 	// But really, this should never happen. We advertised it. We should have it. (Unless it just got committed to a block?) ((TODO: search most recent block for txn by txid?))
-	logging.Base().Error("request for txid we don't have: %s", txid.String())
+	//logging.Base().Error("request for txid we don't have: %s", txid.String())
 	return network.OutgoingMessage{}
 }
 
