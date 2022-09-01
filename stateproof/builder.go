@@ -33,9 +33,40 @@ import (
 	"sort"
 )
 
+// fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist
+//  Not threadsafe, should be called in a lock environment
+func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (b builder, err error) {
+	if spw.persistBuilders {
+		// Store the newly built builder into the database
+		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return getBuilder(tx, rnd, &b)
+		})
+		if err == nil {
+			return b, nil
+		}
+	}
+
+	b, err = spw.makeBuilderForRound(rnd)
+	if err != nil {
+		return builder{}, err
+	}
+
+	if spw.persistBuilders {
+		// Store the newly built builder into the database
+		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return insertBuilder(tx, rnd, &b)
+		})
+		if err != nil {
+			spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %w", err)
+			// No need to return the error, as the builder was already created successfully
+		}
+	}
+
+	return b, nil
+}
+
 // makeBuilderForRound not threadsafe, should be called in a lock environment
 func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
-	// TODO: fetch builder from DB if exists
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -86,7 +117,6 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	// TODO: insert new Builder to DB (would have returned earlier if existed)
 	return res, nil
 }
 
@@ -114,7 +144,7 @@ func (spw *Worker) initBuilders() {
 }
 
 func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := spw.makeBuilderForRound(rnd)
+	builderForRound, err := spw.fetchBuilderForRound(rnd)
 	if err != nil {
 		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
 		return
@@ -203,7 +233,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 				sfa.Round, proto.StateProofInterval)
 		}
 
-		builderForRound, err = spw.makeBuilderForRound(sfa.Round)
+		builderForRound, err = spw.fetchBuilderForRound(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
@@ -371,15 +401,18 @@ func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
+	// TODO: if flag not enables => return
+
 	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	for rnd := range spw.builders {
-		if rnd < oldestRoundToRemove {
-			delete(spw.builders, rnd)
-		}
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deleteBuilders(tx, oldestRoundToRemove)
+	})
+	if err != nil {
+		spw.log.Errorf("deleteOldBuilders: failed to delete builders from database: %w", err)
 	}
 }
 

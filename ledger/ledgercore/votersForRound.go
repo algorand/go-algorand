@@ -149,18 +149,6 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	return nil
 }
 
-// Initialize is mostly used to restore VotersForRound from the database, and does not need to be called for normal usage
-func (tr *VotersForRound) Initialize(proto config.ConsensusParams, parts basics.ParticipantsArray, parttree *merklearray.Tree, addrToPos map[basics.Address]uint64) {
-	tr.mu.Lock()
-
-	tr.Proto = proto
-	tr.Participants = parts
-	tr.Tree = parttree
-	tr.AddrToPos = addrToPos
-
-	tr.mu.Unlock()
-}
-
 // BroadcastError broadcasts the error
 func (tr *VotersForRound) BroadcastError(err error) {
 	tr.mu.Lock()

@@ -54,9 +54,7 @@ func TestPendingSigDB(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(dbs.Wdb)
 	require.NoError(t, err)
 
 	for r := basics.Round(0); r < basics.Round(100); r++ {

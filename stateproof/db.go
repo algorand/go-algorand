@@ -56,6 +56,8 @@ const (
 	insertBuilderForRound = `INSERT INTO builders (round,builder) VALUES (?,?)`
 
 	selectBuilderForRound = `SELECT builder FROM builders WHERE round=?`
+
+	deleteBuilderForRound = `DELETE FROM builders WHERE round<?`
 )
 
 // dbSchemaUpgrade0 initialize the tables.
@@ -78,12 +80,6 @@ func dbSchemaUpgrade0(_ context.Context, tx *sql.Tx, _ bool) error {
 	return nil
 }
 
-type pendingSig struct {
-	signer       basics.Address
-	sig          merklesignature.Signature
-	fromThisNode bool
-}
-
 func makeStateProofDB(accessor db.Accessor) error {
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
@@ -99,6 +95,13 @@ func makeStateProofDB(accessor db.Accessor) error {
 }
 
 //#region Sig Operations
+
+type pendingSig struct {
+	signer       basics.Address
+	sig          merklesignature.Signature
+	fromThisNode bool
+}
+
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
 	_, err := tx.Exec("INSERT INTO sigs (sprnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
 		rnd,
@@ -167,15 +170,20 @@ func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	return err
 }
 
-func getBuilder(tx *sql.Tx, rnd basics.Round) (*builder, error) {
-	var b builder
+func getBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	row := tx.QueryRow(selectBuilderForRound, rnd)
 	err := row.Scan(&b)
 	if err != nil {
-		return &builder{}, fmt.Errorf("getBuilder: builder for round %d not found in database: %w", rnd, err)
+		return fmt.Errorf("getBuilder: builder for round %d not found in database: %w", rnd, err)
 	}
 
-	return &b, nil
+	return nil
+}
+
+// deleteBuilders deletes all builders up to rnd
+func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
+	_, err := tx.Exec(deleteBuilderForRound, rnd)
+	return err
 }
 
 //#endregion
