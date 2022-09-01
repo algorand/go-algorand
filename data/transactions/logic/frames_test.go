@@ -70,6 +70,7 @@ func TestPushPopN(t *testing.T) {
 func TestPushPopNTyping(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	testProg(t, "pushn 2; +", LogicVersion)
 	testProg(t, "pushn 2; concat", LogicVersion, Expect{1, "...wanted type []byte..."})
 
@@ -111,6 +112,16 @@ func TestProtoChecks(t *testing.T) {
 	// deadcode region.
 	testPanics(t, "proto 0 0; int 1", fpVersion)
 	testAccepts(t, "callsub a; a: proto 0 0; int 1", fpVersion)
+
+	testPanics(t, `
+    int 1
+    callsub toodeep
+
+toodeep:
+    proto 10 1
+    int 1
+    return
+`, fpVersion, "callsub to proto that requires 10 args")
 }
 
 func TestVoidSub(t *testing.T) {
@@ -179,6 +190,9 @@ func TestForgetReturn(t *testing.T) {
 }
 
 func TestFrameAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testAccepts(t, `
         b main
    add: proto 2 1
@@ -300,4 +314,73 @@ func TestFrameAccess(t *testing.T) {
         int 1
         return
 `, fpVersion, "frame_bury above stack")
+}
+
+func TestFrameDigAtStart(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// This is debatable, perhaps we should begin programs with a callstack
+	// where the frame pointer is at 0.  This would allow storing "locals" at
+	// the bottom of the stack, just like a subroutine.
+	testPanics(t, `
+        frame_dig 1
+`, fpVersion, "frame_dig with empty callstack")
+
+	// This should certainly panic, but maybe only because the arg is negative,
+	// thus it would be looking below the stack if we start programs with a 0
+	// frame pointer.
+	testPanics(t, `
+        frame_dig -1
+`, fpVersion, "frame_dig with empty callstack")
+}
+
+func TestFrameDigAboveStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testPanics(t, `
+     int 1
+     callsub main
+main:
+     proto 1 1
+     pop						// argument popped
+     frame_dig -1				// but then frame_dig used to get at it
+`, fpVersion, "frame_dig above stack")
+}
+
+func TestFrameAccessBelowStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testPanics(t, `
+     int 1
+     callsub main
+main:
+     proto 1 1
+     frame_dig -10				// digging down below arguments
+`, fpVersion, "frame_dig -10 in sub with 1 arg")
+
+	testPanics(t, `
+     int 1
+     callsub main
+main:
+     frame_dig -10				// digging down below arguments
+`, fpVersion, "frame_dig below stack")
+
+	testPanics(t, `
+     int 1
+     callsub main
+main:
+     proto 1 1
+     frame_bury -10				// burying down below arguments
+`, fpVersion, "frame_bury -10 in sub with 1 arg")
+
+	testPanics(t, `
+     int 1
+     callsub main
+main:
+     frame_bury -10				// burying down below arguments
+`, fpVersion, "frame_bury below stack")
+
 }

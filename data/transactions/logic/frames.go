@@ -46,14 +46,15 @@ func opFrameDig(cx *EvalContext) error {
 	}
 
 	frame := cx.callstack[top]
-	if i < 0 && -int(i) > frame.args {
+	// If proto was used, don't allow `frame_dig` to go below specified args
+	if frame.clear && -int(i) > frame.args {
 		return fmt.Errorf("frame_dig %d in sub with %d args", i, frame.args)
 	}
 	idx := frame.height + int(i)
 	if idx >= len(cx.stack) {
 		return errors.New("frame_dig above stack")
 	}
-	if idx < 0 { // Impossible, because of arglen check in callsub
+	if idx < 0 {
 		return errors.New("frame_dig below stack")
 	}
 
@@ -70,14 +71,15 @@ func opFrameBury(cx *EvalContext) error {
 	}
 
 	frame := cx.callstack[top]
-	if i < 0 && -int(i) > frame.args {
+	// If proto was used, don't allow `frame_bury` to go below specified args
+	if frame.clear && -int(i) > frame.args {
 		return fmt.Errorf("frame_bury %d in sub with %d args", i, frame.args)
 	}
 	idx := frame.height + int(i)
 	if idx >= last {
 		return errors.New("frame_bury above stack")
 	}
-	if idx < 0 { // Impossible, because of arglen check in callsub
+	if idx < 0 {
 		return errors.New("frame_bury below stack")
 	}
 	cx.stack[idx] = cx.stack[last]
