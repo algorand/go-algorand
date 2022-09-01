@@ -401,7 +401,9 @@ func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
-	// TODO: if flag not enables => return
+	if !spw.persistBuilders {
+		return
+	}
 
 	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
