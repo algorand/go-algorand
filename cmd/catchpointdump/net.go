@@ -203,15 +203,12 @@ func doDownloadCatchpoint(url string, wdReader util.WatchdogStreamReader, out io
 
 	for {
 		n, err := wdReader.Read(tempBytes)
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return err
 		}
 		totalBytes += n
-		_, err = out.Write(tempBytes[:n])
-		if err != nil {
+		writtenBytes, err := out.Write(tempBytes[:n])
+		if err != nil || n != writtenBytes {
 			return err
 		}
 

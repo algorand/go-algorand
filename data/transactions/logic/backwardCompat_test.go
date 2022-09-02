@@ -28,9 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This test ensures a program compiled with by pre-TEAL v2 go-algorand
-// that includes all the opcodes from TEAL v1 runs in TEAL v2 runModeSignature well
-var sourceTEALv1 = `byte 0x41 // A
+// This test ensures a program compiled with by pre-AVM v2 go-algorand
+// that includes all the opcodes from AVM v1 runs in AVM v2 runModeSignature well
+var sourceV1 = `byte 0x41 // A
 sha256
 byte 0x559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd
 ==
@@ -246,7 +246,7 @@ dup
 ==
 `
 
-var programTEALv1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
+var programV1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
 
 func TestBackwardCompatTEALv1(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -260,15 +260,15 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	pk := basics.Address(c.SignatureVerifier)
 
-	program, err := hex.DecodeString(programTEALv1)
+	program, err := hex.DecodeString(programV1)
 	require.NoError(t, err)
 
 	// ensure old program is the same as a new one when assembling without version
-	ops, err := AssembleString(sourceTEALv1)
+	ops, err := AssembleString(sourceV1)
 	require.NoError(t, err)
 	require.Equal(t, program, ops.Program)
-	// ensure the old program is the same as a new one except TEAL version byte
-	opsV2, err := AssembleStringWithVersion(sourceTEALv1, 2)
+	// ensure the old program is the same as a new one except AVM version byte
+	opsV2, err := AssembleStringWithVersion(sourceV1, 2)
 	require.NoError(t, err)
 	require.Equal(t, program[1:], opsV2.Program[1:])
 
@@ -278,7 +278,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 
 	ep, tx, _ := makeSampleEnvWithVersion(1)
-	// RekeyTo disallowed on TEAL v0/v1
+	// RekeyTo disallowed on AVM v0/v1
 	tx.RekeyTo = basics.Address{}
 
 	ep.TxnGroup[0].Lsig.Logic = program
@@ -327,7 +327,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 
 	// Cost remains the same, because v0 does not get dynamic treatment
 	ep.Proto.LogicSigMaxCost = 2139
-	ep.MinTealVersion = new(uint64) // Was higher because sample txn has a rekey
+	ep.MinAvmVersion = new(uint64) // Was higher because sample txn has a rekey
 	testLogicBytes(t, program, ep, "static cost", "")
 
 	ep.Proto.LogicSigMaxCost = 2140
@@ -343,7 +343,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	testLogicBytes(t, program, ep)
 }
 
-// ensure v2 fields error on pre TEAL v2 logicsig version
+// ensure v2 fields error on pre v2 logicsig version
 // ensure v2 fields error in v1 program
 func TestBackwardCompatGlobalFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -368,7 +368,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ops := testProg(t, text, AssemblerMaxVersion)
 
 		ep, _, _ := makeSampleEnvWithVersion(1)
-		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min teal version issues
+		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min version issues
 		ep.TxnGroup[0].Lsig.Logic = ops.Program
 		_, err := EvalSignature(0, ep)
 		require.Error(t, err)
@@ -408,13 +408,13 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	for _, fs := range fields {
 		field := fs.field.String()
-		for _, command := range tests {
+		for i, command := range tests {
 			text := fmt.Sprintf(command, field)
 			asmError := "...was introduced in ..."
 			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("%s unknown field: %#v", op, field)
+				asmError = fmt.Sprintf("%#v field of %s can only be used with %d immediates", field, op, i+2)
 			}
 			// check assembler fails in versions before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
@@ -434,7 +434,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep, tx, _ := makeSampleEnvWithVersion(1)
 			// We'll reject too early if we have a nonzero RekeyTo, because that
 			// field must be zero for every txn in the group if this is an old
-			// TEAL version
+			// AVM version
 			tx.RekeyTo = basics.Address{}
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
@@ -461,8 +461,8 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 func TestBackwardCompatAssemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// TEAL v1 does not allow branching to the last line
-	// TEAL v2 makes such programs legal
+	// v1 does not allow branching to the last line
+	// v2 makes such programs legal
 	t.Parallel()
 	source := "int 1; int 1; bnz done; done:"
 

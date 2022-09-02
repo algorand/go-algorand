@@ -45,44 +45,44 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	s2 := randString()
 
 	sig := c.Sign(id, s)
-	if !c.Verify(id, s, sig, true) {
+	if !c.Verify(id, s, sig) {
 		t.Errorf("correct signature failed to verify (ephemeral)")
 	}
 
-	if c.Verify(id, s2, sig, true) {
+	if c.Verify(id, s2, sig) {
 		t.Errorf("signature verifies on wrong message")
 	}
 
 	sig2 := c2.Sign(id, s)
-	if c.Verify(id, s, sig2, true) {
+	if c.Verify(id, s, sig2) {
 		t.Errorf("wrong master key incorrectly verified (ephemeral)")
 	}
 
 	otherID := randID()
-	if c.Verify(otherID, s, sig, true) {
+	if c.Verify(otherID, s, sig) {
 		t.Errorf("signature verifies for wrong ID")
 	}
 
 	nextOffsetID := id
 	nextOffsetID.Offset++
-	if c.Verify(nextOffsetID, s, sig, true) {
+	if c.Verify(nextOffsetID, s, sig) {
 		t.Errorf("signature verifies after changing offset")
 	}
 
 	c.DeleteBeforeFineGrained(nextOffsetID, 256)
 	sigAfterDelete := c.Sign(id, s)
-	if c.Verify(id, s, sigAfterDelete, true) { // TODO(adam): Previously, this call to Verify was verifying old-style coarse-grained one-time signatures. Now it's verifying new-style fine-grained one-time signatures. Is this correct?
+	if c.Verify(id, s, sigAfterDelete) { // TODO(adam): Previously, this call to Verify was verifying old-style coarse-grained one-time signatures. Now it's verifying new-style fine-grained one-time signatures. Is this correct?
 		t.Errorf("signature verifies after delete offset")
 	}
 
 	sigNextAfterDelete := c.Sign(nextOffsetID, s)
-	if !c.Verify(nextOffsetID, s, sigNextAfterDelete, true) {
+	if !c.Verify(nextOffsetID, s, sigNextAfterDelete) {
 		t.Errorf("signature fails to verify after deleting up to this offset")
 	}
 
 	nextOffsetID.Offset++
 	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
-	if !c.Verify(nextOffsetID, s, sigNext2AfterDelete, true) {
+	if !c.Verify(nextOffsetID, s, sigNext2AfterDelete) {
 		t.Errorf("signature fails to verify after deleting up to previous offset")
 	}
 
@@ -93,18 +93,18 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	nextBatchOffsetID.Offset++
 	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
 	sigAfterDelete = c.Sign(nextBatchID, s)
-	if c.Verify(nextBatchID, s, sigAfterDelete, true) {
+	if c.Verify(nextBatchID, s, sigAfterDelete) {
 		t.Errorf("signature verifies after delete")
 	}
 
 	sigNextAfterDelete = c.Sign(nextBatchOffsetID, s)
-	if !c.Verify(nextBatchOffsetID, s, sigNextAfterDelete, true) {
+	if !c.Verify(nextBatchOffsetID, s, sigNextAfterDelete) {
 		t.Errorf("signature fails to verify after delete up to this offset")
 	}
 
 	nextBatchOffsetID.Offset++
 	sigNext2AfterDelete = c.Sign(nextBatchOffsetID, s)
-	if !c.Verify(nextBatchOffsetID, s, sigNext2AfterDelete, true) {
+	if !c.Verify(nextBatchOffsetID, s, sigNext2AfterDelete) {
 		t.Errorf("signature fails to verify after delete up to previous offset")
 	}
 
@@ -115,27 +115,27 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 
 	preBigJumpID := bigJumpID
 	preBigJumpID.Batch--
-	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s), true) {
+	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s)) {
 		t.Errorf("preBigJumpID verifies")
 	}
 
 	preBigJumpID.Batch++
 	preBigJumpID.Offset--
-	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s), true) {
+	if c.Verify(preBigJumpID, s, c.Sign(preBigJumpID, s)) {
 		t.Errorf("preBigJumpID verifies")
 	}
 
-	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s), true) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID does not verify")
 	}
 
 	bigJumpID.Offset++
-	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s), true) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Offset++ does not verify")
 	}
 
 	bigJumpID.Batch++
-	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s), true) {
+	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
 	}
 }
@@ -158,7 +158,7 @@ func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 			// verify them
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				v.Verify(ids[i], msg, sigs[i], enabled)
+				v.Verify(ids[i], msg, sigs[i])
 			}
 		})
 	}

@@ -21,6 +21,7 @@
 import argparse
 import atexit
 import base64
+import datetime
 import glob
 import json
 import logging
@@ -39,7 +40,7 @@ import algosdk
 logger = logging.getLogger(__name__)
 
 scriptdir = os.path.dirname(os.path.realpath(__file__))
-repodir =  os.path.join(scriptdir, "..", "..")
+repodir = os.path.join(scriptdir, "..", "..")
 
 # less than 16kB of log we show the whole thing, otherwise the last 16kB
 LOG_WHOLE_CUTOFF = 1024 * 16
@@ -131,11 +132,8 @@ def _script_thread_inner(runset, scriptname, timeout):
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)
     os.makedirs(env['TEMPDIR'])
-    cmdlogpath = os.path.join(env['TEMPDIR'],'.cmdlog')
+    cmdlogpath = os.path.join(env['TEMPDIR'], '.cmdlog')
     cmdlog = open(cmdlogpath, 'wb')
-    if not runset.is_ok():
-        runset.done(scriptname, False, time.time() - start)
-        return
     logger.info('starting %s', scriptname)
     p = subprocess.Popen([scriptname, walletname], env=env, cwd=repodir, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
@@ -150,11 +148,15 @@ def _script_thread_inner(runset, scriptname, timeout):
         retcode = -1
     dt = time.time() - start
 
-
     if runset.terminated:
         logger.info('Program terminated before %s finishes.', scriptname)
         runset.done(scriptname, False, dt)
         return
+
+    with runset.lock:
+        with open(cmdlogpath, 'r') as fin:
+            for line in fin:
+                runset.event_log("output", scriptname, output=line)
 
     if retcode != 0:
         with runset.lock:
@@ -168,11 +170,11 @@ def _script_thread_inner(runset, scriptname, timeout):
                     if len(lines) > 1:
                         # drop probably-partial first line
                         lines = lines[1:]
-                    sys.stderr.write('end of log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write(f'end of log follows ({scriptname}):\n')
                     sys.stderr.write('\n'.join(lines))
                     sys.stderr.write('\n\n')
                 else:
-                    sys.stderr.write('whole log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write(f'whole log follows ({scriptname}):\n')
                     sys.stderr.write(fin.read())
     else:
         logger.info('finished %s OK in %f seconds', scriptname, dt)
@@ -183,35 +185,26 @@ def script_thread(runset, scriptname, to):
     start = time.time()
     try:
         _script_thread_inner(runset, scriptname, to)
-    except Exception as e:
+    except Exception:
         logger.error('error in e2e_client_runner.py', exc_info=True)
         runset.done(scriptname, False, time.time() - start)
 
-def killthread(runset):
-    time.sleep(5)
-    runset.kill()
-    return
 
 class RunSet:
     def __init__(self, env):
         self.env = env
         self.threads = {}
         self.procs = {}
-        self.ok = True
         self.lock = threading.Lock()
         self.terminated = None
-        self.killthread = None
         self.kmd = None
         self.algod = None
         self.pubw = None
         self.maxpubaddr = None
         self.errors = []
         self.statuses = []
+        self.jsonfile = None
         return
-
-    def is_ok(self):
-        with self.lock:
-            return self.ok
 
     def connect(self):
         with self.lock:
@@ -225,7 +218,7 @@ class RunSet:
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
 
-        xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
+        xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
 
@@ -241,7 +234,6 @@ class RunSet:
                         pubwid = xw['id']
                 pubw = self.kmd.init_wallet_handle(pubwid, '')
                 pubaddrs = self.kmd.list_keys(pubw)
-                pubbalances = []
                 maxamount = 0
                 maxpubaddr = None
                 for pa in pubaddrs:
@@ -254,9 +246,7 @@ class RunSet:
             return self.pubw, self.maxpubaddr
 
     def start(self, scriptname, timeout):
-        with self.lock:
-            if not self.ok:
-                return
+        self.event_log("run", scriptname)
         t = threading.Thread(target=script_thread, args=(self, scriptname, timeout))
         t.start()
         with self.lock:
@@ -267,18 +257,13 @@ class RunSet:
             self.procs[scriptname] = p
 
     def done(self, scriptname, ok, seconds):
+        self.event_log("pass" if ok else "fail", scriptname, seconds)
         with self.lock:
             self.statuses.append( {'script':scriptname, 'ok':ok, 'seconds':seconds} )
             if not ok:
                 self.errors.append('{} failed'.format(scriptname))
             self.threads.pop(scriptname, None)
             self.procs.pop(scriptname, None)
-            self.ok = self.ok and ok
-            if not self.ok:
-                self._terminate()
-                if self.killthread is None:
-                    self.killthread = threading.Thread(target=killthread, args=(self,), daemon=True)
-                    self.killthread.start()
 
     def _terminate(self):
         # run from inside self.lock
@@ -287,12 +272,6 @@ class RunSet:
         self.terminated = time.time()
         for p in self.procs.values():
             p.terminate()
-
-    def kill(self):
-        with self.lock:
-            for p in self.procs.values():
-                p.kill()
-        return
 
     def wait(self, timeout):
         now = time.time()
@@ -312,8 +291,32 @@ class RunSet:
             now = time.time()
         if now >= endt:
             with self.lock:
-                self.ok = False
                 self._terminate()
+
+    def event_log(self, action, scriptname, elapsed=0.0, **kwargs):
+        if self.jsonfile:
+            prefix, base = os.path.split(scriptname)
+            prefix, package = os.path.split(prefix)
+            j = json.dumps(test_event(action, package, base, elapsed, **kwargs))
+            self.jsonfile.write(j+"\n")
+
+
+def test_event(action, package, test, elapsed=0.0, output="", time=None):
+    # Documented here: https://pkg.go.dev/cmd/test2json
+    event = {}
+
+    if time is None:            # expected case
+        time = datetime.datetime.now()
+    event["Time"] = time.isoformat("T")+"Z"
+    event["Action"] = action    # run | pause | cont | pass | bench | fail | output | skip
+    event["Package"] = package
+    event["Test"] = test
+    if elapsed > 0.0:           # Should be set for Action=pass|fail
+        event["Elapsed"] = elapsed
+    if output:                  # Should be set for Action=output
+        event["Output"] = output
+
+    return event
 
 
 # 'network stop' and 'network delete' are also tested and used as cleanup procedures
@@ -410,7 +413,7 @@ def main():
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('--version', default="Future")
     ap.add_argument('--unsafe_scrypt', default=False, action='store_true', help="allows kmd to run with unsafe scrypt attribute. This will speed up tests time")
-    
+
     args = ap.parse_args()
 
     if args.verbose:
@@ -418,7 +421,11 @@ def main():
     else:
         logging.basicConfig(format=_logging_format, datefmt=_logging_datefmt, level=logging.INFO)
 
-    logger.info('starting: %r', args.scripts)
+    if len(args.scripts) > 3:
+        logger.info('starting %d scripts', len(args.scripts))
+    else:
+        logger.info('starting: %r', args.scripts)
+
     # start with a copy when making env for child processes
     env = dict(os.environ)
     tempdir = os.getenv('TEMPDIR')
@@ -453,6 +460,19 @@ def main():
     xrun(['goal', 'node', 'status'], env=env, timeout=5)
 
     rs = RunSet(env)
+
+    trdir = os.environ.get("TEST_RESULTS")
+    if trdir:
+        prefix, base = os.path.split(args.scripts[0])
+        prefix, package = os.path.split(prefix)
+        trdir = os.path.join(trdir, package)
+        os.makedirs(trdir, exist_ok=True)
+
+        jsonpath = os.path.join(trdir, "results.json")
+        rs.jsonfile = open(jsonpath, "w")
+        junitpath = os.path.join(trdir, "testresults.xml")
+        atexit.register(finish_test_results, rs.jsonfile, jsonpath, junitpath)
+
     for scriptname in args.scripts:
         rs.start(os.path.abspath(scriptname), args.timeout-10)
     rs.wait(args.timeout)
@@ -473,6 +493,15 @@ def main():
         goal_network_delete(netdir, normal_cleanup=True)
 
     return retcode
+
+
+def finish_test_results(jsonfile, jsonpath, junitpath):
+    # This only runs in CI, since TEST_RESULTS env var controls the
+    # block that opens the jsonfile, and registers this atexit. So we
+    # assume jsonfile is open, and gotestsum available.
+    jsonfile.close()
+    xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+
 
 if __name__ == '__main__':
     sys.exit(main())

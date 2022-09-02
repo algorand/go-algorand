@@ -20,8 +20,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,11 +136,9 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
-	require.NoError(b, err)
+	dbTempDir := b.TempDir()
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
 
 	genesisInitState := getInitState()
 
@@ -153,7 +149,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
 	creator := basics.Address{}
-	_, err = rand.Read(creator[:])
+	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
 	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 

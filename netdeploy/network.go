@@ -81,13 +81,20 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 
+	if n.cfg.Name == "" {
+		n.cfg.Name = template.Genesis.NetworkName
+	}
+	if n.cfg.Name == "" {
+		return n, fmt.Errorf("unnamed network. Use the \"network\" flag or \"Genesis.NetworkName\" in the network template")
+	}
+
 	// Create the network root directory so we can generate genesis.json and prepare node data directories
 	err = os.MkdirAll(rootDir, os.ModePerm)
 	if err != nil {
 		return n, err
 	}
 	template.Consensus = consensus
-	err = template.generateGenesisAndWallets(rootDir, name, binDir)
+	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name, binDir)
 	if err != nil {
 		return n, err
 	}

@@ -18,7 +18,6 @@ package logging
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,7 +64,7 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	testDir := os.Getenv("TESTDIR")
 
 	if testDir == "" {
-		testDir, _ = ioutil.TempDir("", "tmp")
+		testDir = t.TempDir()
 	}
 
 	a := require.New(t)
@@ -143,7 +142,7 @@ func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
 	testDir := os.Getenv("TESTDIR")
 
 	if testDir == "" {
-		testDir, _ = ioutil.TempDir("", "tmp")
+		testDir = t.TempDir()
 	}
 
 	a := require.New(t)

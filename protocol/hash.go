@@ -38,11 +38,8 @@ const (
 	AuctionParams     HashID = "aP"
 	AuctionSettlement HashID = "aS"
 
-	CompactCertCoin HashID = "ccc"
-	CompactCertPart HashID = "ccp"
-	CompactCertSig  HashID = "ccs"
-
 	AgreementSelector                HashID = "AS"
+	BlockHeader256                   HashID = "B256"
 	BlockHeader                      HashID = "BH"
 	BalanceRecord                    HashID = "BR"
 	Credential                       HashID = "CR"
@@ -63,9 +60,15 @@ const (
 	Seed                             HashID = "SD"
 	SpecialAddr                      HashID = "SpecialAddr"
 	SignedTxnInBlock                 HashID = "STIB"
-	TestHashable                     HashID = "TE"
-	TxGroup                          HashID = "TG"
-	TxnMerkleLeaf                    HashID = "TL"
-	Transaction                      HashID = "TX"
-	Vote                             HashID = "VO"
+
+	StateProofCoin    HashID = "spc"
+	StateProofMessage HashID = "spm"
+	StateProofPart    HashID = "spp"
+	StateProofSig     HashID = "sps"
+
+	TestHashable  HashID = "TE"
+	TxGroup       HashID = "TG"
+	TxnMerkleLeaf HashID = "TL"
+	Transaction   HashID = "TX"
+	Vote          HashID = "VO"
 )

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import csv
 import glob
 import json
 import logging
@@ -8,8 +9,7 @@ import os
 import re
 import sys
 import subprocess
-
-from metrics_delta import parse_metrics, gather_metrics_files_by_nick
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def get_heap_inuse_totals(dirpath):
         else:
             cached[nick] = sorted(old + recs)
     if cached and bynick:
-        with open(cache_path, 'wb') as fout:
+        with open(cache_path, 'wt') as fout:
             json.dump(cached, fout)
     return cached
 
@@ -86,6 +86,7 @@ def get_heap_inuse_totals(dirpath):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('-d', '--dir', required=True, help='dir path to find /*.metrics in')
+    ap.add_argument('--csv')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -94,10 +95,40 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    metrics_files = glob.glob(os.path.join(args.dir, '*.metrics'))
-    filesByNick = gather_metrics_files_by_nick(metrics_files)
-
     heap_totals = get_heap_inuse_totals(args.dir)
+
+    if args.csv:
+        if args.csv == '-':
+            csvf = sys.stdout
+        else:
+            csvf = open(args.csv, 'wt')
+        writer = csv.writer(csvf)
+        whens = set()
+        for nick, recs in heap_totals.items():
+            for ts, n in recs:
+                whens.add(ts)
+        whens = sorted(whens)
+        nodes = sorted(heap_totals.keys())
+        writer.writerow(['when','dt','round'] + nodes)
+        first = None
+        for ts in whens:
+            tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
+            if first is None:
+                first = tv
+            nick = nodes[0]
+            bipath = os.path.join(args.dir, '{}.{}.blockinfo.json'.format(nick, ts))
+            try:
+                bi = json.load(open(bipath))
+                rnd = str(bi['block']['rnd'])
+            except:
+                rnd = ''
+            row = [ts, tv-first, rnd]
+            for nick in nodes:
+                for rec in heap_totals[nick]:
+                    if rec[0] == ts:
+                        row.append(rec[1])
+                        break
+            writer.writerow(row)
 
     return 0
 

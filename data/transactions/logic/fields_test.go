@@ -78,7 +78,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 	}
 }
 
-// ensure v2+ fields error in programs of previous TEAL version, similarly to global fields test
+// ensure v2+ fields error in programs of previous version, similarly to global fields test
 func TestTxnFieldVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -105,7 +105,7 @@ func TestTxnFieldVersions(t *testing.T) {
 	txn := makeSampleTxn()
 	// We'll reject too early if we have a nonzero RekeyTo, because that
 	// field must be zero for every txn in the group if this is an old
-	// TEAL version
+	// AVM version
 	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	asmDefaultError := "...was introduced in ..."

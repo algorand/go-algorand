@@ -17,11 +17,15 @@
 package ledger
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,6 +34,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/golang/snappy"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -62,6 +67,13 @@ const (
 	trieAccumulatedChangesFlush = 256
 	// CatchpointDirName represents the directory name in which all the catchpoints files are stored
 	CatchpointDirName = "catchpoints"
+
+	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
+	CatchpointFileVersionV5 = uint64(0200)
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
+	// This version introduced accounts and resources separation. The first catchpoint
+	// round of this version is >= `reenableCatchpointsRound`.
+	CatchpointFileVersionV6 = uint64(0201)
 )
 
 // TrieMemoryConfig is the memory configuration setup used for the merkle trie.
@@ -72,11 +84,25 @@ var TrieMemoryConfig = merkletrie.MemoryConfig{
 	MaxChildrenPagesThreshold: 64,
 }
 
+func catchpointStage1Encoder(w io.Writer) (io.WriteCloser, error) {
+	return snappy.NewBufferedWriter(w), nil
+}
+
+type snappyReadCloser struct {
+	*snappy.Reader
+}
+
+func (snappyReadCloser) Close() error { return nil }
+
+func catchpointStage1Decoder(r io.Reader) (io.ReadCloser, error) {
+	return snappyReadCloser{snappy.NewReader(r)}, nil
+}
+
 type catchpointTracker struct {
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
 	dbDirectory string
 
-	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
+	// catchpointInterval is the configured interval at which the catchpointTracker would generate catchpoint labels and catchpoint files.
 	catchpointInterval uint64
 
 	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
@@ -99,65 +125,75 @@ type catchpointTracker struct {
 	// note that this is the last catchpoint *label* and not the catchpoint file.
 	lastCatchpointLabel string
 
-	// catchpointSlowWriting suggest to the accounts writer that it should finish writing up the catchpoint file ASAP.
-	// when this channel is closed, the accounts writer would try and complete the writing as soon as possible.
-	// otherwise, it would take it's time and perform periodic sleeps between chunks processing.
-	catchpointSlowWriting chan struct{}
+	// catchpointDataSlowWriting suggests to the accounts writer that it should finish
+	// writing up the (first stage) catchpoint data file ASAP. When this channel is
+	// closed, the accounts writer would try and complete the writing as soon as possible.
+	// Otherwise, it would take its time and perform periodic sleeps between chunks
+	// processing.
+	catchpointDataSlowWriting chan struct{}
 
-	// catchpointWriting help to synchronize the catchpoint file writing. When this atomic variable is 0, no writing is going on.
+	// catchpointDataWriting helps to synchronize the (first stage) catchpoint data file
+	// writing. When this atomic variable is 0, no writing is going on.
 	// Any non-zero value indicates a catchpoint being written, or scheduled to be written.
-	catchpointWriting int32
+	catchpointDataWriting int32
 
 	// The Trie tracking the current account balances. Always matches the balances that were
 	// written to the database.
 	balancesTrie *merkletrie.Trie
 
-	// catchpointsMu is the synchronization mutex for accessing the various non-static variables.
-	catchpointsMu deadlock.RWMutex
-
-	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
+	// roundDigest stores the digest of the block for every round starting with dbRound+1 and every round after it.
 	roundDigest []crypto.Digest
 
-	// accountDataResourceSeparationRound is a round where the EnableAccountDataResourceSeparation feature was enabled via the consensus.
+	// reenableCatchpointsRound is a round where the EnableOnlineAccountCatchpoints feature was enabled via the consensus.
 	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
 	// label being produced. This variable could be "wrong" in two cases -
-	// 1. It's zero, meaning that the EnableAccountDataResourceSeparation has yet to be seen.
-	// 2. It's non-zero meaning that it the given round is after the EnableAccountDataResourceSeparation was enabled ( it might be exact round
+	// 1. It's zero, meaning that the EnableOnlineAccountCatchpoints has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the EnableOnlineAccountCatchpoints was enabled ( it might be exact round
 	//    but that's only if newBlock was called with that round ), plus the lookback.
-	accountDataResourceSeparationRound basics.Round
+	reenableCatchpointsRound basics.Round
 
 	// forceCatchpointFileWriting used for debugging purpose by bypassing the test against
-	// accountDataResourceSeparationRound in isCatchpointRound(), so that we could generate
+	// reenableCatchpointsRound in isCatchpointRound(), so that we could generate
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
+
+	// catchpointsMu protects `roundDigest`, `reenableCatchpointsRound` and
+	// `lastCatchpointLabel`.
+	catchpointsMu deadlock.RWMutex
 }
 
 // initialize initializes the catchpointTracker structure
 func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 	ct.dbDirectory = filepath.Dir(dbPathPrefix)
-	ct.enableGeneratingCatchpointFiles = cfg.Archival
+
 	switch cfg.CatchpointTracking {
 	case -1:
-		ct.catchpointInterval = 0
+		// No catchpoints.
 	default:
-		// give a warning, then fall thought
+		// Give a warning, then fall through to case 0.
 		logging.Base().Warnf("catchpointTracker: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
 		fallthrough
 	case 0:
-		if ct.enableGeneratingCatchpointFiles {
+		if cfg.Archival && (cfg.CatchpointInterval > 0) {
 			ct.catchpointInterval = cfg.CatchpointInterval
-		} else {
-			ct.catchpointInterval = 0
+			ct.enableGeneratingCatchpointFiles = true
 		}
 	case 1:
-		ct.catchpointInterval = cfg.CatchpointInterval
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = cfg.Archival
+		}
 	case 2:
-		ct.catchpointInterval = cfg.CatchpointInterval
-		ct.enableGeneratingCatchpointFiles = true
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = true
+		}
 	case forceCatchpointFileGenerationTrackingMode:
-		ct.catchpointInterval = cfg.CatchpointInterval
-		ct.enableGeneratingCatchpointFiles = true
-		ct.forceCatchpointFileWriting = true
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = true
+			ct.forceCatchpointFileWriting = true
+		}
 	}
 
 	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
@@ -173,72 +209,155 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 	return ct.lastCatchpointLabel
 }
 
+func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, updatingBalancesDuration time.Duration) error {
+	ct.log.Infof("finishing catchpoint's first stage dbRound: %d", dbRound)
+
+	var totalAccounts uint64
+	var totalChunks uint64
+	var biggestChunkLen uint64
+
+	if ct.enableGeneratingCatchpointFiles {
+		// Generate the catchpoint file. This need to be done inline so that it will
+		// block any new accounts that from being written. generateCatchpointData()
+		// expects that the accounts data would not be modified in the background during
+		// it's execution.
+		var err error
+		totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
+			ctx, dbRound, updatingBalancesDuration)
+		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
+		if err != nil {
+			return err
+		}
+	}
+
+	f := func(ctx context.Context, tx *sql.Tx) error {
+		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalAccounts, totalChunks, biggestChunkLen)
+		if err != nil {
+			return err
+		}
+
+		// Clear the db record.
+		return writeCatchpointStateUint64(ctx, tx, catchpointStateWritingFirstStageInfo, 0)
+	}
+	return ct.dbs.Wdb.Atomic(f)
+}
+
+// Possibly finish generating first stage catchpoint db record and data file after
+// a crash.
+func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round) error {
+	v, err := readCatchpointStateUint64(
+		context.Background(), ct.dbs.Rdb.Handle, catchpointStateWritingFirstStageInfo)
+	if err != nil {
+		return err
+	}
+	if v == 0 {
+		return nil
+	}
+
+	// First, delete the unfinished data file.
+	relCatchpointDataFilePath := filepath.Join(
+		CatchpointDirName,
+		makeCatchpointDataFilePath(dbRound))
+	err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+	if err != nil {
+		return err
+	}
+
+	return ct.finishFirstStage(context.Background(), dbRound, 0)
+}
+
+func (ct *catchpointTracker) finishCatchpointsAfterCrash(catchpointLookback uint64) error {
+	records, err := selectUnfinishedCatchpoints(context.Background(), ct.dbs.Rdb.Handle)
+	if err != nil {
+		return err
+	}
+
+	for _, record := range records {
+		// First, delete the unfinished catchpoint file.
+		relCatchpointFilePath := filepath.Join(
+			CatchpointDirName,
+			makeCatchpointFilePath(basics.Round(record.round)))
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
+		if err != nil {
+			return err
+		}
+
+		err = ct.finishCatchpoint(
+			context.Background(), record.round, record.blockHash, catchpointLookback)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
+	err := ct.finishFirstStageAfterCrash(dbRound)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	catchpointLookback, err := readCatchpointStateUint64(
+		ctx, ct.dbs.Rdb.Handle, catchpointStateCatchpointLookback)
+	if err != nil {
+		return err
+	}
+
+	if catchpointLookback != 0 {
+		err = ct.finishCatchpointsAfterCrash(catchpointLookback)
+		if err != nil {
+			return err
+		}
+
+		if uint64(dbRound) >= catchpointLookback {
+			err := ct.pruneFirstStageRecordsData(ctx, dbRound-basics.Round(catchpointLookback))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // loadFromDisk loads the state of a tracker from persistent
 // storage.  The ledger argument allows loadFromDisk to load
 // blocks from the database, or access its own state.  The
 // ledgerForTracker interface abstracts away the details of
 // ledger internals so that individual trackers can be tested
 // in isolation.
-func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
+func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) (err error) {
 	ct.log = l.trackerLog()
 	ct.dbs = l.trackerDB()
 
 	ct.roundDigest = nil
-	ct.catchpointWriting = 0
+	ct.catchpointDataWriting = 0
 	// keep these channel closed if we're not generating catchpoint
-	ct.catchpointSlowWriting = make(chan struct{}, 1)
-	close(ct.catchpointSlowWriting)
+	ct.catchpointDataSlowWriting = make(chan struct{}, 1)
+	close(ct.catchpointDataSlowWriting)
 
 	err = ct.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err0 := ct.accountsInitializeHashes(ctx, tx, lastBalancesRound)
-		if err0 != nil {
-			return err0
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	ct.accountsq, err = accountsInitDbQueries(ct.dbs.Rdb.Handle, ct.dbs.Wdb.Handle)
-	if err != nil {
-		return
-	}
-
-	ct.lastCatchpointLabel, _, err = ct.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
-	if err != nil {
-		return
-	}
-
-	writingCatchpointRound, _, err := ct.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
-	if err != nil {
-		return err
-	}
-	if writingCatchpointRound == 0 || !ct.catchpointEnabled() {
-		return nil
-	}
-	var dbRound basics.Round
-	// make sure that the database is at the desired round.
-	err = ct.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbRound, err = accountsRound(tx)
-		return
+		return ct.accountsInitializeHashes(ctx, tx, dbRound)
 	})
 	if err != nil {
 		return err
 	}
-	if dbRound != basics.Round(writingCatchpointRound) {
-		return nil
-	}
 
-	blk, err := l.Block(dbRound)
+	ct.accountsq, err = accountsInitDbQueries(ct.dbs.Rdb.Handle)
 	if err != nil {
-		return err
+		return
 	}
-	blockHeaderDigest := blk.Digest()
 
-	ct.generateCatchpoint(context.Background(), basics.Round(writingCatchpointRound), ct.lastCatchpointLabel, blockHeaderDigest, time.Duration(0))
-	return nil
+	ct.lastCatchpointLabel, err = readCatchpointStateString(
+		context.Background(), ct.dbs.Rdb.Handle, catchpointStateLastCatchpoint)
+	if err != nil {
+		return
+	}
+
+	return ct.recoverFromCrash(dbRound)
 }
 
 // newBlock informs the tracker of a new block from round
@@ -246,12 +365,16 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	ct.catchpointsMu.Lock()
 	defer ct.catchpointsMu.Unlock()
+
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if config.Consensus[blk.CurrentProtocol].EnableAccountDataResourceSeparation && ct.accountDataResourceSeparationRound == 0 {
-		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+	if (config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
+		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
+		if catchpointLookback == 0 {
+			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
+		}
+		ct.reenableCatchpointsRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
 	}
-
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -263,64 +386,101 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 	return rnd, basics.Round(0)
 }
 
-func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	var hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
+// Calculate whether we have intermediate first stage catchpoint rounds and the
+// new offset.
+func calculateFirstStageRounds(oldBase basics.Round, offset uint64, reenableCatchpointsRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (hasIntermediateFirstStageRound bool, hasMultipleIntermediateFirstStageRounds bool, newOffset uint64) {
+	newOffset = offset
 
-	newBase := dcr.oldBase + basics.Round(dcr.offset)
-
-	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
-	if ct.catchpointInterval > 0 {
-		nextCatchpointRound := ((uint64(dcr.oldBase+dcr.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
-
-		if nextCatchpointRound < uint64(dcr.oldBase+dcr.lookback)+dcr.offset {
-			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcr.lookback
-			if mostRecentCatchpointRound > nextCatchpointRound {
-				hasMultipleIntermediateCatchpoint = true
-				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcr.lookback
-			}
-			hasIntermediateCatchpoint = true
-		}
+	if reenableCatchpointsRound == 0 {
+		return
 	}
 
+	minFirstStageRound := oldBase + 1
+	if (reenableCatchpointsRound > basics.Round(catchpointLookback)) &&
+		(reenableCatchpointsRound-basics.Round(catchpointLookback) >
+			minFirstStageRound) {
+		minFirstStageRound =
+			reenableCatchpointsRound - basics.Round(catchpointLookback)
+	}
+
+	// The smallest integer r >= minFirstStageRound such that
+	// (r + catchpointLookback) % ct.catchpointInterval == 0.
+	first := (int64(minFirstStageRound)+int64(catchpointLookback)+
+		int64(catchpointInterval)-1)/
+		int64(catchpointInterval)*int64(catchpointInterval) -
+		int64(catchpointLookback)
+	// The largest integer r <= dcr.oldBase + dcr.offset such that
+	// (r + catchpointLookback) % ct.catchpointInterval == 0.
+	last := (int64(oldBase)+int64(offset)+int64(catchpointLookback))/
+		int64(catchpointInterval)*int64(catchpointInterval) - int64(catchpointLookback)
+
+	if first <= last {
+		hasIntermediateFirstStageRound = true
+		// We skip earlier catchpoints if there is more than one to generate.
+		newOffset = uint64(last) - uint64(oldBase)
+
+		if first < last {
+			hasMultipleIntermediateFirstStageRounds = true
+		}
+	}
+	return
+}
+
+func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	if ct.catchpointInterval == 0 {
+		return dcr
+	}
+
+	ct.catchpointsMu.Lock()
+	reenableCatchpointsRound := ct.reenableCatchpointsRound
+	ct.catchpointsMu.Unlock()
+
+	// Check if we need to do the first stage of catchpoint generation.
+	var hasIntermediateFirstStageRound bool
+	var hasMultipleIntermediateFirstStageRounds bool
+	hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, dcr.offset =
+		calculateFirstStageRounds(
+			dcr.oldBase, dcr.offset, reenableCatchpointsRound,
+			ct.catchpointInterval, dcr.catchpointLookback)
+
 	// if we're still writing the previous balances, we can't move forward yet.
-	if ct.IsWritingCatchpointFile() {
+	if ct.IsWritingCatchpointDataFile() {
 		// if we hit this path, it means that we're still writing a catchpoint.
 		// see if the new delta range contains another catchpoint.
-		if hasIntermediateCatchpoint {
+		if hasIntermediateFirstStageRound {
 			// check if we're already attempting to perform fast-writing.
 			select {
-			case <-ct.catchpointSlowWriting:
+			case <-ct.catchpointDataSlowWriting:
 				// yes, we're already doing fast-writing.
 			default:
 				// no, we're not yet doing fast writing, make it so.
-				close(ct.catchpointSlowWriting)
+				close(ct.catchpointDataSlowWriting)
 			}
 		}
 		return nil
 	}
 
-	newOffset := uint64(newBase - dcr.oldBase)
-	// trackers are not allowed to increase offsets, only descease
-	if newOffset < dcr.offset {
-		dcr.offset = newOffset
-	}
+	if hasIntermediateFirstStageRound {
+		dcr.catchpointFirstStage = true
 
-	// check to see if this is a catchpoint round
-	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback)
-
-	if dcr.isCatchpointRound && ct.enableGeneratingCatchpointFiles {
-		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
-		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
-		ct.catchpointSlowWriting = make(chan struct{}, 1)
-		if hasMultipleIntermediateCatchpoint {
-			close(ct.catchpointSlowWriting)
+		if ct.enableGeneratingCatchpointFiles {
+			// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
+			atomic.StoreInt32(&ct.catchpointDataWriting, int32(-1))
+			ct.catchpointDataSlowWriting = make(chan struct{}, 1)
+			if hasMultipleIntermediateFirstStageRounds {
+				close(ct.catchpointDataSlowWriting)
+			}
 		}
 	}
 
-	dcr.catchpointWriting = &ct.catchpointWriting
+	dcr.catchpointDataWriting = &ct.catchpointDataWriting
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
+
+	{
+		rounds := calculateCatchpointRounds(
+			dcr.oldBase+1, dcr.oldBase+basics.Round(dcr.offset), ct.catchpointInterval)
+		dcr.catchpointSecondStage = (len(rounds) > 0)
+	}
 
 	return dcr
 }
@@ -330,9 +490,10 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	ct.catchpointsMu.RLock()
 	defer ct.catchpointsMu.RUnlock()
-	if dcc.isCatchpointRound {
-		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
-	}
+
+	dcc.committedRoundDigests = make([]crypto.Digest, dcc.offset)
+	copy(dcc.committedRoundDigests, ct.roundDigest[:dcc.offset])
+
 	return nil
 }
 
@@ -342,10 +503,9 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	dbRound := dcc.oldBase
 
 	defer func() {
-		if err != nil {
-			if dcc.isCatchpointRound && ct.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(&ct.catchpointWriting, 0)
-			}
+		if err != nil && dcc.catchpointFirstStage &&
+			ct.enableGeneratingCatchpointFiles {
+			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
 	}()
 
@@ -384,30 +544,38 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = now - dcc.stats.MerkleTrieUpdateDuration
 	}
 
-	err = updateAccountsHashRound(tx, treeTargetRound)
+	err = updateAccountsHashRound(ctx, tx, treeTargetRound)
 	if err != nil {
 		return err
 	}
 
-	if dcc.isCatchpointRound {
-		dcc.trieBalancesHash, err = ct.balancesTrie.RootHash()
+	if dcc.catchpointFirstStage {
+		err = writeCatchpointStateUint64(ctx, tx, catchpointStateWritingFirstStageInfo, 1)
 		if err != nil {
 			return err
 		}
 	}
+
+	err = writeCatchpointStateUint64(
+		ctx, tx, catchpointStateCatchpointLookback, dcc.catchpointLookback)
+	if err != nil {
+		return err
+	}
+
+	for _, round := range ct.calculateCatchpointRounds(dcc) {
+		err = insertUnfinishedCatchpoint(
+			ctx, tx, round, dcc.committedRoundDigests[round-dcc.oldBase-1])
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	var err error
-	if dcc.isCatchpointRound {
-		dcc.catchpointLabel, err = ct.accountsCreateCatchpointLabel(dcc.newBase+dcc.lookback, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
-		if err != nil {
-			ct.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
-		}
-	}
 	if ct.balancesTrie != nil {
-		_, err = ct.balancesTrie.Evict(false)
+		_, err := ct.balancesTrie.Evict(false)
 		if err != nil {
 			ct.log.Warnf("merkle trie failed to evict: %v", err)
 		}
@@ -415,9 +583,6 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 
 	ct.catchpointsMu.Lock()
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
-	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
-		ct.lastCatchpointLabel = dcc.catchpointLabel
-	}
 	ct.catchpointsMu.Unlock()
 
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
@@ -427,18 +592,314 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	}
 }
 
-func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if dcc.isCatchpointRound && ct.enableGeneratingCatchpointFiles && dcc.catchpointLabel != "" {
-		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
-		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
+func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestChunkLen uint64, in *tar.Reader, out *tar.Writer) error {
+	{
+		bytes := protocol.Encode(&header)
+
+		err := out.WriteHeader(&tar.Header{
+			Name: "content.msgpack",
+			Mode: 0600,
+			Size: int64(len(bytes)),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = out.Write(bytes)
+		if err != nil {
+			return err
+		}
 	}
 
-	// in scheduleCommit, we expect that this function to update the catchpointWriting when
-	// it's on a catchpoint round and the node is configured to generate a catchpoint file. Doing this in a deferred function
-	// here would prevent us from "forgetting" to update this variable later on.
-	if dcc.isCatchpointRound && ct.enableGeneratingCatchpointFiles {
-		atomic.StoreInt32(dcc.catchpointWriting, 0)
+	// make buffer for re-use that can fit biggest chunk
+	buf := make([]byte, biggestChunkLen)
+	for {
+		err := ctx.Err()
+		if err != nil {
+			return err
+		}
+
+		header, err := in.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
+		n, err := io.ReadAtLeast(in, buf, int(header.Size))
+		if (err != nil) && (err != io.EOF) {
+			return err
+		}
+		if int64(n) != header.Size { // should not happen
+			return fmt.Errorf("read too many bytes from chunk %+v", header)
+		}
+
+		err = out.WriteHeader(header)
+		if err != nil {
+			return err
+		}
+
+		_, err = out.Write(buf[:header.Size])
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestChunkLen uint64, dataPath string, outPath string) error {
+	// Initialize streams.
+	fin, err := os.OpenFile(dataPath, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer fin.Close()
+
+	compressorIn, err := catchpointStage1Decoder(fin)
+	if err != nil {
+		return err
+	}
+	defer compressorIn.Close()
+
+	tarIn := tar.NewReader(compressorIn)
+
+	fout, err := os.OpenFile(outPath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer fout.Close()
+
+	gzipOut, err := gzip.NewWriterLevel(fout, gzip.BestSpeed)
+	if err != nil {
+		return err
+	}
+	defer gzipOut.Close()
+
+	tarOut := tar.NewWriter(gzipOut)
+	defer tarOut.Close()
+
+	// Repack.
+	err = doRepackCatchpoint(ctx, header, biggestChunkLen, tarIn, tarOut)
+	if err != nil {
+		return err
+	}
+
+	// Close streams.
+	err = tarOut.Close()
+	if err != nil {
+		return err
+	}
+
+	err = gzipOut.Close()
+	if err != nil {
+		return err
+	}
+
+	err = fout.Close()
+	if err != nil {
+		return err
+	}
+
+	err = compressorIn.Close()
+	if err != nil {
+		return err
+	}
+
+	err = fin.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Create a catchpoint (a label and possibly a file with db record) and remove
+// the unfinished catchpoint record.
+func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
+	startTime := time.Now()
+	label := ledgercore.MakeCatchpointLabel(
+		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
+
+	ct.log.Infof(
+		"creating catchpoint round: %d accountsRound: %d label: %s",
+		round, accountsRound, label)
+
+	err := writeCatchpointStateString(
+		ctx, ct.dbs.Wdb.Handle, catchpointStateLastCatchpoint, label)
+	if err != nil {
+		return err
+	}
+
+	ct.catchpointsMu.Lock()
+	ct.lastCatchpointLabel = label
+	ct.catchpointsMu.Unlock()
+
+	if !ct.enableGeneratingCatchpointFiles {
+		return nil
+	}
+
+	catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
+	catchpointDataFilePath =
+		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
+
+	// Check if the data file exists.
+	_, err = os.Stat(catchpointDataFilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	// Make a catchpoint file.
+	header := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     accountsRound,
+		BlocksRound:       round,
+		Totals:            dataInfo.Totals,
+		TotalAccounts:     dataInfo.TotalAccounts,
+		TotalChunks:       dataInfo.TotalChunks,
+		Catchpoint:        label,
+		BlockHeaderDigest: blockHash,
+	}
+
+	relCatchpointFilePath :=
+		filepath.Join(CatchpointDirName, makeCatchpointFilePath(round))
+	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
+
+	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
+	if err != nil {
+		return err
+	}
+
+	err = repackCatchpoint(ctx, header, dataInfo.BiggestChunkLen, catchpointDataFilePath, absCatchpointFilePath)
+	if err != nil {
+		return err
+	}
+
+	fileInfo, err := os.Stat(absCatchpointFilePath)
+	if err != nil {
+		return err
+	}
+
+	err = ct.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = ct.recordCatchpointFile(ctx, tx, round, relCatchpointFilePath, fileInfo.Size())
+		if err != nil {
+			return err
+		}
+		return deleteUnfinishedCatchpoint(ctx, tx, round)
+	})
+	if err != nil {
+		return err
+	}
+
+	ct.log.With("accountsRound", accountsRound).
+		With("writingDuration", uint64(time.Since(startTime).Nanoseconds())).
+		With("accountsCount", dataInfo.TotalAccounts).
+		With("fileSize", fileInfo.Size()).
+		With("catchpointLabel", label).
+		Infof("Catchpoint file was created")
+
+	return nil
+}
+
+// Try create a catchpoint (a label and possibly a file with db record) and remove
+// the unfinished catchpoint record.
+func (ct *catchpointTracker) finishCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest, catchpointLookback uint64) error {
+	accountsRound := round - basics.Round(catchpointLookback)
+
+	ct.log.Infof("finishing catchpoint round: %d accountsRound: %d", round, accountsRound)
+
+	dataInfo, exists, err :=
+		selectCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, accountsRound)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return deleteUnfinishedCatchpoint(ctx, ct.dbs.Wdb.Handle, round)
+	}
+	return ct.createCatchpoint(ctx, accountsRound, round, dataInfo, blockHash)
+}
+
+// Calculate catchpoint round numbers in [min, max]. `catchpointInterval` must be
+// non-zero.
+func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInterval uint64) []basics.Round {
+	var res []basics.Round
+
+	// The smallest integer i such that i * ct.catchpointInterval >= first.
+	l := (uint64(min) + catchpointInterval - 1) / catchpointInterval
+	// The largest integer i such that i * ct.catchpointInterval <= last.
+	r := uint64(max) / catchpointInterval
+
+	for i := l; i <= r; i++ {
+		round := basics.Round(i * catchpointInterval)
+		res = append(res, round)
+	}
+
+	return res
+}
+
+func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitContext) []basics.Round {
+	if ct.catchpointInterval == 0 {
+		return nil
+	}
+
+	min := dcc.oldBase + 1
+	if dcc.catchpointLookback+1 > uint64(min) {
+		min = basics.Round(dcc.catchpointLookback) + 1
+	}
+	return calculateCatchpointRounds(min, dcc.newBase, ct.catchpointInterval)
+}
+
+// Delete old first stage catchpoint records and data files.
+func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, maxRoundToDelete basics.Round) error {
+	rounds, err := selectOldCatchpointFirstStageInfoRounds(
+		ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+	if err != nil {
+		return err
+	}
+
+	for _, round := range rounds {
+		relCatchpointDataFilePath :=
+			filepath.Join(CatchpointDirName, makeCatchpointDataFilePath(round))
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return deleteOldCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+}
+
+func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+	if dcc.catchpointFirstStage {
+		err := ct.finishFirstStage(ctx, dcc.newBase, dcc.updatingBalancesDuration)
+		if err != nil {
+			ct.log.Warnf(
+				"error finishing catchpoint's first stage dcc.newBase: %d err: %v",
+				dcc.newBase, err)
+		}
+	}
+
+	// Generate catchpoints for rounds in (dcc.oldBase, dcc.newBase].
+	for _, round := range ct.calculateCatchpointRounds(dcc) {
+		err := ct.finishCatchpoint(
+			ctx, round, dcc.committedRoundDigests[round-dcc.oldBase-1], dcc.catchpointLookback)
+		if err != nil {
+			ct.log.Warnf("error creating catchpoint round: %d err: %v", round, err)
+		}
+	}
+
+	// Prune first stage catchpoint records from the database.
+	if uint64(dcc.newBase) >= dcc.catchpointLookback {
+		err := ct.pruneFirstStageRecordsData(
+			ctx, dcc.newBase-basics.Round(dcc.catchpointLookback))
+		if err != nil {
+			ct.log.Warnf(
+				"error pruning first stage records and data dcc.newBase: %d err: %v",
+				dcc.newBase, err)
+		}
 	}
 }
 
@@ -449,9 +910,9 @@ func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
 	if ct.enableGeneratingCatchpointFiles {
 		// determine if this was a catchpoint round
-		if dcc.isCatchpointRound {
+		if dcc.catchpointFirstStage {
 			// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
-			atomic.StoreInt32(&ct.catchpointWriting, 0)
+			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
 	}
 }
@@ -461,7 +922,6 @@ func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 // be called even if loadFromDisk() is not called or does
 // not succeed.
 func (ct *catchpointTracker) close() {
-
 }
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
@@ -563,70 +1023,31 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	return
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
-// to avoid memory pressure until the catchpoint file writing is complete.
-func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
-	return atomic.LoadInt32(&ct.catchpointWriting) != 0
+// IsWritingCatchpointDataFile returns true iff a (first stage) catchpoint data file
+// is being generated.
+func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
+	return atomic.LoadInt32(&ct.catchpointDataWriting) != 0
 }
 
-// isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
-func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
-	if !ct.forceCatchpointFileWriting {
-		if ct.accountDataResourceSeparationRound == basics.Round(0) {
-			return false
-		}
+// Generates a (first stage) catchpoint data file.
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, error) {
+	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
-		if ct.accountDataResourceSeparationRound > (basics.Round(offset) + dbRound + lookback) {
-			return false
-		}
-	}
-	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
-}
-
-// accountsCreateCatchpointLabel creates a catchpoint label and write it.
-func (ct *catchpointTracker) accountsCreateCatchpointLabel(committedRound basics.Round, totals ledgercore.AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
-	cpLabel := ledgercore.MakeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
-	label = cpLabel.String()
-	_, err = ct.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
-	return
-}
-
-// generateCatchpoint generates a single catchpoint file
-func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
-	beforeGeneratingCatchpointTime := time.Now()
+	startTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
 	}
 
-	// the retryCatchpointCreation is used to repeat the catchpoint file generation in case the node crashed / aborted during startup
-	// before the catchpoint file generation could be completed.
-	retryCatchpointCreation := false
-	ct.log.Debugf("accountUpdates: generateCatchpoint: generating catchpoint for round %d", committedRound)
-	defer func() {
-		if !retryCatchpointCreation {
-			// clear the writingCatchpoint flag
-			_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(0))
-			if err != nil {
-				ct.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, committedRound, err)
-			}
-		}
-	}()
-
-	_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(committedRound))
-	if err != nil {
-		ct.log.Warnf("accountUpdates: generateCatchpoint unable to write catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, committedRound, err)
-		return
-	}
-
-	relCatchpointFileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(committedRound))
-	absCatchpointFileName := filepath.Join(ct.dbDirectory, relCatchpointFileName)
+	catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
+	catchpointDataFilePath =
+		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
 	more := true
 	const shortChunkExecutionDuration = 50 * time.Millisecond
 	const longChunkExecutionDuration = 1 * time.Second
 	var chunkExecutionDuration time.Duration
 	select {
-	case <-ct.catchpointSlowWriting:
+	case <-ct.catchpointDataSlowWriting:
 		chunkExecutionDuration = longChunkExecutionDuration
 	default:
 		chunkExecutionDuration = shortChunkExecutionDuration
@@ -635,8 +1056,11 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter = makeCatchpointWriter(ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
+	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
+		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx)
+		if err != nil {
+			return
+		}
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(ctx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
@@ -661,21 +1085,23 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 						chunkExecutionDuration = longChunkExecutionDuration
 					}
 				case <-ctx.Done():
-					retryCatchpointCreation = true
+					//retryCatchpointCreation = true
 					err2 := catchpointWriter.Abort()
 					if err2 != nil {
 						return fmt.Errorf("error removing catchpoint file : %v", err2)
 					}
 					return nil
-				case <-ct.catchpointSlowWriting:
+				case <-ct.catchpointDataSlowWriting:
 					chunkExecutionDuration = longChunkExecutionDuration
 				}
 			}
 			if err != nil {
-				err = fmt.Errorf("unable to create catchpoint for round %d: %v", committedRound, err)
+				err = fmt.Errorf(
+					"unable to create catchpoint data file for round %d: %v",
+					accountsRound, err)
 				err2 := catchpointWriter.Abort()
 				if err2 != nil {
-					ct.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
+					ct.log.Warnf("catchpointTracker.generateCatchpointData() error removing catchpoint file : %v", err2)
 				}
 				return
 			}
@@ -683,62 +1109,93 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 		return
 	})
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
-
 	if err != nil {
-		ct.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
-		return
-	}
-	if catchpointWriter == nil {
-		ct.log.Warnf("accountUpdates: generateCatchpoint: nil catchpointWriter")
-		return
+		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
+		return 0, 0, 0, err
 	}
 
-	err = ct.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
-	if err != nil {
-		ct.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
-		return
-	}
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
-	catchpointGenerationStats.WritingDuration = uint64(time.Since(beforeGeneratingCatchpointTime).Nanoseconds())
+	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
-	catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
-	ct.log.With("writingDuration", catchpointGenerationStats.WritingDuration).
+	ct.log.With("accountsRound", accountsRound).
+		With("writingDuration", catchpointGenerationStats.WritingDuration).
 		With("CPUTime", catchpointGenerationStats.CPUTime).
 		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
 		With("accountsCount", catchpointGenerationStats.AccountsCount).
 		With("fileSize", catchpointGenerationStats.FileSize).
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
-		Infof("Catchpoint file was generated")
+		Infof("Catchpoint data file was generated")
+
+	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), nil
 }
 
-// catchpointRoundToPath calculate the catchpoint file path for a given round
-func catchpointRoundToPath(rnd basics.Round) string {
-	irnd := int64(rnd) / 256
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+	accountTotals, err := accountsTotals(ctx, tx, false)
+	if err != nil {
+		return err
+	}
+
+	{
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			return err
+		}
+		if ct.balancesTrie == nil {
+			trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+			if err != nil {
+				return err
+			}
+			ct.balancesTrie = trie
+		} else {
+			ct.balancesTrie.SetCommitter(mc)
+		}
+	}
+	trieBalancesHash, err := ct.balancesTrie.RootHash()
+	if err != nil {
+		return err
+	}
+
+	info := catchpointFirstStageInfo{
+		Totals:           accountTotals,
+		TotalAccounts:    totalAccounts,
+		TotalChunks:      totalChunks,
+		BiggestChunkLen:  biggestChunkLen,
+		TrieBalancesHash: trieBalancesHash,
+	}
+	return insertOrReplaceCatchpointFirstStageInfo(ctx, tx, accountsRound, &info)
+}
+
+func makeCatchpointDataFilePath(accountsRound basics.Round) string {
+	return strconv.FormatInt(int64(accountsRound), 10) + ".data"
+}
+
+func makeCatchpointFilePath(round basics.Round) string {
+	irnd := int64(round) / 256
 	outStr := ""
 	for irnd > 0 {
 		outStr = filepath.Join(outStr, fmt.Sprintf("%02x", irnd%256))
 		irnd = irnd / 256
 	}
-	outStr = filepath.Join(outStr, strconv.FormatInt(int64(rnd), 10)+".catchpoint")
+	outStr = filepath.Join(outStr, strconv.FormatInt(int64(round), 10)+".catchpoint")
 	return outStr
 }
 
-// saveCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
+// recordCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
-func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
+func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, e db.Executable, round basics.Round, relCatchpointFilePath string, fileSize int64) (err error) {
 	if ct.catchpointFileHistoryLength != 0 {
-		err = ct.accountsq.storeCatchpoint(context.Background(), round, fileName, catchpoint, fileSize)
+		err = storeCatchpoint(ctx, e, round, relCatchpointFilePath, "", fileSize)
 		if err != nil {
-			ct.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
+			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to save catchpoint: %v", err)
 			return
 		}
 	} else {
-		err = os.Remove(fileName)
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
 		if err != nil {
-			ct.log.Warnf("accountUpdates: saveCatchpoint: unable to remove file (%s): %v", fileName, err)
+			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to remove file (%s): %v", relCatchpointFilePath, err)
 			return
 		}
 	}
@@ -746,7 +1203,7 @@ func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName str
 		return
 	}
 	var filesToDelete map[basics.Round]string
-	filesToDelete, err = ct.accountsq.getOldestCatchpointFiles(context.Background(), 2, ct.catchpointFileHistoryLength)
+	filesToDelete, err = getOldestCatchpointFiles(ctx, e, 2, ct.catchpointFileHistoryLength)
 	if err != nil {
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
@@ -755,7 +1212,7 @@ func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName str
 		if err != nil {
 			return err
 		}
-		err = ct.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
+		err = storeCatchpoint(ctx, e, round, "", "", 0)
 		if err != nil {
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
@@ -770,13 +1227,13 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
+		dbFileName, _, fileSize, err = getCatchpoint(ctx, tx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
-		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to lookup catchpoint %d: %v", round, err)
 	}
 	if dbFileName != "" {
 		catchpointPath := filepath.Join(ct.dbDirectory, dbFileName)
@@ -788,22 +1245,24 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			err := ct.saveCatchpointFile(round, "", 0, "")
+			err := ct.recordCatchpointFile(
+				context.Background(), ct.dbs.Wdb.Handle, round, "", 0)
 			if err != nil {
-				ct.log.Warnf("accountUpdates: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to delete missing catchpoint entry: %v", err)
 				return nil, err
 			}
 
 			return nil, ledgercore.ErrNoEntry{}
 		}
 		// it's some other error.
-		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to open catchpoint file '%s' %v", catchpointPath, err)
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(round))
-	catchpointPath := filepath.Join(ct.dbDirectory, fileName)
-	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+	relCatchpointFilePath :=
+		filepath.Join(CatchpointDirName, makeCatchpointFilePath(round))
+	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
+	file, err := os.OpenFile(absCatchpointFilePath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
 		// great, if found that we should have had this in the database.. add this one now :
 		fileInfo, err := file.Stat()
@@ -812,9 +1271,11 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
 
-		err = ct.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		err = ct.recordCatchpointFile(
+			context.Background(), ct.dbs.Wdb.Handle, round, relCatchpointFilePath,
+			fileInfo.Size())
 		if err != nil {
-			ct.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
+			ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to save missing catchpoint entry: %v", err)
 		}
 		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
@@ -823,10 +1284,10 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
-func deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries, dbDirectory string) (err error) {
+func deleteStoredCatchpoints(ctx context.Context, e db.Executable, dbDirectory string) (err error) {
 	catchpointsFilesChunkSize := 50
 	for {
-		fileNames, err := dbQueries.getOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
+		fileNames, err := getOldestCatchpointFiles(ctx, e, catchpointsFilesChunkSize, 0)
 		if err != nil {
 			return err
 		}
@@ -840,7 +1301,7 @@ func deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries, 
 				return err
 			}
 			// clear the entry from the database
-			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
+			err = storeCatchpoint(ctx, e, round, "", "", 0)
 			if err != nil {
 				return err
 			}
@@ -960,7 +1421,7 @@ func (ct *catchpointTracker) catchpointEnabled() bool {
 // accountsInitializeHashes initializes account hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
 func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
-	hashRound, err := accountsHashRound(tx)
+	hashRound, err := accountsHashRound(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -968,7 +1429,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 	if hashRound != rnd {
 		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
 		// with the hashes.
-		err = resetAccountHashes(tx)
+		err = resetAccountHashes(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -1068,7 +1529,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsHashRound(tx, rnd)
+		err = updateAccountsHashRound(ctx, tx, rnd)
 		if err != nil {
 			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
 		}

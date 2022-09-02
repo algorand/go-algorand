@@ -191,4 +191,4 @@ assertContains "$RES" "$ERR_APP_CL_STR" "optin of deleted application should fai
 RES=$(${qcmd} total-supply 2>&1 || true)
 assertContains "$RES" "$ERR_APP_NE_STR" "read global of deleted application should fail"
 
-date "+$scriptname done %Y%m%d_%H%M%S"
+date "+$scriptname OK %Y%m%d_%H%M%S"

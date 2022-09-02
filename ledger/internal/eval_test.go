@@ -30,13 +30,15 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -198,14 +200,15 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
-func TestCowCompactCert(t *testing.T) {
+func TestCowStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var certRnd basics.Round
-	var certType protocol.CompactCertType
-	var cert compactcert.Cert
+	var spType protocol.StateProofType
+	var stateProof stateproof.StateProof
 	var atRound basics.Round
 	var validate bool
+	msg := stateproofmsg.Message{}
+
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
@@ -214,45 +217,59 @@ func TestCowCompactCert(t *testing.T) {
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 		0, ledgercore.AccountTotals{}, 0)
 
-	certType = protocol.CompactCertType(1234) // bad cert type
-	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
-	require.Error(t, err)
+	spType = protocol.StateProofType(1234) // bad stateproof type
+	stateProofTx := transactions.StateProofTxnFields{
+		StateProofType: spType,
+		StateProof:     stateProof,
+		Message:        msg,
+	}
+	err := apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
 
-	// no certRnd block
-	certType = protocol.CompactCertBasic
+	// no spRnd block
+	stateProofTx.StateProofType = protocol.StateProofBasic
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
-	certRnd = 3
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
-	require.Error(t, err)
+	stateProofTx.Message.LastAttestedRound = 3
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.Contains(t, err.Error(), "no block")
+
+	// stateproof txn doesn't confirm the next state proof round. expected is in the past
+	validate = true
+	stateProofTx.Message.LastAttestedRound = uint64(16)
+	c0.SetStateProofNextRound(8)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+
+	// stateproof txn doesn't confirm the next state proof round. expected is in the future
+	validate = true
+	stateProofTx.Message.LastAttestedRound = uint64(16)
+	c0.SetStateProofNextRound(32)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
 	validate = true
-	var certHdr bookkeeping.BlockHeader
-	certHdr.CurrentProtocol = "TestCowCompactCert"
-	certHdr.Round = 1
-	proto := config.Consensus[certHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
-	config.Consensus[certHdr.CurrentProtocol] = proto
-	blocks[certHdr.Round] = certHdr
+	var spHdr bookkeeping.BlockHeader
+	spHdr.CurrentProtocol = "TestCowStateProof"
+	spHdr.Round = 1
+	proto := config.Consensus[spHdr.CurrentProtocol]
+	proto.StateProofInterval = 2
+	config.Consensus[spHdr.CurrentProtocol] = proto
+	blocks[spHdr.Round] = spHdr
 
-	certHdr.Round = 15
-	blocks[certHdr.Round] = certHdr
-	certRnd = certHdr.Round
+	spHdr.Round = 15
+	blocks[spHdr.Round] = spHdr
+	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
+	c0.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
-	require.Error(t, err)
-
-	// validate fail
-	certHdr.Round = 1
-	certRnd = certHdr.Round
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
-	require.Error(t, err)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.Contains(t, err.Error(), "no block")
 
 	// fall through to no err
 	validate = false
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.NoError(t, err)
 
 	// 100% coverage
@@ -431,13 +448,14 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 }
 
 type evalTestLedger struct {
-	blocks        map[basics.Round]bookkeeping.Block
-	roundBalances map[basics.Round]map[basics.Address]basics.AccountData
-	genesisHash   crypto.Digest
-	genesisProto  config.ConsensusParams
-	feeSink       basics.Address
-	rewardsPool   basics.Address
-	latestTotals  ledgercore.AccountTotals
+	blocks              map[basics.Round]bookkeeping.Block
+	roundBalances       map[basics.Round]map[basics.Address]basics.AccountData
+	genesisHash         crypto.Digest
+	genesisProto        config.ConsensusParams
+	genesisProtoVersion protocol.ConsensusVersion
+	feeSink             basics.Address
+	rewardsPool         basics.Address
+	latestTotals        ledgercore.AccountTotals
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -464,6 +482,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
+	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -563,9 +582,14 @@ func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
 	return ledger.genesisHash
 }
 
-// GenesisProto returns the genesis hash for this ledger.
+// GenesisProto returns the genesis consensus params for this ledger.
 func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
-	return ledger.genesisProto
+	return config.Consensus[ledger.genesisProtoVersion]
+}
+
+// GenesisProto returns the genesis consensus version for this ledger.
+func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return ledger.genesisProtoVersion
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -623,7 +647,11 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
-func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+func (ledger *evalTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return ledger.BlockHdrCached(rnd)
+}
+
+func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
 
@@ -718,6 +746,10 @@ type testCowBaseLedger struct {
 
 func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.BlockHdrCached(rnd)
 }
 
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
@@ -870,7 +902,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
 
-	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, merklesignature.Verifier{}.Commitment, acctData.StateProofID)
 	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
 
 	badBlock := *validatedBlock
@@ -1112,11 +1144,11 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	recvAcct, err := eval.state.lookup(recvAddr)
 	require.NoError(t, err)
-	require.Equal(t, recvAcct.Status, basics.Offline)
-	require.Equal(t, recvAcct.VoteFirstValid, basics.Round(0))
-	require.Equal(t, recvAcct.VoteLastValid, basics.Round(0))
-	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
-	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
-	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
+	require.Equal(t, basics.Offline, recvAcct.Status)
+	require.Equal(t, basics.Round(0), recvAcct.VoteFirstValid)
+	require.Equal(t, basics.Round(0), recvAcct.VoteLastValid)
+	require.Equal(t, uint64(0), recvAcct.VoteKeyDilution)
+	require.Equal(t, crypto.OneTimeSignatureVerifier{}, recvAcct.VoteID)
+	require.Equal(t, crypto.VRFVerifier{}, recvAcct.SelectionID)
+	require.Equal(t, merklesignature.Verifier{}.Commitment, recvAcct.StateProofID)
 }

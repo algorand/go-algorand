@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.17
 
 require (
-	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
+	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
@@ -20,6 +20,7 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
 	github.com/getkin/kin-openapi v0.22.0
 	github.com/gofrs/flock v0.7.0
+	github.com/golang/snappy v0.0.4
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.6.2
 	github.com/jmoiron/sqlx v1.2.0

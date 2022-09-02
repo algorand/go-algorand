@@ -57,7 +57,7 @@ type Ledger interface {
 	EnsureBlock(block *bookkeeping.Block, c agreement.Certificate)
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
-	IsWritingCatchpointFile() bool
+	IsWritingCatchpointDataFile() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 }
@@ -493,7 +493,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			}
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
-			if s.ledger.IsWritingCatchpointFile() {
+			if s.ledger.IsWritingCatchpointDataFile() {
 				s.log.Info("Catchup is stopping due to catchpoint file being written")
 				s.suspendForCatchpointWriting = true
 				return
@@ -554,7 +554,7 @@ func (s *Service) periodicSync() {
 				continue
 			}
 			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.
-			if s.ledger.IsWritingCatchpointFile() {
+			if s.ledger.IsWritingCatchpointDataFile() {
 				// keep the existing sleep duration and try again later.
 				continue
 			}

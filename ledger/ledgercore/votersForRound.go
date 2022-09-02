@@ -24,11 +24,20 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
+
+// OnlineAccountsFetcher captures the functionality of querying online accounts status
+type OnlineAccountsFetcher interface {
+	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
+	// balance and address, whose voting keys are valid in voteRnd.  See the
+	// normalization description in AccountData.NormalizedOnlineBalance().
+	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
+}
 
 // VotersForRound tracks the top online voting accounts as of a particular
 // round, along with a Merkle tree commitment to those voting accounts.
@@ -51,7 +60,7 @@ type VotersForRound struct {
 	// in participants.
 	Proto config.ConsensusParams
 
-	// Participants is the array of top #CompactCertVoters online accounts
+	// Participants is the array of top StateProofTopVoters online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
 	Participants basics.ParticipantsArray
@@ -68,9 +77,6 @@ type VotersForRound struct {
 	TotalWeight basics.MicroAlgos
 }
 
-// TopOnlineAccounts is the function signature for a method that would return the top online accounts.
-type TopOnlineAccounts func(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*OnlineAccount, error)
-
 // MakeVotersForRound create a new VotersForRound object and initialize it's cond.
 func MakeVotersForRound() *VotersForRound {
 	vr := &VotersForRound{}
@@ -78,22 +84,42 @@ func MakeVotersForRound() *VotersForRound {
 	return vr
 }
 
-// LoadTree todo
-func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
+func createStateProofParticipant(stateProofID *merklesignature.Commitment, money basics.MicroAlgos) basics.Participant {
+	var retPart basics.Participant
+	retPart.Weight = money.ToUint64()
+	// Some accounts might not have StateProof keys commitment. As a result,
+	// the commitment would be an array filled with zeroes: [0x0...0x0].
+	// Since the commitment is created using the subset-sum hash function, for which the
+	// value [0x0..0x0] might be known, we avoid using such empty commitments.
+	// We replace it with a commitment for zero keys..
+	if stateProofID.IsEmpty() {
+		copy(retPart.PK.Commitment[:], merklesignature.NoKeysCommitment[:])
+	} else {
+		copy(retPart.PK.Commitment[:], stateProofID[:])
+
+	}
+	// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
+	// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
+	// registered by the Account.
+	retPart.PK.KeyLifetime = merklesignature.KeyLifetimeDefault
+	return retPart
+}
+
+// LoadTree loads the participation tree and other required fields, using the provided OnlineAccountsFetcher.
+func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
-	// certRound is the block that we expect to form a compact certificate for,
+	// stateProofRound is the block that we expect to form a state proof for,
 	// using the balances from round r.
-	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
+	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineTop(r, certRound, tr.Proto.CompactCertTopVoters)
+	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters, &tr.Proto, hdr.RewardsLevel)
 	if err != nil {
 		return err
 	}
 
 	participants := make(basics.ParticipantsArray, len(top))
 	addrToPos := make(map[basics.Address]uint64)
-	var totalWeight basics.MicroAlgos
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
@@ -103,19 +129,11 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 			return fmt.Errorf("votersTracker.LoadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)
 		}
 
-		totalWeight = ot.AddA(totalWeight, money)
-		if ot.Overflowed {
-			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
-		}
-
-		participants[i] = basics.Participant{
-			PK:     acct.StateProofID,
-			Weight: money.ToUint64(),
-		}
+		participants[i] = createStateProofParticipant(&acct.StateProofID, money)
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: stateproof.HashType})
 	if err != nil {
 		return err
 	}
@@ -123,7 +141,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 	tr.mu.Lock()
 	tr.AddrToPos = addrToPos
 	tr.Participants = participants
-	tr.TotalWeight = totalWeight
+	tr.TotalWeight = totalOnlineWeight
 	tr.Tree = tree
 	tr.cond.Broadcast()
 	tr.mu.Unlock()

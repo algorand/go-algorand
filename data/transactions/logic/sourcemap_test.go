@@ -40,13 +40,15 @@ func TestGetSourceMap(t *testing.T) {
 	a.Equal(sourceNames, actualSourceMap.Sources)
 	a.Equal([]string{}, actualSourceMap.Names)
 
-	// Check encoding for each line.
-	splitMapping := strings.Split(actualSourceMap.Mapping, ";")
-	for pc := range splitMapping {
+	// Check encoding for `mappings` field.
+	splitMappings := strings.Split(actualSourceMap.Mappings, ";")
+	prevLine := 0
+	for pc := range splitMappings {
 		if line, ok := offsetToLine[pc]; ok {
-			a.Equal(MakeSourceMapLine(0, 0, line, 0), splitMapping[pc])
+			a.Equal(MakeSourceMapLine(0, 0, line-prevLine, 0), splitMappings[pc])
+			prevLine = line
 		} else {
-			a.Equal("", splitMapping[pc])
+			a.Equal("", splitMappings[pc])
 		}
 	}
 }

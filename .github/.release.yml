@@ -1,0 +1,20 @@
+changelog:
+  exclude:
+    labels:
+      - Skip-Release-Notes
+  categories:
+    - title: Bugfixes
+      labels:
+        - Bug-Fix
+    - title: New Features
+      labels:
+        - New Feature
+    - title: Enhancements
+      labels:
+        - Enhancement
+    - title: Not Yet Enabled
+      labels:
+        - Not-Yet-Enabled
+    - title: Other
+      labels:
+        - "*"

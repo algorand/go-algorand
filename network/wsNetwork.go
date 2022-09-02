@@ -127,10 +127,10 @@ var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_in
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
-const peerDisconnectionAckDuration time.Duration = 5 * time.Second
+const peerDisconnectionAckDuration = 5 * time.Second
 
 // peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
-const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
+const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
@@ -767,7 +767,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
-		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
+		wn.RegisterMessageInterest(protocol.StateProofSigTag)
 	}
 }
 

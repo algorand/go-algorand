@@ -217,7 +217,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 
 // MultisigVerify verifies an assembled MultisigSig
 func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
-	batchVerifier := MakeBatchVerifierWithAlgorithmDefaultSize()
+	batchVerifier := MakeBatchVerifier()
 
 	if verified, err = MultisigBatchVerify(msg, addr, sig, batchVerifier); err != nil {
 		return

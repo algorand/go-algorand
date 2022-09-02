@@ -17,10 +17,11 @@
 package fixtures
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 // WebProxyInterceptFunc expose the web proxy intercept function
@@ -32,16 +33,16 @@ type WebProxy struct {
 	listener    net.Listener
 	destination string
 	intercept   WebProxyInterceptFunc
+	log         logging.Logger
 }
 
 // MakeWebProxy creates an instance of the web proxy
-func MakeWebProxy(destination string, intercept WebProxyInterceptFunc) (wp *WebProxy, err error) {
-	if strings.HasPrefix(destination, "http://") {
-		destination = destination[7:]
-	}
+func MakeWebProxy(destination string, log logging.Logger, intercept WebProxyInterceptFunc) (wp *WebProxy, err error) {
+	destination = strings.TrimPrefix(destination, "http://")
 	wp = &WebProxy{
 		destination: destination,
 		intercept:   intercept,
+		log:         log,
 	}
 	wp.server = &http.Server{
 		Handler: wp,
@@ -63,6 +64,7 @@ func (wp *WebProxy) GetListenAddress() string {
 
 // Close release the web proxy resources
 func (wp *WebProxy) Close() {
+	wp.log.Debugln("webproxy: quiting")
 	// we can't use shutdown, since we have tunneled websocket, which is a hijacked connection
 	// that http.Server doens't know how to handle.
 	wp.server.Close()
@@ -70,7 +72,7 @@ func (wp *WebProxy) Close() {
 
 // ServeHTTP serves a single HTTP request
 func (wp *WebProxy) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	//fmt.Printf("incoming request for %v\n", request.URL)
+	wp.log.Debugf("webproxy: incoming request for %v", request.URL)
 	if wp.intercept == nil {
 		wp.Passthrough(response, request)
 		return
@@ -86,7 +88,7 @@ func (wp *WebProxy) Passthrough(response http.ResponseWriter, request *http.Requ
 	clientRequestURL.Host = wp.destination
 	clientRequest, err := http.NewRequest(request.Method, clientRequestURL.String(), request.Body)
 	if err != nil {
-		fmt.Printf("Passthrough request assembly error %v (%#v)\n", err, clientRequestURL)
+		wp.log.Debugf("Passthrough request assembly error %v (%#v)", err, clientRequestURL)
 		response.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -99,7 +101,7 @@ func (wp *WebProxy) Passthrough(response http.ResponseWriter, request *http.Requ
 	}
 	clientResponse, err := client.Do(clientRequest)
 	if err != nil {
-		fmt.Printf("Passthrough request error %v (%v)\n", err, request.URL.String())
+		wp.log.Debugf("Passthrough request error %v (%v)", err, request.URL.String())
 		response.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -117,7 +117,7 @@ var opDocByName = map[string]string{
 	"gaid":    "ID of the asset or application created in the Tth transaction of the current group",
 	"gaids":   "ID of the asset or application created in the Ath transaction of the current group",
 
-	"json_ref": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
+	"json_ref": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
 
 	"bnz":     "branch to TARGET if value A is not zero",
 	"bz":      "branch to TARGET if value A is zero",
@@ -190,6 +190,9 @@ var opDocByName = map[string]string{
 	"itxn_next":   "begin preparation of a new inner transaction in the same transaction group",
 	"itxn_field":  "set field F of the current inner transaction to A",
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
+
+	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)",
 }
 
 // OpDoc returns a description of the op
@@ -255,6 +258,9 @@ var opcodeImmediateNotes = map[string]string{
 
 	"base64_decode": "{uint8 encoding index}",
 	"json_ref":      "{string return type}",
+
+	"vrf_verify": "{uint8 parameters index}",
+	"block":      "{uint8 block field}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -264,6 +270,7 @@ func OpImmediateNote(opName string) string {
 
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
+	"vrf_verify":          "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
 	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
 	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
@@ -284,7 +291,6 @@ var opDocExtras = map[string]string{
 	"bitlen":              "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
 	"divw":                "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
 	"divmodw":             "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
-	"txn":                 "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":               "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
 	"gload":               "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
@@ -315,8 +321,8 @@ var opDocExtras = map[string]string{
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
 	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
-	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
-	"json_ref":            "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
+	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -328,13 +334,13 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "bn256_add", "bn256_scalar_mul", "bn256_pairing", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "bn256_add", "bn256_scalar_mul", "bn256_pairing", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
-	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log"},
+	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 

@@ -29,9 +29,7 @@ import (
 )
 
 func BenchmarkAlgodStartup(b *testing.B) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkAlgodStartup")
-	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := b.TempDir()
 	genesisFile, err := ioutil.ReadFile("../../installer/genesis/devnet/genesis.json")
 	require.NoError(b, err)
 

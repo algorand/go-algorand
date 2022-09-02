@@ -308,7 +308,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
 // It returns true if this is the case; otherwise, it returns false.
-func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature, batchVersionCompatible bool) bool {
+func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature) bool {
 	offsetID := OneTimeSignatureSubkeyOffsetID{
 		SubKeyPK: sig.PK,
 		Batch:    id.Batch,
@@ -319,24 +319,12 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	if batchVersionCompatible {
-		return batchVerificationImpl(
-			[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
-			[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
-			[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
-		)
-	}
+	return batchVerificationImpl(
+		[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
+		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
+		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
+	)
 
-	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig, batchVersionCompatible) {
-		return false
-	}
-	if !ed25519Verify(batchID.SubKeyPK, HashRep(offsetID), sig.PK1Sig, batchVersionCompatible) {
-		return false
-	}
-	if !ed25519Verify(offsetID.SubKeyPK, HashRep(message), sig.Sig, batchVersionCompatible) {
-		return false
-	}
-	return true
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.

@@ -41,10 +41,10 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23"`
 
 	// environmental (may be overridden)
-	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
+	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
 	// are being kept around. ( the precise number of recent blocks depends on the consensus parameters )
 	Archival bool `version[0]:"false"`
 
@@ -162,7 +162,7 @@ type Local struct {
 	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int `version[0]:"50000" version[5]:"15000"`
+	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
 
 	// number of seconds allowed for syncing transactions
 	TxSyncTimeoutSeconds int64 `version[0]:"30"`
@@ -318,7 +318,8 @@ type Local struct {
 
 	// CatchpointTracking determines if catchpoints are going to be tracked. The value is interpreted as follows:
 	// A value of -1 means "don't track catchpoints".
-	// A value of 1 means "track catchpoints as long as CatchpointInterval is also set to a positive non-zero value". If CatchpointInterval <= 0, no catchpoint tracking would be performed.
+	// A value of 1 means "track catchpoints as long as CatchpointInterval > 0".
+	// A value of 2 means "track catchpoints and always generate catchpoint files as long as CatchpointInterval > 0".
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
 	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
 	CatchpointTracking int64 `version[11]:"0"`
@@ -350,7 +351,7 @@ type Local struct {
 	NetworkMessageTraceServer string `version[13]:""`
 
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
-	VerifiedTranscationsCacheSize int `version[14]:"30000"`
+	VerifiedTranscationsCacheSize int `version[14]:"30000" version[23]:"150000"`
 
 	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
 	// When enabled, the catchup service would use the archive servers before falling back to the relays.
@@ -425,7 +426,7 @@ type Local struct {
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 
 	// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block.
-	ProposalAssemblyTime time.Duration `version[19]:"250000000"`
+	ProposalAssemblyTime time.Duration `version[19]:"250000000" version[23]:"500000000"`
 
 	// When the number of http connections to the REST layer exceeds the soft limit,
 	// we start returning http code 429 Too Many Requests.
@@ -447,6 +448,10 @@ type Local struct {
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
 	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+
+	// MaxAcctLookback sets the maximum lookback range for account states,
+	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
+	MaxAcctLookback uint64 `version[23]:"4"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
