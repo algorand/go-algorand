@@ -189,7 +189,8 @@ var AccountDBVersion = int32(7)
 type PersistedAccountData interface {
 	Addr() basics.Address
 	AccountData() *BaseAccountData
-	Rowid() int64
+	IsValid() bool
+	ID() int64
 	Round() basics.Round
 	before(other *PersistedAccountData) bool
 }
@@ -215,26 +216,30 @@ type persistedAccountData struct {
 	round basics.Round
 }
 
-func (pac persistedAccountData) Addr() basics.Address {
-	return pac.addr
+func (pad persistedAccountData) Addr() basics.Address {
+	return pad.addr
 }
 
-func (pac persistedAccountData) AccountData() *BaseAccountData {
-	return &pac.accountData
+func (pad persistedAccountData) AccountData() *BaseAccountData {
+	return &pad.accountData
 }
 
-func (pac persistedAccountData) Rowid() int64 {
-	return pac.rowid
+func (pad persistedAccountData) IsValid() bool {
+	return pad.rowid != 0
 }
 
-func (pac persistedAccountData) Round() basics.Round {
-	return pac.round
+func (pad persistedAccountData) ID() int64 {
+	return pad.rowid
+}
+
+func (pad persistedAccountData) Round() basics.Round {
+	return pad.round
 }
 
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
-func (pac persistedAccountData) before(other *PersistedAccountData) bool {
-	return pac.round < (*other).Round()
+func (pad persistedAccountData) before(other *PersistedAccountData) bool {
+	return pad.round < (*other).Round()
 }
 
 type PersistedOnlineAccountData struct {
@@ -306,7 +311,7 @@ func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource 
 }
 
 type UpdatedAccounts struct {
-	data []persistedAccountData
+	data  []persistedAccountData
 	Count int
 }
 
@@ -603,7 +608,7 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.Read(res.Addr); has {
-						newEntry.OldResource = PersistedResourcesData{Addrid: pad.Rowid()}
+						newEntry.OldResource = PersistedResourcesData{Addrid: pad.ID()}
 					}
 					newEntry.OldResource.Aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
@@ -639,7 +644,7 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.Read(res.Addr); has {
-						newEntry.OldResource = PersistedResourcesData{Addrid: pad.Rowid()}
+						newEntry.OldResource = PersistedResourcesData{Addrid: pad.ID()}
 					}
 					newEntry.OldResource.Aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
@@ -890,7 +895,7 @@ func (a *CompactAccountDeltas) GetByIdx(i int) AccountDelta {
 func (a *CompactAccountDeltas) KnownAddresses() map[basics.Address]int64 {
 	knownAddresses := make(map[basics.Address]int64, a.Len())
 	for _, delta := range a.deltas {
-		knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.Rowid()
+		knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.ID()
 	}
 	return knownAddresses
 }
@@ -3452,7 +3457,7 @@ func AccountsNewRound(
 	var persistedResources map[basics.Address][]PersistedResourcesData
 	persistedAccounts, persistedResources, err = AccountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
 	updatedAccounts = UpdatedAccounts{
-		data: persistedAccounts,
+		data:  persistedAccounts,
 		Count: len(persistedAccounts),
 	}
 	updatedResources = persistedResources
@@ -3489,7 +3494,7 @@ func AccountsNewRoundImpl(
 	newAddressesRowIDs := make(map[basics.Address]int64)
 	for i := 0; i < updates.Len(); i++ {
 		data := updates.GetByIdx(i)
-		if data.OldAcct.Rowid() == 0 {
+		if data.OldAcct.ID() == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.NewAcct.IsEmpty() {
 				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
@@ -3511,25 +3516,25 @@ func AccountsNewRoundImpl(
 			if data.NewAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				var rowsAffected int64
-				rowsAffected, err = writer.deleteAccount(data.OldAcct.Rowid())
+				rowsAffected, err = writer.deleteAccount(data.OldAcct.ID())
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
 					updatedAccounts[updatedAccountIdx].accountData = BaseAccountData{}
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.OldAcct.Rowid())
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.OldAcct.ID())
 					}
 				}
 			} else {
 				var rowsAffected int64
 				normBalance := data.NewAcct.NormalizedOnlineBalance(proto)
-				rowsAffected, err = writer.updateAccount(data.OldAcct.Rowid(), normBalance, data.NewAcct)
+				rowsAffected, err = writer.updateAccount(data.OldAcct.ID(), normBalance, data.NewAcct)
 				if err == nil {
 					// rowid doesn't change on update.
-					updatedAccounts[updatedAccountIdx].rowid = data.OldAcct.Rowid()
+					updatedAccounts[updatedAccountIdx].rowid = data.OldAcct.ID()
 					updatedAccounts[updatedAccountIdx].accountData = data.NewAcct
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.OldAcct.Rowid())
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.OldAcct.ID())
 					}
 				}
 			}

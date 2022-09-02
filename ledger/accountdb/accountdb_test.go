@@ -223,7 +223,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		knownAddresses := make(map[basics.Address]int64)
 		for _, delta := range updatesCnt.deltas {
-			knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.Rowid()
+			knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.ID()
 		}
 
 		err = resourceUpdatesCnt.ResourcesLoadOld(tx, knownAddresses)
@@ -368,7 +368,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			knownAddresses := make(map[basics.Address]int64)
 			for _, delta := range outAccountDeltas.deltas {
-				knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.Rowid()
+				knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.ID()
 			}
 
 			err = outResourcesDeltas.ResourcesLoadOld(tx, knownAddresses)
@@ -2925,7 +2925,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	matches := 0
 	for _, upd := range updatedAccounts {
 		if addressesToCheck[upd.Addr()] {
-			a.Equal(int64(0), upd.Rowid())
+			a.Equal(int64(0), upd.ID())
 			a.Empty(upd.AccountData())
 			matches++
 		}

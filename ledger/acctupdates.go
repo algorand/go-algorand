@@ -915,7 +915,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
 			if persistedData.Round() == currentDbRound {
-				if persistedData.Rowid() != 0 {
+				if persistedData.IsValid() {
 					// if we read actual data return it
 					au.baseAccounts.WritePending(persistedData)
 					ad = persistedData.AccountData().GetLedgerCoreAccountData()
@@ -1142,7 +1142,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
 		}
 		if persistedData.Round() == currentDbRound {
-			if persistedData.Rowid() != 0 {
+			if persistedData.IsValid() {
 				// if we read actual data return it
 				au.baseAccounts.WritePending(persistedData)
 				return persistedData.AccountData().GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
