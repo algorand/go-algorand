@@ -99,7 +99,7 @@ func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessa
 		data = fmt.Sprintf("proposal %s", shortdigest(crypto.Digest(p.Block.Hash())))
 
 	case protocol.TxnTag:
-		dec := protocol.NewDecoderBytes(msg.Data)
+		dec := protocol.NewMsgpDecoderBytes(msg.Data)
 		for {
 			var stx transactions.SignedTxn
 			err := dec.Decode(&stx)

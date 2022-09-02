@@ -10,6 +10,8 @@ elif [ "$1" = "rel/stable" ]; then
     echo "stable"
 elif [ "$1" = "rel/beta" ]; then
     echo "beta"
+elif [ "$1" = "feature/alphanet" ]; then
+    echo "alpha"
 else
     echo "dev"
 fi
