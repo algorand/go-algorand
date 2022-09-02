@@ -565,7 +565,12 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	if handle == protocol.CodecHandle {
 		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
 		if err != nil {
-			return internalError(ctx, err, err.Error(), v2.Log)
+			switch err.(type) {
+			case ledgercore.ErrNoEntry:
+				return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+			default:
+				return internalError(ctx, err, err.Error(), v2.Log)
+			}
 		}
 
 		ctx.Response().Writer.Header().Add("X-Algorand-Struct", "block-v1")
@@ -575,7 +580,12 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	ledger := v2.Node.LedgerForAPI()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
