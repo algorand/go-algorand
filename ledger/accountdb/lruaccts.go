@@ -49,11 +49,11 @@ func (m *LRUAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the LRUAccounts has for the given address.
+// Read the persistedAccountData object that the LRUAccounts has for the given address.
 // thread locking semantics : read lock
 func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
-		return *el.Value, true
+		return el.Value, true
 	}
 	return &persistedAccountData{}, false
 }
@@ -93,14 +93,14 @@ func (m *LRUAccounts) WritePending(acct PersistedAccountData) {
 func (m *LRUAccounts) Write(acctData PersistedAccountData) {
 	if el := m.accounts[acctData.Addr()]; el != nil {
 		// already exists; is it a newer ?
-		if (*el.Value).before(&acctData) {
+		if (el.Value).before(&acctData) {
 			// we update with a newer version.
-			el.Value = &acctData
+			el.Value = acctData
 		}
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.Addr()] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.Addr()] = m.accountsList.pushFront(acctData)
 	}
 }
 
@@ -121,7 +121,7 @@ func (m *LRUAccounts) Prune(newSize int) (removed int) {
 			break
 		}
 		back := m.accountsList.back()
-		delete(m.accounts, (*back.Value).Addr())
+		delete(m.accounts, (back.Value).Addr())
 		m.accountsList.remove(back)
 		removed++
 	}

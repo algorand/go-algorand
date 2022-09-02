@@ -31,7 +31,7 @@ type persistedAccountDataListNode struct {
 	// element (l.Front()).
 	next, prev *persistedAccountDataListNode
 
-	Value *PersistedAccountData
+	Value PersistedAccountData
 }
 
 func newPersistedAccountList() *persistedAccountDataList {
@@ -99,7 +99,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
-func (l *persistedAccountDataList) pushFront(v *PersistedAccountData) *persistedAccountDataListNode {
+func (l *persistedAccountDataList) pushFront(v PersistedAccountData) *persistedAccountDataListNode {
 	newNode := l.getNewNode()
 	newNode.Value = v
 	return l.insertValue(newNode, &l.root)

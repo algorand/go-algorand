@@ -91,8 +91,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	d, err := aq.Lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, d.Round)
-	require.Equal(t, d.AccountData, BaseAccountData{})
+	require.Equal(t, rnd, d.round)
+	require.Equal(t, d.accountData, BaseAccountData{})
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -898,7 +898,10 @@ func TestCompactDeltas(t *testing.T) {
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{}, delta.OldAcct)
+
+	// TODO: do not export OldAcct
+	// require.Equal(t, persistedAccountData{}, delta.OldAcct)
+	require.Nil(t, delta.OldAcct)
 	require.NotEmpty(t, delta.NewAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
