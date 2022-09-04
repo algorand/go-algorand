@@ -12,13 +12,13 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofTracker) {
+func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
 	a := require.New(t)
 	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
 
 	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
 
-	spt := stateProofTracker{}
+	spt := stateProofVerificationTracker{}
 
 	conf := config.GetDefaultLocal()
 
