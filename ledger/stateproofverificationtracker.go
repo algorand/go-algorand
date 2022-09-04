@@ -16,17 +16,18 @@ type StateProofVerificationData struct {
 	ProvenWeight     basics.MicroAlgos
 }
 
-type StateProofTracker struct {
+type stateProofTracker struct {
 	trackedData map[basics.Round]StateProofVerificationData
 }
 
-func (spt *StateProofTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+func (spt *stateProofTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+	spt.trackedData = make(map[basics.Round]StateProofVerificationData)
 	return nil
 }
 
 // newBlock informs the tracker of a new block along with
 // a given ledgercore.StateDelta as produced by BlockEvaluator.
-func (spt *StateProofTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+func (spt *stateProofTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta) {
 	if uint64(blk.Round())%blk.ConsensusProtocol().StateProofInterval == 0 {
 		verificationData := StateProofVerificationData{
 			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
@@ -50,7 +51,7 @@ func (spt *StateProofTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 // For example, returning 0 means that no blocks can be deleted.
 // Separetly, the method returns the lookback that is being
 // maintained by the tracker.
-func (spt *StateProofTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
+func (spt *stateProofTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
 	return round, 0
 }
 
@@ -61,7 +62,7 @@ func (spt *StateProofTracker) committedUpTo(round basics.Round) (minRound, lookb
 // The contract:
 // offset must not be greater than the received dcr.offset value of non zero
 // oldBase must not be modifed if non zero
-func (spt *StateProofTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+func (spt *stateProofTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return nil
 }
 
@@ -71,35 +72,35 @@ func (spt *StateProofTracker) produceCommittingTask(committedRound basics.Round,
 // prepareCommit aligns the data structures stored in the deferredCommitContext with the current
 // state of the tracker. It allows the tracker to decide what data is going to be persisted
 // on the coming commitRound.
-func (spt *StateProofTracker) prepareCommit(*deferredCommitContext) error {
+func (spt *stateProofTracker) prepareCommit(*deferredCommitContext) error {
 	return nil
 }
 
 // commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
 // by all the prepareCommit calls. The commitRound is being executed within a single transactional
 // context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
-func (spt *StateProofTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (spt *stateProofTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
 	return nil
 }
 
 // postCommit is called only on a successful commitRound. In that case, each of the trackers have
 // the chance to update it's internal data structures, knowing that the given deferredCommitContext
 // has completed. An optional context is provided for long-running operations.
-func (spt *StateProofTracker) postCommit(context.Context, *deferredCommitContext) {
+func (spt *stateProofTracker) postCommit(context.Context, *deferredCommitContext) {
 
 }
 
 // postCommitUnlocked is called only on a successful commitRound. In that case, each of the trackers have
 // the chance to make changes that aren't state-dependent.
 // An optional context is provided for long-running operations.
-func (spt *StateProofTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
+func (spt *stateProofTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
 
 }
 
 // handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 // Tracker might update own state in this case. For example, account updates tracker cancels
 // scheduled catchpoint writing that deferred commit.
-func (spt *StateProofTracker) handleUnorderedCommit(*deferredCommitContext) {
+func (spt *stateProofTracker) handleUnorderedCommit(*deferredCommitContext) {
 
 }
 
@@ -107,6 +108,6 @@ func (spt *StateProofTracker) handleUnorderedCommit(*deferredCommitContext) {
 // like open database connections or goroutines.  close may
 // be called even if loadFromDisk() is not called or does
 // not succeed.
-func (spt *StateProofTracker) close() {
+func (spt *stateProofTracker) close() {
 
 }
