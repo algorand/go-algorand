@@ -3,15 +3,17 @@ package ledger
 import (
 	"context"
 	"database/sql"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type StateProofVerificationData struct {
 	VotersCommitment crypto.GenericDigest
-	ProvenWeight     uint64
+	ProvenWeight     basics.MicroAlgos
 }
 
 type StateProofTracker struct {
@@ -25,7 +27,13 @@ func (spt *StateProofTracker) loadFromDisk(ledgerForTracker, basics.Round) error
 // newBlock informs the tracker of a new block along with
 // a given ledgercore.StateDelta as produced by BlockEvaluator.
 func (spt *StateProofTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-
+	if uint64(blk.Round())%blk.ConsensusProtocol().StateProofInterval == 0 {
+		verificationData := StateProofVerificationData{
+			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+			ProvenWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		}
+		spt.trackedData[blk.Round()] = verificationData
+	}
 }
 
 // committedUpTo informs the tracker that the block database has
@@ -43,7 +51,7 @@ func (spt *StateProofTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 // Separetly, the method returns the lookback that is being
 // maintained by the tracker.
 func (spt *StateProofTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
-	return 0, round
+	return round, 0
 }
 
 // produceCommittingTask prepares a deferredCommitRange; Preparing a deferredCommitRange is a joint
@@ -100,5 +108,5 @@ func (spt *StateProofTracker) handleUnorderedCommit(*deferredCommitContext) {
 // be called even if loadFromDisk() is not called or does
 // not succeed.
 func (spt *StateProofTracker) close() {
-	
+
 }
