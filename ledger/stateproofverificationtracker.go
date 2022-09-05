@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2022 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package ledger
 
 import (
@@ -11,23 +27,23 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type StateProofVerificationData struct {
+type stateProofVerificationData struct {
 	VotersCommitment crypto.GenericDigest
 	ProvenWeight     basics.MicroAlgos
 }
 
 type stateProofVerificationTracker struct {
-	trackedData map[basics.Round]StateProofVerificationData
+	trackedData map[basics.Round]stateProofVerificationData
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	spt.trackedData = make(map[basics.Round]StateProofVerificationData)
+	spt.trackedData = make(map[basics.Round]stateProofVerificationData)
 	return nil
 }
 
 func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta) {
 	if uint64(blk.Round())%blk.ConsensusProtocol().StateProofInterval == 0 {
-		verificationData := StateProofVerificationData{
+		verificationData := stateProofVerificationData{
 			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 			ProvenWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		}
@@ -40,7 +56,7 @@ func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (min
 }
 
 func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return nil
+	return dcr
 }
 
 func (spt *stateProofVerificationTracker) prepareCommit(*deferredCommitContext) error {
@@ -52,7 +68,6 @@ func (spt *stateProofVerificationTracker) commitRound(context.Context, *sql.Tx, 
 }
 
 func (spt *stateProofVerificationTracker) postCommit(context.Context, *deferredCommitContext) {
-
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
