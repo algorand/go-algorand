@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -42,6 +41,10 @@ func (spt *stateProofVerificationTracker) loadFromDisk(ledgerForTracker, basics.
 }
 
 func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta) {
+	if blk.ConsensusProtocol().StateProofInterval == 0 {
+		return
+	}
+
 	if uint64(blk.Round())%blk.ConsensusProtocol().StateProofInterval == 0 {
 		verificationData := stateProofVerificationData{
 			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
