@@ -103,9 +103,9 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	var res builder
+	res.Round = rnd
 	res.VotersHdr = votersHdr
 	res.AddrToPos = voters.AddrToPos
-	res.Proto = voters.Proto
 	res.Message = msg
 	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
 		uint64(hdr.Round),
@@ -410,6 +410,12 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
+	for rnd := range spw.builders {
+		if rnd < oldestRoundToRemove {
+			delete(spw.builders, rnd)
+		}
+	}
+
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deleteBuilders(tx, oldestRoundToRemove)
 	})
@@ -453,7 +459,7 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
-		stxn.Txn.LastValid = firstValid + basics.Round(b.Proto.MaxTxnLife)
+		stxn.Txn.LastValid = firstValid + basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofTxnFields.StateProof = *sp

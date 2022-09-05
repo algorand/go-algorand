@@ -317,7 +317,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load state proof data: %v", err)
 		return nil, err
 	}
-	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+
+	persistBuilders := false // TODO: persistBuilders := someConfigurationFlag
+	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node, persistBuilders)
 
 	return node, err
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto/stateproof"
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -51,7 +50,7 @@ func (z *builder) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
-	if (*z).Proto.MsgIsZero() {
+	if (*z).Round.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x20
 	}
@@ -75,11 +74,11 @@ func (z *builder) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).AddrToPos)))
 			}
-			zb0001_keys := make([]basics.Address, 0, len((*z).AddrToPos))
+			zb0001_keys := make([]Address, 0, len((*z).AddrToPos))
 			for zb0001 := range (*z).AddrToPos {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort((zb0001_keys))
+			sort.Sort(SortAddress(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).AddrToPos[zb0001]
 				_ = zb0002
@@ -98,9 +97,9 @@ func (z *builder) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Message.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
-			// string "proto"
-			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o = (*z).Proto.MarshalMsg(o)
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = (*z).Round.MarshalMsg(o)
 		}
 	}
 	return
@@ -145,6 +144,14 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
+			bts, err = (*z).Round.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Round")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -160,10 +167,10 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0006 {
 				(*z).AddrToPos = nil
 			} else if (*z).AddrToPos == nil {
-				(*z).AddrToPos = make(map[basics.Address]uint64, zb0005)
+				(*z).AddrToPos = make(map[Address]uint64, zb0005)
 			}
 			for zb0005 > 0 {
-				var zb0001 basics.Address
+				var zb0001 Address
 				var zb0002 uint64
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
@@ -177,14 +184,6 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				(*z).AddrToPos[zb0001] = zb0002
-			}
-		}
-		if zb0003 > 0 {
-			zb0003--
-			bts, err = (*z).Proto.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proto")
-				return
 			}
 		}
 		if zb0003 > 0 {
@@ -243,6 +242,12 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				}
+			case "rnd":
+				bts, err = (*z).Round.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
 			case "addr":
 				var zb0007 int
 				var zb0008 bool
@@ -259,10 +264,10 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0008 {
 					(*z).AddrToPos = nil
 				} else if (*z).AddrToPos == nil {
-					(*z).AddrToPos = make(map[basics.Address]uint64, zb0007)
+					(*z).AddrToPos = make(map[Address]uint64, zb0007)
 				}
 				for zb0007 > 0 {
-					var zb0001 basics.Address
+					var zb0001 Address
 					var zb0002 uint64
 					zb0007--
 					bts, err = zb0001.UnmarshalMsg(bts)
@@ -276,12 +281,6 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					(*z).AddrToPos[zb0001] = zb0002
-				}
-			case "proto":
-				bts, err = (*z).Proto.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Proto")
-					return
 				}
 			case "hdr":
 				bts, err = (*z).VotersHdr.UnmarshalMsg(bts)
@@ -321,7 +320,7 @@ func (z *builder) Msgsize() (s int) {
 	} else {
 		s += (*z).Builder.Msgsize()
 	}
-	s += 5 + msgp.MapHeaderSize
+	s += 4 + (*z).Round.Msgsize() + 5 + msgp.MapHeaderSize
 	if (*z).AddrToPos != nil {
 		for zb0001, zb0002 := range (*z).AddrToPos {
 			_ = zb0001
@@ -329,13 +328,13 @@ func (z *builder) Msgsize() (s int) {
 			s += 0 + zb0001.Msgsize() + msgp.Uint64Size
 		}
 	}
-	s += 6 + (*z).Proto.Msgsize() + 4 + (*z).VotersHdr.Msgsize() + 4 + (*z).Message.Msgsize()
+	s += 4 + (*z).VotersHdr.Msgsize() + 4 + (*z).Message.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *builder) MsgIsZero() bool {
-	return ((*z).Builder == nil) && (len((*z).AddrToPos) == 0) && ((*z).Proto.MsgIsZero()) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
+	return ((*z).Builder == nil) && ((*z).Round.MsgIsZero()) && (len((*z).AddrToPos) == 0) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

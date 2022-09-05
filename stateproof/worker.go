@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -38,10 +37,10 @@ type builder struct {
 
 	*stateproof.Builder
 
-	AddrToPos map[basics.Address]uint64 `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
-	Proto     config.ConsensusParams    `codec:"proto"`
-	VotersHdr bookkeeping.BlockHeader   `codec:"hdr"`
-	Message   stateproofmsg.Message     `codec:"msg"`
+	Round     basics.Round            `codec:"rnd"`
+	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
+	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
+	Message   stateproofmsg.Message   `codec:"msg"`
 }
 
 // Worker builds state proofs, by broadcasting
@@ -79,20 +78,21 @@ type Worker struct {
 }
 
 // NewWorker constructs a new Worker, as used by the node.
-func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender) *Worker {
+func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender, persistBuilders bool) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Worker{
-		db:        db,
-		log:       log,
-		accts:     accts,
-		ledger:    ledger,
-		net:       net,
-		txnSender: txnSender,
-		builders:  make(map[basics.Round]builder),
-		ctx:       ctx,
-		shutdown:  cancel,
-		signedCh:  make(chan struct{}, 1),
+		db:              db,
+		log:             log,
+		accts:           accts,
+		ledger:          ledger,
+		net:             net,
+		txnSender:       txnSender,
+		builders:        make(map[basics.Round]builder),
+		persistBuilders: persistBuilders,
+		ctx:             ctx,
+		shutdown:        cancel,
+		signedCh:        make(chan struct{}, 1),
 	}
 }
 
@@ -126,3 +126,10 @@ func (spw *Worker) Shutdown() {
 	spw.wg.Wait()
 	spw.db.Close()
 }
+
+// SortAddress implements sorting by Address keys for
+// canonical encoding of maps in msgpack format.
+type SortAddress = basics.SortAddress
+
+// Address is required for the msgpack sort binding, since it looks for Address and not basics.Address
+type Address = basics.Address

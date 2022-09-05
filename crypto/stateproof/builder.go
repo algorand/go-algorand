@@ -34,7 +34,8 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
-const StateProofTopVoters = 1024 // Should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
+// StateProofTopVoters should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
+const StateProofTopVoters = 1024
 
 // Builder keeps track of signatures on a message and eventually produces
 // a state proof for that message.
