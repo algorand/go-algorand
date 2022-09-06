@@ -104,7 +104,7 @@ func (m *LRUAccounts) Write(acctData PersistedAccountData) {
 	}
 }
 
-// Write a slice of persistedAccountData to the LRUAccounts cache.
+// WriteAccounts writes a slice of persistedAccountData to the LRUAccounts cache.
 // thread locking semantics : write lock
 func (m *LRUAccounts) WriteAccounts(updatedPersistedAccounts UpdatedAccounts) {
 	for _, persistedAcct := range updatedPersistedAccounts.data {

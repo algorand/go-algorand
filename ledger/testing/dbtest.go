@@ -18,16 +18,18 @@ package testing
 
 import (
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
+// DbOpenTest returns db pair
 func DbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	dbs, err := db.OpenPair(fn, inMemory)
@@ -35,6 +37,7 @@ func DbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	return dbs, fn
 }
 
+// SetDbLogging sets logger in db pair
 func SetDbLogging(t testing.TB, dbs db.Pair) {
 	dblogger := logging.TestingLog(t)
 	dbs.Rdb.SetLogger(dblogger)
@@ -58,6 +61,7 @@ func CreatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 	return updates.ToModifiedCreatables(known)
 }
 
+// ApplyPartialDeltas combines base accounts with deltas
 func ApplyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
 	for addr, ad := range base {

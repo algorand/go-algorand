@@ -63,7 +63,7 @@ type catchpointWriter struct {
 }
 
 type catchpointFileBalancesChunkV5 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
+	_struct  struct{}                           `codec:",omitempty,omitemptyarray"`
 	Balances []accountdb.EncodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
@@ -72,7 +72,7 @@ type catchpointFileBalancesChunkV5 struct {
 type SortUint64 = basics.SortUint64
 
 type catchpointFileBalancesChunkV6 struct {
-	_struct     struct{}                 `codec:",omitempty,omitemptyarray"`
+	_struct     struct{}                           `codec:",omitempty,omitemptyarray"`
 	Balances    []accountdb.EncodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 	numAccounts uint64
 }

@@ -186,12 +186,14 @@ var accountsResetExprs = []string{
 // and their descriptions.
 var AccountDBVersion = int32(7)
 
+// PersistedAccountData is exported view of persistedAccountData
 type PersistedAccountData interface {
 	Addr() basics.Address
 	AccountData() *BaseAccountData
 	IsValid() bool
 	ID() int64
 	Round() basics.Round
+
 	before(other *PersistedAccountData) bool
 }
 
@@ -355,7 +357,7 @@ type CompactAccountDeltas struct {
 }
 
 // OnlineAccountDelta track all changes of account state within a range,
-// used in conjunction wih CompactOnlineAccountDeltas to group and represent per-account changes.
+// used in conjunction with CompactOnlineAccountDeltas to group and represent per-account changes.
 // oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
 // to determine if the acct became online or went offline.
 type OnlineAccountDelta struct {

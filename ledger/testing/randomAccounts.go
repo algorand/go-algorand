@@ -581,13 +581,14 @@ func RandomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	return newSample
 }
 
-func RandomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
+// RandomCreatables returns random creatable indices and data
+func RandomCreatables(numElementsPerSegment int) ([]basics.CreatableIndex,
 	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
+	creatablesList := make([]basics.CreatableIndex, numElementsPerSegment*10)
 	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
 
-	for i := 0; i < numElementsPerSegement*10; i++ {
+	for i := 0; i < numElementsPerSegment*10; i++ {
 		assetIndex, mc := randomCreatable(uniqueAssetIds)
 		creatables[assetIndex] = mc
 		creatablesList[i] = assetIndex

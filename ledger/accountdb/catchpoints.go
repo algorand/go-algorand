@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// EncodedBalanceRecordV5 is v5 encoded catchpoint chunk entry
 type EncodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -38,6 +39,7 @@ type EncodedBalanceRecordV5 struct {
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
+// EncodedBalanceRecordV6 is v6 encoded catchpoint chunk entry
 type EncodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -185,8 +187,10 @@ func RemoveSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
+// CatchpointDirName is a default subdirectory for catchpoint files
 const CatchpointDirName = "catchpoints"
 
+// MakeCatchpointDataFilePath returns a catchpoint data file name for a given round
 func MakeCatchpointDataFilePath(accountsRound basics.Round) string {
 	return strconv.FormatInt(int64(accountsRound), 10) + ".Data"
 }

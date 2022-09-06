@@ -18,6 +18,7 @@ package accountdb
 
 import (
 	"database/sql"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
@@ -31,7 +32,7 @@ type accountsDbQueries interface {
 	Close()
 }
 
-type BlockDB interface {
+type blockDB interface {
 	BlockLatest(tx *sql.Tx) (basics.Round, error)
 	BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err error)
 	BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error)

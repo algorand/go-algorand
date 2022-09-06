@@ -62,7 +62,7 @@ func (m *LRUResources) Init(log logging.Logger, pendingWrites int, pendingWrites
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedResourcesData object that the LRUResources has for the given address and creatable index.
+// Read the persistedResourcesData object that the LRUResources has for the given address and creatable index.
 // thread locking semantics : read lock
 func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (data PersistedResourcesData, has bool) {
 	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: aidx}]; el != nil {
@@ -71,7 +71,7 @@ func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (da
 	return PersistedResourcesData{}, false
 }
 
-// read the persistedResourcesData object that the LRUResources has for the given address.
+// ReadAll reads the persistedResourcesData object that the LRUResources has for the given address.
 // thread locking semantics : read lock
 func (m *LRUResources) ReadAll(addr basics.Address) (ret []PersistedResourcesData) {
 	for ac, pd := range m.resources {

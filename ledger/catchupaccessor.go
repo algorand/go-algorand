@@ -369,9 +369,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		c.acctResCnt.TotalAssets += totalAssets
 
 		expectedTotalAppParams,
-		expectedTotalAppLocalStates,
-		expectedTotalAssetParams,
-		expectedTotalAssets := balance.ExpectedResourcesCount()
+			expectedTotalAppLocalStates,
+			expectedTotalAssetParams,
+			expectedTotalAssets := balance.ExpectedResourcesCount()
 
 		// check that counted resources adds up for this account
 		if !expectingMoreEntries[i] {
