@@ -336,7 +336,7 @@ type CompactResourcesDeltas struct {
 }
 
 type AccountDelta struct {
-	OldAcct     PersistedAccountData
+	oldAcct     persistedAccountData
 	NewAcct     BaseAccountData
 	NAcctDeltas int
 	Address     basics.Address
@@ -551,6 +551,24 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 		}
 	}
 	return
+}
+
+// OldHash returns the old accound data hash if old data is not empty, and existence flag
+func (ad *AccountDelta) OldHash() (hash []byte, exist bool) {
+	if ad.oldAcct.accountData.IsEmpty() {
+		return nil, false
+	}
+	hash = AccountHashBuilderV6(ad.Address, &ad.oldAcct.accountData, protocol.Encode(&ad.oldAcct.accountData))
+	return hash, true
+}
+
+// NewHash returns the new accound data hash if new data is not empty, and existence flag
+func (ad *AccountDelta) NewHash() (hash []byte, exist bool) {
+	if ad.NewAcct.IsEmpty() {
+		return nil, false
+	}
+	hash = AccountHashBuilderV6(ad.Address, &ad.NewAcct, protocol.Encode(&ad.NewAcct))
+	return hash, true
 }
 
 // MakeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
@@ -800,7 +818,7 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				updEntry := AccountDelta{
-					OldAcct:     prev.OldAcct,
+					oldAcct:     prev.oldAcct,
 					NAcctDeltas: prev.NAcctDeltas + 1,
 					Address:     prev.Address,
 				}
@@ -817,8 +835,8 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					Address: addr,
 				}
 				newEntry.NewAcct.SetCoreAccountData(&acctDelta)
-				if BaseAccountData, has := baseAccounts.Read(addr); has {
-					newEntry.OldAcct = BaseAccountData
+				if padif, has := baseAccounts.Read(addr); has {
+					newEntry.oldAcct = padif.(persistedAccountData)
 					outAccountDeltas.Insert(newEntry) // Insert instead of upsert economizes one map lookup
 				} else {
 					outAccountDeltas.insertMissing(newEntry)
@@ -895,7 +913,7 @@ func (a *CompactAccountDeltas) GetByIdx(i int) AccountDelta {
 func (a *CompactAccountDeltas) KnownAddresses() map[basics.Address]int64 {
 	knownAddresses := make(map[basics.Address]int64, a.Len())
 	for _, delta := range a.deltas {
-		knownAddresses[delta.OldAcct.Addr()] = delta.OldAcct.ID()
+		knownAddresses[delta.oldAcct.Addr()] = delta.oldAcct.ID()
 	}
 	return knownAddresses
 }
@@ -923,7 +941,7 @@ func (a *CompactAccountDeltas) insertMissing(delta AccountDelta) {
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *CompactAccountDeltas) updateOld(idx int, old persistedAccountData) {
-	a.deltas[idx].OldAcct = old
+	a.deltas[idx].oldAcct = old
 }
 
 func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
@@ -3494,7 +3512,7 @@ func AccountsNewRoundImpl(
 	newAddressesRowIDs := make(map[basics.Address]int64)
 	for i := 0; i < updates.Len(); i++ {
 		data := updates.GetByIdx(i)
-		if data.OldAcct.ID() == 0 {
+		if data.oldAcct.ID() == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.NewAcct.IsEmpty() {
 				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
@@ -3516,25 +3534,25 @@ func AccountsNewRoundImpl(
 			if data.NewAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				var rowsAffected int64
-				rowsAffected, err = writer.deleteAccount(data.OldAcct.ID())
+				rowsAffected, err = writer.deleteAccount(data.oldAcct.ID())
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
 					updatedAccounts[updatedAccountIdx].accountData = BaseAccountData{}
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.OldAcct.ID())
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.oldAcct.ID())
 					}
 				}
 			} else {
 				var rowsAffected int64
 				normBalance := data.NewAcct.NormalizedOnlineBalance(proto)
-				rowsAffected, err = writer.updateAccount(data.OldAcct.ID(), normBalance, data.NewAcct)
+				rowsAffected, err = writer.updateAccount(data.oldAcct.ID(), normBalance, data.NewAcct)
 				if err == nil {
 					// rowid doesn't change on update.
-					updatedAccounts[updatedAccountIdx].rowid = data.OldAcct.ID()
+					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.ID()
 					updatedAccounts[updatedAccountIdx].accountData = data.NewAcct
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.OldAcct.ID())
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.oldAcct.ID())
 					}
 				}
 			}

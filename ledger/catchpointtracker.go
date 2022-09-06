@@ -915,9 +915,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 
 	for i := 0; i < accountsDeltas.Len(); i++ {
 		delta := accountsDeltas.GetByIdx(i)
-		accountData := delta.OldAcct.AccountData()
-		if !accountData.IsEmpty() {
-			deleteHash := accountdb.AccountHashBuilderV6(delta.Address, accountData, protocol.Encode(accountData))
+		if deleteHash, has := delta.OldHash(); has {
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.Address, err)
@@ -929,8 +927,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 			}
 		}
 
-		if !delta.NewAcct.IsEmpty() {
-			addHash := accountdb.AccountHashBuilderV6(delta.Address, &delta.NewAcct, protocol.Encode(&delta.NewAcct))
+		if addHash, has := delta.NewHash(); has {
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.Address, err)
