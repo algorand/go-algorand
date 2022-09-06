@@ -205,7 +205,7 @@ type persistedAccountData struct {
 	// The address of the account. In contrasts to maps, having this value explicitly here allows us to use this
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	addr basics.Address
-	// The underlaying account data
+	// The underlying account data
 	accountData BaseAccountData
 	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
 	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
@@ -248,7 +248,8 @@ func (pad persistedAccountData) before(other *PersistedAccountData) bool {
 type PersistedOnlineAccountData interface {
 	Addr() basics.Address
 	AccountData() *BaseOnlineAccountData
-	Rowid() int64
+	IsValid() bool
+	ID() int64
 	Round() basics.Round
 	UpdRound() basics.Round
 	before(other *PersistedOnlineAccountData) bool
@@ -274,7 +275,11 @@ func (poad persistedOnlineAccountData) AccountData() *BaseOnlineAccountData {
 	return &poad.accountData
 }
 
-func (poad persistedOnlineAccountData) Rowid() int64 {
+func (poad persistedOnlineAccountData) IsValid() bool {
+	return poad.rowid != 0
+}
+
+func (poad persistedOnlineAccountData) ID() int64 {
 	return poad.rowid
 }
 
@@ -398,8 +403,8 @@ type CompactAccountDeltas struct {
 type OnlineAccountDelta struct {
 	oldAcct           persistedOnlineAccountData
 	newAcct           []BaseOnlineAccountData
-	NOnlineAcctDeltas int
-	Address           basics.Address
+	nOnlineAcctDeltas int
+	address           basics.Address
 	updRound          []uint64
 	newStatus         []basics.Status
 }
@@ -1004,6 +1009,14 @@ func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound
 	c.newStatus = append(c.newStatus, acctDelta.Status)
 }
 
+func (c *OnlineAccountDelta) NumDeltas() int {
+	return c.nOnlineAcctDeltas
+}
+
+func (c *OnlineAccountDelta) Address() basics.Address {
+	return c.address
+}
+
 // MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
@@ -1025,14 +1038,14 @@ func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				updEntry := prev
-				updEntry.NOnlineAcctDeltas++
+				updEntry.nOnlineAcctDeltas++
 				updEntry.append(acctDelta, deltaRound)
 				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := OnlineAccountDelta{
-					NOnlineAcctDeltas: 1,
-					Address:           addr,
+					nOnlineAcctDeltas: 1,
+					address:           addr,
 				}
 				newEntry.append(acctDelta, deltaRound)
 				// the cache always has the most recent data,
@@ -1068,7 +1081,7 @@ func (a *CompactOnlineAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.deltas[idx].Address
+		addr := a.deltas[idx].address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
@@ -1125,7 +1138,7 @@ func (a *CompactOnlineAccountDeltas) insert(delta OnlineAccountDelta) int {
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[delta.Address] = last
+	a.cache[delta.address] = last
 	return last
 }
 
@@ -1750,7 +1763,7 @@ func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 	}
 }
 
-// GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
+// GetOnlineAccountData returns ledgercore.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
 func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
@@ -3789,7 +3802,7 @@ func onlineAccountsNewRoundImpl(
 			newAcct := data.newAcct[j]
 			updRound := data.updRound[j]
 			newStatus := data.newStatus[j]
-			if prevAcct.Rowid() == 0 {
+			if prevAcct.rowid == 0 {
 				// zero rowid means we don't have a previous value.
 				if newAcct.IsEmpty() {
 					// IsEmpty means we don't have a previous value.
@@ -3797,15 +3810,15 @@ func onlineAccountsNewRoundImpl(
 				} else {
 					if newStatus == basics.Online {
 						if newAcct.IsVotingEmpty() {
-							err = fmt.Errorf("empty voting data for online account %s: %v", data.Address.String(), newAcct)
+							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
 						} else {
 							// create a new entry.
 							var rowid int64
 							normBalance := newAcct.NormalizedOnlineBalance(proto)
-							rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+							rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 							if err == nil {
 								updated := persistedOnlineAccountData{
-									addr:        data.Address,
+									addr:        data.address,
 									accountData: newAcct,
 									round:       lastUpdateRound,
 									rowid:       rowid,
@@ -3816,7 +3829,7 @@ func onlineAccountsNewRoundImpl(
 							}
 						}
 					} else if !newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.Address.String(), newAcct)
+						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 					}
 				}
 			} else {
@@ -3824,13 +3837,13 @@ func onlineAccountsNewRoundImpl(
 				if newAcct.IsVotingEmpty() {
 					// new value is zero then go offline
 					if newStatus == basics.Online {
-						err = fmt.Errorf("empty voting data but online account %s: %v", data.Address.String(), newAcct)
+						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 					} else {
 						var rowid int64
-						rowid, err = writer.insertOnlineAccount(data.Address, 0, BaseOnlineAccountData{}, updRound, 0)
+						rowid, err = writer.insertOnlineAccount(data.address, 0, BaseOnlineAccountData{}, updRound, 0)
 						if err == nil {
 							updated := persistedOnlineAccountData{
-								addr:        data.Address,
+								addr:        data.address,
 								accountData: BaseOnlineAccountData{},
 								round:       lastUpdateRound,
 								rowid:       rowid,
@@ -3845,10 +3858,10 @@ func onlineAccountsNewRoundImpl(
 					if prevAcct.accountData != newAcct {
 						var rowid int64
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
-						rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err == nil {
 							updated := persistedOnlineAccountData{
-								addr:        data.Address,
+								addr:        data.address,
 								accountData: newAcct,
 								round:       lastUpdateRound,
 								rowid:       rowid,

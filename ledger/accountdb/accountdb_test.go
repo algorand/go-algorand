@@ -3199,25 +3199,25 @@ func TestAccountOnlineQueries(t *testing.T) {
 	//    A |   2 |      0
 
 	checkAddrB := func() {
-		require.Equal(t, int64(2), poads[0].Rowid())
+		require.Equal(t, int64(2), poads[0].ID())
 		require.Equal(t, basics.Round(1), poads[0].UpdRound())
 		require.Equal(t, addrB, poads[0].Addr())
-		require.Equal(t, int64(4), poads[1].Rowid())
+		require.Equal(t, int64(4), poads[1].ID())
 		require.Equal(t, basics.Round(3), poads[1].UpdRound())
 		require.Equal(t, addrB, poads[1].Addr())
 	}
 
 	checkAddrC := func() {
-		require.Equal(t, int64(5), poads[2].Rowid())
+		require.Equal(t, int64(5), poads[2].ID())
 		require.Equal(t, basics.Round(3), poads[2].UpdRound())
 		require.Equal(t, addrC, poads[2].Addr())
 	}
 
 	checkAddrA := func() {
-		require.Equal(t, int64(1), poads[3].Rowid())
+		require.Equal(t, int64(1), poads[3].ID())
 		require.Equal(t, basics.Round(1), poads[3].UpdRound())
 		require.Equal(t, addrA, poads[3].Addr())
-		require.Equal(t, int64(3), poads[4].Rowid())
+		require.Equal(t, int64(3), poads[4].ID())
 		require.Equal(t, basics.Round(2), poads[4].UpdRound())
 		require.Equal(t, addrA, poads[4].Addr())
 	}
@@ -3248,25 +3248,25 @@ func TestAccountOnlineQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(3), rnd)
 	require.Equal(t, 2, len(poads))
-	require.Equal(t, int64(1), poads[0].Rowid())
+	require.Equal(t, int64(1), poads[0].ID())
 	require.Equal(t, basics.Round(1), poads[0].UpdRound())
-	require.Equal(t, int64(3), poads[1].Rowid())
+	require.Equal(t, int64(3), poads[1].ID())
 	require.Equal(t, basics.Round(2), poads[1].UpdRound())
 
 	poads, rnd, err = queries.LookupOnlineHistory(addrB)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(3), rnd)
 	require.Equal(t, 2, len(poads))
-	require.Equal(t, int64(2), poads[0].Rowid())
+	require.Equal(t, int64(2), poads[0].ID())
 	require.Equal(t, basics.Round(1), poads[0].UpdRound())
-	require.Equal(t, int64(4), poads[1].Rowid())
+	require.Equal(t, int64(4), poads[1].ID())
 	require.Equal(t, basics.Round(3), poads[1].UpdRound())
 
 	poads, rnd, err = queries.LookupOnlineHistory(addrC)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(3), rnd)
 	require.Equal(t, 1, len(poads))
-	require.Equal(t, int64(5), poads[0].Rowid())
+	require.Equal(t, int64(5), poads[0].ID())
 	require.Equal(t, basics.Round(3), poads[0].UpdRound())
 }
 
@@ -3296,11 +3296,11 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 
 	// acct A is empty
 	deltaA := OnlineAccountDelta{
-		Address: addrA,
+		address: addrA,
 	}
 	// acct B is new and offline
 	deltaB := OnlineAccountDelta{
-		Address: addrB,
+		address: addrB,
 		newAcct: []BaseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
 		}},
@@ -3309,7 +3309,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	}
 	// acct C is new and online
 	deltaC := OnlineAccountDelta{
-		Address: addrC,
+		address: addrC,
 		newAcct: []BaseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 			BaseVotingData: BaseVotingData{VoteFirstValid: 500},
@@ -3319,7 +3319,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	}
 	// acct D is old and went offline
 	deltaD := OnlineAccountDelta{
-		Address: addrD,
+		address: addrD,
 		oldAcct: persistedOnlineAccountData{
 			addr: addrD,
 			accountData: BaseOnlineAccountData{
@@ -3337,7 +3337,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 
 	// acct E is old online
 	deltaE := OnlineAccountDelta{
-		Address: addrE,
+		address: addrE,
 		oldAcct: persistedOnlineAccountData{
 			addr: addrE,
 			accountData: BaseOnlineAccountData{
@@ -3398,7 +3398,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 
 	// acct A is new, offline and then online
 	deltaA := OnlineAccountDelta{
-		Address: addrA,
+		address: addrA,
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
@@ -3413,7 +3413,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 	}
 	// acct B is new and online and then offline
 	deltaB := OnlineAccountDelta{
-		Address: addrB,
+		address: addrB,
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
@@ -3428,7 +3428,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 	}
 	// acct C is old online, then online and then offline
 	deltaC := OnlineAccountDelta{
-		Address: addrC,
+		address: addrC,
 		oldAcct: persistedOnlineAccountData{
 			addr: addrC,
 			accountData: BaseOnlineAccountData{
@@ -3638,7 +3638,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	addrB := ledgertesting.RandomAddress()
 
 	deltaA := OnlineAccountDelta{
-		Address: addrA,
+		address: addrA,
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
@@ -3657,7 +3657,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	}
 	// acct B is new and online and then offline
 	deltaB := OnlineAccountDelta{
-		Address: addrB,
+		address: addrB,
 		newAcct: []BaseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},

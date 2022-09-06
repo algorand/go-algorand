@@ -20,10 +20,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/accountdb"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/ledger/accountdb"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -224,13 +225,13 @@ func TestAcctOnline(t *testing.T) {
 			data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr())
-			require.NotEmpty(t, data.Rowid())
+			require.NotEmpty(t, data.ID())
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 			require.Empty(t, data.AccountData())
 
 			data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 			require.True(t, has)
-			require.NotEmpty(t, data.Rowid())
+			require.NotEmpty(t, data.ID())
 			require.Empty(t, data.AccountData())
 
 			oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
@@ -241,7 +242,7 @@ func TestAcctOnline(t *testing.T) {
 			data, err = oa.accountsq.LookupOnline(bal.Addr, rnd-1)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr())
-			require.NotEmpty(t, data.Rowid())
+			require.NotEmpty(t, data.ID())
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 			require.NotEmpty(t, data.AccountData())
 		}
@@ -258,13 +259,13 @@ func TestAcctOnline(t *testing.T) {
 			data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr())
-			require.Empty(t, data.Rowid())
+			require.Empty(t, data.ID())
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 			require.Empty(t, data.AccountData())
 
 			data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 			require.True(t, has)
-			require.NotEmpty(t, data.Rowid()) // TODO: FIXME: set rowid to empty for these items
+			require.NotEmpty(t, data.ID()) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.AccountData())
 
 			// committed round i => dbRound = i - maxDeltaLookback (= 13 for the account 0)
@@ -284,14 +285,14 @@ func TestAcctOnline(t *testing.T) {
 				data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 				require.NoError(t, err)
 				require.Equal(t, bal.Addr, data.Addr())
-				require.NotEmpty(t, data.Rowid())
+				require.NotEmpty(t, data.ID())
 				require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 				require.NotEmpty(t, data.AccountData())
 
 				// the most recent value is empty because the account is scheduled for removal
 				data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 				require.True(t, has)
-				require.NotEmpty(t, data.Rowid()) // TODO: FIXME: set rowid to empty for these items
+				require.NotEmpty(t, data.ID()) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData())
 
 				// account 1 went offline at round 2 => it offline at requested round 1+1=2
@@ -309,14 +310,14 @@ func TestAcctOnline(t *testing.T) {
 				data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 				require.NoError(t, err)
 				require.Equal(t, bal.Addr, data.Addr())
-				require.NotEmpty(t, data.Rowid())
+				require.NotEmpty(t, data.ID())
 				require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 				require.NotEmpty(t, data.AccountData())
 
 				// the most recent value is empty because the account is scheduled for removal
 				data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 				require.True(t, has)
-				require.NotEmpty(t, data.Rowid()) // TODO: FIXME: set rowid to empty for these items
+				require.NotEmpty(t, data.ID()) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData())
 
 				// account 2 went offline at round 3 => it online at requested round 1+1=2
@@ -340,13 +341,13 @@ func TestAcctOnline(t *testing.T) {
 		data, err := oa.accountsq.LookupOnline(bal.Addr, basics.Round(i+1))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr())
-		require.NotEmpty(t, data.Rowid())
+		require.NotEmpty(t, data.ID())
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 		require.Empty(t, data.AccountData())
 
 		data, has := oa.baseOnlineAccounts.Read(bal.Addr)
 		require.True(t, has)
-		require.NotEmpty(t, data.Rowid())
+		require.NotEmpty(t, data.ID())
 		require.Empty(t, data.AccountData())
 
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
@@ -357,7 +358,7 @@ func TestAcctOnline(t *testing.T) {
 		data, err = oa.accountsq.LookupOnline(bal.Addr, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr())
-		require.NotEmpty(t, data.Rowid())
+		require.NotEmpty(t, data.ID())
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 		require.NotEmpty(t, data.AccountData())
 	}
@@ -374,7 +375,7 @@ func TestAcctOnline(t *testing.T) {
 		data, err = oa.accountsq.LookupOnline(bal.Addr, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr())
-		require.NotEmpty(t, data.Rowid())
+		require.NotEmpty(t, data.ID())
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 		require.NotEmpty(t, data.AccountData())
 
@@ -517,7 +518,7 @@ func TestAcctOnlineCache(t *testing.T) {
 					data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 					require.NoError(t, err)
 					require.Equal(t, bal.Addr, data.Addr())
-					require.NotEmpty(t, data.Rowid())
+					require.NotEmpty(t, data.ID())
 					require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 					if (rnd-1)%(numAccts*2) >= numAccts {
 						require.Empty(t, data.AccountData())
@@ -553,9 +554,9 @@ func TestAcctOnlineCache(t *testing.T) {
 					require.Equal(t, oa.cachedDBRoundOnline, data.Round())
 					if (rnd-1)%(numAccts*2) >= numAccts {
 						require.Empty(t, data.AccountData())
-						require.Empty(t, data.Rowid())
+						require.Empty(t, data.ID())
 					} else {
-						require.NotEmpty(t, data.Rowid())
+						require.NotEmpty(t, data.ID())
 						require.NotEmpty(t, data.AccountData())
 					}
 
@@ -974,7 +975,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 
 		// prepare block
 		totals = newBlock(t, ml, testProtocolVersion, protoParams, 1, base, updates, totals)
-		// commit changes synchroniously
+		// commit changes synchronously
 		commitSync(t, oa, ml, 1)
 
 		// add maxBalLookback empty blocks
@@ -1048,7 +1049,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err := oa.accountsq.LookupOnline(addrA, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrA, pad.Addr())
-		require.NotEmpty(t, pad.Rowid())
+		require.NotEmpty(t, pad.ID())
 		require.Empty(t, pad.AccountData().VoteLastValid)
 
 		// commit a block to get these entries removed
@@ -1081,7 +1082,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			pad, err = oa.accountsq.LookupOnline(addrB, 1)
 			require.NoError(t, err)
 			require.Equal(t, addrB, pad.Addr())
-			require.NotEmpty(t, pad.Rowid())
+			require.NotEmpty(t, pad.ID())
 			require.NotEmpty(t, pad.AccountData().VoteLastValid)
 		}()
 
@@ -1097,7 +1098,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err = oa.accountsq.LookupOnline(addrA, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrA, pad.Addr())
-		require.Empty(t, pad.Rowid())
+		require.Empty(t, pad.ID())
 		require.Empty(t, pad.AccountData().VoteLastValid)
 
 		_, has = oa.accounts[addrB]
@@ -1113,7 +1114,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err = oa.accountsq.LookupOnline(addrB, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrB, pad.Addr())
-		require.NotEmpty(t, pad.Rowid())
+		require.NotEmpty(t, pad.ID())
 		require.NotEmpty(t, pad.AccountData().VoteLastValid)
 	})
 }

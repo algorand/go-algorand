@@ -54,7 +54,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round())
 		require.Equal(t, addr, acct.Addr())
 		require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid())
+		require.Equal(t, int64(i), acct.ID())
 	}
 
 	// verify expected missing entries
@@ -78,7 +78,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			require.Equal(t, basics.Round(i), acct.Round())
 			require.Equal(t, addr, acct.Addr())
 			require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.Rowid())
+			require.Equal(t, int64(i), acct.ID())
 		} else {
 			require.False(t, has)
 			require.Equal(t, persistedOnlineAccountData{}, acct)
@@ -95,7 +95,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
-			time.Sleep(time.Duration(crypto.RandUint64() % 50) * time.Millisecond)
+			time.Sleep(time.Duration(crypto.RandUint64()%50) * time.Millisecond)
 			acct := persistedOnlineAccountData{
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
@@ -183,7 +183,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round())
 		require.Equal(t, addr, acct.Addr())
 		require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid())
+		require.Equal(t, int64(i), acct.ID())
 	}
 
 	// verify expected missing entries
