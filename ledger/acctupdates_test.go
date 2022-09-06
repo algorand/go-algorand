@@ -1315,7 +1315,8 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 			addr := ledgertesting.RandomAddress()
 			acctData := accountdb.BaseAccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates.Insert(accountdb.AccountDelta{Address: addr, NewAcct: acctData})
+
+			updates.Insert(accountdb.MakeTestAccountDelta(addr, acctData))
 			i++
 		}
 

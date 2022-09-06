@@ -37,8 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/accountdb"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -359,7 +359,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 				addr := ledgertesting.RandomAddress()
 				acctData := accountdb.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.Insert(accountdb.AccountDelta{Address: addr, NewAcct: acctData})
+				updates.Insert(accountdb.MakeTestAccountDelta(addr, acctData))
 				i++
 			}
 

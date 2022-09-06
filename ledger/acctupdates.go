@@ -1398,7 +1398,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactAccountDeltas.Len(); i++ {
 		acctUpdate := dcc.compactAccountDeltas.GetByIdx(i)
-		cnt := acctUpdate.NAcctDeltas
+		cnt := acctUpdate.NumDeltas()
 		macct, ok := au.accounts[acctUpdate.Address]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.Address)
@@ -1417,7 +1417,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	for i := 0; i < dcc.CompactResourcesDeltas.Len(); i++ {
 		resUpdate := dcc.CompactResourcesDeltas.GetByIdx(i)
 		cnt := resUpdate.NAcctDeltas
-		key := ledgercore.AccountCreatable{resUpdate.Address, resUpdate.OldResource.Aidx}
+		key := ledgercore.AccountCreatable{Address: resUpdate.Address, Index: resUpdate.OldResource.Aidx}
 		macct, ok := au.resources[key]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but not in au.resources", cnt, resUpdate.Address, resUpdate.OldResource.Aidx)
