@@ -918,10 +918,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 		if deleteHash, has := delta.OldHash(); has {
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.Address, err)
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.Address(), err)
 			}
 			if !deleted {
-				ct.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), delta.Address)
+				ct.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), delta.Address())
 			} else {
 				accumulatedChanges++
 			}
@@ -930,10 +930,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 		if addHash, has := delta.NewHash(); has {
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
-				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.Address, err)
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.Address(), err)
 			}
 			if !added {
-				ct.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), delta.Address)
+				ct.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), delta.Address())
 			} else {
 				accumulatedChanges++
 			}

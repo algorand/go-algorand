@@ -339,7 +339,7 @@ type AccountDelta struct {
 	oldAcct     persistedAccountData
 	newAcct     BaseAccountData
 	nAcctDeltas int
-	Address     basics.Address
+	address     basics.Address
 }
 
 // CompactAccountDeltas and AccountDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
@@ -555,7 +555,7 @@ func PrepareNormalizedBalancesV6(bals []EncodedBalanceRecordV6, proto config.Con
 
 // MakeTestAccountDelta used in tests for AccountDelta creation with only newAcct set
 func MakeTestAccountDelta(addr basics.Address, newAcct BaseAccountData) AccountDelta {
-	return AccountDelta{Address: addr, newAcct: newAcct}
+	return AccountDelta{address: addr, newAcct: newAcct}
 }
 
 // OldHash returns the old accound data hash if old data is not empty, and existence flag
@@ -563,7 +563,7 @@ func (ad *AccountDelta) OldHash() (hash []byte, exist bool) {
 	if ad.oldAcct.accountData.IsEmpty() {
 		return nil, false
 	}
-	hash = AccountHashBuilderV6(ad.Address, &ad.oldAcct.accountData, protocol.Encode(&ad.oldAcct.accountData))
+	hash = AccountHashBuilderV6(ad.address, &ad.oldAcct.accountData, protocol.Encode(&ad.oldAcct.accountData))
 	return hash, true
 }
 
@@ -572,13 +572,18 @@ func (ad *AccountDelta) NewHash() (hash []byte, exist bool) {
 	if ad.newAcct.IsEmpty() {
 		return nil, false
 	}
-	hash = AccountHashBuilderV6(ad.Address, &ad.newAcct, protocol.Encode(&ad.newAcct))
+	hash = AccountHashBuilderV6(ad.address, &ad.newAcct, protocol.Encode(&ad.newAcct))
 	return hash, true
 }
 
 // NumDeltas returns number of account deltas
 func (ad *AccountDelta) NumDeltas() int {
 	return ad.nAcctDeltas
+}
+
+// NumDeltas returns number of account deltas
+func (ad *AccountDelta) Address() basics.Address {
+	return ad.address
 }
 
 // MakeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
@@ -830,7 +835,7 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 				updEntry := AccountDelta{
 					oldAcct:     prev.oldAcct,
 					nAcctDeltas: prev.nAcctDeltas + 1,
-					Address:     prev.Address,
+					address:     prev.address,
 				}
 				updEntry.newAcct.SetCoreAccountData(&acctDelta)
 				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
@@ -842,7 +847,7 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					newAcct: BaseAccountData{
 						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
-					Address: addr,
+					address: addr,
 				}
 				newEntry.newAcct.SetCoreAccountData(&acctDelta)
 				if padif, has := baseAccounts.Read(addr); has {
@@ -875,7 +880,7 @@ func (a *CompactAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.deltas[idx].Address
+		addr := a.deltas[idx].address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
@@ -940,7 +945,7 @@ func (a *CompactAccountDeltas) Insert(delta AccountDelta) int {
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[delta.Address] = last
+	a.cache[delta.address] = last
 	return last
 }
 
@@ -3532,11 +3537,11 @@ func AccountsNewRoundImpl(
 				// create a new entry.
 				var rowid int64
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				rowid, err = writer.insertAccount(data.Address, normBalance, data.newAcct)
+				rowid, err = writer.insertAccount(data.address, normBalance, data.newAcct)
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].rowid = rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
-					newAddressesRowIDs[data.Address] = rowid
+					newAddressesRowIDs[data.address] = rowid
 				}
 			}
 		} else {
@@ -3550,7 +3555,7 @@ func AccountsNewRoundImpl(
 					updatedAccounts[updatedAccountIdx].rowid = 0
 					updatedAccounts[updatedAccountIdx].accountData = BaseAccountData{}
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.Address, data.oldAcct.ID())
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.ID())
 					}
 				}
 			} else {
@@ -3562,7 +3567,7 @@ func AccountsNewRoundImpl(
 					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.ID()
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.Address, data.oldAcct.ID())
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.ID())
 					}
 				}
 			}
@@ -3574,7 +3579,7 @@ func AccountsNewRoundImpl(
 
 		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
 		updatedAccounts[updatedAccountIdx].round = lastUpdateRound
-		updatedAccounts[updatedAccountIdx].addr = data.Address
+		updatedAccounts[updatedAccountIdx].addr = data.address
 		updatedAccountIdx++
 	}
 

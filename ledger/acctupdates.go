@@ -1399,18 +1399,19 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	for i := 0; i < dcc.compactAccountDeltas.Len(); i++ {
 		acctUpdate := dcc.compactAccountDeltas.GetByIdx(i)
 		cnt := acctUpdate.NumDeltas()
-		macct, ok := au.accounts[acctUpdate.Address]
+		addr := acctUpdate.Address()
+		macct, ok := au.accounts[addr]
 		if !ok {
-			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.Address)
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
 		}
 
 		if cnt > macct.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, acctUpdate.Address, macct.ndeltas)
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
 		} else if cnt == macct.ndeltas {
-			delete(au.accounts, acctUpdate.Address)
+			delete(au.accounts, addr)
 		} else {
 			macct.ndeltas -= cnt
-			au.accounts[acctUpdate.Address] = macct
+			au.accounts[addr] = macct
 		}
 	}
 
