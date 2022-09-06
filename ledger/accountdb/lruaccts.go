@@ -55,7 +55,7 @@ func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has 
 	if el := m.accounts[addr]; el != nil {
 		return el.Value, true
 	}
-	return &persistedAccountData{}, false
+	return
 }
 
 // FlushPendingWrites flushes the pending writes to the main LRUAccounts cache.
@@ -93,7 +93,7 @@ func (m *LRUAccounts) WritePending(acct PersistedAccountData) {
 func (m *LRUAccounts) Write(acctData PersistedAccountData) {
 	if el := m.accounts[acctData.Addr()]; el != nil {
 		// already exists; is it a newer ?
-		if (el.Value).before(&acctData) {
+		if el.Value.before(&acctData) {
 			// we update with a newer version.
 			el.Value = acctData
 		}

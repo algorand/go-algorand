@@ -250,7 +250,7 @@ type deferredCommitContext struct {
 	updatedPersistedResources map[basics.Address][]accountdb.PersistedResourcesData
 
 	compactOnlineAccountDeltas     accountdb.CompactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []accountdb.PersistedOnlineAccountData
+	updatedPersistedOnlineAccounts accountdb.UpdatedOnlineAccounts
 
 	updatingBalancesDuration time.Duration
 

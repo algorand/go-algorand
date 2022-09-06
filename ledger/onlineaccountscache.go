@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"container/list"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/accountdb"
 )
@@ -42,10 +41,10 @@ func (o *onlineAccountsCache) init(accts []accountdb.PersistedOnlineAccountData,
 	for _, acct := range accts {
 		// if cache full, stop writing
 		cachedAcct := cachedOnlineAccount{
-			BaseOnlineAccountData: acct.AccountData,
-			updRound:              acct.UpdRound,
+			BaseOnlineAccountData: *acct.AccountData(),
+			updRound:              acct.UpdRound(),
 		}
-		if !o.writeFront(acct.Addr, cachedAcct) {
+		if !o.writeFront(acct.Addr(), cachedAcct) {
 			break
 		}
 	}

@@ -244,22 +244,51 @@ func (pad persistedAccountData) before(other *PersistedAccountData) bool {
 	return pad.round < (*other).Round()
 }
 
-type PersistedOnlineAccountData struct {
-	Addr        basics.Address
-	AccountData BaseOnlineAccountData
-	Rowid       int64
+type PersistedOnlineAccountData interface {
+	Addr() basics.Address
+	AccountData() *BaseOnlineAccountData
+	Rowid() int64
+	Round() basics.Round
+	UpdRound() basics.Round
+	before(other *PersistedOnlineAccountData) bool
+}
+
+type persistedOnlineAccountData struct {
+	addr        basics.Address
+	accountData BaseOnlineAccountData
+	rowid       int64
 	// the round number that is associated with the BaseOnlineAccountData. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose. This value comes from account rounds table and correspond to
 	// the last trackers db commit round.
-	Round basics.Round
+	round basics.Round
 	// the round number that the online account is for, i.e. account state change round.
-	UpdRound basics.Round
+	updRound basics.Round
 }
 
-// before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
+func (poad persistedOnlineAccountData) Addr() basics.Address {
+	return poad.addr
+}
+
+func (poad persistedOnlineAccountData) AccountData() *BaseOnlineAccountData {
+	return &poad.accountData
+}
+
+func (poad persistedOnlineAccountData) Rowid() int64 {
+	return poad.rowid
+}
+
+func (poad persistedOnlineAccountData) Round() basics.Round {
+	return poad.round
+}
+
+func (poad persistedOnlineAccountData) UpdRound() basics.Round {
+	return poad.updRound
+}
+
+// before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
-func (prd *PersistedResourcesData) before(other *PersistedResourcesData) bool {
-	return prd.Round < other.Round
+func (pac persistedOnlineAccountData) before(other *PersistedOnlineAccountData) bool {
+	return pac.round < (*other).Round()
 }
 
 //msgp:ignore PersistedResourcesData
@@ -281,10 +310,10 @@ type PersistedResourcesData struct {
 	Round basics.Round
 }
 
-// before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
+// before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
-func (pac *PersistedOnlineAccountData) before(other *PersistedOnlineAccountData) bool {
-	return pac.Round < other.Round
+func (prd *PersistedResourcesData) before(other *PersistedResourcesData) bool {
+	return prd.Round < other.Round
 }
 
 func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource {
@@ -314,6 +343,11 @@ func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource 
 
 type UpdatedAccounts struct {
 	data  []persistedAccountData
+	Count int
+}
+
+type UpdatedOnlineAccounts struct {
+	Data []persistedOnlineAccountData
 	Count int
 }
 
@@ -1038,19 +1072,19 @@ func (a *CompactOnlineAccountDeltas) AccountsLoadOld(tx *sql.Tx) (err error) {
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &PersistedOnlineAccountData{Addr: addr, Rowid: rowid.Int64}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
+				persistedAcctData := &persistedOnlineAccountData{addr: addr, rowid: rowid.Int64}
+				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
 				if err != nil {
 					return err
 				}
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// empty data means offline account
-				a.updateOld(idx, PersistedOnlineAccountData{Addr: addr, Rowid: rowid.Int64})
+				a.updateOld(idx, persistedOnlineAccountData{addr: addr, rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, PersistedOnlineAccountData{Addr: addr})
+			a.updateOld(idx, persistedOnlineAccountData{addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -1100,7 +1134,7 @@ func (a *CompactOnlineAccountDeltas) insertMissing(delta OnlineAccountDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *CompactOnlineAccountDeltas) updateOld(idx int, old PersistedOnlineAccountData) {
+func (a *CompactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccountData) {
 	a.deltas[idx].oldAcct = old
 }
 
@@ -2850,18 +2884,18 @@ func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data persistedAccountD
 	return
 }
 
-func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
 		var updround sql.NullInt64
-		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.Round, &buf)
+		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.round, &buf)
 		if err == nil {
-			data.Addr = addr
+			data.addr = addr
 			if len(buf) > 0 && rowid.Valid && updround.Valid {
-				data.Rowid = rowid.Int64
-				data.UpdRound = basics.Round(updround.Int64)
-				err = protocol.Decode(buf, &data.AccountData)
+				data.rowid = rowid.Int64
+				data.updRound = basics.Round(updround.Int64)
+				err = protocol.Decode(buf, &data.accountData)
 				return err
 			}
 			// we don't have that account, just return the database round.
@@ -2897,7 +2931,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
-func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -2907,16 +2941,16 @@ func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 
 		for rows.Next() {
 			var buf []byte
-			data := PersistedOnlineAccountData{}
-			err := rows.Scan(&data.Rowid, &data.UpdRound, &rnd, &buf)
+			data := persistedOnlineAccountData{}
+			err := rows.Scan(&data.rowid, &data.updRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
-			err = protocol.Decode(buf, &data.AccountData)
+			err = protocol.Decode(buf, &data.accountData)
 			if err != nil {
 				return err
 			}
-			data.Addr = addr
+			data.addr = addr
 			result = append(result, data)
 		}
 		return err
@@ -3146,13 +3180,13 @@ func OnlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]PersistedOnlineAccount
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		data := PersistedOnlineAccountData{}
-		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
+		data := persistedOnlineAccountData{}
+		err := rows.Scan(&data.rowid, &addrbuf, &data.updRound, &buf)
 		if err != nil {
 			return nil, err
 		}
-		if len(addrbuf) != len(data.Addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.Addr))
+		if len(addrbuf) != len(data.addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
 			return nil, err
 		}
 		if maxAccounts > 0 {
@@ -3164,8 +3198,8 @@ func OnlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]PersistedOnlineAccount
 				copy(seenAddr, addrbuf)
 			}
 		}
-		copy(data.Addr[:], addrbuf)
-		err = protocol.Decode(buf, &data.AccountData)
+		copy(data.addr[:], addrbuf)
+		err = protocol.Decode(buf, &data.accountData)
 		if err != nil {
 			return nil, err
 		}
@@ -3503,7 +3537,7 @@ func OnlineAccountsNewRound(
 	tx *sql.Tx,
 	updates CompactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []PersistedOnlineAccountData, err error) {
+) (updatedAccounts UpdatedOnlineAccounts, err error) {
 	hasAccounts := updates.Len() > 0
 
 	writer, err := makeOnlineAccountsSQLWriter(tx, hasAccounts)
@@ -3512,7 +3546,12 @@ func OnlineAccountsNewRound(
 	}
 	defer writer.close()
 
-	updatedAccounts, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	var persistedAccounts []persistedOnlineAccountData
+	persistedAccounts, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updatedAccounts = UpdatedOnlineAccounts{
+		Data: persistedAccounts,
+		Count: len(persistedAccounts),
+	}
 	return
 }
 
@@ -3740,7 +3779,7 @@ func AccountsNewRoundImpl(
 func OnlineAccountsNewRoundImpl(
 	writer onlineAccountsWriter, updates CompactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []PersistedOnlineAccountData, err error) {
+) (updatedAccounts []persistedOnlineAccountData, err error) {
 
 	for i := 0; i < updates.Len(); i++ {
 		data := updates.GetByIdx(i)
@@ -3749,7 +3788,7 @@ func OnlineAccountsNewRoundImpl(
 			newAcct := data.newAcct[j]
 			updRound := data.updRound[j]
 			newStatus := data.newStatus[j]
-			if prevAcct.Rowid == 0 {
+			if prevAcct.Rowid() == 0 {
 				// zero rowid means we don't have a previous value.
 				if newAcct.IsEmpty() {
 					// IsEmpty means we don't have a previous value.
@@ -3764,12 +3803,12 @@ func OnlineAccountsNewRoundImpl(
 							normBalance := newAcct.NormalizedOnlineBalance(proto)
 							rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 							if err == nil {
-								updated := PersistedOnlineAccountData{
-									Addr:        data.Address,
-									AccountData: newAcct,
-									Round:       lastUpdateRound,
-									Rowid:       rowid,
-									UpdRound:    basics.Round(updRound),
+								updated := persistedOnlineAccountData{
+									addr:        data.Address,
+									accountData: newAcct,
+									round:       lastUpdateRound,
+									rowid:       rowid,
+									updRound:    basics.Round(updRound),
 								}
 								updatedAccounts = append(updatedAccounts, updated)
 								prevAcct = updated
@@ -3789,12 +3828,12 @@ func OnlineAccountsNewRoundImpl(
 						var rowid int64
 						rowid, err = writer.insertOnlineAccount(data.Address, 0, BaseOnlineAccountData{}, updRound, 0)
 						if err == nil {
-							updated := PersistedOnlineAccountData{
-								Addr:        data.Address,
-								AccountData: BaseOnlineAccountData{},
-								Round:       lastUpdateRound,
-								Rowid:       rowid,
-								UpdRound:    basics.Round(updRound),
+							updated := persistedOnlineAccountData{
+								addr:        data.Address,
+								accountData: BaseOnlineAccountData{},
+								round:       lastUpdateRound,
+								rowid:       rowid,
+								updRound:    basics.Round(updRound),
 							}
 
 							updatedAccounts = append(updatedAccounts, updated)
@@ -3802,17 +3841,17 @@ func OnlineAccountsNewRoundImpl(
 						}
 					}
 				} else {
-					if prevAcct.AccountData != newAcct {
+					if *prevAcct.AccountData() != newAcct {
 						var rowid int64
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
 						rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err == nil {
-							updated := PersistedOnlineAccountData{
-								Addr:        data.Address,
-								AccountData: newAcct,
-								Round:       lastUpdateRound,
-								Rowid:       rowid,
-								UpdRound:    basics.Round(updRound),
+							updated := persistedOnlineAccountData{
+								addr:        data.Address,
+								accountData: newAcct,
+								round:       lastUpdateRound,
+								rowid:       rowid,
+								updRound:    basics.Round(updRound),
 							}
 
 							updatedAccounts = append(updatedAccounts, updated)

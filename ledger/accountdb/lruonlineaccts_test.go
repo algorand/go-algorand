@@ -37,11 +37,11 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	accountsNum := 50
 	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
-		acct := PersistedOnlineAccountData{
-			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-			Round:       basics.Round(i),
-			Rowid:       int64(i),
-			AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		acct := persistedOnlineAccountData{
+			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			round:       basics.Round(i),
+			rowid:       int64(i),
+			accountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.Write(acct)
 	}
@@ -51,10 +51,10 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.Read(addr)
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), acct.Round)
-		require.Equal(t, addr, acct.Addr)
-		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid)
+		require.Equal(t, basics.Round(i), acct.Round())
+		require.Equal(t, addr, acct.Addr())
+		require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid())
 	}
 
 	// verify expected missing entries
@@ -62,7 +62,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, PersistedOnlineAccountData{}, acct)
+		require.Equal(t, persistedOnlineAccountData{}, acct)
 	}
 
 	baseOnlineAcct.Prune(accountsNum / 2)
@@ -75,13 +75,13 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		if i >= accountsNum/2 && i < accountsNum {
 			// expected to have it.
 			require.True(t, has)
-			require.Equal(t, basics.Round(i), acct.Round)
-			require.Equal(t, addr, acct.Addr)
-			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.Rowid)
+			require.Equal(t, basics.Round(i), acct.Round())
+			require.Equal(t, addr, acct.Addr())
+			require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
+			require.Equal(t, int64(i), acct.Rowid())
 		} else {
 			require.False(t, has)
-			require.Equal(t, PersistedOnlineAccountData{}, acct)
+			require.Equal(t, persistedOnlineAccountData{}, acct)
 		}
 	}
 }
@@ -96,11 +96,11 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
-			acct := PersistedOnlineAccountData{
-				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-				Round:       basics.Round(i),
-				Rowid:       int64(i),
-				AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			acct := persistedOnlineAccountData{
+				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				round:       basics.Round(i),
+				rowid:       int64(i),
+				accountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}(i)
@@ -138,11 +138,11 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 	baseOnlineAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
-			acct := PersistedOnlineAccountData{
-				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-				Round:       basics.Round(i),
-				Rowid:       int64(i),
-				AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			acct := persistedOnlineAccountData{
+				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				round:       basics.Round(i),
+				rowid:       int64(i),
+				accountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}
@@ -164,11 +164,11 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	baseOnlineAcct.Init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
-		acct := PersistedOnlineAccountData{
-			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-			Round:       basics.Round(i),
-			Rowid:       int64(i),
-			AccountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		acct := persistedOnlineAccountData{
+			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			round:       basics.Round(i),
+			rowid:       int64(i),
+			accountData: BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.writePending(acct)
 	}
@@ -180,10 +180,10 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.Read(addr)
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), acct.Round)
-		require.Equal(t, addr, acct.Addr)
-		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid)
+		require.Equal(t, basics.Round(i), acct.Round())
+		require.Equal(t, addr, acct.Addr())
+		require.Equal(t, uint64(i), acct.AccountData().MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid())
 	}
 
 	// verify expected missing entries
@@ -191,6 +191,6 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, PersistedOnlineAccountData{}, acct)
+		require.Equal(t, persistedOnlineAccountData{}, acct)
 	}
 }

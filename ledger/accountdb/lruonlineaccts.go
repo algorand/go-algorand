@@ -53,9 +53,9 @@ func (m *LRUOnlineAccounts) Init(log logging.Logger, pendingWrites int, pendingW
 // thread locking semantics : read lock
 func (m *LRUOnlineAccounts) Read(addr basics.Address) (data PersistedOnlineAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
-		return *el.Value, true
+		return el.Value, true
 	}
-	return PersistedOnlineAccountData{}, false
+	return
 }
 
 // flushPendingWrites flushes the pending writes to the main lruAccounts cache.
@@ -85,22 +85,30 @@ func (m *LRUOnlineAccounts) writePending(acct PersistedOnlineAccountData) {
 	}
 }
 
-// write a single persistedAccountData to the lruAccounts cache.
+// Write a single persistedOnlineAccountData to the LRUOnlineAccounts cache.
 // when writing the entry, the round number would be used to determine if it's a newer
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *LRUOnlineAccounts) Write(acctData PersistedOnlineAccountData) {
-	if el := m.accounts[acctData.Addr]; el != nil {
+	if el := m.accounts[acctData.Addr()]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.before(&acctData) {
 			// we update with a newer version.
-			el.Value = &acctData
+			el.Value = acctData
 		}
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.Addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.Addr()] = m.accountsList.pushFront(acctData)
+	}
+}
+
+// Write a slice of persistedOnlineAccountData to the LRUOnlineAccounts cache.
+// thread locking semantics : write lock
+func (m *LRUOnlineAccounts) WriteAccounts(updatedPersistedAccounts UpdatedOnlineAccounts) {
+	for _, persistedAcct := range updatedPersistedAccounts.Data {
+		m.Write(persistedAcct)
 	}
 }
 
@@ -113,7 +121,7 @@ func (m *LRUOnlineAccounts) Prune(newSize int) (removed int) {
 			break
 		}
 		back := m.accountsList.back()
-		delete(m.accounts, back.Value.Addr)
+		delete(m.accounts, back.Value.Addr())
 		m.accountsList.remove(back)
 		removed++
 	}

@@ -461,13 +461,15 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
-		ao.baseOnlineAccounts.Write(persistedAcct)
+	ao.baseOnlineAccounts.WriteAccounts(dcc.updatedPersistedOnlineAccounts)
+
+
+	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts.Data {
 		ao.onlineAccountsCache.writeFrontIfExist(
-			persistedAcct.Addr,
+			persistedAcct.Addr(),
 			cachedOnlineAccount{
-				BaseOnlineAccountData: persistedAcct.AccountData,
-				updRound:              persistedAcct.UpdRound,
+				BaseOnlineAccountData: *persistedAcct.AccountData(),
+				updRound:              persistedAcct.UpdRound(),
 			})
 	}
 
@@ -680,7 +682,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
-		if err != nil || persistedData.Rowid == 0 {
+		if err != nil || persistedData.Rowid() == 0 {
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}
@@ -716,21 +718,21 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			} else {
 				for _, data := range persistedDataHistory {
 					written := ao.onlineAccountsCache.writeFront(
-						data.Addr,
+						data.Addr(),
 						cachedOnlineAccount{
-							BaseOnlineAccountData: data.AccountData,
-							updRound:              data.UpdRound,
+							BaseOnlineAccountData: *data.AccountData(),
+							updRound:              data.UpdRound(),
 						})
 					if !written {
 						ao.accountsMu.Unlock()
-						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.Addr.String(), data.UpdRound)
+						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.Addr().String(), data.UpdRound())
 						return ledgercore.OnlineAccountData{}, err
 					}
 				}
 				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
-			return persistedData.AccountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return persistedData.AccountData().GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
 		// case 3.3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()
