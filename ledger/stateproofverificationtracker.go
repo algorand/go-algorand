@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -32,11 +33,30 @@ type stateProofVerificationData struct {
 }
 
 type stateProofVerificationTracker struct {
-	trackedData map[basics.Round]stateProofVerificationData
+	earliestLastAttestedRound basics.Round
+	trackedData               []stateProofVerificationData
+}
+
+// TODO: What if the interval changes?
+func (spt *stateProofVerificationTracker) roundToTrackedIndex(round basics.Round) uint64 {
+	return uint64(round.SubSaturate(spt.earliestLastAttestedRound)) / config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
+}
+
+func (spt *stateProofVerificationTracker) removeOlder(lastAttestedRound basics.Round) {
+	if lastAttestedRound <= spt.earliestLastAttestedRound {
+		return
+	}
+
+	// TODO: zero some elements?
+	trackedIndex := spt.roundToTrackedIndex(lastAttestedRound)
+
+	spt.trackedData = spt.trackedData[trackedIndex:]
+	spt.earliestLastAttestedRound = lastAttestedRound
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	spt.trackedData = make(map[basics.Round]stateProofVerificationData)
+	// TODO: Decide on slice size
+	spt.trackedData = make([]stateProofVerificationData, 0, 1000)
 	return nil
 }
 
@@ -50,8 +70,13 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, _ ledg
 			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 			ProvenWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		}
-		spt.trackedData[blk.Round()] = verificationData
+		spt.trackedData = append(spt.trackedData, verificationData)
 	}
+
+	lastAttestedRound := blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound.SubSaturate(
+		basics.Round(blk.ConsensusProtocol().StateProofInterval))
+
+	spt.removeOlder(lastAttestedRound)
 }
 
 func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {

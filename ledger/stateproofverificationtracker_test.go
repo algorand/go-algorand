@@ -48,9 +48,14 @@ func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerifi
 	return ml, &spt
 }
 
-func blockStateProofsEnabled(prevBlock *blockEntry, stuck bool) blockEntry {
-	round := prevBlock.block.Round() + 1
-	lastAttestedRound := prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+func blockStateProofsEnabled(prevBlock *blockEntry, stuckStateProofs bool) blockEntry {
+	round := basics.Round(1)
+	prevBlockLastAttestedRound := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+
+	if prevBlock != nil {
+		round = prevBlock.block.Round() + 1
+		prevBlockLastAttestedRound = prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	}
 
 	block := randomBlock(round)
 	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -59,17 +64,19 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stuck bool) blockEntry {
 	var stateTracking bookkeeping.StateProofTrackingData
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 
-	if !stuck && round-lastAttestedRound > statProofInterval {
-		stateTracking.StateProofNextRound = lastAttestedRound + statProofInterval
+	if !stuckStateProofs && round > prevBlockLastAttestedRound {
+		stateTracking.StateProofNextRound = prevBlockLastAttestedRound + statProofInterval
+	} else {
+		stateTracking.StateProofNextRound = prevBlockLastAttestedRound
 	}
 
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	return block
 }
 
-func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEntry, stuck bool) *blockEntry {
+func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEntry, stuckStateProofs bool) *blockEntry {
 	for i := uint64(1); i <= numOfBlocks; i++ {
-		block := blockStateProofsEnabled(prevBlock, stuck)
+		block := blockStateProofsEnabled(prevBlock, stuckStateProofs)
 		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
 		prevBlock = &block
 	}
@@ -87,7 +94,7 @@ func TestStateproofVerificationTracker_Addition(t *testing.T) {
 
 	expectedNumberOfVerificationData := uint64(2)
 	numOfBlocks := expectedNumberOfVerificationData * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
-	feedBlocks(ml, numOfBlocks, &blockEntry{}, true)
+	feedBlocks(ml, numOfBlocks, nil, true)
 
 	a.Equal(uint64(len(spt.trackedData)), expectedNumberOfVerificationData)
 }
@@ -104,7 +111,7 @@ func TestStateproofVerificationTracker_Removal(t *testing.T) {
 	intervalsToRemove := uint64(3)
 	roundsInInterval := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 
-	lastStuckBlock := feedBlocks(ml, intervalsToAdd*roundsInInterval, &blockEntry{}, true)
+	lastStuckBlock := feedBlocks(ml, intervalsToAdd*roundsInInterval, nil, true)
 	feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
 
 	a.Equal(uint64(len(spt.trackedData)), intervalsToAdd-intervalsToRemove)
