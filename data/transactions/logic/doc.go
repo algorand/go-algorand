@@ -192,7 +192,7 @@ var opDocByName = map[string]string{
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
-	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)",
+	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 }
 
 // OpDoc returns a description of the op

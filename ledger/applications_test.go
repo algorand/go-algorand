@@ -36,7 +36,7 @@ import (
 // commitRound schedules a commit for known offset and dbRound
 // and waits for completion
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
-	commitRoundLookback(dbRound+basics.Round(offset), l)
+	commitRoundLookback(l.Latest().SubSaturate(dbRound+basics.Round(offset)), l)
 }
 
 func commitRoundLookback(lookback basics.Round, l *Ledger) {
@@ -44,7 +44,7 @@ func commitRoundLookback(lookback basics.Round, l *Ledger) {
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	l.trackers.scheduleCommit(l.Latest(), l.Latest()-lookback)
+	l.trackers.scheduleCommit(l.Latest(), lookback)
 	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
 	// use that as an indicator.
 	for {
@@ -1234,4 +1234,71 @@ int 1
 			a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[1]["lk"].Bytes, "local")
 		})
 	}
+}
+
+// TestLogicSigValidation tests that LogicSig-signed transactions can be validated properly.
+func TestLogicSigValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	source := `#pragma version 6
+int 1
+`
+
+	a := require.New(t)
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+	pd := logic.HashProgram(program)
+	lsigAddr := basics.Address(pd)
+
+	funder, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	a.Contains(genesisInitState.Accounts, funder)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      funder,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// fund lsig account
+	fundingPayment := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: txHeader,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: lsigAddr,
+			Amount:   basics.MicroAlgos{Raw: proto.MinBalance + proto.MinTxnFee},
+		},
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, fundingPayment, transactions.ApplyData{})
+	a.NoError(err)
+
+	// send 0 Algos from lsig account to self
+	txHeader.Sender = lsigAddr
+	lsigPayment := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: txHeader,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: lsigAddr,
+		},
+	}
+	signedLsigPayment := transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Logic: program},
+		Txn:  lsigPayment,
+	}
+	err = l.appendUnvalidatedSignedTx(t, genesisInitState.Accounts, signedLsigPayment, transactions.ApplyData{})
+	a.NoError(err)
 }

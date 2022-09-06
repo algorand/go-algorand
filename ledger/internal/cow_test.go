@@ -89,11 +89,11 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *mockLedger) compactCertNext() basics.Round {
+func (ml *mockLedger) GetStateProofNextRound() basics.Round {
 	return 0
 }
 
-func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	err, hit := ml.blockErr[rnd]
 	if hit {
 		return bookkeeping.BlockHeader{}, err
@@ -103,7 +103,7 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 }
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ml.blockHdr(rnd)
+	return ml.blockHdrCached(rnd)
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {

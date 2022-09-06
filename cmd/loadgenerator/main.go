@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -66,9 +65,9 @@ func loadMnemonic(mnemonic string) crypto.Seed {
 // Like shared/pingpong/accounts.go
 func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 	keylist := make([]*crypto.SignatureSecrets, 0, 5)
-	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(algodDir, func(path string, info fs.FileInfo, _ error) error {
 		var handle db.Accessor
-		handle, err = db.MakeErasableAccessor(path)
+		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
 			return nil // don't care, move on
 		}
@@ -107,10 +106,10 @@ func main() {
 	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
 		if algodDir != "" {
 			path := filepath.Join(algodDir, "algod.net")
-			net, err := ioutil.ReadFile(path)
+			net, err := os.ReadFile(path)
 			maybefail(err, "%s: %v\n", path, err)
 			path = filepath.Join(algodDir, "algod.token")
-			token, err := ioutil.ReadFile(path)
+			token, err := os.ReadFile(path)
 			maybefail(err, "%s: %v\n", path, err)
 			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
 			maybefail(err, "bad net url %v\n", err)
@@ -126,8 +125,9 @@ func main() {
 	var publicKeys []basics.Address
 	addKey := func(mnemonic string) {
 		seed := loadMnemonic(mnemonic)
-		privateKeys = append(privateKeys, crypto.GenerateSignatureSecrets(seed))
-		publicKeys = append(publicKeys, basics.Address(privateKeys[0].SignatureVerifier))
+		secrets := crypto.GenerateSignatureSecrets(seed)
+		privateKeys = append(privateKeys, secrets)
+		publicKeys = append(publicKeys, basics.Address(secrets.SignatureVerifier))
 	}
 	if cfg.AccountMnemonic != "" { // one mnemonic provided
 		addKey(cfg.AccountMnemonic)
@@ -137,7 +137,7 @@ func main() {
 		}
 	} else if len(algodDir) > 0 {
 		// get test cluster local unlocked wallet
-		privateKeys := findRootKeys(algodDir)
+		privateKeys = findRootKeys(algodDir)
 		if len(privateKeys) == 0 {
 			fmt.Fprintf(os.Stderr, "%s: found no root keys\n", algodDir)
 			os.Exit(1)
@@ -241,7 +241,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 		sendSize = transactionBlockSize
 	}
 	// create sendSize transaction to send.
-	txns := make([]transactions.SignedTxn, sendSize, sendSize)
+	txns := make([]transactions.SignedTxn, sendSize)
 	for i := range txns {
 		tx := transactions.Transaction{
 			Header: transactions.Header{
@@ -289,7 +289,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	for i := 0; i < nroutines; i++ {
 		totalSent += sent[i]
 	}
-	dt := time.Now().Sub(start)
+	dt := time.Since(start)
 	fmt.Fprintf(os.Stdout, "sent %d/%d in %s (%.1f/s)\n", totalSent, sendSize, dt.String(), float64(totalSent)/dt.Seconds())
 	if cfg.TxnsToSend != 0 {
 		// We attempted what we were asked. We're done.

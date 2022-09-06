@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -121,12 +120,14 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 	newLedgerTracker := &mockLedgerForTracker{
-		inMemory: false,
-		log:      dblogger,
-		blocks:   make([]blockEntry, len(ml.blocks)),
-		deltas:   make([]ledgercore.StateDelta, len(ml.deltas)),
-		accts:    make(map[basics.Address]basics.AccountData),
-		filename: fn,
+		inMemory:         false,
+		log:              dblogger,
+		blocks:           make([]blockEntry, len(ml.blocks)),
+		deltas:           make([]ledgercore.StateDelta, len(ml.deltas)),
+		accts:            make(map[basics.Address]basics.AccountData),
+		filename:         fn,
+		consensusParams:  ml.consensusParams,
+		consensusVersion: ml.consensusVersion,
 	}
 	for k, v := range ml.accts {
 		newLedgerTracker.accts[k] = v
@@ -138,9 +139,9 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	ml.dbs.Wdb.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
-		bytes, err := ioutil.ReadFile(ml.filename + ext)
+		bytes, err := os.ReadFile(ml.filename + ext)
 		require.NoError(t, err)
-		err = ioutil.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
+		err = os.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
 		require.NoError(t, err)
 	}
 	dbs, err := db.OpenPair(newLedgerTracker.filename, false)
@@ -282,7 +283,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
-	_, err := ao.OnlineTotals(latest + 1)
+	_, err := ao.onlineTotals(latest + 1)
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -290,8 +291,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Error(t, err)
 	require.Equal(t, basics.Round(0), validThrough)
 
-	if base > 0 {
-		_, err := ao.OnlineTotals(base - basics.Round(ao.maxBalLookback()))
+	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
+		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -354,7 +355,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := ao.OnlineTotals(rnd)
+			totals, err := ao.onlineTotals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
@@ -457,6 +458,11 @@ func TestAcctUpdates(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	conf := config.GetDefaultLocal()
@@ -760,7 +766,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
-
 }
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {

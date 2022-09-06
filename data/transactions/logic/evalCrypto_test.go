@@ -109,6 +109,9 @@ byte 0x%s
 }
 
 func TestVrfVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	ep, _, _ := makeSampleEnv()
 	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
 	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")

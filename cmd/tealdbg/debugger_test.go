@@ -103,6 +103,7 @@ func TestDebuggerSimple(t *testing.T) {
 
 	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
 	ep.Debugger = debugger
+	ep.SigLedger = logic.NoHeaderLedger{}
 
 	source := `int 0
 int 1

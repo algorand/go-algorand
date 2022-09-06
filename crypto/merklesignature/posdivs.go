@@ -20,20 +20,11 @@ import (
 	"errors"
 )
 
-var errRoundMultipleOfInterval = errors.New("the round should be a multiple of the interval")
 var errRoundFirstValid = errors.New("the round cannot be less than firstValid")
-var errIntervalZero = errors.New("the interval should not be zero")
-var errRoundNotZero = errors.New("the round should not be zero")
 
-func checkMerkleSignatureSchemeParams(firstValid, round, interval uint64) error {
-	if interval == 0 {
-		return errIntervalZero
-	}
-	if round == 0 {
-		return errRoundNotZero
-	}
-	if round%interval != 0 {
-		return errRoundMultipleOfInterval
+func checkMerkleSignatureSchemeParams(firstValid, round, keyLifetime uint64) error {
+	if keyLifetime == 0 {
+		return ErrKeyLifetimeIsZero
 	}
 	if round < firstValid {
 		return errRoundFirstValid
@@ -52,4 +43,11 @@ func indexToRound(firstValid, interval, pos uint64) uint64 {
 
 func roundOfFirstIndex(firstValid, interval uint64) uint64 {
 	return ((firstValid + interval - 1) / interval) * interval
+}
+
+// firstRoundInKeyLifetime calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
+// It is implicitly assumed that round is larger than keyLifetime, as an MSS key for round 0 is not valid.
+// A key lifetime of 0 is invalid.
+func firstRoundInKeyLifetime(round, keyLifetime uint64) uint64 {
+	return round - (round % keyLifetime)
 }

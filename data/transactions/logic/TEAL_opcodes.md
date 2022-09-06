@@ -1401,7 +1401,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Opcode: 0xd1 {uint8 block field}
 - Stack: ..., A: uint64 &rarr; ..., any
-- field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)
+- field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
 
 `block` Fields:

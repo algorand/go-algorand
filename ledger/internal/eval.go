@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -108,11 +107,11 @@ type roundCowBase struct {
 	// TxnCounter from previous block header.
 	txnCount uint64
 
-	// Round of the next expected compact cert.  In the common case this
-	// is CompactCertNextRound from previous block header, except when
-	// compact certs are first enabled, in which case this gets set
-	// appropriately at the first block where compact certs are enabled.
-	compactCertNextRnd basics.Round
+	// Round of the next expected state proof.  In the common case this
+	// is StateProofNextRound from previous block header, except when
+	// state proofs are first enabled, in which case this gets set
+	// appropriately at the first block where state proofs are enabled.
+	stateProofNextRnd basics.Round
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
@@ -135,19 +134,19 @@ type roundCowBase struct {
 	creators map[creatable]foundAddress
 }
 
-func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, stateProofNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
 	return &roundCowBase{
-		l:                  l,
-		rnd:                rnd,
-		txnCount:           txnCount,
-		compactCertNextRnd: compactCertNextRnd,
-		proto:              proto,
-		accounts:           make(map[basics.Address]ledgercore.AccountData),
-		appParams:          make(map[ledgercore.AccountApp]cachedAppParams),
-		assetParams:        make(map[ledgercore.AccountAsset]cachedAssetParams),
-		appLocalStates:     make(map[ledgercore.AccountApp]cachedAppLocalState),
-		assets:             make(map[ledgercore.AccountAsset]cachedAssetHolding),
-		creators:           make(map[creatable]foundAddress),
+		l:                 l,
+		rnd:               rnd,
+		txnCount:          txnCount,
+		stateProofNextRnd: stateProofNextRnd,
+		proto:             proto,
+		accounts:          make(map[basics.Address]ledgercore.AccountData),
+		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
+		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
+		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
+		assets:            make(map[ledgercore.AccountAsset]cachedAssetHolding),
+		creators:          make(map[creatable]foundAddress),
 	}
 }
 
@@ -325,11 +324,11 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) compactCertNext() basics.Round {
-	return x.compactCertNextRnd
+func (x *roundCowBase) GetStateProofNextRound() basics.Round {
+	return x.stateProofNextRnd
 }
 
-func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdr(r)
 }
 
@@ -570,37 +569,6 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round, validate bool) error {
-	if certType != protocol.CompactCertBasic {
-		return fmt.Errorf("compact cert type %d not supported", certType)
-	}
-
-	nextCertRnd := cs.compactCertNext()
-
-	certHdr, err := cs.blockHdr(certRnd)
-	if err != nil {
-		return err
-	}
-
-	proto := config.Consensus[certHdr.CurrentProtocol]
-
-	if validate {
-		votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
-		votersHdr, err := cs.blockHdr(votersRnd)
-		if err != nil {
-			return err
-		}
-
-		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
-		if err != nil {
-			return err
-		}
-	}
-
-	cs.setCompactCertNext(certRnd + basics.Round(proto.CompactCertRounds))
-	return nil
-}
-
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
@@ -629,7 +597,7 @@ type LedgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
+	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -709,18 +677,18 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
-	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+	base.stateProofNextRnd = eval.prevHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-	// Check if compact certs are being enabled as of this block.
-	if base.compactCertNextRnd == 0 && proto.CompactCertRounds != 0 {
-		// Determine the first block that will contain a Merkle
+	// Check if state proofs are being enabled as of this block.
+	if base.stateProofNextRnd == 0 && proto.StateProofInterval != 0 {
+		// Determine the first block that will contain a Vector
 		// commitment to the voters.  We need to account for the
-		// fact that the voters come from CompactCertVotersLookback
+		// fact that the voters come from StateProofVotersLookback
 		// rounds ago.
-		votersRound := (hdr.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds))
+		votersRound := (hdr.Round + basics.Round(proto.StateProofVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.StateProofInterval))
 
-		// The first compact cert will appear CompactCertRounds after that.
-		base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
+		// The first state proof will appear StateProofInterval after that.
+		base.stateProofNextRnd = votersRound + basics.Round(proto.StateProofInterval)
 	}
 
 	latestRound, prevTotals, err := l.LatestTotals()
@@ -1018,12 +986,12 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 	rewardlvl := cow.rewardsLevel()
 	for _, addr := range cow.modifiedAccounts() {
-		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
+		// Skip FeeSink, RewardsPool, and StateProofSender MinBalance checks here.
 		// There's only a few accounts, so space isn't an issue, and we don't
 		// expect them to have low balances, but if they do, it may cause
 		// surprises.
 		if addr == eval.block.FeeSink || addr == eval.block.RewardsPool ||
-			addr == transactions.CompactCertSender {
+			addr == transactions.StateProofSender {
 			continue
 		}
 
@@ -1096,7 +1064,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.txnCounter())
 	if err != nil {
-		return fmt.Errorf("transaction %v: %v", txid, err)
+		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 
 	// Validate applyData if we are validating an existing block.
@@ -1138,47 +1106,47 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
-	params := balances.ConsensusParams()
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
+	params := cow.ConsensusParams()
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
 		return
 	}
 
-	err = apply.Rekey(balances, &tx)
+	err = apply.Rekey(cow, &tx)
 	if err != nil {
 		return
 	}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, cow, eval.specials, &ad, cow.round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, cow, eval.specials, &ad, ctr)
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, eval.specials, &ad)
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
+		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)
 
-	case protocol.CompactCertTx:
-		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
-		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+	case protocol.StateProofTx:
+		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNextRound depending on
+		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
-		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
+		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid, eval.validate)
+			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 		}
 
 	default:
@@ -1209,28 +1177,24 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 	return
 }
 
-// compactCertVotersAndTotal returns the expected values of CompactCertVoters
-// and CompactCertVotersTotal for a block.
-func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
-	if eval.proto.CompactCertRounds == 0 {
+// stateProofVotersAndTotal returns the expected values of StateProofVotersCommitment
+// and StateProofOnlineTotalWeight for a block.
+func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
+	if eval.proto.StateProofInterval == 0 {
 		return
 	}
 
-	if eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) != 0 {
+	if eval.block.Round()%basics.Round(eval.proto.StateProofInterval) != 0 {
 		return
 	}
 
-	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
-	voters, err := eval.l.CompactCertVoters(lookback)
-	if err != nil {
+	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.StateProofVotersLookback))
+	voters, err := eval.l.VotersForStateProof(lookback)
+	if err != nil || voters == nil {
 		return
 	}
 
-	if voters != nil {
-		root, total = voters.Tree.Root(), voters.TotalWeight
-	}
-
-	return
+	return voters.Tree.Root(), voters.TotalWeight, nil
 }
 
 // TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
@@ -1255,17 +1219,17 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		eval.generateExpiredOnlineAccountsList()
 
-		if eval.proto.CompactCertRounds > 0 {
-			var basicCompactCert bookkeeping.CompactCertState
-			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+		if eval.proto.StateProofInterval > 0 {
+			var basicStateProof bookkeeping.StateProofTrackingData
+			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofOnlineTotalWeight, err = eval.stateProofVotersAndTotal()
 			if err != nil {
 				return err
 			}
 
-			basicCompactCert.CompactCertNextRound = eval.state.compactCertNext()
+			basicStateProof.StateProofNextRound = eval.state.GetStateProofNextRound()
 
-			eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
-			eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
+			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+			eval.block.StateProofTracking[protocol.StateProofBasic] = basicStateProof
 		}
 	}
 
@@ -1297,22 +1261,22 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		expectedVoters, expectedVotersWeight, err := eval.stateProofVotersAndTotal()
 		if err != nil {
 			return err
 		}
-		if !eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEqual(expectedVoters) {
-			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
+		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
+			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
-			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+			return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.GetStateProofNextRound())
 		}
-		for ccType := range eval.block.CompactCert {
-			if ccType != protocol.CompactCertBasic {
-				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+		for ccType := range eval.block.StateProofTracking {
+			if ccType != protocol.StateProofBasic {
+				return fmt.Errorf("StateProofType %d unexpected", ccType)
 			}
 		}
 	}
@@ -1483,6 +1447,7 @@ type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
+	ledger           logic.LedgerForSignature
 
 	ctx      context.Context
 	txgroups [][]transactions.SignedTxnWithAD
@@ -1513,7 +1478,7 @@ func (validator *evalTxValidator) run() {
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, validator.ledger)
 	if err != nil {
 		validator.done <- err
 	}
@@ -1568,6 +1533,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
 		txvalidator.verificationPool = executionPool
+		txvalidator.ledger = l
 
 		txvalidator.ctx = validationCtx
 		txvalidator.txgroups = paysetgroups

@@ -27,13 +27,13 @@ type Tag string
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"
-	CompactCertSigTag  Tag = "CS"
 	MsgOfInterestTag   Tag = "MI"
 	MsgDigestSkipTag   Tag = "MS"
 	NetPrioResponseTag Tag = "NP"
 	PingTag            Tag = "pi"
 	PingReplyTag       Tag = "pj"
 	ProposalPayloadTag Tag = "PP"
+	StateProofSigTag   Tag = "SP"
 	TopicMsgRespTag    Tag = "TS"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
