@@ -1,6 +1,6 @@
 run:
   timeout: 5m
-  tests: false
+  tests: true
   
 linters:
   # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
@@ -66,12 +66,24 @@ issues:
     - "var-naming: don't use leading k in Go names"
 
   exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gofmt
+        - gosimple
+        - govet
+        - ineffassign
+        - misspell
+        - nolintlint
+        # - revive
+        - staticcheck
+        - typecheck
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:
         - errcheck
         - gofmt
-        - golint
+        - revive
         - govet
         - ineffassign
         - misspell

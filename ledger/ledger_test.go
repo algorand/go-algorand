@@ -2345,8 +2345,8 @@ int %d // 10001000
 	require.NoError(t, err)
 
 	blk.BlockHeader.Round++
-	blk.BlockHeader.TimeStamp += 1
-	blk.TxnCounter += 1
+	blk.BlockHeader.TimeStamp++
+	blk.TxnCounter++
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
@@ -2356,6 +2356,26 @@ int %d // 10001000
 
 	latest := l.Latest()
 	require.Equal(t, basics.Round(2*proto.MaxTxnLife+1), latest)
+
+	// add couple more blocks to have the block with `blk BlkTimestamp` to be dbRound + 1
+	// reload again and ensure this block can be replayed
+	programRound := blk.BlockHeader.Round
+	target := latest + basics.Round(cfg.MaxAcctLookback) - 1
+	blk = genesisInitState.Block
+	blk.BlockHeader.Round = latest
+	for i := latest + 1; i <= target; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp = roundToTimeStamp(int(i))
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	l.trackers.mu.RLock()
+	require.Equal(t, programRound, l.trackers.dbRound+1) // programRound is next to be replayed
+	l.trackers.mu.RUnlock()
+	err = l.reloadLedger()
+	require.NoError(t, err)
 }
 
 // TestLedgerMigrateV6ShrinkDeltas opens a ledger + dbV6, submits a bunch of txns,
