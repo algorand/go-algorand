@@ -331,8 +331,12 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
+	const inMem = true
+	ml := makeMockLedgerForTracker(b, inMem, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
+
+	_, err := accountdb.TrackerDBInitialize(ml, inMem, ".")
+	require.NoError(b, err)
 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -341,7 +345,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 
 	temporaryDirectroy := b.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectroy, accountdb.CatchpointDirName)
-	err := os.Mkdir(catchpointsDirectory, 0777)
+	err = os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
 	ct.dbDirectory = temporaryDirectroy
@@ -351,32 +355,56 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	defer ct.close()
 
 	// at this point, the database was created. We want to fill the accounts data
-	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			var updates accountdb.CompactAccountDeltas
-			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-				addr := ledgertesting.RandomAddress()
-				acctData := accountdb.BaseAccountData{}
-				acctData.MicroAlgos.Raw = 1
-				updates.Insert(accountdb.MakeTestAccountDelta(addr, acctData))
-				i++
-			}
-
-			_, _, err = accountdb.AccountsNewRound(tx, updates, accountdb.CompactResourcesDeltas{}, nil, proto, basics.Round(1))
-			if err != nil {
-				return
-			}
-		}
-
-		return accountdb.UpdateAccountsHashRound(ctx, tx, 1)
-	})
+	accountsNumber := 6000000*b.N - 5 - 2 // subtract the account we've already created above, plus the sink/reward
+	err = accountdb.GenerateCommitDeltasTest(ml.dbs.Wdb, proto, accountsNumber)
 	require.NoError(b, err)
 
 	b.ResetTimer()
 	ct.generateCatchpointData(context.Background(), basics.Round(0), time.Second)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
+}
+
+func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	const inMem = true
+	ml := makeMockLedgerForTracker(b, inMem, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	_, err := accountdb.TrackerDBInitialize(ml, inMem, ".")
+	require.NoError(b, err)
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ct := catchpointTracker{}
+	ct.initialize(cfg, ".")
+	defer ct.close()
+
+	// at this point, the database was created. We want to fill the accounts data
+	accountsNumber := 600000*b.N - 5 - 2 // subtract the account we've already created above, plus the sink/reward
+	err = accountdb.GenerateCommitDeltasTest(ml.dbs.Wdb, proto, accountsNumber)
+	require.NoError(b, err)
+
+	ct.close()
+
+	b.ResetTimer()
+	err = ct.loadFromDisk(ml, 0)
+	require.NoError(b, err)
+	b.StopTimer()
+	b.ReportMetric(float64(accountsNumber), "entries/trie")
 }
 
 func TestReproducibleCatchpointLabels(t *testing.T) {

@@ -833,7 +833,7 @@ func (a *CompactAccountDeltas) upsertOld(old persistedAccountData) {
 		a.deltas[idx].oldAcct = old
 		return
 	}
-	a.Insert(AccountDelta{oldAcct: old, address: old.addr})
+	a.insert(AccountDelta{oldAcct: old, address: old.addr})
 }
 
 // upsert updates existing or inserts a new entry
@@ -842,7 +842,7 @@ func (a *CompactAccountDeltas) upsert(addr basics.Address, delta AccountDelta) {
 		a.deltas[idx] = delta
 		return
 	}
-	a.Insert(delta)
+	a.insert(delta)
 }
 func BenchmarkCompactDeltas(b *testing.B) {
 	b.Run("account-deltas", func(b *testing.B) {
@@ -1024,7 +1024,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 
 	addr2 := ledgertesting.RandomAddress()
 	sample2.address = addr2
-	idx = ad.Insert(sample2)
+	idx = ad.insert(sample2)
 	a.Equal(3, ad.Len())
 	a.Equal(2, idx)
 	data = ad.GetByIdx(idx)

@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/blockdb"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -347,7 +348,7 @@ type UpdatedAccounts struct {
 }
 
 type UpdatedOnlineAccounts struct {
-	Data []persistedOnlineAccountData
+	Data  []persistedOnlineAccountData
 	Count int
 }
 
@@ -888,7 +889,7 @@ func MakeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 				newEntry.newAcct.SetCoreAccountData(&acctDelta)
 				if padif, has := baseAccounts.Read(addr); has {
 					newEntry.oldAcct = padif.(persistedAccountData)
-					outAccountDeltas.Insert(newEntry) // Insert instead of upsert economizes one map lookup
+					outAccountDeltas.insert(newEntry) // Insert instead of upsert economizes one map lookup
 				} else {
 					outAccountDeltas.insertMissing(newEntry)
 				}
@@ -974,7 +975,7 @@ func (a *CompactAccountDeltas) update(idx int, delta AccountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *CompactAccountDeltas) Insert(delta AccountDelta) int {
+func (a *CompactAccountDeltas) insert(delta AccountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
 
@@ -986,7 +987,7 @@ func (a *CompactAccountDeltas) Insert(delta AccountDelta) int {
 }
 
 func (a *CompactAccountDeltas) insertMissing(delta AccountDelta) {
-	idx := a.Insert(delta)
+	idx := a.insert(delta)
 	a.misses = append(a.misses, idx)
 }
 
@@ -3549,7 +3550,7 @@ func OnlineAccountsNewRound(
 	var persistedAccounts []persistedOnlineAccountData
 	persistedAccounts, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	updatedAccounts = UpdatedOnlineAccounts{
-		Data: persistedAccounts,
+		Data:  persistedAccounts,
 		Count: len(persistedAccounts),
 	}
 	return
@@ -3841,7 +3842,7 @@ func onlineAccountsNewRoundImpl(
 						}
 					}
 				} else {
-					if *prevAcct.AccountData() != newAcct {
+					if prevAcct.accountData != newAcct {
 						var rowid int64
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
 						rowid, err = writer.insertOnlineAccount(data.Address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
@@ -5240,4 +5241,31 @@ func AccountsInitTest(tx *sql.Tx, initAccounts map[basics.Address]basics.Account
 	}
 
 	return
+}
+
+// GenerateCommitDeltasTest creates some account deltas and adds new rounds into tracker DB by provided txn
+func GenerateCommitDeltasTest(accessor db.Accessor, proto config.ConsensusParams, accountsNumber int) (err error) {
+	const maxUpdatesPerAccount = 1024
+	for i := 0; i < accountsNumber; { // subtract the account we've already created above, plus the sink/reward
+		var updates CompactAccountDeltas
+		for k := 0; i < accountsNumber && k < maxUpdatesPerAccount; k++ {
+			addr := ledgertesting.RandomAddress()
+			acctData := BaseAccountData{}
+			acctData.MicroAlgos.Raw = 1
+			updates.insert(AccountDelta{address: addr, newAcct: acctData})
+			i++
+		}
+
+		err = accessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			_, _, err = AccountsNewRound(tx, updates, CompactResourcesDeltas{}, nil, proto, basics.Round(1))
+			return err
+		})
+		if err != nil {
+			return
+		}
+	}
+
+	return accessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		return UpdateAccountsHashRound(ctx, tx, 1)
+	})
 }
