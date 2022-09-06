@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -47,7 +48,36 @@ func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerifi
 	return ml, &spt
 }
 
-func TestStateproofVerificationTracker_Sanity(t *testing.T) {
+func blockStateProofsEnabled(prevBlock *blockEntry, stuck bool) blockEntry {
+	round := prevBlock.block.Round() + 1
+	lastAttestedRound := prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+	block := randomBlock(round)
+	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	statProofInterval := basics.Round(block.block.ConsensusProtocol().StateProofInterval)
+
+	var stateTracking bookkeeping.StateProofTrackingData
+	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+
+	if !stuck && round-lastAttestedRound > statProofInterval {
+		stateTracking.StateProofNextRound = lastAttestedRound + statProofInterval
+	}
+
+	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
+	return block
+}
+
+func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEntry, stuck bool) *blockEntry {
+	for i := uint64(1); i <= numOfBlocks; i++ {
+		block := blockStateProofsEnabled(prevBlock, stuck)
+		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
+		prevBlock = &block
+	}
+
+	return prevBlock
+}
+
+func TestStateproofVerificationTracker_Addition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -56,13 +86,26 @@ func TestStateproofVerificationTracker_Sanity(t *testing.T) {
 	defer spt.close()
 
 	expectedNumberOfVerificationData := uint64(2)
-
-	for i := uint64(1); i <= config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*expectedNumberOfVerificationData; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-
-		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
-	}
+	numOfBlocks := expectedNumberOfVerificationData * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
+	feedBlocks(ml, numOfBlocks, &blockEntry{}, true)
 
 	a.Equal(uint64(len(spt.trackedData)), expectedNumberOfVerificationData)
+}
+
+func TestStateproofVerificationTracker_Removal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	intervalsToAdd := uint64(6)
+	intervalsToRemove := uint64(3)
+	roundsInInterval := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
+
+	lastStuckBlock := feedBlocks(ml, intervalsToAdd*roundsInInterval, &blockEntry{}, true)
+	feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
+
+	a.Equal(uint64(len(spt.trackedData)), intervalsToAdd-intervalsToRemove)
 }
