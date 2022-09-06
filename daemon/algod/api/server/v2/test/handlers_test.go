@@ -120,7 +120,8 @@ func TestGetBlock(t *testing.T) {
 
 	getBlockTest(t, 0, "json", 200)
 	getBlockTest(t, 0, "msgpack", 200)
-	getBlockTest(t, 1, "json", 500)
+	getBlockTest(t, 1, "json", 404)
+	getBlockTest(t, 1, "msgpack", 404)
 	getBlockTest(t, 0, "bad format", 400)
 }
 
