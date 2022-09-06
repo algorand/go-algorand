@@ -395,7 +395,7 @@ type CompactAccountDeltas struct {
 // oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
 // to determine if the acct became online or went offline.
 type OnlineAccountDelta struct {
-	oldAcct           PersistedOnlineAccountData
+	oldAcct           persistedOnlineAccountData
 	newAcct           []BaseOnlineAccountData
 	NOnlineAcctDeltas int
 	Address           basics.Address
@@ -1037,7 +1037,7 @@ func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 				// the cache always has the most recent data,
 				// including deleted/expired online accounts with empty voting data
 				if BaseOnlineAccountData, has := baseOnlineAccounts.Read(addr); has {
-					newEntry.oldAcct = BaseOnlineAccountData
+					newEntry.oldAcct = BaseOnlineAccountData.(persistedOnlineAccountData)
 					outAccountDeltas.insert(newEntry)
 				} else {
 					outAccountDeltas.insertMissing(newEntry)
@@ -2931,7 +2931,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
-func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -3524,7 +3524,7 @@ func AccountsNewRound(
 
 	var persistedAccounts []persistedAccountData
 	var persistedResources map[basics.Address][]PersistedResourcesData
-	persistedAccounts, persistedResources, err = AccountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+	persistedAccounts, persistedResources, err = accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
 	updatedAccounts = UpdatedAccounts{
 		data:  persistedAccounts,
 		Count: len(persistedAccounts),
@@ -3547,7 +3547,7 @@ func OnlineAccountsNewRound(
 	defer writer.close()
 
 	var persistedAccounts []persistedOnlineAccountData
-	persistedAccounts, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	persistedAccounts, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	updatedAccounts = UpdatedOnlineAccounts{
 		Data: persistedAccounts,
 		Count: len(persistedAccounts),
@@ -3555,9 +3555,9 @@ func OnlineAccountsNewRound(
 	return
 }
 
-// AccountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
+// accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func AccountsNewRoundImpl(
+func accountsNewRoundImpl(
 	writer accountsWriter,
 	updates CompactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
@@ -3776,7 +3776,7 @@ func AccountsNewRoundImpl(
 	return
 }
 
-func OnlineAccountsNewRoundImpl(
+func onlineAccountsNewRoundImpl(
 	writer onlineAccountsWriter, updates CompactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedOnlineAccountData, err error) {

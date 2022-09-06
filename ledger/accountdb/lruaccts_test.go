@@ -66,7 +66,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedAccountData{}, *acct.(*persistedAccountData))
+		require.Equal(t, persistedAccountData{}, acct)
 	}
 
 	baseAcct.Prune(accountsNum / 2)
@@ -87,7 +87,7 @@ func TestLRUBasicAccounts(t *testing.T) {
 			require.Equal(t, int64(i), pad.rowid)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedAccountData{}, *acct.(*persistedAccountData))
+			require.Equal(t, persistedAccountData{}, acct)
 		}
 	}
 }
@@ -209,7 +209,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.Read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedAccountData{}, *acct.(*persistedAccountData))
+		require.Equal(t, persistedAccountData{}, acct)
 	}
 }
 

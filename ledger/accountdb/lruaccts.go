@@ -55,7 +55,7 @@ func (m *LRUAccounts) Read(addr basics.Address) (data PersistedAccountData, has 
 	if el := m.accounts[addr]; el != nil {
 		return el.Value, true
 	}
-	return
+	return persistedAccountData{}, false
 }
 
 // FlushPendingWrites flushes the pending writes to the main LRUAccounts cache.

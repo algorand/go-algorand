@@ -2828,7 +2828,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
-				updatedAccounts, updatedResources, err := AccountsNewRoundImpl(
+				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
 					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
@@ -2910,7 +2910,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.Len())       // (addr1, aidx) found
 
-	updatedAccounts, updatedResources, err := AccountsNewRoundImpl(
+	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
 		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
@@ -3100,22 +3100,22 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	poad, err := queries.LookupOnline(addrA, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrA, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrA, poad.Addr())
 	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, poad.AccountData().MicroAlgos)
 	require.Equal(t, voteIDA, poad.AccountData().VoteID)
 
 	poad, err = queries.LookupOnline(addrB, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrB, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrB, poad.Addr())
 	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, poad.AccountData().MicroAlgos)
 	require.Equal(t, voteIDB, poad.AccountData().VoteID)
 
 	poad, err = queries.LookupOnline(addrC, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrC, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrC, poad.Addr())
 	require.Empty(t, poad.AccountData())
 
 	// check round 2
@@ -3134,21 +3134,21 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	poad, err = queries.LookupOnline(addrA, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrA, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrA, poad.Addr())
 	require.Empty(t, poad.AccountData())
 
 	poad, err = queries.LookupOnline(addrB, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrB, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrB, poad.Addr())
 	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, poad.AccountData().MicroAlgos)
 	require.Equal(t, voteIDB, poad.AccountData().VoteID)
 
 	poad, err = queries.LookupOnline(addrC, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrC, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrC, poad.Addr())
 	require.Empty(t, poad.AccountData())
 
 	// check round 3
@@ -3167,20 +3167,20 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	poad, err = queries.LookupOnline(addrA, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrA, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrA, poad.Addr())
 	require.Empty(t, poad.AccountData())
 
 	poad, err = queries.LookupOnline(addrB, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrB, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrB, poad.Addr())
 	require.Empty(t, poad.AccountData())
 
 	poad, err = queries.LookupOnline(addrC, rnd)
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), poad.Round)
-	require.Equal(t, addrC, poad.Addr)
+	require.Equal(t, basics.Round(3), poad.Round())
+	require.Equal(t, addrC, poad.Addr())
 	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, poad.AccountData().MicroAlgos)
 	require.Equal(t, voteIDC, poad.AccountData().VoteID)
 
@@ -3201,25 +3201,25 @@ func TestAccountOnlineQueries(t *testing.T) {
 	checkAddrB := func() {
 		require.Equal(t, int64(2), poads[0].Rowid())
 		require.Equal(t, basics.Round(1), poads[0].UpdRound())
-		require.Equal(t, addrB, poads[0].Addr)
+		require.Equal(t, addrB, poads[0].Addr())
 		require.Equal(t, int64(4), poads[1].Rowid())
 		require.Equal(t, basics.Round(3), poads[1].UpdRound())
-		require.Equal(t, addrB, poads[1].Addr)
+		require.Equal(t, addrB, poads[1].Addr())
 	}
 
 	checkAddrC := func() {
 		require.Equal(t, int64(5), poads[2].Rowid())
 		require.Equal(t, basics.Round(3), poads[2].UpdRound())
-		require.Equal(t, addrC, poads[2].Addr)
+		require.Equal(t, addrC, poads[2].Addr())
 	}
 
 	checkAddrA := func() {
 		require.Equal(t, int64(1), poads[3].Rowid())
 		require.Equal(t, basics.Round(1), poads[3].UpdRound())
-		require.Equal(t, addrA, poads[3].Addr)
+		require.Equal(t, addrA, poads[3].Addr())
 		require.Equal(t, int64(3), poads[4].Rowid())
 		require.Equal(t, basics.Round(2), poads[4].UpdRound())
-		require.Equal(t, addrA, poads[4].Addr)
+		require.Equal(t, addrA, poads[4].Addr())
 	}
 
 	checkAddrB()
@@ -3356,32 +3356,32 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
 	lastUpdateRound := basics.Round(1)
-	updated, err := OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
 
 	require.Len(t, updated, 3)
-	require.Equal(t, updated[0].Addr, addrC)
-	require.Equal(t, updated[1].Addr, addrD)
-	require.Equal(t, updated[2].Addr, addrE)
+	require.Equal(t, updated[0].Addr(), addrC)
+	require.Equal(t, updated[1].Addr(), addrD)
+	require.Equal(t, updated[2].Addr(), addrE)
 
 	// check errors: new online with empty voting data
 	deltaC.newStatus[0] = basics.Online
 	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []OnlineAccountDelta{deltaC}
-	_, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new non-online with non-empty voting data
 	deltaB.newStatus[0] = basics.Offline
 	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []OnlineAccountDelta{deltaB}
-	_, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []OnlineAccountDelta{deltaD}
-	_, err = OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
 
@@ -3452,15 +3452,15 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC)
 	lastUpdateRound := basics.Round(1)
-	updated, err := OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
 
 	require.Len(t, updated, 5)
-	require.Equal(t, updated[0].Addr, addrA)
-	require.Equal(t, updated[1].Addr, addrB)
-	require.Equal(t, updated[2].Addr, addrB)
-	require.Equal(t, updated[3].Addr, addrC)
-	require.Equal(t, updated[4].Addr, addrC)
+	require.Equal(t, updated[0].Addr(), addrA)
+	require.Equal(t, updated[1].Addr(), addrB)
+	require.Equal(t, updated[2].Addr(), addrB)
+	require.Equal(t, updated[3].Addr(), addrC)
+	require.Equal(t, updated[4].Addr(), addrC)
 }
 
 func TestAccountOnlineRoundParams(t *testing.T) {
@@ -3681,7 +3681,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 
 	lastUpdateRound := basics.Round(10)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	updated, err := OnlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
 	require.Len(t, updated, 5)
 
@@ -3689,7 +3689,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int64
-	var history []persistedOnlineAccountData
+	var history []PersistedOnlineAccountData
 	var validThrough basics.Round
 	for _, rnd := range []basics.Round{1, 2, 3} {
 		err = OnlineAccountsDelete(tx, rnd)
