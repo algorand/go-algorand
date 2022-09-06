@@ -18,25 +18,28 @@ package data
 
 import (
 	"bytes"
+	"container/heap"
 	"context"
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+	"github.com/algorand/go-deadlock"
 )
 
 // The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
@@ -60,6 +63,7 @@ type txBacklogMsg struct {
 type TxHandler struct {
 	txPool                *pools.TransactionPool
 	ledger                *Ledger
+	log                   logging.Logger
 	genesisID             string
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
@@ -72,22 +76,115 @@ type TxHandler struct {
 
 	relayMessages bool
 
-	txRequests   map[transactions.Txid]*requestedTxn
+	prevRound uint64
+
+	//txRequests   map[transactions.Txid]*requestedTxn
+	txRequests   requestedTxnSet
 	txRequestsMu deadlock.Mutex
 	// TODO: age-out txRequests, remove txids that have been committed more than N (probably 2) rounds ago, remove txns no longer valid range
 	// TODO: keep a prio-heap of open requests sorted by expiration
+
+	// prevTxns is map[transactions.Txid]SignedTxn
+	prevTxns atomic.Value
+}
+
+// We need to store txns we have seen:
+// * Until one round after they have committed, other nodes could still be fetching them to validate what we see as the 'previous' round.
+// * Until they expire by LastValid. (txPool does this)
+// * Fetch them by txid when requested by a peer
+//
+// data.Ledger.LookupTxid() is horribly expensive, inflating the entire block's Txns, calculating Txid one by one, and then throwing away the set when done.
+
+// We need to keep track of Txn requests
+// * Until we get the txn data
+// * Or N rounds then give up?
+
+type requestedTxn struct {
+	txid          transactions.Txid
+	requestedFrom []network.Peer
+	advertisedBy  []network.Peer
+	requestedAt   time.Time
+	heapPos       int
+}
+
+type requestedTxnSet struct {
+	// ar contains a heap ordered by .requestedAt
+	ar     []*requestedTxn
+	byTxid map[transactions.Txid]*requestedTxn
+}
+
+// Len is part of sort.Interface and container/heap.Interface
+func (rts *requestedTxnSet) Len() int {
+	return len(rts.ar)
+}
+
+// Less is part of sort.Interface and container/heap.Interface
+func (rts *requestedTxnSet) Less(i, j int) bool {
+	return rts.ar[i].requestedAt.Before(rts.ar[j].requestedAt)
+}
+
+// Swap is part of sort.Interface and container/heap.Interface
+func (rts *requestedTxnSet) Swap(i, j int) {
+	t := rts.ar[i]
+	rts.ar[i] = rts.ar[j]
+	rts.ar[j] = t
+	rts.ar[i].heapPos = i
+	rts.ar[j].heapPos = j
+}
+
+// Push is part of container/heap.Interface
+func (rts *requestedTxnSet) Push(x interface{}) {
+	req := x.(*requestedTxn)
+	last := len(rts.ar)
+	req.heapPos = last
+	rts.ar = append(rts.ar, req)
+}
+
+// Pop is part of container/heap.Interface
+func (rts *requestedTxnSet) Pop() interface{} {
+	last := len(rts.ar) - 1
+	out := rts.ar[last]
+	out.heapPos = -1
+	rts.ar = rts.ar[:last]
+	return out
+}
+
+func (rts *requestedTxnSet) add(x *requestedTxn) {
+	rts.byTxid[x.txid] = x
+	heap.Push(rts, x)
+}
+
+func (rts *requestedTxnSet) getByTxid(txid transactions.Txid) (x *requestedTxn, ok bool) {
+	x, ok = rts.byTxid[txid]
+	return x, ok
+}
+
+func (rts *requestedTxnSet) popByTxid(txid transactions.Txid) (x *requestedTxn, ok bool) {
+	x, ok = rts.byTxid[txid]
+	if ok {
+		delete(rts.byTxid, txid)
+		heap.Remove(rts, x.heapPos)
+	}
+	return x, ok
+}
+func (rts *requestedTxnSet) dropOlderThan(timeout time.Time) {
+	for (len(rts.ar) > 0) && (rts.ar[0].requestedAt.Before(timeout)) {
+		evicted := rts.ar[0]
+		heap.Pop(rts)
+		delete(rts.byTxid, evicted.txid)
+	}
 }
 
 // MakeTxHandler makes a new handler for transaction messages
-func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool, cfg *config.Local) *TxHandler {
+func MakeTxHandler(txPool *pools.TransactionPool, dledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool, cfg *config.Local) *TxHandler {
 
 	if txPool == nil {
-		logging.Base().Fatal("MakeTxHandler: txPool is nil on initialization")
+		dledger.log.Fatal("MakeTxHandler: txPool is nil on initialization")
 		return nil
 	}
 
-	if ledger == nil {
-		logging.Base().Fatal("MakeTxHandler: ledger is nil on initialization")
+	if dledger == nil {
+		dledger.log.Fatal("MakeTxHandler: ledger is nil on initialization")
 		return nil
 	}
 
@@ -95,7 +192,8 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		txPool:                txPool,
 		genesisID:             genesisID,
 		genesisHash:           genesisHash,
-		ledger:                ledger,
+		ledger:                dledger,
+		log:                   dledger.log,
 		txVerificationPool:    executionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
@@ -104,7 +202,32 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+
+	handler.ledger.Ledger.RegisterBlockListeners([]ledger.BlockListener{handler})
 	return handler
+}
+
+// OnNewBlock is part of ledger.BlockListener interface
+func (handler *TxHandler) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	stxns, err := block.DecodePaysetFlat()
+	if err != nil {
+		handler.log.Errorf("txHandler OnNewBlock DecodePaysetFlat: %v", err)
+		return
+	}
+	txidList := make([]transactions.Txid, len(stxns))
+	prevTxns := make(map[transactions.Txid]transactions.SignedTxn, len(stxns))
+	for i, stxn := range stxns {
+		txid := stxn.ID()
+		prevTxns[txid] = stxn.SignedTxn
+		txidList[i] = txid
+	}
+	handler.txRequestsMu.Lock()
+	for _, txid := range txidList {
+		handler.txRequests.popByTxid(txid)
+	}
+	handler.prevTxns.Store(prevTxns)
+	atomic.StoreUint64(&handler.prevRound, uint64(block.BlockHeader.Round))
+	handler.txRequestsMu.Unlock()
 }
 
 // Start enables the processing of incoming messages at the transaction handler
@@ -123,9 +246,10 @@ func (handler *TxHandler) Start() {
 			MessageHandler: network.HandlerFunc(handler.processIncomingTxnRequest),
 		},
 	})
-	logging.Base().Info("txHandler Start")
-	handler.backlogWg.Add(1)
+	handler.log.Info("txHandler Start")
+	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
+	go handler.retryHandler()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
@@ -188,7 +312,7 @@ func (handler *TxHandler) backlogWorker() {
 func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
-		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
+		handler.log.Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
 		handler.net.Disconnect(wi.rawmsg.Sender)
 		return
 	}
@@ -202,14 +326,14 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
-		logging.Base().Debugf("could not remember tx: %v", err)
+		handler.log.Debugf("could not remember tx: %v", err)
 		return
 	}
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
 	if err != nil {
-		logging.Base().Infof("unable to pin transaction: %v", err)
+		handler.log.Infof("unable to pin transaction: %v", err)
 	}
 
 	// TODO: at this point we need to either send TX data or Ta txid advertisement depending on what protocol the peer is
@@ -218,7 +342,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	if handler.relayMessages {
 		err = TxnBroadcast(handler.ctx, handler.net, verifiedTxGroup, wi.rawmsg.Sender)
 		if err != nil {
-			logging.Base().Infof("unable to pin transaction: %v", err)
+			handler.log.Infof("unable to pin transaction: %v", err)
 		}
 	}
 }
@@ -310,7 +434,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
 		tx.verificationErr = fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
-		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
+		handler.log.Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
 		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
@@ -326,6 +450,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	return nil
 }
 
+// processIncomingTxn is the handler for protocol.TxnTag "TX"
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
@@ -342,13 +467,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			break
 		}
 		if err != nil {
-			logging.Base().Warnf("Received a non-decodable txn: %v", err)
+			handler.log.Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
 		ntx++
 	}
 	if ntx == 0 {
-		logging.Base().Warnf("Received empty tx group")
+		handler.log.Warnf("Received empty tx group")
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
@@ -358,6 +483,11 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		rawmsg:            &rawmsg,
 		unverifiedTxGroup: unverifiedTxGroup,
 	}:
+		handler.txRequestsMu.Lock()
+		for _, stxn := range unverifiedTxGroup {
+			handler.txRequests.popByTxid(stxn.ID())
+		}
+		handler.txRequestsMu.Unlock()
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.
@@ -367,28 +497,21 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
-type requestedTxn struct {
-	//txid transactions.Txid // always present as key of map
-	requestedFrom []network.Peer
-	advertisedBy  []network.Peer
-	requestedAt   time.Time
-	LastValid     basics.Round
-}
-
 // we can be lazy responding to advertise offers
 const requestExpiration = time.Millisecond * 900
 
+// processIncomingTxnAdvertise is the handler for protocol.TxnAdvertiseTag "Ta"
 func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	var request []byte
 	var txid transactions.Txid
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
 	if !ok {
-		logging.Base().Errorf("Ta Sender not UnicastPeer")
+		handler.log.Errorf("Ta Sender not UnicastPeer")
 		return network.OutgoingMessage{}
 	}
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
-		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		handler.log.Warnf("got txid advertisement len %d", len(rawmsg.Data))
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	handler.txRequestsMu.Lock()
@@ -398,73 +521,152 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		_, _, found := handler.txPool.Lookup(txid)
 		if found {
 			// we already have it, nothing to do
-			logging.Base().Infof("Ta already have %s", txid.String())
+			handler.log.Infof("Ta already have %s", txid.String())
 			continue
 		}
-		req, ok := handler.txRequests[txid]
+		req, ok := handler.txRequests.getByTxid(txid)
 		if !ok {
-			if handler.txRequests == nil {
-				handler.txRequests = make(map[transactions.Txid]*requestedTxn)
-			}
 			req = new(requestedTxn)
-			handler.txRequests[txid] = req
+			req.txid = txid
+			req.requestedAt = now
+			//req.LastValid = basics.Round(handler.prevRound + 1000)
+			handler.txRequests.add(req)
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 		} else {
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 			if now.Sub(req.requestedAt) < requestExpiration {
 				// no new request
-				logging.Base().Infof("Ta already req %s", txid.String())
+				handler.log.Infof("Ta already req %s", txid.String())
 				continue
 			}
+			req.requestedAt = now
+			heap.Fix(&handler.txRequests, req.heapPos)
 		}
-		logging.Base().Infof("Ta req %s", txid.String())
+		handler.log.Infof("Ta req %s", txid.String())
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
-		req.requestedAt = now
 		request = append(request, (txid[:])...)
 	}
 	handler.txRequestsMu.Unlock()
 	if len(request) != 0 {
 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
 		if err != nil {
-			logging.Base().Errorf("Ta req err, %v", err)
+			handler.log.Errorf("Ta req err, %v", err)
 		}
 	}
 	return network.OutgoingMessage{}
 }
+
+func (handler *TxHandler) retryHandler() {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer handler.backlogWg.Done()
+	defer ticker.Stop()
+	for {
+		select {
+		case <-handler.ctx.Done():
+			return
+		case now := <-ticker.C:
+			var toRequest map[network.Peer][]byte
+			handler.txRequestsMu.Lock()
+			timeout := now.Add(-1 * requestExpiration)
+			req := handler.txRequests.ar[0]
+			for req.requestedAt.Before(timeout) {
+				var nextSource network.Peer
+				// find a peer that has advertised it who we haven't asked yet
+				for _, source := range req.advertisedBy {
+					found := false
+					for _, prevReq := range req.requestedFrom {
+						if prevReq == source {
+							found = true
+							break
+						}
+					}
+					if !found {
+						nextSource = source
+						break
+					}
+				}
+				if nextSource != nil {
+					if toRequest == nil {
+						toRequest = make(map[network.Peer][]byte)
+					}
+					toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
+					req.requestedAt = now
+					req.requestedFrom = append(req.requestedFrom, nextSource)
+					heap.Fix(&handler.txRequests, 0)
+				} else {
+					heap.Pop(&handler.txRequests)
+				}
+				req = handler.txRequests.ar[0]
+			}
+			handler.txRequestsMu.Unlock()
+			if len(toRequest) != 0 {
+				for npeer, request := range toRequest {
+					peer, ok := npeer.(network.UnicastPeer)
+					if !ok {
+						handler.log.Errorf("Ta Sender not UnicastPeer")
+					} else {
+						err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
+						if err != nil {
+							handler.log.Errorf("Ta req err, %v", err)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// getByTxid looks up a transaction first in the pool, then in the previous block
+func (handler *TxHandler) getByTxid(txid transactions.Txid) (tx transactions.SignedTxn, found bool) {
+	tx, _, found = handler.txPool.Lookup(txid)
+	if found {
+		handler.log.Infof("Tr p %s", txid.String())
+		return tx, found
+	}
+	ptany := handler.prevTxns.Load()
+	if ptany == nil {
+		handler.log.Infof("Tr np MISSING %s", txid.String())
+	}
+	prevTxns := ptany.(map[transactions.Txid]transactions.SignedTxn)
+	tx, found = prevTxns[txid]
+	if !found {
+		handler.log.Infof("Tr MISSING %s", txid.String())
+	}
+	return tx, found
+}
+
+// processIncomingTxnRequest is the handler for protocol.TxnRequestTag "Tr"
 func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
 	if !ok {
-		logging.Base().Errorf("Tr Sender not UnicastPeer")
+		handler.log.Errorf("Tr Sender not UnicastPeer")
 		return network.OutgoingMessage{}
 	}
 	var txid transactions.Txid
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
-		logging.Base().Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		handler.log.Warnf("got txid advertisement len %d", len(rawmsg.Data))
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	response := make([]transactions.SignedTxn, numids)
 	numFound := 0
 	for i := 0; i < numids; i++ {
 		copy(txid[:], rawmsg.Data[len(txid)*i:])
-		tx, _, found := handler.txPool.Lookup(txid)
+		tx, found := handler.getByTxid(txid)
 		if found {
 			response[i] = tx
 			numFound++
-			logging.Base().Infof("Tr %s", txid.String())
-		} else {
-			logging.Base().Infof("Tr MISSING %s", txid.String())
 		}
 	}
 	if numFound != 0 {
 		err := peer.Unicast(handler.ctx, reencode(response), protocol.TxnTag)
 		if err != nil {
-			logging.Base().Errorf("Tr res err, %v", err)
+			handler.log.Errorf("Tr res err, %v", err)
 		}
 	}
 	// TODO: add NACK message to protocol so they can ask another node?
 	// But really, this should never happen. We advertised it. We should have it. (Unless it just got committed to a block?) ((TODO: search most recent block for txn by txid?))
-	//logging.Base().Error("request for txid we don't have: %s", txid.String())
+	//handler.log.Error("request for txid we don't have: %s", txid.String())
 	return network.OutgoingMessage{}
 }
 
@@ -474,18 +676,18 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 // Note that this also checks the consistency of the transaction's group hash,
 // which is required for safe transaction signature caching behavior.
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
-	if logging.Base().IsLevelEnabled(logging.Debug) {
+	if handler.log.IsLevelEnabled(logging.Debug) {
 		txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
 		for i := range tx.unverifiedTxGroup {
 			txids[i] = tx.unverifiedTxGroup[i].ID()
 		}
-		logging.Base().Debugf("got a tx group with IDs %v", txids)
+		handler.log.Debugf("got a tx group with IDs %v", txids)
 	}
 
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
-		logging.Base().Debugf("txPool rejected transaction: %v", err)
+		handler.log.Debugf("txPool rejected transaction: %v", err)
 		return true
 	}
 	return false
@@ -503,7 +705,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
+		handler.log.Warnf("Could not get header for previous block %v: %v", latest, err)
 		return network.OutgoingMessage{}, true
 	}
 
@@ -511,7 +713,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache(), handler.ledger)
 	if err != nil {
 		// transaction is invalid
-		logging.Base().Warnf("One or more transactions were malformed: %v", err)
+		handler.log.Warnf("One or more transactions were malformed: %v", err)
 		return network.OutgoingMessage{Action: network.Disconnect}, true
 	}
 
@@ -522,14 +724,14 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	// save the transaction, if it has high enough fee and not already in the cache
 	err = handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
-		logging.Base().Debugf("could not remember tx: %v", err)
+		handler.log.Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{}, true
 	}
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
 	if err != nil {
-		logging.Base().Warnf("unable to pin transaction: %v", err)
+		handler.log.Warnf("unable to pin transaction: %v", err)
 	}
 
 	return network.OutgoingMessage{}, false
