@@ -150,6 +150,9 @@ func (rts *requestedTxnSet) Pop() interface{} {
 }
 
 func (rts *requestedTxnSet) add(x *requestedTxn) {
+	if rts.byTxid == nil {
+		rts.byTxid = make(map[transactions.Txid]*requestedTxn)
+	}
 	rts.byTxid[x.txid] = x
 	heap.Push(rts, x)
 }
@@ -567,36 +570,38 @@ func (handler *TxHandler) retryHandler() {
 		case now := <-ticker.C:
 			var toRequest map[network.Peer][]byte
 			handler.txRequestsMu.Lock()
-			timeout := now.Add(-1 * requestExpiration)
-			req := handler.txRequests.ar[0]
-			for req.requestedAt.Before(timeout) {
-				var nextSource network.Peer
-				// find a peer that has advertised it who we haven't asked yet
-				for _, source := range req.advertisedBy {
-					found := false
-					for _, prevReq := range req.requestedFrom {
-						if prevReq == source {
-							found = true
+			if len(handler.txRequests.ar) != 0 {
+				timeout := now.Add(-1 * requestExpiration)
+				req := handler.txRequests.ar[0]
+				for req.requestedAt.Before(timeout) {
+					var nextSource network.Peer
+					// find a peer that has advertised it who we haven't asked yet
+					for _, source := range req.advertisedBy {
+						found := false
+						for _, prevReq := range req.requestedFrom {
+							if prevReq == source {
+								found = true
+								break
+							}
+						}
+						if !found {
+							nextSource = source
 							break
 						}
 					}
-					if !found {
-						nextSource = source
-						break
+					if nextSource != nil {
+						if toRequest == nil {
+							toRequest = make(map[network.Peer][]byte)
+						}
+						toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
+						req.requestedAt = now
+						req.requestedFrom = append(req.requestedFrom, nextSource)
+						heap.Fix(&handler.txRequests, 0)
+					} else {
+						heap.Pop(&handler.txRequests)
 					}
+					req = handler.txRequests.ar[0]
 				}
-				if nextSource != nil {
-					if toRequest == nil {
-						toRequest = make(map[network.Peer][]byte)
-					}
-					toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
-					req.requestedAt = now
-					req.requestedFrom = append(req.requestedFrom, nextSource)
-					heap.Fix(&handler.txRequests, 0)
-				} else {
-					heap.Pop(&handler.txRequests)
-				}
-				req = handler.txRequests.ar[0]
 			}
 			handler.txRequestsMu.Unlock()
 			if len(toRequest) != 0 {
