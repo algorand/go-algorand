@@ -31,7 +31,6 @@ const ConfigFilename = "ppconfig.json"
 // PpConfig defines configuration structure for
 type PpConfig struct {
 	SrcAccount      string
-	DelayBetweenTxn time.Duration
 	RandomizeFee    bool
 	RandomizeAmt    bool
 	RandomizeDst    bool
@@ -41,7 +40,6 @@ type PpConfig struct {
 	TxnPerSec       uint64
 	NumPartAccounts uint32
 	RunTime         time.Duration
-	RestTime        time.Duration
 	RefreshTime     time.Duration
 	MinAccountFunds uint64
 	Quiet           bool
@@ -71,7 +69,6 @@ type PpConfig struct {
 // DefaultConfig object for Ping Pong
 var DefaultConfig = PpConfig{
 	SrcAccount:      "",
-	DelayBetweenTxn: 100,
 	RandomizeFee:    false,
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
@@ -81,7 +78,6 @@ var DefaultConfig = PpConfig{
 	TxnPerSec:       200,
 	NumPartAccounts: 10,
 	RunTime:         10 * time.Second,
-	RestTime:        1 * time.Hour, // Long default rest to avoid accidental DoS
 	RefreshTime:     10 * time.Second,
 	MinAccountFunds: 100000,
 	GroupSize:       1,

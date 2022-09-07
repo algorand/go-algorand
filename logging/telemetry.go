@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/util/uuid"
 )
 
 const telemetryPrefix = "/"
@@ -75,7 +75,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
 		if cfg.SessionGUID == "" {
-			cfg.SessionGUID = uuid.NewV4().String()
+			cfg.SessionGUID = uuid.New()
 		}
 		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
 		if err != nil {
@@ -109,14 +109,12 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
-			// In this case we don't know what to do since we couldn't
-			// create the directory.  Just create an ephemeral config.
-			cfg = createTelemetryConfig()
-			return
+			// If the path could not be opened do nothing, the IsNotExist error
+			// is handled below.
+		} else {
+			// Load the telemetry from the default config path
+			cfg, err = LoadTelemetryConfig(configPath)
 		}
-
-		// Load the telemetry from the default config path
-		cfg, err = LoadTelemetryConfig(configPath)
 	}
 
 	// If there was some error loading the configuration from the config path...
@@ -213,12 +211,14 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		err = cfg.Save(configPath)
 	}
 
-	ch := config.GetCurrentVersion().Channel
+	ver := config.GetCurrentVersion()
+	ch := ver.Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
 	if ch == "" {
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
 
 	return cfg, created, err
 }

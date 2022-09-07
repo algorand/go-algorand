@@ -18,14 +18,11 @@ package fixtures
 
 import (
 	"bytes"
-	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -47,8 +44,7 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	ef.t = t
 	ef.testDir = os.Getenv("TESTDIR")
 	if ef.testDir == "" {
-		ef.testDir, _ = ioutil.TempDir("", "tmp")
-		ef.testDir = filepath.Join(ef.testDir, "expect")
+		ef.testDir = filepath.Join(t.TempDir(), "expect")
 		err = os.MkdirAll(ef.testDir, 0755)
 		if err != nil {
 			ef.t.Errorf("error creating test dir %s, with error %v", ef.testDir, err)
@@ -58,9 +54,7 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	}
 	ef.testDataDir = os.Getenv("TESTDATADIR")
 	if ef.testDataDir == "" {
-		// Default to test/testdata in the source tree being tested
-		_, path, _, _ := runtime.Caller(0)
-		ef.testDataDir = filepath.Join(filepath.Dir(path), "../../testdata")
+		ef.testDataDir = filepath.Join(getTestDir(), "testdata")
 	}
 
 	ef.testFilter = os.Getenv("TESTFILTER")
@@ -153,7 +147,7 @@ func (ef *ExpectFixture) Run() {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
 				if reason, ok := disabledTest[testName]; ok {
-					t.Skip(fmt.Sprintf("Skipping %s test: %s", testName, reason))
+					t.Skipf("Skipping %s test: %s", testName, reason)
 				}
 				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 
@@ -166,7 +160,7 @@ func (ef *ExpectFixture) Run() {
 				cmd.Stdout = &outBuf
 
 				// Set stderr to be a file descriptor. In other way Go's exec.Cmd::writerDescriptor
-				// attaches goroutine reading that blocks on io.Copy from stderr.
+				// attaches a goroutine reading stderr that blocks on io.Copy from stderr.
 				// Cmd::CombinedOutput sets stderr to stdout and also blocks.
 				// Cmd::Start + Cmd::Wait with manual pipes redirection etc also blocks.
 				// Wrapping 'expect' with 'expect "$@" 2>&1' also blocks on stdout reading.

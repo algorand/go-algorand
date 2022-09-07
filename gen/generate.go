@@ -19,7 +19,6 @@ package gen
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -271,7 +271,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 				data.VoteLastValid = part.LastValid
 				data.VoteKeyDilution = part.KeyDilution
 				if protoParams.EnableStateProofKeyregCheck {
-					data.StateProofID = *part.StateProofVerifier()
+					data.StateProofID = part.StateProofVerifier().Commitment
 				}
 			}
 
@@ -301,6 +301,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		}()
 	}
 
+	createStart := time.Now()
 	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
 	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
 		go createWallet()
@@ -372,10 +373,10 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	}
 
 	jsonData := protocol.EncodeJSON(g)
-	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
+	err = os.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
 
 	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
-		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+		fmt.Printf("Created %d new rootkeys and %d new partkeys in %s.\n", rootKeyCreated, partKeyCreated, time.Since(createStart))
 		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this many rounds the network will stall unless new keys are registered.\n", lastWalletValid-firstWalletValid)
 	}
 

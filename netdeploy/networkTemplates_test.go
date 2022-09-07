@@ -17,7 +17,6 @@
 package netdeploy
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,12 +59,11 @@ func TestGenerateGenesis(t *testing.T) {
 	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")
 	template, _ := loadTemplate(filepath.Join(templateDir, "David20.json"))
 
-	targetFolder, err := ioutil.TempDir("", "netroot")
-	defer os.RemoveAll(targetFolder)
+	targetFolder := t.TempDir()
 	networkName := "testGenGen"
 	binDir := os.ExpandEnv("${GOPATH}/bin")
 
-	err = template.generateGenesisAndWallets(targetFolder, networkName, binDir)
+	err := template.generateGenesisAndWallets(targetFolder, networkName, binDir)
 	a.NoError(err)
 	_, err = os.Stat(filepath.Join(targetFolder, config.GenesisJSONFile))
 	fileExists := err == nil

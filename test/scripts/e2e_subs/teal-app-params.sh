@@ -34,6 +34,6 @@ APPID_2=$(${gcmd} app create --creator "$ACCOUNTB" --approval-prog=${TEAL}/quine
 ${gcmd} app call --app-id="$APPID_2" --from="$ACCOUNTB"
 
 # Verify "app_params_get AppApprovalProgram" works on update
-${gcmd} app update --app-id="$APPID_2" --from="$ACCOUNTB" --approval-prog=${TEAL}/approve-all.teal --clear-prog=${TEAL}/approve-all.teal
+${gcmd} app update --app-id="$APPID_2" --from="$ACCOUNTB" --approval-prog=${TEAL}/approve-all5.teal --clear-prog=${TEAL}/approve-all5.teal
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"

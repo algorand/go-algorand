@@ -31,13 +31,23 @@ import (
 // header), or to generate proofs of membership for transactions that are
 // in this block.
 func (block Block) TxnMerkleTree() (*merklearray.Tree, error) {
-	return merklearray.Build(&txnMerkleArray{block: block}, crypto.HashFactory{HashType: crypto.Sha512_256})
+	return merklearray.Build(&txnMerkleArray{block: block, hashType: crypto.Sha512_256}, crypto.HashFactory{HashType: crypto.Sha512_256})
+}
+
+// TxnMerkleTreeSHA256 returns a cryptographic commitment to the transactions in the
+// block, along with their ApplyData, as a Merkle tree vector commitment, using SHA256. This allows the
+// caller to either extract the root hash (for inclusion in the block
+// header), or to generate proofs of membership for transactions that are
+// in this block.
+func (block Block) TxnMerkleTreeSHA256() (*merklearray.Tree, error) {
+	return merklearray.BuildVectorCommitmentTree(&txnMerkleArray{block: block, hashType: crypto.Sha256}, crypto.HashFactory{HashType: crypto.Sha256})
 }
 
 // txnMerkleArray is a representation of the transactions in this block,
 // along with their ApplyData, as an array for the merklearray package.
 type txnMerkleArray struct {
-	block Block
+	block    Block
+	hashType crypto.HashType
 }
 
 // Length implements the merklearray.Array interface.
@@ -52,6 +62,7 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	}
 
 	var elem txnMerkleElem
+	elem.hashType = tma.hashType
 	elem.stib = tma.block.Payset[pos]
 
 	stxn, _, err := tma.block.DecodeSignedTxn(elem.stib)
@@ -63,13 +74,6 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return &elem, nil
 }
 
-// txnMerkleElem represents a leaf in the Merkle tree of all transactions
-// in a block.
-type txnMerkleElem struct {
-	txn  transactions.Transaction
-	stib transactions.SignedTxnInBlock
-}
-
 func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
 	buf = make([]byte, 2*crypto.DigestSize)
 	copy(buf[:], txid[:])
@@ -77,14 +81,27 @@ func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) 
 	return
 }
 
+// txnMerkleElem represents a leaf in the Merkle tree of all transactions
+// in a block.
+type txnMerkleElem struct {
+	txn      transactions.Transaction
+	stib     transactions.SignedTxnInBlock
+	hashType crypto.HashType
+}
+
+func (tme *txnMerkleElem) RawLeaf() []byte {
+	if tme.hashType == crypto.Sha512_256 {
+		return txnMerkleToRaw(tme.txn.ID(), tme.stib.Hash())
+	}
+	// else: hashType == crypto.Sha256
+	return txnMerkleToRaw(tme.txn.IDSha256(), tme.stib.HashSHA256())
+}
+
 // ToBeHashed implements the crypto.Hashable interface.
 func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	// The leaf contains two hashes: the transaction ID (hash of the
 	// transaction itself), and the hash of the entire SignedTxnInBlock.
-	txid := tme.txn.ID()
-	stib := tme.stib.Hash()
-
-	return protocol.TxnMerkleLeaf, txnMerkleToRaw(txid, stib)
+	return protocol.TxnMerkleLeaf, tme.RawLeaf()
 }
 
 // Hash implements an optimized version of crypto.HashObj(tme).
@@ -93,12 +110,9 @@ func (tme *txnMerkleElem) Hash() crypto.Digest {
 }
 
 func (tme *txnMerkleElem) HashRepresentation() []byte {
-	txid := tme.txn.ID()
-	stib := tme.stib.Hash()
-
 	var buf [len(protocol.TxnMerkleLeaf) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.TxnMerkleLeaf...)
-	s = append(s, txnMerkleToRaw(txid, stib)...)
+	s = append(s, tme.RawLeaf()...)
 	return s
 }

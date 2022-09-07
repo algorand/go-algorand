@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/stateproof"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -31,6 +33,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+)
+
+const (
+	// noPeersAvailableSleepInterval is the sleep interval that the node would wait if no peers are available to download the next block from.
+	// this delay is intended to ensure to give the network package some time to download the list of relays.
+	noPeersAvailableSleepInterval = 50 * time.Millisecond
 )
 
 // CatchpointCatchupNodeServices defines the extenal node support needed
@@ -458,6 +466,21 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
+// lookbackForStateproofsSupport calculates the lookback (from topblock round) needed to be downloaded
+// in order to support state proofs verification.
+func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	if proto.StateProofInterval == 0 {
+		return 0
+	}
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&topBlock.BlockHeader)
+	// in order to be able to confirm/build lowestStateProofRound we would need to reconstruct
+	// the corresponding voterForRound which is (lowestStateProofRound - stateproofInterval - VotersLookback)
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
+	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	return uint64(topBlock.Round().SubSaturate(lowestStateProofRound))
+}
+
 // processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
@@ -465,11 +488,23 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
-	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife
-	if lookback < config.Consensus[topBlock.CurrentProtocol].MaxBalLookback {
-		lookback = config.Consensus[topBlock.CurrentProtocol].MaxBalLookback
+	// pick the lookback with the greater of
+	// either (MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback) or MaxBalLookback
+	// Explanation:
+	// 1. catchpoint snapshots accounts at round X-CatchpointLookback
+	// 2. replay starts from X-CatchpointLookback+1
+	// 3. transaction evaluation at Y requires block up to MaxTxnLife+DeeperBlockHeaderHistory back from Y
+	proto := config.Consensus[topBlock.CurrentProtocol]
+	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory + proto.CatchpointLookback
+	if lookback < proto.MaxBalLookback {
+		lookback = proto.MaxBalLookback
 	}
+
+	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
+	if lookback < lookbackForStateProofSupport {
+		lookback = lookbackForStateProofSupport
+	}
+
 	// in case the effective lookback is going before our rounds count, trim it there.
 	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
 	if lookback >= uint64(topBlock.Round()) {
@@ -559,9 +594,12 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
 		}
 
-		cs.updateBlockRetrievalStatistics(0, 1)
-		peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		if psp != nil {
+			// the block might have been retrieved from the local ledger, nothing to rank
+			cs.updateBlockRetrievalStatistics(0, 1)
+			peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		}
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
@@ -592,7 +630,13 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount uint64) (blk *bookkeeping.Block, downloadDuration time.Duration, psp *peerSelectorPeer, stop bool, err error) {
 	psp, err = cs.blocksDownloadPeerSelector.getNextPeer()
 	if err != nil {
-		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from")
+		if err == errPeerSelectorNoPeerPoolsAvailable {
+			cs.log.Infof("fetchBlock: unable to obtain a list of peers to retrieve the latest block from; will retry shortly.")
+			// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
+			time.Sleep(noPeersAvailableSleepInterval)
+			return nil, time.Duration(0), psp, false, nil
+		}
+		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from : %w", err)
 		return nil, time.Duration(0), psp, true, cs.abort(err)
 	}
 	peer := psp.Peer

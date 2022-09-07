@@ -18,7 +18,6 @@ package node
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
 	util.SetFdSoftLimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
@@ -93,15 +92,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	}
 
 	for i := range wallets {
-		rootDirectory, err := ioutil.TempDir("", "testdir"+t.Name()+strconv.Itoa(i))
+		rootDirectory := t.TempDir()
 		rootDirs = append(rootDirs, rootDirectory)
-		require.NoError(t, err)
 
 		defaultConfig.NetAddress = "127.0.0.1:0"
 		defaultConfig.SaveToDisk(rootDirectory)
 
 		// Save empty phonebook - we'll add peers after they've been assigned listening ports
-		err = config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
+		err := config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
 		require.NoError(t, err)
 
 		genesisDir := filepath.Join(rootDirectory, g.ID())
@@ -174,7 +172,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		require.NoError(t, err)
 	}
 
-	return nodes, wallets, rootDirs
+	return nodes, wallets
 }
 
 func TestSyncingFullNode(t *testing.T) {
@@ -185,10 +183,9 @@ func TestSyncingFullNode(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootDirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootDirs[i])
 		defer nodes[i].Stop()
 	}
 
@@ -244,10 +241,9 @@ func TestInitialSync(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	nodes, wallets, rootdirs := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootdirs[i])
 		defer nodes[i].Stop()
 	}
 	initialRound := nodes[0].ledger.NextRound()
@@ -313,10 +309,9 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets, rootDirs := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
-		defer os.RemoveAll(rootDirs[i])
 		defer nodes[i].Stop()
 	}
 
@@ -483,8 +478,7 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
-	require.NoError(t, err)
+	testDirectroy := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -508,48 +502,31 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	require.NoError(t, os.RemoveAll(testDirectroy))
 }
 
-func TestAsyncRecord(t *testing.T) {
+// TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set
+func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
-	require.NoError(t, err)
-
-	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-node-record-async",
-		Proto:       protocol.ConsensusCurrentVersion,
-		Network:     config.Devtestnet,
-		FeeSink:     sinkAddr.String(),
-		RewardsPool: poolAddr.String(),
+	tests := []struct {
+		name        string
+		acctData    basics.OnlineAccountData
+		expectedInt int
+	}{
+		{"online 1", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 1, VoteLastValid: 100},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0},
+		{"online 2", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 1, VoteLastValid: 100},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0},
+		{"offline & not closed", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 0, VoteLastValid: 0},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 1}}, 0 | bitAccountOffline},
+		{"offline & closed", basics.OnlineAccountData{
+			VotingData:            basics.VotingData{VoteFirstValid: 0, VoteLastValid: 0},
+			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0 | bitAccountOffline | bitAccountIsClosed},
 	}
-
-	cfg := config.GetDefaultLocal()
-	cfg.DisableNetworking = true
-	node, err := MakeFull(logging.TestingLog(t), testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
-	require.NoError(t, err)
-	node.Start()
-	defer node.Stop()
-
-	var addr basics.Address
-	addr[0] = 1
-
-	p := account.Participation{
-		Parent:     addr,
-		FirstValid: 0,
-		LastValid:  1000000,
-		Voting:     &crypto.OneTimeSignatureSecrets{},
-		VRF:        &crypto.VRFSecrets{},
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
+		})
 	}
-	id, err := node.accountManager.Registry().Insert(p)
-	require.NoError(t, err)
-	err = node.accountManager.Registry().Register(id, 0)
-	require.NoError(t, err)
-
-	node.Record(addr, 10000, account.Vote)
-	node.Record(addr, 20000, account.BlockProposal)
-
-	time.Sleep(5000 * time.Millisecond)
-	records := node.accountManager.Registry().GetAll()
-	require.Len(t, records, 1)
-	require.Equal(t, 10000, int(records[0].LastVote))
-	require.Equal(t, 20000, int(records[0].LastBlockProposal))
 }

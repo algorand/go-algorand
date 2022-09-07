@@ -53,7 +53,7 @@ proc checkProcessReturnedCodeTest {} {
     }
 
     # test close sending sighup
-    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    spawn /bin/bash -c "echo 44; sleep 2; kill -11 $$"
     expect {
 	44 {
 	    close
@@ -67,7 +67,7 @@ proc checkProcessReturnedCodeTest {} {
     }
 
     # same, without close. should get to segv
-    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    spawn /bin/bash -c "echo 44; sleep 2; kill -11 $$"
     expect {
 	44 {
 	    puts "not closing"

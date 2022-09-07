@@ -18,8 +18,9 @@ package fixtures
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
+	"path"
+	"runtime"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -35,6 +36,15 @@ type baseFixture struct {
 	instance    Fixture
 }
 
+func getTestDir() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		return path.Join(path.Dir(filename), "..", "..")
+	}
+	// fallback to the legacy GOPATH location.
+	return os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/")
+}
+
 func (f *baseFixture) initialize(instance Fixture) {
 	f.instance = instance
 	f.Config = config.Protocol
@@ -44,12 +54,12 @@ func (f *baseFixture) initialize(instance Fixture) {
 	}
 	f.testDir = os.Getenv("TESTDIR")
 	if f.testDir == "" {
-		f.testDir, _ = ioutil.TempDir("", "tmp")
+		f.testDir, _ = os.MkdirTemp("", "tmp")
 		f.testDirTmp = true
 	}
 	f.testDataDir = os.Getenv("TESTDATADIR")
 	if f.testDataDir == "" {
-		f.testDataDir = os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/testdata")
+		f.testDataDir = path.Join(getTestDir(), "testdata")
 	}
 }
 

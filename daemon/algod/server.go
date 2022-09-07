@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
@@ -82,7 +82,13 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			maxLogAge = 0
 		}
 	}
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+
+	var logWriter io.Writer
+	if cfg.LogSizeLimit > 0 {
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+	} else {
+		logWriter = os.Stdout
+	}
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))
@@ -140,7 +146,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	fmt.Fprintln(logWriter, "Logging Starting")
 	if s.log.GetTelemetryUploadingEnabled() {
 		// May or may not be logging to node.log
-		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryHostName())
+		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryGUID())
 		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
 	} else {
 		// May or may not be logging to node.log
@@ -151,6 +157,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
 		metricLabels["telemetry_session"] = s.log.GetTelemetrySession()
+		if h := s.log.GetTelemetryGUID(); h != "" {
+			metricLabels["telemetry_host"] = h
+		}
+		if i := s.log.GetInstanceName(); i != "" {
+			metricLabels["telemetry_instance"] = i
+		}
 	}
 	s.metricCollector = metrics.MakeMetricService(
 		&metrics.ServiceConfig{
@@ -195,6 +207,10 @@ func (s *Server) Start() {
 	fmt.Println("Success!")
 
 	cfg := s.node.Config()
+
+	if cfg.EnableRuntimeMetrics {
+		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
 
 	if cfg.EnableMetricReporting {
 		if err := s.metricCollector.Start(context.Background()); err != nil {
@@ -247,13 +263,25 @@ func (s *Server) Start() {
 	// quit earlier than these service files get created
 	s.pidFile = filepath.Join(s.RootPath, "algod.pid")
 	s.netFile = filepath.Join(s.RootPath, "algod.net")
-	ioutil.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
-	ioutil.WriteFile(s.netFile, []byte(fmt.Sprintf("%s\n", addr)), 0644)
+	err = os.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
+	if err != nil {
+		fmt.Printf("pidfile error: %v\n", err)
+		os.Exit(1)
+	}
+	err = os.WriteFile(s.netFile, []byte(fmt.Sprintf("%s\n", addr)), 0644)
+	if err != nil {
+		fmt.Printf("netfile error: %v\n", err)
+		os.Exit(1)
+	}
 
 	listenAddr, listening := s.node.ListeningAddress()
 	if listening {
 		s.netListenFile = filepath.Join(s.RootPath, "algod-listen.net")
-		ioutil.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
+		err = os.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
+		if err != nil {
+			fmt.Printf("netlistenfile error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	errChan := make(chan error, 1)

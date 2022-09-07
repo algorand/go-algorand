@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+//go:build linux
 // +build linux
 
 package libgoal

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -122,7 +123,15 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
-					d.log.Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+					// check protocol version
+					cv, err := d.ledger.ConsensusVersion(d.ledger.NextRound())
+					if err == nil {
+						if _, ok := config.Consensus[cv]; !ok {
+							warnMsg = fmt.Sprintf("received proposal message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
+						}
+					}
+					d.log.Warn(warnMsg)
 					net.Disconnect(raw.MessageHandle)
 					d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 					continue
@@ -188,6 +197,10 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		}
 		proto, err := d.ledger.ConsensusVersion(ParamsRound(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
+
+		if e.t() == payloadVerified {
+			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+		}
 	}()
 
 	var pseudonodeEvents <-chan externalEvent

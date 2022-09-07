@@ -163,8 +163,7 @@ func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 
 		appIdxPerm := rand.Perm(g.NumApps)
 		for j := 0; j < rand.Int()%(maxAppsOptedIn+1); j++ {
-			var appIdx basics.AppIndex
-			appIdx = basics.AppIndex(appIdxPerm[j] + 1)
+			appIdx := basics.AppIndex(appIdxPerm[j] + 1)
 			acctOptIns[appIdx] = struct{}{}
 
 			txn := transactions.Transaction{
@@ -510,7 +509,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
-	// apply initialization transations if any
+	// apply initialization transactions if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
 

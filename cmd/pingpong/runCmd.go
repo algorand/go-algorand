@@ -20,9 +20,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strconv"
 	"time"
 
@@ -43,9 +43,7 @@ var minFee uint64
 var randomFee, noRandomFee bool
 var randomAmount, noRandomAmount bool
 var randomDst bool
-var delayBetween string
 var runTime string
-var restTime string
 var refreshTime string
 var saveConfig bool
 var useDefault bool
@@ -67,6 +65,8 @@ var appProgLocalKeys uint32
 var duration uint32
 var rekey bool
 var nftAsaPerSecond uint32
+var pidFile string
+var cpuprofile string
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -84,9 +84,7 @@ func init() {
 	runCmd.Flags().BoolVar(&randomFee, "rf", false, "Set to enable random fees (between minf and mf)")
 	runCmd.Flags().BoolVar(&noRandomFee, "nrf", false, "Set to disable random fees")
 	runCmd.Flags().BoolVar(&randomDst, "rd", false, "Send money to randomly-generated addresses")
-	runCmd.Flags().StringVar(&delayBetween, "delay", "", "Delay (ms) between every transaction (0 means none)")
 	runCmd.Flags().StringVar(&runTime, "run", "", "Duration of time (seconds) to run transfers before resting (0 means non-stop)")
-	runCmd.Flags().StringVar(&restTime, "rest", "", "Duration of time (seconds) to rest between transfer periods (0 means no rest)")
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
 	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
@@ -107,7 +105,8 @@ func init() {
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
 	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
-
+	runCmd.Flags().StringVar(&pidFile, "pidfile", "", "path to write process id of this pingpong")
+	runCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
 }
 
 var runCmd = &cobra.Command{
@@ -116,15 +115,43 @@ var runCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Make a cache dir for wallet handle tokens
-		cacheDir, err := ioutil.TempDir("", "pingpong")
+		cacheDir, err := os.MkdirTemp("", "pingpong")
 		if err != nil {
 			reportErrorf("Cannot make temp dir: %v\n", err)
+		}
+		if cpuprofile != "" {
+			proff, err := os.Create(cpuprofile)
+			if err != nil {
+				reportErrorf("%s: %v\n", cpuprofile, err)
+			}
+			defer proff.Close()
+			err = pprof.StartCPUProfile(proff)
+			if err != nil {
+				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, err)
+			}
+			defer pprof.StopCPUProfile()
 		}
 
 		// Get libgoal Client
 		ac, err := libgoal.MakeClient(dataDir, cacheDir, libgoal.FullClient)
 		if err != nil {
 			panic(err)
+		}
+
+		if pidFile != "" {
+			pidf, err := os.Create(pidFile)
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
+			defer os.Remove(pidFile)
+			_, err = fmt.Fprintf(pidf, "%d", os.Getpid())
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
+			err = pidf.Close()
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
 		}
 
 		// Prepare configuration
@@ -187,26 +214,12 @@ var runCmd = &cobra.Command{
 		}
 		cfg.RandomizeDst = randomDst
 		cfg.Quiet = quietish
-		if delayBetween != "" {
-			val, err := strconv.ParseUint(delayBetween, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --delay: %v\n", err)
-			}
-			cfg.DelayBetweenTxn = time.Duration(uint32(val)) * time.Millisecond
-		}
 		if runTime != "" {
 			val, err := strconv.ParseUint(runTime, 10, 32)
 			if err != nil {
 				reportErrorf("Invalid value specified for --run: %v\n", err)
 			}
 			cfg.RunTime = time.Duration(uint32(val)) * time.Second
-		}
-		if restTime != "" {
-			val, err := strconv.ParseUint(restTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --rest: %v\n", err)
-			}
-			cfg.RestTime = time.Duration(uint32(val)) * time.Second
 		}
 		if refreshTime != "" {
 			val, err := strconv.ParseUint(refreshTime, 10, 32)
@@ -249,7 +262,7 @@ var runCmd = &cobra.Command{
 		}
 
 		if logicProg != "" {
-			cfg.Program, err = ioutil.ReadFile(logicProg)
+			cfg.Program, err = os.ReadFile(logicProg)
 			if err != nil {
 				reportErrorf("Error opening logic program: %v\n", err)
 			}

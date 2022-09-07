@@ -91,11 +91,15 @@ func (ml *emptyLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *emptyLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+func (ml *emptyLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ml *emptyLedger) compactCertNext() basics.Round {
+func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
+func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
 }
 
@@ -973,7 +977,7 @@ func TestApplyStorageDelta(t *testing.T) {
 		}},
 	)
 	baseCow := makeRoundCowBase(nil, 0, 0, 0, config.ConsensusParams{})
-	baseCow.updateAppResourceCache(ledgercore.AccountApp{Address: addr, App: 1}, ledgercore.AccountResource{})
+	baseCow.updateAppResourceCache(ledgercore.AccountApp{Address: addr, App: 1}, ledgercore.AppResource{})
 	cow.lookupParent = baseCow
 
 	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)

@@ -18,6 +18,7 @@ package fixtures
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"sort"
 	"time"
 	"unicode"
@@ -25,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
@@ -92,7 +93,7 @@ func (f *RestClientFixture) ClientWaitForRound(client client.RestClient, round u
 		}
 		select {
 		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for round %v", round)
+			return fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -265,10 +266,54 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 	for txid, addr := range txidsAndAddresses {
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
+			f.t.Logf("txn failed to confirm: ", addr, txid)
+			pendingTxns, err := f.AlgodClient.GetPendingTransactions(0)
+			if err == nil {
+				pendingTxids := make([]string, 0, pendingTxns.TotalTxns)
+				for _, txn := range pendingTxns.TruncatedTxns.Transactions {
+					pendingTxids = append(pendingTxids, txn.TxID)
+				}
+				f.t.Logf("pending txids: ", pendingTxids)
+			} else {
+				f.t.Logf("unable to log pending txns, ", err)
+			}
+			allTxids := make([]string, 0, len(txidsAndAddresses))
+			for txID := range txidsAndAddresses {
+				allTxids = append(allTxids, txID)
+			}
+			f.t.Logf("all txids: ", allTxids)
 			return false
 		}
 	}
 	return true
+}
+
+// WaitForAccountFunded waits until either the passed account gets non-empty balance
+// or until the passed roundTimeout passes
+// or until waiting for a round to pass times out
+func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAddress string) (err error) {
+	client := f.AlgodClient
+	for {
+		// Get current round information
+		curStatus, statusErr := client.Status()
+		require.NoError(f.t, statusErr, "fixture should be able to get node status")
+		curRound := curStatus.LastRound
+
+		// Check if we know about the transaction yet
+		acct, acctErr := client.AccountInformation(accountAddress)
+		require.NoError(f.t, acctErr, "fixture should be able to get account info")
+		if acct.Amount > 0 {
+			return nil
+		}
+
+		// Check if we should wait a round
+		if curRound > roundTimeout {
+			return fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
+		}
+		// Wait a round
+		err = f.WaitForRoundWithTimeout(curRound + 1)
+		require.NoError(f.t, err, "fixture should be able to wait for one round to pass")
+	}
 }
 
 // SendMoneyAndWait uses the rest client to send money and WaitForTxnConfirmation to wait for the send to confirm
@@ -284,7 +329,8 @@ func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transaction
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
 func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
 	client := f.LibGoalClient
-	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, 0, 0)
+	// use one curRound - 1 in case other nodes are behind
+	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)

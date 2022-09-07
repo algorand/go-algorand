@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -930,5 +931,10 @@ func (e checkpointEvent) ConsensusRound() round {
 }
 
 func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
+	return e
+}
+
+func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
+	e.Input.Proposal.validatedAt = d
 	return e
 }

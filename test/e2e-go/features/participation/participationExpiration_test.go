@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, finalStatus basics.Status, protocolCheck string) {
+func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, finalStatus basics.Status, protocolCheck string, includeStateProofs bool) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	pClient := fixture.GetLibGoalClientForNamedNode("Primary")
@@ -84,7 +84,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 		a.Equal(sAccount, partkeyResponse.Parent.String())
 
 		// account uses part key to go online
-		goOnlineTx, err := sClient.MakeUnsignedGoOnlineTx(sAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
+		goOnlineTx, err := sClient.MakeRegistrationTransactionWithGenesisID(partkeyResponse, transactionFee, 0, 0, [32]byte{}, includeStateProofs)
 		a.NoError(err)
 
 		a.Equal(sAccount, goOnlineTx.Src().String())
@@ -191,7 +191,7 @@ func TestParticipationAccountsExpirationFuture(t *testing.T) {
 	fixture.Start()
 	defer fixture.Shutdown()
 
-	testExpirationAccounts(t, &fixture, basics.Offline, "future")
+	testExpirationAccounts(t, &fixture, basics.Offline, "future", true)
 }
 
 // TestParticipationAccountsExpirationNonFuture tests that sending a transaction to an account with
@@ -214,5 +214,5 @@ func TestParticipationAccountsExpirationNonFuture(t *testing.T) {
 	fixture.Start()
 	defer fixture.Shutdown()
 
-	testExpirationAccounts(t, &fixture, basics.Online, string(protocol.ConsensusV29))
+	testExpirationAccounts(t, &fixture, basics.Online, string(protocol.ConsensusV29), false)
 }

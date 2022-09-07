@@ -24,9 +24,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestClerkSendNoteEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))

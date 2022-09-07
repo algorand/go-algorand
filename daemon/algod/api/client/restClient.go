@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -135,7 +134,7 @@ func extractError(resp *http.Response) error {
 		return nil
 	}
 
-	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
+	errorBuf, _ := io.ReadAll(resp.Body) // ignore returned error
 	errorString := filterASCII(string(errorBuf))
 
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -221,7 +220,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return fmt.Errorf("can only decode raw response into type implementing v1.RawResponse")
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -369,6 +368,10 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
+type proofParams struct {
+	HashType string `url:"hashtype"`
+}
+
 type accountInformationParams struct {
 	Format  string `url:"format"`
 	Exclude string `url:"exclude"`
@@ -422,7 +425,7 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
-		infoParams = accountInformationParams{Exclude: "", Format: "json"}
+		infoParams = accountInformationParams{Exclude: "none", Format: "json"}
 	} else {
 		infoParams = accountInformationParams{Exclude: "all", Format: "json"}
 	}
@@ -634,7 +637,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -650,10 +653,16 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-// Proof gets a Merkle proof for a transaction in a block.
-func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
+// LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
+func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.LightBlockHeaderProofResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
+	return
+}
+
+// TransactionProof gets a Merkle proof for a transaction in a block.
+func (client RestClient) TransactionProof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.TransactionProofResponse, err error) {
 	txid = stripTransaction(txid)
-	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), proofParams{HashType: hashType.String()})
 	return
 }
 

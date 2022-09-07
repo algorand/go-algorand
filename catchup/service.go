@@ -57,7 +57,7 @@ type Ledger interface {
 	EnsureBlock(block *bookkeeping.Block, c agreement.Certificate)
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
-	IsWritingCatchpointFile() bool
+	IsWritingCatchpointDataFile() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 }
@@ -425,7 +425,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		close(completed)
 	}()
 
-	peerSelector := s.createPeerSelector(true)
+	peerSelector := createPeerSelector(s.net, s.cfg, true)
 
 	if _, err := peerSelector.getNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
@@ -493,7 +493,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			}
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
-			if s.ledger.IsWritingCatchpointFile() {
+			if s.ledger.IsWritingCatchpointDataFile() {
 				s.log.Info("Catchup is stopping due to catchpoint file being written")
 				s.suspendForCatchpointWriting = true
 				return
@@ -554,7 +554,7 @@ func (s *Service) periodicSync() {
 				continue
 			}
 			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.
-			if s.ledger.IsWritingCatchpointFile() {
+			if s.ledger.IsWritingCatchpointDataFile() {
 				// keep the existing sleep duration and try again later.
 				continue
 			}
@@ -653,7 +653,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	}
 
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	peerSelector := s.createPeerSelector(false)
+	peerSelector := createPeerSelector(s.net, s.cfg, false)
 	for s.ledger.LastRound() < cert.Round {
 		psp, getPeerErr := peerSelector.getNextPeer()
 		if getPeerErr != nil {
@@ -755,11 +755,11 @@ func (s *Service) handleUnsupportedRound(nextUnsupportedRound basics.Round) {
 	}
 }
 
-func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
+func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) *peerSelector {
 	var peerClasses []peerClass
-	if s.cfg.EnableCatchupFromArchiveServers {
+	if cfg.EnableCatchupFromArchiveServers {
 		if pipelineFetch {
-			if s.cfg.NetAddress != "" { // Relay node
+			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
@@ -774,7 +774,7 @@ func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
 				}
 			}
 		} else {
-			if s.cfg.NetAddress != "" { // Relay node
+			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
@@ -791,7 +791,7 @@ func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
 		}
 	} else {
 		if pipelineFetch {
-			if s.cfg.NetAddress != "" { // Relay node
+			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
@@ -804,7 +804,7 @@ func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
 				}
 			}
 		} else {
-			if s.cfg.NetAddress != "" { // Relay node
+			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
@@ -818,5 +818,5 @@ func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
 			}
 		}
 	}
-	return makePeerSelector(s.net, peerClasses)
+	return makePeerSelector(net, peerClasses)
 }

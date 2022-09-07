@@ -20,6 +20,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // rateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
@@ -57,17 +59,18 @@ func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duratio
 func (r *rateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 	var waitTime time.Duration
 	var provisionalTime time.Time
-	queueingTimedOut := time.After(r.queueingTimeout)
+	queueingDeadline := time.Now().Add(r.queueingTimeout)
 	for {
 		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(req.Host)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
-		select {
-		case <-time.After(waitTime):
-		case <-queueingTimedOut:
-			return nil, ErrConnectionQueueingTimeout
+		waitDeadline := time.Now().Add(waitTime)
+		if waitDeadline.Before(queueingDeadline) {
+			util.NanoSleep(waitTime)
+			continue
 		}
+		return nil, ErrConnectionQueueingTimeout
 	}
 	res, err = r.innerTransport.RoundTrip(req)
 	r.phonebook.UpdateConnectionTime(req.Host, provisionalTime)

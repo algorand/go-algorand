@@ -17,6 +17,7 @@
 // Support all unix system except linux
 // in https://github.com/golang/sys/blob/master/unix/syscall_unix.go
 
+//go:build aix || darwin || dragonfly || freebsd || netbsd || openbsd || solaris
 // +build aix darwin dragonfly freebsd netbsd openbsd solaris
 
 package libgoal

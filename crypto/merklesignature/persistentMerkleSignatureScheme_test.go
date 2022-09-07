@@ -19,11 +19,12 @@ package merklesignature
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
-	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -67,7 +68,7 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 	store := createTestDB(a)
 	defer store.Close()
 
-	firstValid := uint64(1)
+	firstValid := uint64(0)
 	LastValid := uint64(5000)
 
 	interval := uint64(256)
@@ -80,17 +81,12 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 	err = newMss.RestoreAllSecrets(*store)
 	a.NoError(err)
 
-	for i := uint64(1); i < LastValid; i++ {
+	for i := uint64(0); i < LastValid; i++ {
 		key1 := mss.GetKey(i)
 		key2 := newMss.GetKey(i)
-		if i%interval == 0 {
-			a.NotNil(key1)
-			a.NotNil(key2)
-			a.Equal(*key1, *key2)
-			continue
-		}
-		a.Nil(key1)
-		a.Nil(key2)
+		a.NotNil(key1)
+		a.NotNil(key2)
+		a.Equal(*key1, *key2)
 	}
 
 	// make sure we exercise the path of the database being upgraded, but then
@@ -101,7 +97,7 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 }
 
 func createTestDB(a *require.Assertions) *db.Accessor {
-	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	tmpname := fmt.Sprintf("%015x", crypto.RandUint64())
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
 	a.NotNil(store)

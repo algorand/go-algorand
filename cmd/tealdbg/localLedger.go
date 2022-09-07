@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 
@@ -198,7 +198,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(resp.Body)
 		return basics.Address{}, fmt.Errorf("application response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var appResp ApplicationIndexerResponse
@@ -229,7 +229,7 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(resp.Body)
 		return basics.AccountData{}, fmt.Errorf("account response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var accountResp AccountIndexerResponse
@@ -281,30 +281,41 @@ func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
 
-func (l *localLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	ad, ok := l.balances[addr]
 	if !ok {
-		return ledgercore.AccountResource{}, nil
+		return ledgercore.AssetResource{}, nil
 	}
-	var result ledgercore.AccountResource
-	if ctype == basics.AppCreatable {
-		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-			result.AppParams = &p
-		}
-		if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-			result.AppLocalState = &s
-		}
-	} else if ctype == basics.AssetCreatable {
-		if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			result.AssetParams = &p
-		}
-		if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-			result.AssetHolding = &p
-		}
+	var result ledgercore.AssetResource
+	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		result.AssetParams = &p
+	}
+	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		result.AssetHolding = &p
+	}
+
+	return result, nil
+}
+
+func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	ad, ok := l.balances[addr]
+	if !ok {
+		return ledgercore.AppResource{}, nil
+	}
+	var result ledgercore.AppResource
+	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		result.AppParams = &p
+	}
+	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		result.AppLocalState = &s
 	}
 
 	return result, nil

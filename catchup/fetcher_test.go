@@ -105,7 +105,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	b.Payset = []transactions.SignedTxnInBlock{
 		txib,
 	}
-	b.TxnRoot, err = b.PaysetCommit()
+	b.TxnCommitments, err = b.PaysetCommit()
 	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(b, agreement.Certificate{Round: next}))
 	return
@@ -116,7 +116,7 @@ func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBloc
 	for i := 0; i < numBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		blk.TxnRoot, err = blk.PaysetCommit()
+		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
 		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})

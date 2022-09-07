@@ -171,11 +171,20 @@ func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Extract PC from config
-	line := req.debugConfig.BreakAtLine
-	if line == noBreak {
-		s.debugger.RemoveBreakpoint(int(line))
-	} else {
-		s.debugger.SetBreakpoint(int(line))
+	for line := range req.debugConfig.ActiveBreak {
+		if req.debugConfig.NoBreak {
+			err := s.debugger.RemoveBreakpoint(int(line))
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		} else {
+			err := s.debugger.SetBreakpoint(int(line))
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

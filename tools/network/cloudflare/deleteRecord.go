@@ -19,13 +19,13 @@ package cloudflare
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 )
 
 // deleteDNSRecordRequest creates a new http request for deleting a single DNS records.
-func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, recordID string) (*http.Request, error) {
+func deleteDNSRecordRequest(zoneID string, authToken string, recordID string) (*http.Request, error) {
 	// construct the query
 	uri, err := url.Parse(fmt.Sprintf("%szones/%s/dns_records/%s", cloudFlareURI, zoneID, recordID))
 	if err != nil {
@@ -35,7 +35,7 @@ func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -55,7 +55,7 @@ type DeleteDNSRecordResult struct {
 // ParseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseDeleteDNSRecordResponse(response *http.Response) (*DeleteDNSRecordResponse, error) {
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}

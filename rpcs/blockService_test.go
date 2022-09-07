@@ -19,7 +19,7 @@ package rpcs
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -173,7 +173,7 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, http.StatusOK, response.StatusCode)
-	bodyData, err := ioutil.ReadAll(response.Body)
+	bodyData, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(bodyData))
 }
@@ -363,7 +363,7 @@ func addBlock(t *testing.T, ledger *data.Ledger) {
 	require.NoError(t, err)
 	blk.BlockHeader.Round++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	var cert agreement.Certificate

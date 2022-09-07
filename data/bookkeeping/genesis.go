@@ -18,7 +18,7 @@ package bookkeeping
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -86,7 +86,7 @@ type Genesis struct {
 // LoadGenesisFromFile attempts to load a Genesis structure from a (presumably) genesis.json file.
 func LoadGenesisFromFile(genesisFile string) (genesis Genesis, err error) {
 	// Load genesis.json
-	genesisText, err := ioutil.ReadFile(genesisFile)
+	genesisText, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return
 	}
@@ -99,6 +99,51 @@ func LoadGenesisFromFile(genesisFile string) (genesis Genesis, err error) {
 // of the network and the ledger schema version
 func (genesis Genesis) ID() string {
 	return string(genesis.Network) + "-" + genesis.SchemaID
+}
+
+// Hash is the genesis hash.
+func (genesis Genesis) Hash() crypto.Digest {
+	return crypto.HashObj(genesis)
+}
+
+// Balances returns the genesis account balances.
+func (genesis Genesis) Balances() (GenesisBalances, error) {
+	genalloc := make(map[basics.Address]basics.AccountData)
+	for _, entry := range genesis.Allocation {
+		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
+		if err != nil {
+			return GenesisBalances{}, fmt.Errorf("cannot parse genesis addr %s: %w", entry.Address, err)
+		}
+
+		_, present := genalloc[addr]
+		if present {
+			return GenesisBalances{}, fmt.Errorf("repeated allocation to %s", entry.Address)
+		}
+
+		genalloc[addr] = entry.State
+	}
+
+	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse fee sink addr %s: %w", genesis.FeeSink, err)
+	}
+
+	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse rewards pool addr %s: %w", genesis.RewardsPool, err)
+	}
+
+	return MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
+}
+
+// Block computes the genesis block.
+func (genesis Genesis) Block() (Block, error) {
+	genBal, err := genesis.Balances()
+	if err != nil {
+		return Block{}, err
+	}
+
+	return MakeGenesisBlock(genesis.Proto, genBal, genesis.ID(), genesis.Hash())
 }
 
 // A GenesisAllocation object represents an allocation of algos to
@@ -164,13 +209,13 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 
 	blk := Block{
 		BlockHeader: BlockHeader{
-			Round:        0,
-			Branch:       BlockHash{},
-			Seed:         committee.Seed(genesisHash),
-			TxnRoot:      transactions.Payset{}.CommitGenesis(),
-			TimeStamp:    genesisBal.Timestamp,
-			GenesisID:    genesisID,
-			RewardsState: genesisRewardsState,
+			Round:          0,
+			Branch:         BlockHash{},
+			Seed:           committee.Seed(genesisHash),
+			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}},
+			TimeStamp:      genesisBal.Timestamp,
+			GenesisID:      genesisID,
+			RewardsState:   genesisRewardsState,
 			UpgradeState: UpgradeState{
 				CurrentProtocol: proto,
 			},

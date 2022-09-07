@@ -57,7 +57,7 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_ASSET_TRADE
 
 echo "make asset trader able to accept asset"
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-${gcmd} asset send -o ${TEMPDIR}/b-asset-init.tx -a 0 --assetid ${ASSET_ID} -t $ACCOUNT_ASSET_TRADER -f $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
+${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
 
 ${gcmd} clerk sign -i ${TEMPDIR}/b-asset-init.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/b-asset-init.stx
 
@@ -103,7 +103,7 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_ASSET_TRADE
 
 echo "make asset trader able to accept asset"
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-${gcmd} asset send -o ${TEMPDIR}/b-asset-init.tx -a 0 --assetid ${ASSET_ID} -t $ACCOUNT_ASSET_TRADER -f $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
+${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
 
 ${gcmd} clerk sign -i ${TEMPDIR}/b-asset-init.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/b-asset-init.stx
 

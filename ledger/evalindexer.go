@@ -43,6 +43,8 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+
+	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -87,6 +89,11 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 	return l.il.LatestBlockHdr()
 }
 
+// BlockHdrCached is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return l.il.BlockHdrCached(round)
+}
+
 // CheckDup is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	// This function is not used by evaluator.
@@ -115,7 +122,17 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	return *accountData, round, nil
 }
 
-func (l indexerLedgerConnector) LookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l indexerLedgerConnector) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (l indexerLedgerConnector) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+func (l indexerLedgerConnector) lookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	// check to see if the account data in the cache.
 	if creatableMap, ok := l.roundResources.Resources[address]; ok {
 		if resource, ok := creatableMap[Creatable{aidx, ctype}]; ok {
@@ -180,10 +197,10 @@ func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgerc
 	return
 }
 
-// CompactCertVoters is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.VotersForRound, error) {
+// VotersForStateProof is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore.VotersForRound, error) {
 	// This function is not used by evaluator.
-	return nil, errors.New("CompactCertVoters() not implemented")
+	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {

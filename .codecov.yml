@@ -1,0 +1,18 @@
+codecov:
+  require_ci_to_pass: yes
+
+ignore:
+  - "**/*_gen.go"
+  - "**/*_gen_test.go"
+  - "**/generated"
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        informational: true
+    patch:
+      default:
+        target: auto
+        informational: true

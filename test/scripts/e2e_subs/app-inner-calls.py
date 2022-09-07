@@ -14,13 +14,12 @@ goal = Goal(sys.argv[1], autosend=True)
 
 joe = goal.new_account()
 
-txinfo, err = goal.pay(goal.account, joe, amt=500_000)
+_, err = goal.pay(goal.account, joe, amt=500_000)
 assert not err, err
 
 # Turn off rewards for precise balance checking
-txinfo, err = goal.keyreg(joe, nonpart=True)
+_, err = goal.keyreg(joe, nonpart=True)
 assert not err, err
-joeb = goal.balance(joe)
 
 # When invoked, this app funds the app that was created in the txn
 # before it and invokes its start(asset) method.  Of course, this app must
@@ -80,7 +79,7 @@ funder = txinfo['application-index']
 assert funder
 
 # Fund the funder
-txinfo, err = goal.pay(goal.account, goal.app_address(funder), amt=4_000_000)
+_, err = goal.pay(goal.account, goal.app_address(funder), amt=4_000_000)
 assert not err, err
 
 # Construct a group that creates an ASA and an app, then "starts" the
@@ -141,7 +140,7 @@ assert 0 == goal.balance(app_account, asa_id)
 assert 200_000 == goal.min_balance(app_account), goal.min_balance(app_account)
 
 # Ensure creator can send asa to app
-txinfo, err = goal.axfer(joe, app_account, 10, asa_id)
+_, err = goal.axfer(joe, app_account, 10, asa_id)
 assert not err, err
 assert 10 == goal.balance(app_account, asa_id)
 

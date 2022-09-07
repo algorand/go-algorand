@@ -56,7 +56,8 @@ func captureCallstack() []byte {
 	bufferSize := 256 * 1024
 	for {
 		buf = make([]byte, bufferSize)
-		if runtime.Stack(buf, true) < bufferSize {
+		if writtenBytes := runtime.Stack(buf, true); writtenBytes < bufferSize {
+			buf = buf[:writtenBytes]
 			break
 		}
 		bufferSize *= 2

@@ -167,7 +167,7 @@ func (n *BandwidthFilter) Tick(newClockTime int) bool {
 	n.downstreamMutex.Lock()
 	if n.downstreamDataSize < 0 && n.downstreamQueue.Len() == 0 {
 		if n.debugMessageLevel >= 1 {
-			fmt.Printf("node: %d, tick: %d, reseting queued downstream capacity %d -> 0\n", n.nodeID, n.currentTick, n.upstreamDataSize)
+			fmt.Printf("node: %d, tick: %d, resetting queued downstream capacity %d -> 0\n", n.nodeID, n.currentTick, n.upstreamDataSize)
 		}
 		n.downstreamDataSize = 0
 	}
@@ -179,7 +179,7 @@ func (n *BandwidthFilter) Tick(newClockTime int) bool {
 	// adjust the upstream size.
 	if n.upstreamDataSize < 0 && n.upstreamQueue.Len() == 0 {
 		if n.debugMessageLevel >= 1 {
-			fmt.Printf("node: %d, tick: %d, reseting queued upstream capacity %d -> 0\n", n.nodeID, n.currentTick, n.upstreamDataSize)
+			fmt.Printf("node: %d, tick: %d, resetting queued upstream capacity %d -> 0\n", n.nodeID, n.currentTick, n.upstreamDataSize)
 		}
 		n.upstreamDataSize = 0
 	}

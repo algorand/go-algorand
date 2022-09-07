@@ -40,8 +40,7 @@ var (
 	dnsBootstrapArg string // e.g. mainnet or testnet
 	recordIDArg     int64
 
-	cfEmail   string
-	cfAuthKey string
+	cfToken string
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
@@ -50,10 +49,9 @@ var srvRecordTypes = []string{"SRV"}
 const metricsPort = uint16(9100)
 
 func init() {
-	cfEmail = os.Getenv("CLOUDFLARE_EMAIL")
-	cfAuthKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if cfEmail == "" || cfAuthKey == "" {
-		panic(makeExitError(1, "One or more credentials missing from ENV"))
+	cfToken = os.Getenv("CLOUDFLARE_API_TOKEN")
+	if cfToken == "" {
+		panic(makeExitError(1, "CLOUDFLARE_API_TOKEN credentials missing from ENV"))
 	}
 
 	rootCmd.AddCommand(checkCmd)
@@ -125,7 +123,7 @@ type srvService struct {
 }
 
 func makeDNSContext() *dnsContext {
-	cloudflareCred := cloudflare.NewCred(cfEmail, cfAuthKey)
+	cloudflareCred := cloudflare.NewCred(cfToken)
 
 	nameZoneID, err := cloudflareCred.GetZoneID(context.Background(), nameDomainArg)
 	if err != nil {
@@ -543,7 +541,7 @@ func getTargetDNSChain(nameEntries map[string]string, target string) (names []st
 func getReverseMappedEntries(nameZoneID string, recordTypes []string) (reverseMap map[string]string, err error) {
 	reverseMap = make(map[string]string)
 
-	cloudflareDNS := cloudflare.NewDNS(nameZoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(nameZoneID, cfToken)
 
 	for _, recType := range recordTypes {
 		var records []cloudflare.DNSRecordResponseEntry
@@ -569,7 +567,7 @@ func getReverseMappedEntries(nameZoneID string, recordTypes []string) (reverseMa
 func getSrvRecords(serviceName string, networkName, zoneID string) (service srvService, err error) {
 	service = makeService(serviceName, networkName)
 
-	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(zoneID, cfToken)
 
 	var records []cloudflare.DNSRecordResponseEntry
 	records, err = cloudflareDNS.ListDNSRecord(context.Background(), "SRV", service.serviceName, "", "", "", "")
@@ -601,7 +599,7 @@ func getSrvRecords(serviceName string, networkName, zoneID string) (service srvS
 }
 
 func addDNSRecord(from string, to string, cfZoneID string) error {
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	const priority = 1
 	const proxied = false
@@ -620,7 +618,7 @@ func addDNSRecord(from string, to string, cfZoneID string) error {
 }
 
 func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortName string, cfZoneID string) error {
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	const priority = 1
 	const weight = 1
@@ -629,7 +627,7 @@ func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortNam
 }
 
 func clearSRVRecord(srvNetwork string, target string, serviceShortName string, cfZoneID string) error {
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 	return cloudflareDNS.ClearSRVRecord(context.Background(), srvNetwork, target, serviceShortName, "_tcp")
 }
 
@@ -642,7 +640,7 @@ func deleteDNSRecord(from string, to string, cfZoneID string) (err error) {
 		recordType = "CNAME"
 	}
 
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	var records []cloudflare.DNSRecordResponseEntry
 	records, err = cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")

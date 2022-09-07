@@ -19,7 +19,6 @@ package util
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +58,17 @@ func FileExists(filePath string) bool {
 	return fileExists
 }
 
+// IsEmpty recursively check path for files and returns true if there are none.
+func IsEmpty(path string) bool {
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		return os.ErrExist
+	})
+	return err == nil
+}
+
 // ExeDir returns the absolute path to the current executing binary (not including the filename)
 func ExeDir() (string, error) {
 	ex, err := os.Executable()
@@ -72,7 +82,7 @@ func ExeDir() (string, error) {
 
 // GetFirstLineFromFile retrieves the first line of the specified file.
 func GetFirstLineFromFile(netFile string) (string, error) {
-	addrStr, err := ioutil.ReadFile(netFile)
+	addrStr, err := os.ReadFile(netFile)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +129,7 @@ func copyFolder(source string, dest string, info os.FileInfo, includeFilter Incl
 		return fmt.Errorf("error creating destination folder: %v", err)
 	}
 
-	contents, err := ioutil.ReadDir(source)
+	contents, err := os.ReadDir(source)
 	if err != nil {
 		return err
 	}

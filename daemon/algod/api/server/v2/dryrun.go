@@ -119,7 +119,6 @@ type dryrunDebugReceiver struct {
 }
 
 func (ddr *dryrunDebugReceiver) updateScratch() {
-	any := false
 	maxActive := -1
 	lasti := len(ddr.history) - 1
 
@@ -127,37 +126,24 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		return
 	}
 
+	if ddr.scratchActive == nil {
+		ddr.scratchActive = make([]bool, 256)
+	}
+
 	for i, sv := range *ddr.history[lasti].Scratch {
+		ddr.scratchActive[i] = false
 		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
-			any = true
+			ddr.scratchActive[i] = true
 			maxActive = i
 		}
 	}
 
-	if any {
-		if ddr.scratchActive == nil {
-			ddr.scratchActive = make([]bool, maxActive+1, 256)
-		}
-		for i := len(ddr.scratchActive); i <= maxActive; i++ {
-			sv := (*ddr.history[lasti].Scratch)[i]
-			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
-			ddr.scratchActive = append(ddr.scratchActive, active)
-		}
-	} else {
-		if ddr.scratchActive != nil {
-			*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
-		} else {
-			ddr.history[lasti].Scratch = nil
-			return
-		}
+	if maxActive == -1 {
+		ddr.history[lasti].Scratch = nil
+		return
 	}
 
-	scratchlen := maxActive + 1
-	if len(ddr.scratchActive) > scratchlen {
-		scratchlen = len(ddr.scratchActive)
-	}
-
-	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
+	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:maxActive+1]
 	for i := range *ddr.history[lasti].Scratch {
 		if !ddr.scratchActive[i] {
 			(*ddr.history[lasti].Scratch)[i].Type = 0
@@ -257,6 +243,10 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
@@ -310,26 +300,32 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	ad, _, err := dl.lookup(rnd, addr)
 	if err != nil {
-		return ledgercore.AccountResource{}, err
+		return ledgercore.AppResource{}, err
 	}
-	var result ledgercore.AccountResource
-	if ctype == basics.AppCreatable {
-		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-			result.AppParams = &p
-		}
-		if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-			result.AppLocalState = &s
-		}
-	} else if ctype == basics.AssetCreatable {
-		if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			result.AssetParams = &p
-		}
-		if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-			result.AssetHolding = &p
-		}
+	var result ledgercore.AppResource
+	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		result.AppParams = &p
+	}
+	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		result.AppLocalState = &s
+	}
+	return result, nil
+}
+
+func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AssetResource{}, err
+	}
+	var result ledgercore.AssetResource
+	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		result.AssetParams = &p
+	}
+	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		result.AssetHolding = &p
 	}
 	return result, nil
 }
@@ -422,6 +418,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
+			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
@@ -515,11 +512,14 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					messages[0] = "ApprovalProgram"
 				}
 				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
+				if !pass {
+					delta = ep.TxnGroup[ti].EvalDelta
+				}
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]generated.AccountStateDelta, len(delta.LocalDeltas))
+					localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
 						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err2 != nil {
@@ -546,8 +546,17 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
-				cost64 := uint64(cost)
-				result.Cost = &cost64
+				// The cost is broken up into two fields: budgetAdded and budgetConsumed.
+				// This is necessary because the fields can only be represented as unsigned
+				// integers, so a negative cost would underflow. The two fields also provide
+				// more information, which can be useful for testing purposes.
+				// cost = budgetConsumed - budgetAdded
+				netCost := uint64(cost)
+				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
+				budgetConsumed := uint64(cost) + budgetAdded
+				result.Cost = &netCost
+				result.BudgetAdded = &budgetAdded
+				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget
 				cumulativeCost += cost
 
@@ -628,4 +637,14 @@ func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
 	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
 		base.GlobalStateSchema = update.GlobalStateSchema
 	}
+}
+
+// count all inner transactions contained within the eval delta
+func numInnerTxns(delta transactions.EvalDelta) (cnt int) {
+	cnt = len(delta.InnerTxns)
+	for _, itxn := range delta.InnerTxns {
+		cnt += numInnerTxns(itxn.EvalDelta)
+	}
+
+	return
 }

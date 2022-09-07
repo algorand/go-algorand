@@ -1,0 +1,51 @@
+name: "Benchmark workflow"
+on:
+  # Push and update benchmarks when a commit is merged into master.
+  push:
+    branches:
+      - master
+  # Trigger benchmark test on this PR's commit against master.
+  pull_request:
+    branches:
+      - master
+permissions:
+  # Push benchmark performance graph to gh-pages branch.
+  contents: write
+  deployments: write
+jobs:
+  benchmark:
+    name: Performance regression check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+      - run: go version
+      - name: Build go-algorand
+        run: scripts/travis/build.sh
+      # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
+      # Performance degradations suggest either or both:  (1) op code
+      # degradation, (2) `eval` degradation.  (2) suggests a broader performance
+      # issue. 
+      - name: Run benchmark
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+      - name: Push benchmark result to gh-pages branch
+        if: github.event_name == 'push'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+      - name: Evaluate benchmark on PR branch
+        if: github.event.pull_request
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: '200%'
+          comment-on-alert: true

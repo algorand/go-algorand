@@ -47,3 +47,20 @@ func OpenPair(filename string, memory bool) (p Pair, err error) {
 
 	return
 }
+
+// OpenErasablePair opens the filename with both reading and writing accessors
+// with the secure_delete pragma set, using MakeErasableAccessor.
+func OpenErasablePair(filename string) (p Pair, err error) {
+	p.Rdb, err = makeErasableAccessor(filename, true)
+	if err != nil {
+		return
+	}
+
+	p.Wdb, err = makeErasableAccessor(filename, false)
+	if err != nil {
+		p.Rdb.Close()
+		return
+	}
+
+	return
+}

@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -75,10 +74,14 @@ func init() {
 
 	keyregCmd.Flags().Uint64Var(&params.fee, "fee", minFee, "transaction fee")
 	keyregCmd.Flags().Uint64Var(&params.firstValid, "firstvalid", 0, "first round where the transaction may be committed to the ledger")
-	keyregCmd.MarkFlagRequired("firstvalid") // nolint:errcheck
+	if err := keyregCmd.MarkFlagRequired("firstvalid"); err != nil {
+		panic(err)
+	}
 	keyregCmd.Flags().Uint64Var(&params.lastValid, "lastvalid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to firstvalid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
-	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
+	if err := keyregCmd.MarkFlagRequired("network"); err != nil {
+		panic(err)
+	}
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction; only specify when bringing an account online to vote in Algorand consensus")
@@ -144,11 +147,11 @@ func run(params keyregCmdParams) error {
 			return errors.New("must provide --keyfile when registering participation keys")
 		}
 		if params.addr != "" {
-			return errors.New("do not provide --address when registering participation keys")
+			return errors.New("do not provide --account when registering participation keys")
 		}
 	} else {
 		if params.addr == "" {
-			return errors.New("must provide --address when bringing an account offline")
+			return errors.New("must provide --account when bringing an account offline")
 		}
 		if params.partkeyFile != "" {
 			return errors.New("do not provide --keyfile when bringing an account offline")
@@ -160,7 +163,7 @@ func run(params keyregCmdParams) error {
 		var err error
 		accountAddress, err = basics.UnmarshalChecksumAddress(params.addr)
 		if err != nil {
-			return fmt.Errorf("unable to parse --address: %w", err)
+			return fmt.Errorf("unable to parse --account: %w", err)
 		}
 	}
 
@@ -172,8 +175,8 @@ func run(params keyregCmdParams) error {
 		params.txFile = fmt.Sprintf("%s.tx", params.partkeyFile)
 	}
 
-	if util.FileExists(params.txFile) || params.txFile == stdoutFilenameValue {
-		return fmt.Errorf("outputFile '%s' already exists", params.partkeyFile)
+	if params.txFile != stdoutFilenameValue && util.FileExists(params.txFile) {
+		return fmt.Errorf("outputFile '%s' already exists", params.txFile)
 	}
 
 	// Lookup information from partkey file
@@ -244,7 +247,7 @@ func run(params keyregCmdParams) error {
 			return fmt.Errorf("failed to write transaction to stdout: %w", err)
 		}
 	} else {
-		if err = ioutil.WriteFile(params.txFile, data, 0600); err != nil {
+		if err = os.WriteFile(params.txFile, data, 0600); err != nil {
 			return fmt.Errorf("failed to write transaction to '%s': %w", params.txFile, err)
 		}
 	}

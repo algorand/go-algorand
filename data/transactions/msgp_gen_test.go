@@ -1,3 +1,4 @@
+//go:build !skip_msgp_testing
 // +build !skip_msgp_testing
 
 package transactions
@@ -7,9 +8,10 @@ package transactions
 import (
 	"testing"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalApplicationCallTxnFields(t *testing.T) {
@@ -300,66 +302,6 @@ func BenchmarkAppendMsgAssetTransferTxnFields(b *testing.B) {
 
 func BenchmarkUnmarshalAssetTransferTxnFields(b *testing.B) {
 	v := AssetTransferTxnFields{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := CompactCertTxnFields{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingCompactCertTxnFields(t *testing.T) {
-	protocol.RunEncodingTest(t, &CompactCertTxnFields{})
-}
-
-func BenchmarkMarshalMsgCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -900,6 +842,66 @@ func BenchmarkAppendMsgSignedTxnWithAD(b *testing.B) {
 
 func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 	v := SignedTxnWithAD{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalStateProofTxnFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := StateProofTxnFields{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingStateProofTxnFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &StateProofTxnFields{})
+}
+
+func BenchmarkMarshalMsgStateProofTxnFields(b *testing.B) {
+	v := StateProofTxnFields{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgStateProofTxnFields(b *testing.B) {
+	v := StateProofTxnFields{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalStateProofTxnFields(b *testing.B) {
+	v := StateProofTxnFields{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

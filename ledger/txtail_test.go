@@ -17,7 +17,9 @@
 package ledger
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,10 +58,12 @@ func TestTxTailCheckdup(t *testing.T) {
 					CurrentProtocol: protocol.ConsensusCurrentVersion,
 				},
 			},
+			Payset: make(transactions.Payset, 1),
 		}
 
-		txids := make(map[transactions.Txid]basics.Round, 1)
-		txids[transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))] = rnd + txvalidity
+		txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, 1)
+		blk.Payset[0].Txn.Note = []byte{byte(rnd % 256), byte(rnd / 256), byte(1)}
+		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, Intra: 0}
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
@@ -72,12 +76,16 @@ func TestTxTailCheckdup(t *testing.T) {
 
 	// test txid duplication testing.
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
-		txid := transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))
-		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, txid, ledgercore.Txlease{})
+		Txn := transactions.Transaction{
+			Header: transactions.Header{
+				Note: []byte{byte(rnd % 256), byte(rnd / 256), byte(1)},
+			},
+		}
+		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, Txn.ID(), ledgercore.Txlease{})
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
-			var missingRoundErr *txtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxTailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var txInLedgerErr *ledgercore.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
@@ -90,8 +98,8 @@ func TestTxTailCheckdup(t *testing.T) {
 		err := tail.checkDup(proto, rnd, basics.Round(0), rnd, transactions.Txid{}, lease)
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-1 {
-			var missingRoundErr *txtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxTailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
@@ -101,19 +109,20 @@ func TestTxTailCheckdup(t *testing.T) {
 
 type txTailTestLedger struct {
 	Ledger
+	protoVersion protocol.ConsensusVersion
 }
 
 const testTxTailValidityRange = 200
 const testTxTailTxnPerRound = 150
 
 func (t *txTailTestLedger) Latest() basics.Round {
-	return basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife + 10)
+	return basics.Round(config.Consensus[t.protoVersion].MaxTxnLife + 10)
 }
 
 func (t *txTailTestLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
+			CurrentProtocol: t.protoVersion,
 		},
 	}, nil
 }
@@ -122,7 +131,7 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
+				CurrentProtocol: t.protoVersion,
 			},
 			Round: r,
 		},
@@ -134,6 +143,40 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 
 	return blk, nil
 }
+
+func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
+	// create a corresponding blockdb.
+	inMemory := true
+	t.blockDBs, _ = dbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.protoVersion = protoVersion
+
+	tx, err := t.trackerDBs.Wdb.Handle.Begin()
+	require.NoError(ts, err)
+
+	accts := ledgertesting.RandomAccounts(20, true)
+	proto := config.Consensus[protoVersion]
+	newDB := accountsInitTest(ts, tx, accts, protoVersion)
+	require.True(ts, newDB)
+	_, err = accountsInit(tx, accts, proto)
+	require.NoError(ts, err)
+
+	roundData := make([][]byte, 0, proto.MaxTxnLife)
+	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
+	for i := startRound; i <= t.Latest(); i++ {
+		blk, err := t.Block(i)
+		require.NoError(ts, err)
+		tail, err := txTailRoundFromBlock(blk)
+		require.NoError(ts, err)
+		encoded, _ := tail.encode()
+		roundData = append(roundData, encoded)
+	}
+	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	require.NoError(ts, err)
+	tx.Commit()
+	return nil
+}
+
 func makeTxTailTestTransaction(r basics.Round, txnIdx int) (txn transactions.SignedTxnInBlock) {
 	txn.Txn.FirstValid = r
 	txn.Txn.LastValid = r + testTxTailValidityRange
@@ -152,8 +195,9 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
+	require.NoError(t, ledger.initialize(t, protocol.ConsensusCurrentVersion))
 
-	err := txtail.loadFromDisk(&ledger, 0)
+	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)
 	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
@@ -174,7 +218,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 			if r >= ledger.Latest()-testTxTailValidityRange {
 				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
 			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
 		} else {
 			// transaction has no lease
@@ -189,8 +233,137 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 					require.Nil(t, dupResult)
 				}
 			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
+		}
+	}
+}
+
+func TestTxTailDeltaTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, protoVersion := range []protocol.ConsensusVersion{protocol.ConsensusV32, protocol.ConsensusFuture} {
+		t.Run(string(protoVersion), func(t *testing.T) {
+
+			var ledger txTailTestLedger
+			txtail := txTail{}
+			require.NoError(t, ledger.initialize(t, protoVersion))
+
+			err := txtail.loadFromDisk(&ledger, ledger.Latest())
+			require.NoError(t, err)
+			fmt.Printf("%d, %s\n", len(txtail.recent), protoVersion)
+			require.Equal(t, int(config.Consensus[protoVersion].MaxTxnLife), len(txtail.recent))
+			require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
+			require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
+
+			var lease [32]byte
+			for i := int(ledger.Latest()) + 1; i < int(config.Consensus[protoVersion].MaxTxnLife)*3; i++ {
+				blk := bookkeeping.Block{
+					BlockHeader: bookkeeping.BlockHeader{
+						Round:     basics.Round(i),
+						TimeStamp: int64(i << 10),
+						UpgradeState: bookkeeping.UpgradeState{
+							CurrentProtocol: protoVersion,
+						},
+					},
+					Payset: make(transactions.Payset, 1),
+				}
+				sender := &basics.Address{}
+				sender[0] = byte(i)
+				sender[1] = byte(i >> 8)
+				sender[2] = byte(i >> 16)
+				blk.Payset[0].Txn.Sender = *sender
+				blk.Payset[0].Txn.Lease = lease
+				deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+				deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
+					LastValid: basics.Round(i + 50),
+					Intra:     0,
+				}
+				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+
+				txtail.newBlock(blk, deltas)
+				txtail.committedUpTo(basics.Round(i))
+				dcc := &deferredCommitContext{
+					deferredCommitRange: deferredCommitRange{
+						oldBase:              basics.Round(i - 1),
+						offset:               1,
+						catchpointFirstStage: true,
+					},
+					newBase: basics.Round(i),
+				}
+				err = txtail.prepareCommit(dcc)
+				require.NoError(t, err)
+
+				tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
+				require.NoError(t, err)
+
+				err = txtail.commitRound(context.Background(), tx, dcc)
+				require.NoError(t, err)
+				tx.Commit()
+				proto := config.Consensus[protoVersion]
+				retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+				if uint64(i) > proto.MaxTxnLife*2 {
+					// validate internal storage length.
+					require.Equal(t, 1, len(txtail.roundTailSerializedDeltas))
+					require.Equal(t, int(retainSize+1), len(txtail.blockHeaderData)) // retainSize + 1 in-memory delta
+					if enableTxTailHashes {
+						require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
+					}
+				}
+				txtail.postCommit(context.Background(), dcc)
+				if uint64(i) > proto.MaxTxnLife*2 {
+					// validate internal storage length.
+					require.Zero(t, len(txtail.roundTailSerializedDeltas))
+					require.Equal(t, int(retainSize), len(txtail.blockHeaderData))
+					if enableTxTailHashes {
+						require.Equal(t, int(retainSize), len(txtail.roundTailHashes))
+					}
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkTxTailBlockHeaderCache adds 2M random blocks by calling
+// newBlock and postCommit on txTail tracker, and reports memory allocations
+func BenchmarkTxTailBlockHeaderCache(b *testing.B) {
+	const numBlocks = 2_000_000
+	b.ReportAllocs()
+
+	accts := ledgertesting.RandomAccounts(10, false)
+	ledger := makeMockLedgerForTracker(b, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	tail := txTail{}
+	require.NoError(b, tail.loadFromDisk(ledger, 0))
+
+	dbRound := basics.Round(0)
+	const lookback = 8
+	for i := 1; i < numBlocks+1; i++ {
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round:     basics.Round(i),
+				TimeStamp: int64(i << 10),
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: protocol.ConsensusCurrentVersion,
+				},
+			},
+		}
+		tail.newBlock(blk, ledgercore.StateDelta{})
+
+		if i%10 == 0 || i == numBlocks {
+			offset := uint64(i - int(dbRound) - lookback)
+			dcc := &deferredCommitContext{
+				deferredCommitRange: deferredCommitRange{
+					offset:   offset,
+					oldBase:  dbRound,
+					lookback: lookback,
+				},
+				newBase: dbRound + basics.Round(offset),
+			}
+			err := tail.prepareCommit(dcc)
+			require.NoError(b, err)
+			tail.postCommit(context.Background(), dcc)
+			dbRound = dcc.newBase
+			require.Less(b, len(tail.blockHeaderData), 1001+10)
 		}
 	}
 }

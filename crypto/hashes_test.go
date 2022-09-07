@@ -37,6 +37,9 @@ func TestHashFactoryCreatingNewHashes(t *testing.T) {
 	a.NotNil(h)
 	a.Equal(SumhashDigestSize, h.Size())
 
+	h = HashFactory{HashType: Sha256}.NewHash()
+	a.NotNil(h)
+	a.Equal(Sha256Size, h.Size())
 }
 
 func TestHashSum(t *testing.T) {

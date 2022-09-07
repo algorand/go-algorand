@@ -94,7 +94,7 @@ function asset-deposit {
 }
 
 function asset-optin {
-    ${gcmd} asset send  -a 0 "$@"
+    ${gcmd} asset optin "$@"
 }
 
 function clawback_addr {
@@ -175,7 +175,7 @@ appl "withdraw(uint64):void" --app-arg="int:800" --foreign-asset="$ASSETID" --fr
 
 USER=$(${gcmd} account new | awk '{ print $6 }') #new account
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$USER" #fund account
-asset-optin -f "$USER" -t "$USER"  --assetid "$ASSETID" #opt in to asset
+asset-optin --assetid "$ASSETID" -a $USER #opt in to asset
 # SET $USER as clawback address
 ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $USER
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
@@ -190,7 +190,7 @@ ${gcmd} asset send -f "$SMALL" -t "$USER" -a "1000" --assetid "$ASSETID" --clawb
 
 USER2=$(${gcmd} account new | awk '{ print $6 }') #new account
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$USER2" #fund account
-asset-optin -f "$USER2" -t "$USER2"  --assetid "$ASSETID" #opt in to asset
+asset-optin --assetid "$ASSETID" -a $USER2 #opt in to asset
 # set $APPACCT as clawback address on asset
 ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $APPACCT
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
@@ -231,7 +231,7 @@ appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
 
 # mint asset
 APPASSETID=$(asset_ids "$APPACCT")
-asset-optin -f "$SMALL" -t "$SMALL"  --assetid "$APPASSETID" #opt in to asset
+asset-optin --assetid "$APPASSETID" -a $SMALL #opt in to asset
 appl "mint():void" --from="$SMALL" --foreign-asset="$APPASSETID" -o "$T/mint.tx"
 payin 1000 -o "$T/pay1.tx"
 cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"

@@ -242,7 +242,7 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		err = fmt.Errorf("Unable to create new elastic client on '%s' using '%s:%s' : %w", cfg.URI, cfg.UserName, cfg.Password, err)
 		return nil, err
 	}
-	hostName := cfg.getHostName()
+	hostName := cfg.getHostGUID()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
 	if err != nil {

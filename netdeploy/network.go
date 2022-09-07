@@ -19,7 +19,6 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,7 +58,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -69,10 +68,23 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 
 	template, err := loadTemplate(templateFile)
 	if err == nil {
+		if overrideDevMode {
+			template.Genesis.DevMode = true
+			if len(template.Nodes) > 0 {
+				template.Nodes[0].IsRelay = false
+			}
+		}
 		err = template.Validate()
 	}
 	if err != nil {
 		return n, err
+	}
+
+	if n.cfg.Name == "" {
+		n.cfg.Name = template.Genesis.NetworkName
+	}
+	if n.cfg.Name == "" {
+		return n, fmt.Errorf("unnamed network. Use the \"network\" flag or \"Genesis.NetworkName\" in the network template")
 	}
 
 	// Create the network root directory so we can generate genesis.json and prepare node data directories
@@ -81,7 +93,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 	template.Consensus = consensus
-	err = template.generateGenesisAndWallets(rootDir, name, binDir)
+	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name, binDir)
 	if err != nil {
 		return n, err
 	}
@@ -220,7 +232,7 @@ func saveNetworkCfg(cfg NetworkCfg, configFile string) error {
 
 func (n *Network) scanForNodes() error {
 	// Enumerate direct sub-directories of our root and look for valid node data directories (where genesis.json exists)
-	entries, err := ioutil.ReadDir(n.rootDir)
+	entries, err := os.ReadDir(n.rootDir)
 	if err != nil {
 		return err
 	}

@@ -455,6 +455,11 @@ func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
 	return t, nil
 }
 
+// implement timers.Clock
+func (t *demuxTester) Since() time.Duration {
+	return 0
+}
+
 // implement Ledger
 func (t *demuxTester) NextRound() basics.Round {
 	return 1234

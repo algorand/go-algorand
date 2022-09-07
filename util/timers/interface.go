@@ -27,6 +27,10 @@ type Clock interface {
 	// at which Zero was called as their reference point.
 	Zero() Clock
 
+	// Since returns the time spent between the last time the clock was zeroed out and the current
+	// wall clock time.
+	Since() time.Duration
+
 	// TimeoutAt returns a channel that fires delta time after Zero was called.
 	// If delta has already passed, it returns a closed channel.
 	//

@@ -23,9 +23,12 @@ import (
 
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGoalNodeCleanup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 

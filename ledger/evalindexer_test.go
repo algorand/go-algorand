@@ -47,6 +47,10 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 	return il.l.BlockHdr(il.latestRound)
 }
 
+func (il indexerLedgerForEvalImpl) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdrCached(round)
+}
+
 // The value of the returned map is nil iff the account was not found.
 func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error) {
 	res := make(map[basics.Address]*ledgercore.AccountData)
@@ -83,7 +87,7 @@ func (il indexerLedgerForEvalImpl) LookupResources(addresses map[basics.Address]
 			}
 
 			c[creatable], err =
-				il.l.LookupResource(il.latestRound, address, creatable.Index, creatable.Type)
+				il.l.lookupResource(il.latestRound, address, creatable.Index, creatable.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -318,6 +322,7 @@ func TestResourceCaching(t *testing.T) {
 		Timestamp:   0,
 	}
 	l := newTestLedger(t, genesisBalances)
+	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
@@ -359,10 +364,10 @@ func TestResourceCaching(t *testing.T) {
 		assert.Equal(t, basics.Round(0), rnd)
 	}
 	{
-		accountResource, err := ilc.LookupResource(
-			basics.Round(0), address, basics.CreatableIndex(7), basics.AssetCreatable)
+		accountResource, err := ilc.LookupAsset(
+			basics.Round(0), address, basics.AssetIndex(7))
 		require.NoError(t, err)
-		expected := ledgercore.AccountResource{
+		expected := ledgercore.AssetResource{
 			AssetParams: &basics.AssetParams{
 				Total: 8,
 			},

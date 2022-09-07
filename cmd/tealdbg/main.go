@@ -17,17 +17,28 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 )
 
 func main() {
+	// Hidden command to generate docs in a given directory
+	// tealdbg generate-docs [path]
+	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
+		err := doc.GenMarkdownTree(rootCmd, os.Args[2])
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Println(err)
 		os.Exit(1)
@@ -193,7 +204,7 @@ func debugLocal(args []string) {
 		programNames = make([]string, len(args))
 		programBlobs = make([][]byte, len(args))
 		for i, file := range args {
-			data, err := ioutil.ReadFile(file)
+			data, err := os.ReadFile(file)
 			if err != nil {
 				log.Fatalf("Error program reading %s: %s", file, err)
 			}
@@ -205,7 +216,7 @@ func debugLocal(args []string) {
 	var err error
 	var txnBlob []byte
 	if len(txnFile) > 0 {
-		txnBlob, err = ioutil.ReadFile(txnFile)
+		txnBlob, err = os.ReadFile(txnFile)
 		if err != nil {
 			log.Fatalf("Error txn reading %s: %s", txnFile, err)
 		}
@@ -213,7 +224,7 @@ func debugLocal(args []string) {
 
 	var balanceBlob []byte
 	if len(balanceFile) > 0 {
-		balanceBlob, err = ioutil.ReadFile(balanceFile)
+		balanceBlob, err = os.ReadFile(balanceFile)
 		if err != nil {
 			log.Fatalf("Error balance reading %s: %s", balanceFile, err)
 		}
@@ -221,7 +232,7 @@ func debugLocal(args []string) {
 
 	var ddrBlob []byte
 	if len(ddrFile) > 0 {
-		ddrBlob, err = ioutil.ReadFile(ddrFile)
+		ddrBlob, err = os.ReadFile(ddrFile)
 		if err != nil {
 			log.Fatalf("Error dryrun-dump reading %s: %s", ddrFile, err)
 		}

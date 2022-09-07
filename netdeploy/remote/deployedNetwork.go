@@ -19,7 +19,7 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -128,7 +128,7 @@ func InitDeployedNetworkConfig(file string, buildConfig BuildConfig) (cfg Deploy
 }
 
 func loadAndProcessConfig(file string, buildConfig BuildConfig) (expanded string, err error) {
-	raw, err := ioutil.ReadFile(file)
+	raw, err := os.ReadFile(file)
 	if err != nil {
 		return
 	}
@@ -287,7 +287,7 @@ func validateFilename(filename string) (err error) {
 	if strings.Index(filename, "*") >= 0 {
 		return ErrDeployedNetworkNameCantIncludeWildcard
 	}
-	file, err := ioutil.TempFile("", filename)
+	file, err := os.CreateTemp("", filename)
 	if err == nil {
 		file.Close()
 		os.Remove(file.Name())
@@ -394,7 +394,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
 		round:         basics.Round(0),
 		genesisID:     genesis.ID(),
-		genesisHash:   crypto.HashObj(genesis),
+		genesisHash:   genesis.Hash(),
 		poolAddr:      poolAddr,
 		sinkAddr:      sinkAddr,
 	}
@@ -555,7 +555,7 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	payset = append(payset, txibs...)
 	bootstrappedNet.txnCount += uint64(len(payset))
 	block.Payset = payset
-	block.TxnRoot, err = block.PaysetCommit()
+	block.TxnCommitments, err = block.PaysetCommit()
 	if err != nil {
 		return bookkeeping.Block{}, err
 	}
@@ -831,8 +831,8 @@ func (cfg DeployedNetwork) createHostFolders(targetFolder string, genesisFolder 
 }
 
 func (cfg DeployedNetwork) copyWalletsToNodes(genesisFolder string, walletNameToDataMap map[string]walletTargetData) (err error) {
-	var files []os.FileInfo
-	files, err = ioutil.ReadDir(genesisFolder)
+	var files []fs.DirEntry
+	files, err = os.ReadDir(genesisFolder)
 	if err != nil {
 		return
 	}
