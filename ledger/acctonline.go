@@ -445,24 +445,24 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactOnlineAccountDeltas.Len(); i++ {
 		acctUpdate := dcc.compactOnlineAccountDeltas.GetByIdx(i)
-		cnt := acctUpdate.NOnlineAcctDeltas
-		macct, ok := ao.accounts[acctUpdate.Address]
+		addr := acctUpdate.Address()
+		cnt := acctUpdate.NumDeltas()
+		macct, ok := ao.accounts[addr]
 		if !ok {
-			ao.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.Address)
+			ao.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
 		}
 
 		if cnt > macct.ndeltas {
-			ao.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, acctUpdate.Address, macct.ndeltas)
+			ao.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
 		} else if cnt == macct.ndeltas {
-			delete(ao.accounts, acctUpdate.Address)
+			delete(ao.accounts, addr)
 		} else {
 			macct.ndeltas -= cnt
-			ao.accounts[acctUpdate.Address] = macct
+			ao.accounts[addr] = macct
 		}
 	}
 
 	ao.baseOnlineAccounts.WriteAccounts(dcc.updatedPersistedOnlineAccounts)
-
 
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts.Data {
 		ao.onlineAccountsCache.writeFrontIfExist(
@@ -682,7 +682,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
-		if err != nil || persistedData.Rowid() == 0 {
+		if err != nil || !persistedData.IsValid() {
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}

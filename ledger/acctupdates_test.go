@@ -1284,63 +1284,6 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	return
 }
 
-func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
-	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	au, _ := newAcctUpdates(b, ml, cfg)
-	defer au.close()
-
-	// at this point, the database was created. We want to fill the accounts data
-	accountsNumber := 6000000 * b.N
-	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		var updates accountdb.CompactAccountDeltas
-		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-			addr := ledgertesting.RandomAddress()
-			acctData := accountdb.BaseAccountData{}
-			acctData.MicroAlgos.Raw = 1
-
-			updates.Insert(accountdb.MakeTestAccountDelta(addr, acctData))
-			i++
-		}
-
-		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, _, err = accountdb.AccountsNewRound(tx, updates, accountdb.CompactResourcesDeltas{}, nil, proto, basics.Round(1))
-			return
-		})
-		require.NoError(b, err)
-	}
-
-	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return accountdb.UpdateAccountsHashRound(ctx, tx, 1)
-	})
-	require.NoError(b, err)
-
-	au.close()
-
-	b.ResetTimer()
-	err = au.loadFromDisk(ml, 0)
-	require.NoError(b, err)
-	b.StopTimer()
-	b.ReportMetric(float64(accountsNumber), "entries/trie")
-}
-
 // TestAcctUpdatesCachesInitialization test the functionality of the initializeCaches cache.
 func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
