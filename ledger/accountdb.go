@@ -4028,17 +4028,6 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	return
 }
 
-// totalKVs returns the total number of key value pairs
-func totalKVs(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
-	if err == sql.ErrNoRows {
-		total = 0
-		err = nil
-		return
-	}
-	return
-}
-
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )

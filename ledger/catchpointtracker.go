@@ -217,10 +217,10 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var biggestChunkLen uint64
 
 	if ct.enableGeneratingCatchpointFiles {
-		// Generate the catchpoint file. This need to be done inline so that it will
-		// block any new accounts that from being written. generateCatchpointData()
-		// expects that the accounts data would not be modified in the background during
-		// it's execution.
+		// Generate the catchpoint file. This is done inline so that it will
+		// block any new accounts from being written. generateCatchpointData()
+		// expects that the accounts data would not be modified in the
+		// background during its execution.
 		var err error
 		totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, dbRound, updatingBalancesDuration)
@@ -647,6 +647,11 @@ func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, bigges
 	}
 }
 
+// repackCatchpoint takes the header (that must be made "late" in order to have
+// the latest blockhash) and the (snappy compressed) catchpoint data from
+// dataPath and regurgitates it to look like catchpoints have always looked - a
+// tar file with the header in the first "file" and the catchpoint data in file
+// chunks, all compressed with gzip instead of snappy.
 func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestChunkLen uint64, dataPath string, outPath string) error {
 	// Initialize streams.
 	fin, err := os.OpenFile(dataPath, os.O_RDONLY, 0666)
@@ -1140,9 +1145,9 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		return 0, 0, 0, err
 	}
 
-	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
+	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
-	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
+	catchpointGenerationStats.AccountsCount = catchpointWriter.totalAccounts
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
 	ct.log.With("accountsRound", accountsRound).
 		With("writingDuration", catchpointGenerationStats.WritingDuration).
@@ -1153,7 +1158,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), nil
+	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {

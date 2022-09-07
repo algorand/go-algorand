@@ -270,7 +270,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, "balances.1.1.msgpack", header.Name)
+	require.Equal(t, "balances.1.msgpack", header.Name)
 
 	var chunk catchpointFileChunkV6
 	err = protocol.Decode(balancesBlockBytes, &chunk)
@@ -299,9 +299,9 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 				break
 			}
 		}
-		totalAccounts = writer.GetTotalAccounts()
-		totalChunks = writer.GetTotalChunks()
-		biggestChunkLen = writer.GetBiggestChunkLen()
+		totalAccounts = writer.totalAccounts
+		totalChunks = writer.chunkNum
+		biggestChunkLen = writer.biggestChunkLen
 		accountsRnd, err = accountsRound(tx)
 		if err != nil {
 			return
@@ -334,7 +334,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	l, err := OpenLedger(logging.TestingLog(t), "TestFullCatchpointWriter", true, initState, conf)
+	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"ToCatchpoint", true, initState, conf)
 	require.NoError(t, err)
 	defer l.Close()
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
@@ -583,51 +583,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
-	readDb := ml.trackerDB().Rdb
-	var totalAccounts uint64
-	var totalChunks uint64
-	var biggestChunkLen uint64
-	var accountsRnd basics.Round
-	var totals ledgercore.AccountTotals
-	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, 5)
-		if err != nil {
-			return err
-		}
-		for {
-			more, err := writer.WriteStep(context.Background())
-			require.NoError(t, err)
-			if !more {
-				break
-			}
-		}
-		totalAccounts = writer.GetTotalAccounts()
-		totalChunks = writer.GetTotalChunks()
-		biggestChunkLen = writer.GetBiggestChunkLen()
-		accountsRnd, err = accountsRound(tx)
-		if err != nil {
-			return
-		}
-		totals, err = accountsTotals(ctx, tx, false)
-		return
-	})
-	require.NoError(t, err)
-	blocksRound := accountsRnd + 1
-	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
-	// this is not a correct way to create a label, but it's good enough for these tests
-	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest)
-	catchpointFileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
-		BalancesRound:     accountsRnd,
-		BlocksRound:       blocksRound,
-		Totals:            totals,
-		TotalAccounts:     totalAccounts,
-		TotalChunks:       totalChunks,
-		Catchpoint:        catchpointLabel,
-		BlockHeaderDigest: blockHeaderDigest,
-	}
-	err = repackCatchpoint(context.Background(), catchpointFileHeader, biggestChunkLen, catchpointDataFilePath, catchpointFilePath)
-	require.NoError(t, err)
+	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath)
 }
 
 func testNewLedgerFromCatchpoint(t *testing.T, filepath string) *Ledger {
@@ -813,7 +769,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
 	cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath)
-	require.EqualValues(t, cph.TotalChunks, 2)
+	require.EqualValues(t, 2, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, catchpointFilePath)
 	defer l.Close()

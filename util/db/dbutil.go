@@ -209,7 +209,7 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // The return error of fn should be a native sqlite3.Error type or an error wrapping it.
-// DO NOT return a custom error - the internal logic of Atmoic expects an sqlite error and uses that value.
+// DO NOT return a custom error - the internal logic of Atomic expects an sqlite error and uses that value.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	return db.atomic(fn, extras...)
 }

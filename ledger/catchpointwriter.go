@@ -50,7 +50,6 @@ type catchpointWriter struct {
 	tx                   *sql.Tx
 	filePath             string
 	totalAccounts        uint64
-	totalChunks          uint64
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
@@ -117,10 +116,6 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 	if err != nil {
 		return nil, err
 	}
-	totalKVs, err := totalKVs(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
 
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
 	if err != nil {
@@ -136,14 +131,11 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 	}
 	tar := tar.NewWriter(compressor)
 
-	accountChunks := (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
-	kvChunks := (totalKVs + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
 	res := &catchpointWriter{
 		ctx:                  ctx,
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
-		totalChunks:          accountChunks + kvChunks,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
@@ -160,6 +152,15 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
+// WriteStep works for a short period of time (determined by stepCtx) to get
+// some more data (accounts/resources/kvpairs) by using readDatabaseStep, and
+// write that data to the open tar file in cw.tar.  The writing is done in
+// asyncWriter, so that it can proceeed concurrently with reading the data from
+// the db. asyncWriter only runs long enough to process the data read during a
+// single call to WriteStep, and WriteStep ensures that asyncWriter has finished
+// writing by waiting for it in a defer block, collecting any errors that may
+// have occurred during writing.  Therefore, WriteStep looks like a simple
+// synchronous function to its callers.
 func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
 	// have we timed-out / canceled by that point ?
 	if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
@@ -168,24 +169,46 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 
 	writerRequest := make(chan catchpointFileChunkV6, 1)
 	writerResponse := make(chan error, 2)
-	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum, cw.numAccountsProcessed)
+	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum)
 	defer func() {
+		// For simplicity, all cleanup is done once, here. The writerRequest is
+		// closed, signaling asyncWriter that it can exit, and then
+		// writerResponse is drained, ensuring any problems from asyncWriter are
+		// noted (and that the writing is done).
 		close(writerRequest)
-		// wait for the writerResponse to close.
+	DRAIN:
 		for {
 			select {
 			case writerError, open := <-writerResponse:
 				if open {
 					err = writerError
 				} else {
-					return
+					break DRAIN
 				}
+			}
+		}
+		if !more {
+			// If we're done, close up the tar file and report on size
+			cw.tar.Close()
+			cw.compressor.Close()
+			cw.file.Close()
+			fileInfo, statErr := os.Stat(cw.filePath)
+			if statErr != nil {
+				err = statErr
+			}
+			cw.writtenBytes = fileInfo.Size()
+
+			// These don't HAVE to be closed, since the "owning" tx will be cmmmitted/rolledback
+			cw.accountsIterator.Close()
+			if cw.kvRows != nil {
+				cw.kvRows.Close()
+				cw.kvRows = nil
 			}
 		}
 	}()
 
 	for {
-		// have we timed-out / canceled by that point ?
+		// have we timed-out or been canceled ?
 		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
@@ -195,62 +218,44 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			if err != nil {
 				return
 			}
+			// readDatabaseStep yielded nothing, we're done
+			if cw.chunk.empty() {
+				return false, nil
+			}
 		}
 
-		// have we timed-out / canceled by that point ?
+		// have we timed-out or been canceled ?
 		if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 			return
 		}
 
 		// check if we had any error on the writer from previous iterations.
+		// this should not be required for correctness, since we'll find the
+		// error in the defer block. But this might notice earlier.
 		select {
 		case err := <-writerResponse:
-			// we ran into an error. wait for the channel to close before returning with the error.
-			<-writerResponse
 			return false, err
 		default:
 		}
 
-		// send the chunk to asyncWriter channel
-		if !cw.chunk.empty() {
-			cw.numAccountsProcessed += cw.chunk.numAccounts
-			cw.chunkNum++
-			writerRequest <- cw.chunk
-			if cw.numAccountsProcessed == cw.totalAccounts {
-				cw.accountsIterator.Close()
-				if cw.kvRows != nil {
-					cw.kvRows.Close()
-					cw.kvRows = nil
-				}
-				// if we're done, wait for the writer to complete its writing.
-				err, opened := <-writerResponse
-				if opened {
-					// we ran into an error. wait for the channel to close before returning with the error.
-					<-writerResponse
-					return false, err
-				}
-				// channel is closed. we're done writing and no issues detected.
-				return false, nil
-			}
-			cw.chunk = catchpointFileChunkV6{}
-		}
+		// send the chunk to the asyncWriter channel
+		cw.chunkNum++
+		writerRequest <- cw.chunk
+		// indicate that we need a readDatabaseStep
+		cw.chunk = catchpointFileChunkV6{}
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, initialChunkNum uint64, initialNumAccounts uint64) {
+func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
 	defer close(response)
-	chunkNum := initialChunkNum
-	numAccountsProcessed := initialNumAccounts
 	for chk := range chunks {
 		chunkNum++
-		numAccountsProcessed += chk.numAccounts
 		if chk.empty() {
 			break
 		}
-
 		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.%d.msgpack", chunkNum, cw.totalChunks),
+			Name: fmt.Sprintf("balances.%d.msgpack", chunkNum),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})
@@ -266,25 +271,12 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
 			cw.biggestChunkLen = chunkLen
 		}
-		if numAccountsProcessed == cw.totalAccounts { // Quits too soon. Consider KVs
-			cw.tar.Close()
-			cw.compressor.Close()
-			cw.file.Close()
-			var fileInfo os.FileInfo
-			fileInfo, err = os.Stat(cw.filePath)
-			if err != nil {
-				response <- err
-				break
-			}
-			cw.writtenBytes = fileInfo.Size()
-			break
-		}
 	}
 }
 
 // readDatabaseStep places the next chunk of records into cw.chunk. It yields
-// all the account chunks first, and then the kv chunks. Even if the accounts
-// are evenly divisible by BalancesPerCatchpointFileChunk, it muts not return an
+// all of the account chunks first, and then the kv chunks. Even if the accounts
+// are evenly divisible by BalancesPerCatchpointFileChunk, it must not return an
 // empty chunk between accounts and kvs.
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) error {
 	if !cw.accountsDone {
@@ -319,32 +311,13 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 		if err != nil {
 			return err
 		}
-		record := encodedKVRecordV6{Key: k, Value: v}
-		kvrs = append(kvrs, record)
+		kvrs = append(kvrs, encodedKVRecordV6{Key: k, Value: v})
 		if len(kvrs) == BalancesPerCatchpointFileChunk {
 			break
 		}
 	}
 	cw.chunk = catchpointFileChunkV6{KVs: kvrs}
 	return nil
-}
-
-// GetSize returns the number of bytes that have been written to the file.
-func (cw *catchpointWriter) GetSize() int64 {
-	return cw.writtenBytes
-}
-
-// GetBalancesCount returns the number of balances written to this catchpoint file.
-func (cw *catchpointWriter) GetTotalAccounts() uint64 {
-	return cw.totalAccounts
-}
-
-func (cw *catchpointWriter) GetTotalChunks() uint64 {
-	return cw.totalChunks
-}
-
-func (cw *catchpointWriter) GetBiggestChunkLen() uint64 {
-	return cw.biggestChunkLen
 }
 
 // hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.
