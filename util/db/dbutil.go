@@ -315,7 +315,7 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 	return
 }
 
-// ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
+// ResetTransactionWarnDeadline allow the atomic function to extend its warn deadline by setting a new deadline.
 // The Accessor can be copied and therefore isn't suitable for multi-threading directly,
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.

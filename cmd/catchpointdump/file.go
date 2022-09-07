@@ -386,7 +386,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		// increase the deadline warning to disable the warning message.
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
+		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
 }
@@ -420,7 +420,7 @@ func printKeyValueStore(databaseName string, outFile *os.File) error {
 
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var rowsCount int64
-		err := tx.QueryRow(fmt.Sprintf("SELECT count(*) from catchpointkvstore")).Scan(&rowsCount)
+		err := tx.QueryRow("SELECT count(*) from catchpointkvstore").Scan(&rowsCount)
 		if err != nil {
 			return err
 		}

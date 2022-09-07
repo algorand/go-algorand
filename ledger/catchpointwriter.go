@@ -155,7 +155,7 @@ func (cw *catchpointWriter) Abort() error {
 // WriteStep works for a short period of time (determined by stepCtx) to get
 // some more data (accounts/resources/kvpairs) by using readDatabaseStep, and
 // write that data to the open tar file in cw.tar.  The writing is done in
-// asyncWriter, so that it can proceeed concurrently with reading the data from
+// asyncWriter, so that it can proceed concurrently with reading the data from
 // the db. asyncWriter only runs long enough to process the data read during a
 // single call to WriteStep, and WriteStep ensures that asyncWriter has finished
 // writing by waiting for it in a defer block, collecting any errors that may

@@ -4275,8 +4275,8 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		iterator.Close()
 		return
 	}
-	// Do not Close() the iterator here.  It is the caller's responsibilty to do
-	// so, signalled by the return of an empty chunk. If we Close() here, the
+	// Do not Close() the iterator here.  It is the caller's responsibility to
+	// do so, signalled by the return of an empty chunk. If we Close() here, the
 	// next call to Next() will start all over!
 	return
 }
