@@ -679,6 +679,10 @@ func TestAttestorsChange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is difficult for ARM")
+	}
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
