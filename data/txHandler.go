@@ -600,6 +600,9 @@ func (handler *TxHandler) retryHandler() {
 					} else {
 						heap.Pop(&handler.txRequests)
 					}
+					if len(handler.txRequests.ar) == 0 {
+						break
+					}
 					req = handler.txRequests.ar[0]
 				}
 			}

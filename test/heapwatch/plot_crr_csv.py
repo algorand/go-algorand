@@ -35,7 +35,7 @@ def main():
         with open(fname) as fin:
             reader = csv.DictReader(fin)
             for rec in reader:
-                xround = int(rec['round'])
+                xround = int(rec['round'] or 0)
                 for k,v in rec.items():
                     if k in _meta_cols:
                         continue

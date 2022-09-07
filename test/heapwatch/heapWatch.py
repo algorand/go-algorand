@@ -235,7 +235,8 @@ class algodDir:
                 except:
                     pass
         except:
-            return None, None
+            pass
+        return None, None
 
 class maxrnd:
     def __init__(self, biqueue):
