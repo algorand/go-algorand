@@ -2291,11 +2291,11 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 	prd, ok := au.baseResources.Read(addr1, basics.CreatableIndex(aidx1))
 	require.True(t, ok)
-	prd.Round = oldCachedDBRound
+	prd.SetRoundTest(oldCachedDBRound)
 	au.baseResources.Write(prd, addr1)
 	prd, ok = au.baseResources.Read(addr1, basics.CreatableIndex(aidx2))
 	require.True(t, ok)
-	prd.Round = oldCachedDBRound
+	prd.SetRoundTest(oldCachedDBRound)
 	au.baseResources.Write(prd, addr1)
 
 	var ad basics.AccountData

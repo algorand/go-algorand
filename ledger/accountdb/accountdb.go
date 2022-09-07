@@ -291,8 +291,18 @@ func (pac persistedOnlineAccountData) before(other *PersistedOnlineAccountData) 
 	return pac.round < (*other).Round()
 }
 
+type PersistedResourcesData interface {
+	Addrid() int64
+	Aidx() basics.CreatableIndex
+	Data() *resourcesData
+	Round() basics.Round
+	before(other *PersistedResourcesData) bool
+	AccountResource() ledgercore.AccountResource
+	SetRoundTest(round basics.Round)
+}
+
 //msgp:ignore PersistedResourcesData
-type PersistedResourcesData struct {
+type persistedResourcesData struct {
 	// Addrid is the rowid of the account address that holds this resource.
 	// it is used in update/delete operations so must be filled for existing records.
 	// resolution is a multi stage process:
@@ -300,45 +310,65 @@ type PersistedResourcesData struct {
 	// - baseAccount cache might have an entry for the address with rowid set
 	// - when loading non-cached resources in ResourcesLoadOld
 	// - when creating new accounts in AccountsNewRound
-	Addrid int64
+	addrid int64
 	// creatable index
-	Aidx basics.CreatableIndex
+	aidx basics.CreatableIndex
 	// actual resource data
-	Data resourcesData
+	data resourcesData
 	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose.
-	Round basics.Round
+	round basics.Round
+}
+
+func (prd persistedResourcesData) Addrid() int64 {
+	return prd.addrid
+}
+
+func (prd persistedResourcesData) Aidx() basics.CreatableIndex {
+	return prd.aidx
+}
+
+func (prd persistedResourcesData) Data() *resourcesData {
+	return &prd.data
+}
+
+func (prd persistedResourcesData) Round() basics.Round {
+	return prd.round
 }
 
 // before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
-func (prd *PersistedResourcesData) before(other *PersistedResourcesData) bool {
-	return prd.Round < other.Round
+func (prd persistedResourcesData) before(other *PersistedResourcesData) bool {
+	return prd.round < (*other).Round()
 }
 
-func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource {
+func (prd persistedResourcesData) AccountResource() ledgercore.AccountResource {
 	var ret ledgercore.AccountResource
-	if prd.Data.IsAsset() {
-		if prd.Data.IsHolding() {
-			holding := prd.Data.GetAssetHolding()
+	if prd.data.IsAsset() {
+		if prd.data.IsHolding() {
+			holding := prd.data.GetAssetHolding()
 			ret.AssetHolding = &holding
 		}
-		if prd.Data.IsOwning() {
-			assetParams := prd.Data.GetAssetParams()
+		if prd.data.IsOwning() {
+			assetParams := prd.data.GetAssetParams()
 			ret.AssetParams = &assetParams
 		}
 	}
-	if prd.Data.IsApp() {
-		if prd.Data.IsHolding() {
-			localState := prd.Data.GetAppLocalState()
+	if prd.data.IsApp() {
+		if prd.data.IsHolding() {
+			localState := prd.data.GetAppLocalState()
 			ret.AppLocalState = &localState
 		}
-		if prd.Data.IsOwning() {
-			appParams := prd.Data.GetAppParams()
+		if prd.data.IsOwning() {
+			appParams := prd.data.GetAppParams()
 			ret.AppParams = &appParams
 		}
 	}
 	return ret
+}
+
+func (prd persistedResourcesData) SetRoundTest(round basics.Round) {
+	prd.round = round
 }
 
 type UpdatedAccounts struct {
@@ -353,7 +383,7 @@ type UpdatedOnlineAccounts struct {
 
 // ResourceDelta is used as part of the CompactResourcesDeltas to describe a change to a single resource.
 type ResourceDelta struct {
-	OldResource PersistedResourcesData
+	OldResource persistedResourcesData
 	NewResource resourcesData
 	NAcctDeltas int
 	Address     basics.Address
@@ -671,15 +701,15 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 				// baseResources caches deleted entries, and they have addrid = 0
 				// need to handle this and prevent such entries to be treated as fully resolved
 				baseResourceData, has := baseResources.Read(res.Addr, basics.CreatableIndex(res.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.Addrid != 0
+				existingAcctCacheEntry := has && baseResourceData.Addrid() != 0
 				if existingAcctCacheEntry {
-					newEntry.OldResource = baseResourceData
+					newEntry.OldResource = baseResourceData.(persistedResourcesData)
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.Read(res.Addr); has {
-						newEntry.OldResource = PersistedResourcesData{Addrid: pad.ID()}
+						newEntry.OldResource = persistedResourcesData{addrid: pad.ID()}
 					}
-					newEntry.OldResource.Aidx = basics.CreatableIndex(res.Aidx)
+					newEntry.OldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
@@ -707,15 +737,15 @@ func MakeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 				}
 				newEntry.NewResource.SetAppData(res.Params, res.State)
 				baseResourceData, has := baseResources.Read(res.Addr, basics.CreatableIndex(res.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.Addrid != 0
+				existingAcctCacheEntry := has && baseResourceData.Addrid() != 0
 				if existingAcctCacheEntry {
-					newEntry.OldResource = baseResourceData
+					newEntry.OldResource = baseResourceData.(persistedResourcesData)
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.Read(res.Addr); has {
-						newEntry.OldResource = PersistedResourcesData{Addrid: pad.ID()}
+						newEntry.OldResource = persistedResourcesData{addrid: pad.ID()}
 					}
-					newEntry.OldResource.Aidx = basics.CreatableIndex(res.Aidx)
+					newEntry.OldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
@@ -753,9 +783,9 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 	for _, missIdx := range a.misses {
 		delta := a.deltas[missIdx]
 		addr := delta.Address
-		aidx = delta.OldResource.Aidx
-		if delta.OldResource.Addrid != 0 {
-			addrid = delta.OldResource.Addrid
+		aidx = delta.OldResource.Aidx()
+		if delta.OldResource.Addrid() != 0 {
+			addrid = delta.OldResource.Addrid()
 		} else if addrid, ok = knownAddresses[addr]; !ok {
 			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
 			if err != nil {
@@ -775,8 +805,8 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
-				persistedResData := PersistedResourcesData{Addrid: addrid, Aidx: aidx}
-				err = protocol.Decode(resDataBuf, &persistedResData.Data)
+				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx}
+				err = protocol.Decode(resDataBuf, &persistedResData.data)
 				if err != nil {
 					return err
 				}
@@ -787,7 +817,7 @@ func (a *CompactResourcesDeltas) ResourcesLoadOld(tx *sql.Tx, knownAddresses map
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(missIdx, PersistedResourcesData{Addrid: addrid, Aidx: aidx})
+			a.updateOld(missIdx, persistedResourcesData{addrid: addrid, aidx: aidx})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -827,7 +857,7 @@ func (a *CompactResourcesDeltas) insert(delta ResourceDelta) int {
 	if a.cache == nil {
 		a.cache = make(map[ledgercore.AccountCreatable]int)
 	}
-	a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx}] = last
+	a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx()}] = last
 	return last
 }
 
@@ -836,7 +866,7 @@ func (a *CompactResourcesDeltas) insertMissing(delta ResourceDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *CompactResourcesDeltas) updateOld(idx int, old PersistedResourcesData) {
+func (a *CompactResourcesDeltas) updateOld(idx int, old persistedResourcesData) {
 	a.deltas[idx].OldResource = old
 }
 
@@ -2773,28 +2803,28 @@ func (qs *AccountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error) {
+func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.Round, &buf)
+		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.round, &buf)
 		if err == nil {
-			data.Aidx = aidx
+			data.aidx = aidx
 			if len(buf) > 0 && rowid.Valid {
-				data.Addrid = rowid.Int64
-				err = protocol.Decode(buf, &data.Data)
+				data.addrid = rowid.Int64
+				err = protocol.Decode(buf, &data.data)
 				if err != nil {
 					return err
 				}
-				if ctype == basics.AssetCreatable && !data.Data.IsAsset() {
-					return fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
+				if ctype == basics.AssetCreatable && !data.data.IsAsset() {
+					return fmt.Errorf("lookupResources asked for an asset but got %v", data.data)
 				}
-				if ctype == basics.AppCreatable && !data.Data.IsApp() {
-					return fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
+				if ctype == basics.AppCreatable && !data.data.IsApp() {
+					return fmt.Errorf("lookupResources asked for an app but got %v", data.data)
 				}
 				return nil
 			}
-			data.Data = MakeResourcesData(0)
+			data.data = MakeResourcesData(0)
 			// we don't have that account, just return the database round.
 			return nil
 		}
@@ -2841,11 +2871,11 @@ func (qs *AccountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 			if err != nil {
 				return err
 			}
-			data = append(data, PersistedResourcesData{
-				Addrid: addrid.Int64,
-				Aidx:   basics.CreatableIndex(aidx.Int64),
-				Data:   resData,
-				Round:  dbRound,
+			data = append(data, persistedResourcesData{
+				addrid: addrid.Int64,
+				aidx:   basics.CreatableIndex(aidx.Int64),
+				data:   resData,
+				round:  dbRound,
 			})
 			rnd = dbRound
 		}
@@ -3641,15 +3671,15 @@ func accountsNewRoundImpl(
 	var pendingResourcesDeletion map[resourceKey]struct{} // map to indicate which resources need to be deleted
 	for i := 0; i < resources.Len(); i++ {
 		data := resources.GetByIdx(i)
-		if data.OldResource.Addrid == 0 || data.OldResource.Data.IsEmpty() || !data.NewResource.IsEmpty() {
+		if data.OldResource.Addrid() == 0 || data.OldResource.data.IsEmpty() || !data.NewResource.IsEmpty() {
 			continue
 		}
 		if pendingResourcesDeletion == nil {
 			pendingResourcesDeletion = make(map[resourceKey]struct{})
 		}
-		pendingResourcesDeletion[resourceKey{addrid: data.OldResource.Addrid, aidx: data.OldResource.Aidx}] = struct{}{}
+		pendingResourcesDeletion[resourceKey{addrid: data.OldResource.Addrid(), aidx: data.OldResource.Aidx()}] = struct{}{}
 
-		entry := PersistedResourcesData{Addrid: 0, Aidx: data.OldResource.Aidx, Data: MakeResourcesData(0), Round: lastUpdateRound}
+		entry := persistedResourcesData{addrid: 0, aidx: data.OldResource.Aidx(), data: MakeResourcesData(0), round: lastUpdateRound}
 		deltas := updatedResources[data.Address]
 		deltas = append(deltas, entry)
 		updatedResources[data.Address] = deltas
@@ -3658,13 +3688,13 @@ func accountsNewRoundImpl(
 	for i := 0; i < resources.Len(); i++ {
 		data := resources.GetByIdx(i)
 		addr := data.Address
-		aidx := data.OldResource.Aidx
-		addrid := data.OldResource.Addrid
+		aidx := data.OldResource.Aidx()
+		addrid := data.OldResource.Addrid()
 		if addrid == 0 {
 			// new entry, data.OldResource does not have addrid
 			// check if this delta is part of in-memory only account
 			// that is created, funded, transferred, and closed within a commit range
-			inMemEntry := data.OldResource.Data.IsEmpty() && data.NewResource.IsEmpty()
+			inMemEntry := data.OldResource.data.IsEmpty() && data.NewResource.IsEmpty()
 			addrid = newAddressesRowIDs[addr]
 			if addrid == 0 && !inMemEntry {
 				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.NewResource)
@@ -3672,7 +3702,7 @@ func accountsNewRoundImpl(
 			}
 		}
 		var entry PersistedResourcesData
-		if data.OldResource.Data.IsEmpty() {
+		if data.OldResource.data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use OldResource.data.MsgIsZero
 			// because of possibility of empty asset holdings or app local state after opting in,
 			// as well as non-zero UpdateRound field in a new delta
@@ -3680,7 +3710,7 @@ func accountsNewRoundImpl(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
 				// because the base account might gone.
-				entry = PersistedResourcesData{Addrid: 0, Aidx: aidx, Data: MakeResourcesData(0), Round: lastUpdateRound}
+				entry = persistedResourcesData{addrid: 0, aidx: aidx, data: MakeResourcesData(0), round: lastUpdateRound}
 			} else {
 				// create a new entry.
 				if !data.NewResource.IsApp() && !data.NewResource.IsAsset() {
@@ -3697,7 +3727,7 @@ func accountsNewRoundImpl(
 					rowsAffected, err = writer.updateResource(addrid, aidx, data.NewResource)
 					if err == nil {
 						// rowid doesn't change on update.
-						entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.NewResource, round: lastUpdateRound}
 						if rowsAffected != 1 {
 							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 						}
@@ -3706,7 +3736,7 @@ func accountsNewRoundImpl(
 					_, err = writer.insertResource(addrid, aidx, data.NewResource)
 					if err == nil {
 						// set the returned persisted account states so that we could store that as the baseResources in commitRound
-						entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.NewResource, round: lastUpdateRound}
 					}
 				}
 			}
@@ -3725,7 +3755,7 @@ func accountsNewRoundImpl(
 				rowsAffected, err = writer.updateResource(addrid, aidx, data.NewResource)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry = PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.NewResource, Round: lastUpdateRound}
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.NewResource, round: lastUpdateRound}
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 					}

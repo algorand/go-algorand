@@ -890,8 +890,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.WritePending(prd, addr)
-				if prd.Addrid != 0 {
-					if err := addResource(prd.Aidx, rnd, prd.AccountResource()); err != nil {
+				if prd.Addrid() != 0 {
+					if err := addResource(prd.Aidx(), rnd, prd.AccountResource()); err != nil {
 						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 					}
 				}
@@ -946,7 +946,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.WritePending(pd, addr)
-				if err := addResource(pd.Aidx, currentDbRound, pd.AccountResource()); err != nil {
+				if err := addResource(pd.Aidx(), currentDbRound, pd.AccountResource()); err != nil {
 					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 				}
 			}
@@ -1039,8 +1039,8 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		if err != nil {
 			return ledgercore.AccountResource{}, basics.Round(0), err
 		}
-		if persistedData.Round == currentDbRound {
-			if persistedData.Addrid != 0 {
+		if persistedData.Round() == currentDbRound {
+			if persistedData.Addrid() != 0 {
 				// if we read actual data return it
 				au.baseResources.WritePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, nil
@@ -1049,9 +1049,9 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return ledgercore.AccountResource{}, rnd, nil
 		}
 		if synchronized {
-			if persistedData.Round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupResource: database round %d is behind in-memory round %d", persistedData.Round, currentDbRound)
-				return ledgercore.AccountResource{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
+			if persistedData.Round() < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupResource: database round %d is behind in-memory round %d", persistedData.Round(), currentDbRound)
+				return ledgercore.AccountResource{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.Round(), memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1060,8 +1060,8 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupResource: database round %d mismatching in-memory round %d", persistedData.Round, currentDbRound)
-			return ledgercore.AccountResource{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupResource: database round %d mismatching in-memory round %d", persistedData.Round(), currentDbRound)
+			return ledgercore.AccountResource{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.Round(), memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1418,14 +1418,14 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	for i := 0; i < dcc.CompactResourcesDeltas.Len(); i++ {
 		resUpdate := dcc.CompactResourcesDeltas.GetByIdx(i)
 		cnt := resUpdate.NAcctDeltas
-		key := ledgercore.AccountCreatable{Address: resUpdate.Address, Index: resUpdate.OldResource.Aidx}
+		key := ledgercore.AccountCreatable{Address: resUpdate.Address, Index: resUpdate.OldResource.Aidx()}
 		macct, ok := au.resources[key]
 		if !ok {
-			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but not in au.resources", cnt, resUpdate.Address, resUpdate.OldResource.Aidx)
+			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but not in au.resources", cnt, resUpdate.Address, resUpdate.OldResource.Aidx())
 		}
 
 		if cnt > macct.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but au.resources had %d", cnt, resUpdate.Address, resUpdate.OldResource.Aidx, macct.ndeltas)
+			au.log.Panicf("inconsistency: flushed %d changes to (%s, %d), but au.resources had %d", cnt, resUpdate.Address, resUpdate.OldResource.Aidx(), macct.ndeltas)
 		} else if cnt == macct.ndeltas {
 			delete(au.resources, key)
 		} else {

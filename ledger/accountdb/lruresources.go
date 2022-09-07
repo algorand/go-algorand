@@ -68,7 +68,7 @@ func (m *LRUResources) Read(addr basics.Address, aidx basics.CreatableIndex) (da
 	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: aidx}]; el != nil {
 		return el.Value.PersistedResourcesData, true
 	}
-	return PersistedResourcesData{}, false
+	return persistedResourcesData{}, false
 }
 
 // ReadAll reads the persistedResourcesData object that the LRUResources has for the given address.
@@ -115,7 +115,7 @@ func (m *LRUResources) WritePending(acct PersistedResourcesData, addr basics.Add
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *LRUResources) Write(resData PersistedResourcesData, addr basics.Address) {
-	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: resData.Aidx}]; el != nil {
+	if el := m.resources[ledgercore.AccountCreatable{Address: addr, Index: resData.Aidx()}]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.before(&resData) {
 			// we update with a newer version.
@@ -124,7 +124,7 @@ func (m *LRUResources) Write(resData PersistedResourcesData, addr basics.Address
 		m.resourcesList.moveToFront(el)
 	} else {
 		// new entry.
-		m.resources[ledgercore.AccountCreatable{Address: addr, Index: resData.Aidx}] = m.resourcesList.pushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
+		m.resources[ledgercore.AccountCreatable{Address: addr, Index: resData.Aidx()}] = m.resourcesList.pushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
 	}
 }
 
@@ -137,7 +137,7 @@ func (m *LRUResources) Prune(newSize int) (removed int) {
 			break
 		}
 		back := m.resourcesList.back()
-		delete(m.resources, ledgercore.AccountCreatable{Address: back.Value.address, Index: back.Value.Aidx})
+		delete(m.resources, ledgercore.AccountCreatable{Address: back.Value.address, Index: back.Value.Aidx()})
 		m.resourcesList.remove(back)
 		removed++
 	}

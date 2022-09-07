@@ -943,16 +943,16 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 	for i := 0; i < resourcesDeltas.Len(); i++ {
 		resDelta := resourcesDeltas.GetByIdx(i)
 		addr := resDelta.Address
-		if !resDelta.OldResource.Data.IsEmpty() {
+		if !resDelta.OldResource.Data().IsEmpty() {
 			var ctype basics.CreatableType
-			if resDelta.OldResource.Data.IsAsset() {
+			if resDelta.OldResource.Data().IsAsset() {
 				ctype = basics.AssetCreatable
-			} else if resDelta.OldResource.Data.IsApp() {
+			} else if resDelta.OldResource.Data().IsApp() {
 				ctype = basics.AppCreatable
 			} else {
-				return fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.OldResource.Addrid, resDelta.OldResource.Aidx, resDelta.OldResource.Data)
+				return fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.OldResource.Addrid(), resDelta.OldResource.Aidx(), resDelta.OldResource.Data())
 			}
-			deleteHash := accountdb.ResourcesHashBuilderV6(addr, resDelta.OldResource.Aidx, ctype, uint64(resDelta.OldResource.Data.UpdateRound), protocol.Encode(&resDelta.OldResource.Data))
+			deleteHash := accountdb.ResourcesHashBuilderV6(addr, resDelta.OldResource.Aidx(), ctype, uint64(resDelta.OldResource.Data().UpdateRound), protocol.Encode(resDelta.OldResource.Data()))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -971,9 +971,9 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas accountdb.Com
 			} else if resDelta.NewResource.IsApp() {
 				ctype = basics.AppCreatable
 			} else {
-				return fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.OldResource.Aidx, resDelta.NewResource)
+				return fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.OldResource.Aidx(), resDelta.NewResource)
 			}
-			addHash := accountdb.ResourcesHashBuilderV6(addr, resDelta.OldResource.Aidx, ctype, uint64(resDelta.NewResource.UpdateRound), protocol.Encode(&resDelta.NewResource))
+			addHash := accountdb.ResourcesHashBuilderV6(addr, resDelta.OldResource.Aidx(), ctype, uint64(resDelta.NewResource.UpdateRound), protocol.Encode(&resDelta.NewResource))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)

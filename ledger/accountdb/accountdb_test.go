@@ -356,7 +356,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			require.Equal(t, 1, len(outResourcesDeltas.deltas))
 			require.Equal(t,
 				ResourceDelta{
-					OldResource: PersistedResourcesData{Aidx: 100}, NewResource: MakeResourcesData(lastRound - 1),
+					OldResource: persistedResourcesData{aidx: 100}, NewResource: MakeResourcesData(lastRound - 1),
 					NAcctDeltas: numResDeltas, Address: addr,
 				},
 				outResourcesDeltas.deltas[0],
@@ -384,7 +384,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
 			require.Equal(t,
-				PersistedResourcesData{Addrid: 0, Aidx: 100, Data: MakeResourcesData(0), Round: basics.Round(lastRound)},
+				persistedResourcesData{addrid: 0, aidx: 100, data: MakeResourcesData(0), round: basics.Round(lastRound)},
 				updatesResources[addr][0],
 			)
 		})
@@ -819,7 +819,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 
 // upsert updates existing or inserts a new entry
 func (a *CompactResourcesDeltas) upsert(delta ResourceDelta) {
-	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.Aidx}]; exist {
+	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: delta.Address, Index: delta.OldResource.aidx}]; exist {
 		a.deltas[idx] = delta
 		return
 	}
@@ -1033,8 +1033,8 @@ func TestCompactAccountDeltas(t *testing.T) {
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *CompactResourcesDeltas) upsertOld(addr basics.Address, old PersistedResourcesData) {
-	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: addr, Index: old.Aidx}]; exist {
+func (a *CompactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
+	if idx, exist := a.cache[ledgercore.AccountCreatable{Address: addr, Index: old.Aidx()}]; exist {
 		a.deltas[idx].OldResource = old
 		return
 	}
@@ -1059,7 +1059,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Zero(ad.Len())
 	a.Panics(func() { ad.GetByIdx(0) })
 
-	sample1 := ResourceDelta{NewResource: resourcesData{Total: 123}, Address: addr, OldResource: PersistedResourcesData{Aidx: 1}}
+	sample1 := ResourceDelta{NewResource: resourcesData{Total: 123}, Address: addr, OldResource: persistedResourcesData{aidx: 1}}
 	ad.upsert(sample1)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
@@ -1070,7 +1070,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.Address)
 	a.Equal(sample1, data)
 
-	sample2 := ResourceDelta{NewResource: resourcesData{Total: 456}, Address: addr, OldResource: PersistedResourcesData{Aidx: 1}}
+	sample2 := ResourceDelta{NewResource: resourcesData{Total: 456}, Address: addr, OldResource:persistedResourcesData{aidx: 1}}
 	ad.upsert(sample2)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
@@ -1091,7 +1091,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.Address)
 	a.Equal(sample2, data)
 
-	old1 := PersistedResourcesData{Addrid: 111, Aidx: 1, Data: resourcesData{Total: 789}}
+	old1 := persistedResourcesData{addrid: 111, aidx: 1, data: resourcesData{Total: 789}}
 	ad.upsertOld(addr, old1)
 	a.Equal(1, ad.Len())
 	data = ad.GetByIdx(0)
@@ -1099,7 +1099,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(ResourceDelta{NewResource: sample2.NewResource, OldResource: old1, Address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := PersistedResourcesData{Addrid: 222, Aidx: 2, Data: resourcesData{Total: 789}}
+	old2 := persistedResourcesData{addrid: 222, aidx: 2, data: resourcesData{Total: 789}}
 	ad.upsertOld(addr1, old2)
 	a.Equal(2, ad.Len())
 	data = ad.GetByIdx(0)
@@ -1117,7 +1117,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(ResourceDelta{NewResource: sample2.NewResource, OldResource: old2, Address: addr}, data)
 
 	addr2 := ledgertesting.RandomAddress()
-	sample2.OldResource.Aidx = 2
+	sample2.OldResource.aidx = 2
 	sample2.Address = addr2
 	idx = ad.insert(sample2)
 	a.Equal(3, ad.Len())
@@ -1239,19 +1239,19 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
+		require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, PersistedResourcesData{Aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
+			require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
 		}
 	}
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.Write(PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.Write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.Write(PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.Write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1262,11 +1262,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
+		require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.OldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
+			require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.OldResource)
 		}
 	}
 
@@ -1282,7 +1282,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.Write(PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.Write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = MakeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 7, outResourcesDeltas.Len())
@@ -2479,7 +2479,7 @@ func (m *mockAccountWriter) lookup(addr basics.Address) (pad persistedAccountDat
 	return
 }
 
-func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.CreatableIndex) (prd PersistedResourcesData, ok bool, err error) {
+func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.CreatableIndex) (prd persistedResourcesData, ok bool, err error) {
 	rowid, ok := m.addresses[addr]
 	if !ok {
 		return
@@ -2490,19 +2490,19 @@ func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.Crea
 		return
 	}
 	if res.AppLocalState != nil {
-		prd.Data.SetAppLocalState(*res.AppLocalState)
+		prd.data.SetAppLocalState(*res.AppLocalState)
 	}
 	if res.AppParams != nil {
-		prd.Data.SetAppParams(*res.AppParams, prd.Data.IsHolding())
+		prd.data.SetAppParams(*res.AppParams, prd.data.IsHolding())
 	}
 	if res.AssetHolding != nil {
-		prd.Data.SetAssetHolding(*res.AssetHolding)
+		prd.data.SetAssetHolding(*res.AssetHolding)
 	}
 	if res.AssetParams != nil {
-		prd.Data.SetAssetParams(*res.AssetParams, prd.Data.IsHolding())
+		prd.data.SetAssetParams(*res.AssetParams, prd.data.IsHolding())
 	}
-	prd.Addrid = rowid
-	prd.Aidx = cidx
+	prd.addrid = rowid
+	prd.aidx = cidx
 	return
 }
 
@@ -2554,7 +2554,7 @@ func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIn
 		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", addrid, aidx)
 	}
 	// use PersistedResourcesData.AccountResource for conversion
-	prd := PersistedResourcesData{Data: data}
+	prd := persistedResourcesData{data: data}
 	new := prd.AccountResource()
 	m.resources[key] = new
 	return 1, nil
@@ -2576,7 +2576,7 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 		return 0, fmt.Errorf("updateResource: not found (%d, %d)", addrid, aidx)
 	}
 	// use PersistedResourcesData.AccountResource for conversion
-	prd := PersistedResourcesData{Data: data}
+	prd := persistedResourcesData{data: data}
 	new := prd.AccountResource()
 	if new == old {
 		return 0, nil
@@ -2933,9 +2933,9 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	for addr := range addressesToCheck {
 		upd := updatedResources[addr]
 		a.Equal(1, len(upd))
-		a.Equal(int64(0), upd[0].Addrid)
-		a.Equal(basics.CreatableIndex(aidx), upd[0].Aidx)
-		a.Equal(MakeResourcesData(uint64(0)), upd[0].Data)
+		a.Equal(int64(0), upd[0].Addrid())
+		a.Equal(basics.CreatableIndex(aidx), upd[0].Aidx())
+		a.Equal(MakeResourcesData(uint64(0)), upd[0].Data())
 	}
 }
 

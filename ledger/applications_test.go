@@ -258,7 +258,7 @@ return`
 	resourceData, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Equal(basics.Round(4), data.Round())
-	a.Equal(expectedCreatorResource, protocol.Encode(&resourceData.Data))
+	a.Equal(expectedCreatorResource, protocol.Encode(resourceData.Data()))
 
 	data, err = l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
@@ -267,14 +267,14 @@ return`
 	resourceData, err = l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Equal(basics.Round(4), data.Round())
-	a.Equal(expectedUserOptInResource, protocol.Encode(&resourceData.Data))
+	a.Equal(expectedUserOptInResource, protocol.Encode(resourceData.Data()))
 
 	pad, err := l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
 	prd, err := l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Nil(prd.Data.GetAppLocalState().KeyValue)
+	a.Nil(prd.Data().GetAppLocalState().KeyValue)
 	ad, rnd, _, err := l.LookupLatest(userOptin)
 	a.Equal(basics.Round(4), rnd)
 	a.NoError(err)
@@ -287,7 +287,7 @@ return`
 	resourceData, err = l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Equal(basics.Round(4), data.Round())
-	a.Equal(expectedUserLocalResource, protocol.Encode(&resourceData.Data))
+	a.Equal(expectedUserLocalResource, protocol.Encode(resourceData.Data()))
 
 	ar, err := l.LookupApplication(basics.Round(4), userLocal, appIdx)
 	a.NoError(err)
@@ -757,9 +757,10 @@ return`
 	a.Zero(pad.ID())
 	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
+	a.Zero(prd.Addrid())
 	emptyResourceData := accountdb.MakeResourcesData(0)
-	a.Equal(emptyResourceData, prd.Data)
+	resourceData := prd.Data()
+	a.Equal(emptyResourceData, *resourceData)
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
@@ -893,9 +894,10 @@ return`
 	a.Zero(pad.ID())
 	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
+	a.Zero(prd.Addrid())
 	emptyResourceData := accountdb.MakeResourcesData(0)
-	a.Equal(emptyResourceData, prd.Data)
+	resourceData := prd.Data()
+	a.Equal(emptyResourceData, *resourceData)
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
