@@ -170,13 +170,6 @@ func (rts *requestedTxnSet) popByTxid(txid transactions.Txid) (x *requestedTxn, 
 	}
 	return x, ok
 }
-func (rts *requestedTxnSet) dropOlderThan(timeout time.Time) {
-	for (len(rts.ar) > 0) && (rts.ar[0].requestedAt.Before(timeout)) {
-		evicted := rts.ar[0]
-		heap.Pop(rts)
-		delete(rts.byTxid, evicted.txid)
-	}
-}
 
 // MakeTxHandler makes a new handler for transaction messages
 func MakeTxHandler(txPool *pools.TransactionPool, dledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool, cfg *config.Local) *TxHandler {
@@ -568,60 +561,68 @@ func (handler *TxHandler) retryHandler() {
 		case <-handler.ctx.Done():
 			return
 		case now := <-ticker.C:
-			var toRequest map[network.Peer][]byte
-			handler.txRequestsMu.Lock()
-			if len(handler.txRequests.ar) != 0 {
-				timeout := now.Add(-1 * requestExpiration)
-				req := handler.txRequests.ar[0]
-				for req.requestedAt.Before(timeout) {
-					var nextSource network.Peer
-					// find a peer that has advertised it who we haven't asked yet
-					for _, source := range req.advertisedBy {
-						found := false
-						for _, prevReq := range req.requestedFrom {
-							if prevReq == source {
-								found = true
-								break
-							}
-						}
-						if !found {
-							nextSource = source
-							break
-						}
-					}
-					if nextSource != nil {
-						if toRequest == nil {
-							toRequest = make(map[network.Peer][]byte)
-						}
-						toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
-						req.requestedAt = now
-						req.requestedFrom = append(req.requestedFrom, nextSource)
-						heap.Fix(&handler.txRequests, 0)
-					} else {
-						heap.Pop(&handler.txRequests)
-					}
-					if len(handler.txRequests.ar) == 0 {
-						break
-					}
-					req = handler.txRequests.ar[0]
-				}
-			}
-			handler.txRequestsMu.Unlock()
-			if len(toRequest) != 0 {
-				for npeer, request := range toRequest {
-					peer, ok := npeer.(network.UnicastPeer)
-					if !ok {
-						handler.log.Errorf("Ta Sender not UnicastPeer")
-					} else {
-						err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
-						if err != nil {
-							handler.log.Errorf("Ta req err, %v", err)
-						}
-					}
-				}
-			}
+			handler.retryHandlerTick(now)
 		}
 	}
+}
+func (handler *TxHandler) retryHandlerTick(now time.Time) {
+	toRequest := handler.retryHandlerTickRequestList(now)
+	if len(toRequest) == 0 {
+		return
+	}
+	for npeer, request := range toRequest {
+		peer, ok := npeer.(network.UnicastPeer)
+		if !ok {
+			handler.log.Errorf("Ta Sender not UnicastPeer")
+			continue
+		}
+		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
+		if err != nil {
+			handler.log.Errorf("Ta req err, %v", err)
+		}
+	}
+}
+func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
+	handler.txRequestsMu.Lock()
+	defer handler.txRequestsMu.Unlock()
+	if len(handler.txRequests.ar) == 0 {
+		return
+	}
+	timeout := now.Add(-1 * requestExpiration)
+	req := handler.txRequests.ar[0]
+	for req.requestedAt.Before(timeout) {
+		var nextSource network.Peer
+		// find a peer that has advertised it who we haven't asked yet
+		for _, source := range req.advertisedBy {
+			found := false
+			for _, prevReq := range req.requestedFrom {
+				if prevReq == source {
+					found = true
+					break
+				}
+			}
+			if !found {
+				nextSource = source
+				break
+			}
+		}
+		if nextSource != nil {
+			if toRequest == nil {
+				toRequest = make(map[network.Peer][]byte)
+			}
+			toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
+			req.requestedAt = now
+			req.requestedFrom = append(req.requestedFrom, nextSource)
+			heap.Fix(&handler.txRequests, 0)
+		} else {
+			heap.Pop(&handler.txRequests)
+		}
+		if len(handler.txRequests.ar) == 0 {
+			break
+		}
+		req = handler.txRequests.ar[0]
+	}
+	return
 }
 
 // getByTxid looks up a transaction first in the pool, then in the previous block

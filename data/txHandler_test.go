@@ -17,6 +17,8 @@
 package data
 
 import (
+	"container/heap"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -213,4 +215,92 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 		}
 		require.Equal(b, benchTxnNum, idx)
 	}
+}
+
+func txidForInt(x int) (txid transactions.Txid) {
+	binary.LittleEndian.PutUint64(txid[:8], uint64(x))
+	return txid
+}
+
+func rtsValidHeap(a *require.Assertions, rts *requestedTxnSet) {
+	for i, v := range rts.ar {
+		a.Equal(i, v.heapPos)
+	}
+}
+
+func TestRequestedTxnSet(t *testing.T) {
+	a := require.New(t)
+	var txRequests requestedTxnSet
+	req := new(requestedTxn)
+	req.txid = txidForInt(1)
+	req.requestedAt = time.UnixMilli(1001)
+	txRequests.add(req)
+	rtsValidHeap(a, &txRequests)
+	req, ok := txRequests.getByTxid(txidForInt(1))
+	rtsValidHeap(a, &txRequests)
+	a.NotNil(req)
+	a.True(ok)
+	a.Equal(txidForInt(1), req.txid)
+	req, ok = txRequests.popByTxid(txidForInt(2))
+	rtsValidHeap(a, &txRequests)
+	a.Nil(req)
+	a.False(ok)
+	req, ok = txRequests.getByTxid(txidForInt(2))
+	rtsValidHeap(a, &txRequests)
+	a.Nil(req)
+	a.False(ok)
+	req, ok = txRequests.popByTxid(txidForInt(1))
+	rtsValidHeap(a, &txRequests)
+	a.NotNil(req)
+	a.True(ok)
+	a.Equal(txidForInt(1), req.txid)
+	req, ok = txRequests.popByTxid(txidForInt(1))
+	rtsValidHeap(a, &txRequests)
+	a.Nil(req)
+	a.False(ok)
+
+	txRequests.add(&requestedTxn{txid: txidForInt(3), requestedAt: time.UnixMilli(3001)})
+	rtsValidHeap(a, &txRequests)
+	txRequests.add(&requestedTxn{txid: txidForInt(4), requestedAt: time.UnixMilli(4001)})
+	rtsValidHeap(a, &txRequests)
+	txRequests.add(&requestedTxn{txid: txidForInt(5), requestedAt: time.UnixMilli(5001)})
+	rtsValidHeap(a, &txRequests)
+
+	a.Equal(txidForInt(3), txRequests.ar[0].txid)
+
+	txRequests.ar[0].requestedAt = time.UnixMilli(9999)
+	heap.Fix(&txRequests, 0)
+	rtsValidHeap(a, &txRequests)
+	a.Equal(txidForInt(4), txRequests.ar[0].txid)
+
+	heap.Pop(&txRequests)
+	rtsValidHeap(a, &txRequests)
+	a.Equal(txidForInt(5), txRequests.ar[0].txid)
+
+	txRequests.add(&requestedTxn{txid: txidForInt(6), requestedAt: time.UnixMilli(6001)})
+	rtsValidHeap(a, &txRequests)
+	txRequests.add(&requestedTxn{txid: txidForInt(7), requestedAt: time.UnixMilli(7001)})
+	rtsValidHeap(a, &txRequests)
+
+	req, ok = txRequests.getByTxid(txidForInt(6))
+	a.NotNil(req)
+	a.True(ok)
+	a.Equal(txidForInt(6), req.txid)
+	req.requestedAt = time.UnixMilli(11111)
+	heap.Fix(&txRequests, req.heapPos)
+	rtsValidHeap(a, &txRequests)
+
+	a.Equal(txidForInt(5), txRequests.ar[0].txid)
+	heap.Pop(&txRequests)
+	rtsValidHeap(a, &txRequests)
+	a.Equal(txidForInt(7), txRequests.ar[0].txid)
+	heap.Pop(&txRequests)
+	rtsValidHeap(a, &txRequests)
+	a.Equal(txidForInt(3), txRequests.ar[0].txid)
+	heap.Pop(&txRequests)
+	rtsValidHeap(a, &txRequests)
+	a.Equal(txidForInt(6), txRequests.ar[0].txid)
+	heap.Pop(&txRequests)
+	rtsValidHeap(a, &txRequests)
+	a.Panics(func() { heap.Pop(&txRequests) })
 }
