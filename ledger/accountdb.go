@@ -5037,12 +5037,22 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-func insertStateProofVerificationData(ctx context.Context, e db.Executable, lastAttestedRound basics.Round, data *ledgercore.StateProofVerificationData) error {
-	dataSerialized := protocol.Encode(data)
-	f := func() error {
-		query := "INSERT INTO stateproofverification(lastattestedround, verificationdata) VALUES(?, ?)"
-		_, err := e.ExecContext(ctx, query, lastAttestedRound, dataSerialized)
+func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, lastAttestedRound basics.Round, data *[]ledgercore.StateProofVerificationData) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationdata) VALUES(?, ?)")
+
+	if err != nil {
 		return err
 	}
-	return db.Retry(f)
+
+	defer insertStmt.Close()
+
+	// TODO: wrap with db retry?
+	for _, verificationData := range *data {
+		_, err := insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
