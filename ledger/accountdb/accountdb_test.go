@@ -2935,7 +2935,8 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(1, len(upd))
 		a.Equal(int64(0), upd[0].Addrid())
 		a.Equal(basics.CreatableIndex(aidx), upd[0].Aidx())
-		a.Equal(MakeResourcesData(uint64(0)), upd[0].Data())
+		resourceData := upd[0].Data()
+		a.Equal(MakeResourcesData(uint64(0)), *resourceData)
 	}
 }
 
