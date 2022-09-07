@@ -274,7 +274,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				sender[2] = byte(i >> 16)
 				blk.Payset[0].Txn.Sender = *sender
 				blk.Payset[0].Txn.Lease = lease
-				deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+				deltas := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 				deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
 					LastValid: basics.Round(i + 50),
 					Intra:     0,

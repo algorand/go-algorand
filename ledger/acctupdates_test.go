@@ -531,7 +531,7 @@ func TestAcctUpdates(t *testing.T) {
 				blk.RewardsLevel = rewardLevel
 				blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-				delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+				delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, updates.Len(), 0)
 				delta.Accts.MergeAccounts(updates)
 				delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
@@ -2465,7 +2465,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = data.version
-	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, data.updates.Len(), 0)
+	delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, data.updates.Len(), 0)
 	delta.Accts.MergeAccounts(data.updates)
 	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
 	delta.Totals = newTotals

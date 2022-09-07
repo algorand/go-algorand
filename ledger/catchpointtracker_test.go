@@ -886,7 +886,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
@@ -973,7 +973,7 @@ func TestFirstStagePersistence(t *testing.T) {
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
@@ -1094,7 +1094,7 @@ func TestSecondStagePersistence(t *testing.T) {
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
@@ -1211,7 +1211,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
@@ -1242,7 +1242,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml2.trackers.newBlock(blk, delta)
 		ml2.trackers.committedUpTo(secondStageRound)
@@ -1298,7 +1298,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 				},
 			},
 		}
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)

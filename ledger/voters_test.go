@@ -33,7 +33,7 @@ import (
 
 func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts, totals ledgercore.AccountTotals) {
 	updates := ledgercore.MakeAccountDeltas(1)
-	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, updates.Len(), 0)
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = totals
 	ao.newBlock(blk, delta)

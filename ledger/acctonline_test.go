@@ -122,7 +122,7 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protoc
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = testProtocolVersion
-	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, updates.Len(), 0)
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = newTotals
 
@@ -769,7 +769,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = consensusVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta := ledgercore.MakeStateDelta(blk.BlockHeader.Round, blk.RewardsLevel, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 
 		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
