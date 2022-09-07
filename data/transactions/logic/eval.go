@@ -1987,16 +1987,21 @@ func branchTarget(cx *EvalContext) (int, error) {
 
 func switchTarget(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
 	numOffsets, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
-	if numOffsets == 0 {
-		return 0, 0, fmt.Errorf("number of offsets must be greater than 0")
+	if numOffsets <= 0 {
+		return 0, 0, fmt.Errorf("could not decode switch label count at pc=%d", cx.pc+1)
 	}
 	if branchIdx >= numOffsets {
 		return 0, 0, fmt.Errorf("provided branch index %d exceeds max offset index %d", branchIdx, numOffsets-1)
 	}
 
-	pos := uint64(cx.pc+1+bytesUsed) + (2 * branchIdx)
+	end := cx.pc + 1 + bytesUsed         // end of opcode + number of offsets, beginning of offset list
+	pos := uint64(end) + (2 * branchIdx) // position of referenced offset: each offset is 2 bytes
+	if pos >= uint64(len(cx.program)-1) {
+		return 0, 0, fmt.Errorf("invalid byte code: expected offset value but reached end of program")
+	}
+
 	offset := int16(uint16(cx.program[pos])<<8 | uint16(cx.program[pos+1]))
-	target := (cx.pc + 1 + bytesUsed) + 2*int(numOffsets) + int(offset)
+	target := end + 2*int(numOffsets) + int(offset) // offset is applied to the end of this opcode
 
 	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,
 	// is okay and ends normally
@@ -2023,7 +2028,7 @@ func checkBranch(cx *EvalContext) error {
 	return nil
 }
 
-// checks any branch that is {op} {int16 be offset}
+// checks any switch that is {op} {varuint offset index} [{int16 offset}...]
 func checkSwitch(cx *EvalContext) error {
 	// first call to get the number of offsets, 0 is a safe choice because there must exist at least one label
 	_, numOffsets, err := switchTarget(cx, 0)
@@ -2031,7 +2036,7 @@ func checkSwitch(cx *EvalContext) error {
 		return err
 	}
 
-	_, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
+	_, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:]) // decoding the value will work because switchTarget() above already checked
 	opSize := 1 + bytesUsed + 2*int(numOffsets)
 	for branchIdx := uint64(0); branchIdx < numOffsets; branchIdx++ {
 		target, _, err := switchTarget(cx, branchIdx)

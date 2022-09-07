@@ -53,8 +53,7 @@ type labelReference struct {
 
 	label string
 
-	// starting and ending positions of the opcode containing the label reference.
-	// the ending position is exclusive: follows [l, r) convention
+	// ending positions of the opcode containing the label reference.
 	offsetPosition int
 }
 
@@ -831,8 +830,8 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
+	ops.referToLabel(ops.pending.Len(), args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
-	ops.referToLabel(ops.pending.Len(), args[0], ops.pending.Len()+3)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
@@ -1767,6 +1766,8 @@ func (ops *OpStream) resolveLabels() {
 			continue
 		}
 
+		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
+		// instruction they appear in, which is available in lr.offsetPostion
 		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
