@@ -164,6 +164,11 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
+const createStateProofVerificationTable = `
+	CREATE TABLE IF NOT EXISTS stateproofverification (
+	lastattestedround integer primary key NOT NULL,
+	verificationdata blob NOT NULL)`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -178,12 +183,13 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
 	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
+	`DROP TABLE IF EXISTS stateproofverification`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(7)
+var accountDBVersion = int32(8)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -1363,6 +1369,11 @@ func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err 
 
 func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Executable) error {
 	_, err := e.ExecContext(ctx, createCatchpointFirstStageInfoTable)
+	return err
+}
+
+func accountsCreateStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTable)
 	return err
 }
 
