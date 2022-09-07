@@ -78,6 +78,18 @@ func (e unauthorizedRequestError) Error() string {
 	return fmt.Sprintf("Unauthorized request to `%s` when using token `%s` : %s", e.url, e.apiToken, e.errorString)
 }
 
+// HTTPError is generated when we receive an unhandled error from the server. This error contains the error string.
+type HTTPError struct {
+	StatusCode  int
+	Status      string
+	ErrorString string
+}
+
+// Error formats an error string.
+func (e HTTPError) Error() string {
+	return fmt.Sprintf("HTTP %s: %s", e.Status, e.ErrorString)
+}
+
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
 	serverURL       url.URL
@@ -131,7 +143,7 @@ func extractError(resp *http.Response) error {
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return fmt.Errorf("HTTP %s: %s", resp.Status, errorString)
+	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString}
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"

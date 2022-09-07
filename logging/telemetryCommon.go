@@ -64,6 +64,7 @@ type TelemetryConfig struct {
 	FilePath           string       // Path to file on disk, if any
 	ChainID            string       `json:"-"`
 	SessionGUID        string       `json:"-"`
+	Version            string       `json:"-"`
 	UserName           string
 	Password           string
 }

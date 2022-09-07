@@ -20,7 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -47,7 +47,7 @@ var schema = []string{
 
 type pendingSig struct {
 	signer       basics.Address
-	sig          crypto.OneTimeSignature
+	sig          merklesignature.Signature
 	fromThisNode bool
 }
 

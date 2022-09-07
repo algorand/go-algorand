@@ -23,7 +23,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -955,6 +958,14 @@ var readStateAppCmd = &cobra.Command{
 			// Fetching local state. Get account information
 			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
+				var httpError apiclient.HTTPError
+				if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
+					reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
+				}
+				reportErrorf(errorRequestFail, err)
+			}
+
+			if ai.AppLocalState == nil {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
@@ -981,6 +992,10 @@ var readStateAppCmd = &cobra.Command{
 			// Get creator information
 			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			if ai.AppParams == nil {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 

@@ -132,12 +132,14 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 			return
 		}
 	}
-	ch := config.GetCurrentVersion().Channel
+	ver := config.GetCurrentVersion()
+	ch := ver.Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
 	if ch == "" {
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
 	return cfg, err
 }
 
@@ -264,6 +266,7 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry := l.entry.WithFields(Fields{
 		"session":      l.GetTelemetrySession(),
 		"instanceName": l.GetInstanceName(),
+		"v":            l.GetTelemetryVersion(),
 	})
 	// Populate entry like logrus.entry.log() does
 	entry.Time = time.Now()

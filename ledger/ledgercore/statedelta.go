@@ -95,11 +95,6 @@ type StateDelta struct {
 	// previous block timestamp
 	PrevTimestamp int64
 
-	// Modified local creatable states. The value is true if the creatable local state
-	// is created and false if deleted. Used by indexer.
-	ModifiedAssetHoldings  map[AccountAsset]bool
-	ModifiedAppLocalStates map[AccountApp]bool
-
 	// initial hint for allocating data structures for StateDelta
 	initialTransactionsCount int
 
@@ -154,9 +149,14 @@ type AssetResourceRecord struct {
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
+// One key design aspect here was to ensure that we're able to access the written
+// deltas in a deterministic order, while maintaining O(1) lookup. In order to
+// do that, each of the arrays here is constructed as a pair of (slice, map).
+// The map would point the address/address+creatable id onto the index of the
+// element within the slice.
 type AccountDeltas struct {
-	// Actual data. If an account is deleted, `accts` contains a balance record
-	// with empty `AccountData`.
+	// Actual data. If an account is deleted, `accts` contains the NewBalanceRecord
+	// with an empty `AccountData` and a populated `Addr`.
 	accts []NewBalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
@@ -184,8 +184,6 @@ func MakeStateDelta(round basics.Round, rewardsLevel uint64, prevTimestamp int64
 		RewardsLevel:             rewardsLevel,
 		CompactCertNext:          compactCertNext,
 		PrevTimestamp:            prevTimestamp,
-		ModifiedAssetHoldings:    make(map[AccountAsset]bool, hint),
-		ModifiedAppLocalStates:   make(map[AccountApp]bool, hint),
 		initialTransactionsCount: hint,
 	}
 }

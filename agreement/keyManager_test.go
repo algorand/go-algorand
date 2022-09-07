@@ -19,8 +19,9 @@ package agreement
 import (
 	"testing"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -41,11 +42,27 @@ type recordingKeyManager struct {
 }
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
+func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRecordForRound {
+	var km []account.ParticipationRecordForRound
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
+			partRecordForRound := account.ParticipationRecordForRound{
+				ParticipationRecord: account.ParticipationRecord{
+					ParticipationID:   acc.ID(),
+					Account:           acc.Parent,
+					FirstValid:        acc.FirstValid,
+					LastValid:         acc.LastValid,
+					KeyDilution:       acc.KeyDilution,
+					LastVote:          0,
+					LastBlockProposal: 0,
+					LastStateProof:    0,
+					EffectiveFirst:    0,
+					EffectiveLast:     acc.LastValid,
+					VRF:               acc.VRF,
+					Voting:            acc.Voting,
+				},
+			}
+			km = append(km, partRecordForRound)
 		}
 	}
 	return km

@@ -68,11 +68,6 @@ func (ws *workerState) next(delta uint64) uint64 {
 	return atomic.AddUint64(&ws.nextidx, delta) - delta
 }
 
-// When a worker is about to exit, it should call done.
-func (ws *workerState) done() {
-	ws.wg.Done()
-}
-
 // wait waits for all of the workers to finish.
 func (ws *workerState) wait() {
 	ws.wg.Wait()

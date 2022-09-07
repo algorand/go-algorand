@@ -246,7 +246,7 @@
             }
           }
         },
-        "description": "AccountApplicationResponse describes the application data for a specific account and application ID."
+        "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
       },
       "AccountAssetResponse": {
         "content": {
@@ -271,7 +271,7 @@
             }
           }
         },
-        "description": "AccountAssetResponse describes the asset data for a specific account and asset ID."
+        "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
       },
       "AccountResponse": {
         "content": {
@@ -600,6 +600,14 @@
           "application/json": {
             "schema": {
               "properties": {
+                "hashtype": {
+                  "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                  "enum": [
+                    "sumhash",
+                    "sha512_256"
+                  ],
+                  "type": "string"
+                },
                 "idx": {
                   "description": "Index of the transaction in the block's payset.",
                   "type": "integer"
@@ -615,12 +623,18 @@
                   "format": "byte",
                   "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                   "type": "string"
+                },
+                "treedepth": {
+                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                  "type": "integer"
                 }
               },
               "required": [
+                "hashtype",
                 "idx",
                 "proof",
-                "stibhash"
+                "stibhash",
+                "treedepth"
               ],
               "type": "object"
             }
@@ -767,7 +781,7 @@
             "type": "array"
           },
           "created-assets": {
-            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> AssetParams` for this type.",
+            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type.",
             "items": {
               "$ref": "#/components/schemas/Asset"
             },
@@ -809,12 +823,12 @@
             "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
             "type": "string"
           },
-          "total-apps-local-state": {
-            "description": "The count of all application local data (AppLocalState objects) stored in this account.",
+          "total-apps-opted-in": {
+            "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
             "type": "integer"
           },
-          "total-assets": {
-            "description": "The count of all assets (AssetHolding objects) held by this account.",
+          "total-assets-opted-in": {
+            "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
             "type": "integer"
           },
           "total-created-apps": {
@@ -835,40 +849,10 @@
           "rewards",
           "round",
           "status",
-          "total-apps-local-state",
-          "total-assets",
+          "total-apps-opted-in",
+          "total-assets-opted-in",
           "total-created-apps",
           "total-created-assets"
-        ],
-        "type": "object"
-      },
-      "AccountErrorResponse": {
-        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
-        "properties": {
-          "data": {
-            "type": "string"
-          },
-          "max-results": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "total-apps-local-state": {
-            "type": "integer"
-          },
-          "total-assets": {
-            "type": "integer"
-          },
-          "total-created-apps": {
-            "type": "integer"
-          },
-          "total-created-assets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "message"
         ],
         "type": "object"
       },
@@ -877,6 +861,12 @@
         "properties": {
           "selection-participation-key": {
             "description": "\\[sel\\] Selection public key (if any) currently registered for this round.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "state-proof-key": {
+            "description": "\\[stprf\\] Root of the state proof key (if any)",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
@@ -922,6 +912,36 @@
         "required": [
           "address",
           "delta"
+        ],
+        "type": "object"
+      },
+      "AccountsErrorResponse": {
+        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "max-results": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "total-apps-opted-in": {
+            "type": "integer"
+          },
+          "total-assets-opted-in": {
+            "type": "integer"
+          },
+          "total-created-apps": {
+            "type": "integer"
+          },
+          "total-created-assets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message"
         ],
         "type": "object"
       },
@@ -1799,12 +1819,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountErrorResponse"
+                  "$ref": "#/components/schemas/AccountsErrorResponse"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountErrorResponse"
+                  "$ref": "#/components/schemas/AccountsErrorResponse"
                 }
               }
             },
@@ -1850,7 +1870,7 @@
     },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the account's application local state and application params (if they exist) about a given application ID",
+        "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
         "operationId": "AccountApplicationInformation",
         "parameters": [
           {
@@ -1929,7 +1949,7 @@
                 }
               }
             },
-            "description": "AccountApplicationResponse describes the application data for a specific account and application ID."
+            "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
           },
           "400": {
             "content": {
@@ -1986,7 +2006,7 @@
     },
     "/v2/accounts/{address}/assets/{asset-id}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the account's asset holding and asset params (if they exist) about a given asset ID",
+        "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
         "operationId": "AccountAssetInformation",
         "parameters": [
           {
@@ -2065,7 +2085,7 @@
                 }
               }
             },
-            "description": "AccountAssetResponse describes the asset data for a specific account and asset ID."
+            "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
           },
           "400": {
             "content": {
@@ -2615,6 +2635,14 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "hashtype": {
+                      "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                      "enum": [
+                        "sumhash",
+                        "sha512_256"
+                      ],
+                      "type": "string"
+                    },
                     "idx": {
                       "description": "Index of the transaction in the block's payset.",
                       "type": "integer"
@@ -2630,12 +2658,18 @@
                       "format": "byte",
                       "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                       "type": "string"
+                    },
+                    "treedepth": {
+                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                      "type": "integer"
                     }
                   },
                   "required": [
+                    "hashtype",
                     "idx",
                     "proof",
-                    "stibhash"
+                    "stibhash",
+                    "treedepth"
                   ],
                   "type": "object"
                 }

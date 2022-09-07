@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"sync"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -29,8 +31,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-
-	"github.com/algorand/go-deadlock"
 )
 
 type builder struct {

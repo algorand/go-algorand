@@ -36,6 +36,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -97,11 +98,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	require.Equal(t, totals.Online.Money.Raw, totalOnline, "mismatching total online money")
-	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-	require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
+	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
+	require.Equal(t, totalNotPart, totals.NotParticipating.Money.Raw)
+	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
+	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
@@ -114,7 +115,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	for addr, data := range accts {
 		if data.Status == basics.Online {
 			ad := ledgercore.ToAccountData(data)
-			onlineAccounts[addr] = accountDataToOnline(addr, ad, proto)
+			onlineAccounts[addr] = accountDataToOnline(addr, &ad, proto)
 		}
 	}
 
@@ -409,7 +410,35 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	}
 }
 
-// checkCreatables compares the expected database image to the actual database content
+func TestAccountStorageWithStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, false)
+	_ = accountsInitTest(t, tx, accts, proto)
+	checkAccounts(t, tx, 0, accts)
+	require.True(t, allAccountsHaveStateProofPKs(accts))
+}
+
+func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
+	for _, data := range accts {
+		if data.StateProofID.IsEmpty() {
+			return false
+		}
+	}
+	return true
+}
+
+// checkCreatables compares the expected database image to the actual databse content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
@@ -535,6 +564,8 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
 	for i := 0; i < numAccounts; i++ {
@@ -546,6 +577,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			VoteID:             secrets.OneTimeSignatureVerifier,
 			SelectionID:        pubVrfKey,
+			StateProofID:       stateProofID,
 			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 			VoteLastValid:      basics.Round(0x000ffffffffffffff),
 			VoteKeyDilution:    0x000ffffffffffffff,
@@ -613,7 +645,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
-		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+		prevHash = crypto.Hash(append(encodedAccountBalance, []byte(prevHash[:])...))
 	}
 	require.Equal(b, b.N, len(bal))
 }
@@ -800,6 +832,8 @@ func TestAccountsReencoding(t *testing.T) {
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
@@ -820,6 +854,7 @@ func TestAccountsReencoding(t *testing.T) {
 				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
 				VoteID:             secrets.OneTimeSignatureVerifier,
 				SelectionID:        pubVrfKey,
+				StateProofID:       stateProofID,
 				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 				VoteLastValid:      basics.Round(0x000ffffffffffffff),
 				VoteKeyDilution:    0x000ffffffffffffff,
@@ -1028,7 +1063,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(-1, idx)
 	a.Equal(accountDelta{}, data)
 
-	a.Equal(0, ad.len())
+	a.Zero(ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
 	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}, address: addr}
@@ -1123,7 +1158,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(-1, idx)
 	a.Equal(resourceDelta{}, data)
 
-	a.Equal(0, ad.len())
+	a.Zero(ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
 	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
@@ -2073,7 +2108,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}

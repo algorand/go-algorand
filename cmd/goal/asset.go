@@ -529,10 +529,6 @@ var sendAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
@@ -541,9 +537,15 @@ var sendAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
+
 		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {

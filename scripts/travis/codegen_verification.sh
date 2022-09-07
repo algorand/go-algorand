@@ -25,7 +25,7 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
-make gen
+make gen SHORT_PART_PERIOD=1
 
 function runGoFmt() {
     unformatted=$(gofmt -l .)

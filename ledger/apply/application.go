@@ -68,11 +68,6 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// look up how many apps they have
 	totalAppParams := record.TotalAppParams
 
-	if !balances.ConsensusParams().Application {
-		err = fmt.Errorf("cannot create app for %s: applications not supported", creator.String())
-		return
-	}
-
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
 	if maxAppsCreated > 0 && totalAppParams >= uint64(maxAppsCreated) {
@@ -228,10 +223,6 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 		return err
 	}
 
-	if !balances.ConsensusParams().Application {
-		return fmt.Errorf("cannot opt in app %d for %s: applications not supported", appIdx, sender.String())
-	}
-
 	// If the user has already opted in, fail
 	// future optimization: find a way to avoid testing this in case record.TotalAppLocalStates == 0.
 	ok, err := balances.HasAppLocalState(sender, appIdx)
@@ -291,7 +282,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	}
 
 	if record.TotalAppLocalStates == 0 {
-		return fmt.Errorf("account %s is not opted in to any app, and in particular %d", sender.String(), appIdx)
+		return fmt.Errorf("account %v is not opted in to any app, and in particular %d", sender, appIdx)
 	}
 
 	// If they haven't opted in, that's an error

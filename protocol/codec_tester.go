@@ -17,6 +17,7 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -284,8 +285,11 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			*remainingChanges--
 		}
 	case reflect.Slice:
+		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
+		// will result in nil and not slice of size 0
+		l := rand.Int()%31 + 1
+
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
-		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
 		}
@@ -422,6 +426,15 @@ func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 			// we want to skip the serilization test in this case.
 			t.Skip()
 			return
+		}
+		if err == nil {
+			continue
+		}
+
+		// some objects might appen to the original error additional info.
+		// we ensure that invalidObject error is not failing the test.
+		if errors.As(err, &ErrInvalidObject) {
+			continue
 		}
 		require.NoError(t, err)
 	}

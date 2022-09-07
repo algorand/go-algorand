@@ -44,7 +44,7 @@ func newPersistedAccountList() *persistedAccountDataList {
 	return l
 }
 
-func (l *persistedAccountDataList) inserNodeToFreeList(otherNode *persistedAccountDataListNode) {
+func (l *persistedAccountDataList) insertNodeToFreeList(otherNode *persistedAccountDataListNode) {
 	otherNode.next = l.freeList.next
 	otherNode.prev = nil
 	otherNode.Value = nil
@@ -67,7 +67,7 @@ func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAc
 		return l
 	}
 	for i := 0; i < numAllocs; i++ {
-		l.inserNodeToFreeList(new(persistedAccountDataListNode))
+		l.insertNodeToFreeList(new(persistedAccountDataListNode))
 	}
 
 	return l
@@ -95,7 +95,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 	e.next = nil // avoid memory leaks
 	e.prev = nil // avoid memory leaks
 
-	l.inserNodeToFreeList(e)
+	l.insertNodeToFreeList(e)
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.

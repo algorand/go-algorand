@@ -525,7 +525,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
-			return fmt.Errorf("unalbe to load block header %d : %w", lastBalancesRound, err)
+			return fmt.Errorf("unable to load block header %d : %w", lastBalancesRound, err)
 		}
 	}
 

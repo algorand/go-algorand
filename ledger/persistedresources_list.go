@@ -44,7 +44,7 @@ func newPersistedResourcesList() *persistedResourcesDataList {
 	return l
 }
 
-func (l *persistedResourcesDataList) inserNodeToFreeList(otherNode *persistedResourcesDataListNode) {
+func (l *persistedResourcesDataList) insertNodeToFreeList(otherNode *persistedResourcesDataListNode) {
 	otherNode.next = l.freeList.next
 	otherNode.prev = nil
 	otherNode.Value = nil
@@ -67,7 +67,7 @@ func (l *persistedResourcesDataList) allocateFreeNodes(numAllocs int) *persisted
 		return l
 	}
 	for i := 0; i < numAllocs; i++ {
-		l.inserNodeToFreeList(new(persistedResourcesDataListNode))
+		l.insertNodeToFreeList(new(persistedResourcesDataListNode))
 	}
 
 	return l
@@ -94,7 +94,7 @@ func (l *persistedResourcesDataList) remove(e *persistedResourcesDataListNode) {
 	e.next = nil // avoid memory leaks
 	e.prev = nil // avoid memory leaks
 
-	l.inserNodeToFreeList(e)
+	l.insertNodeToFreeList(e)
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.

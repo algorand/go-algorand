@@ -128,35 +128,6 @@ type accountDataAccessor interface {
 	getAccount(addr basics.Address, withRewards bool) (basics.AccountData, error)
 }
 
-func (b *mockCreatableBalances) CountAppParams(addr basics.Address) (int, error) {
-	acct, err := b.access.getAccount(addr, false)
-	if err != nil {
-		return 0, err
-	}
-	return len(acct.AppParams), nil
-}
-func (b *mockCreatableBalances) CountAppLocalState(addr basics.Address) (int, error) {
-	acct, err := b.access.getAccount(addr, false)
-	if err != nil {
-		return 0, err
-	}
-	return len(acct.AppLocalStates), nil
-}
-func (b *mockCreatableBalances) CountAssetHolding(addr basics.Address) (int, error) {
-	acct, err := b.access.getAccount(addr, false)
-	if err != nil {
-		return 0, err
-	}
-	return len(acct.Assets), nil
-}
-func (b *mockCreatableBalances) CountAssetParams(addr basics.Address) (int, error) {
-	acct, err := b.access.getAccount(addr, false)
-	if err != nil {
-		return 0, err
-	}
-	return len(acct.AssetParams), nil
-}
-
 func (b *mockCreatableBalances) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {

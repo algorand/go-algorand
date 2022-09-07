@@ -20,14 +20,31 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
+
+// TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
+type TxnMerkleElemRaw struct {
+	Txn  crypto.Digest // txn id
+	Stib crypto.Digest // hash value of transactions.SignedTxnInBlock
+}
+
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
+	buf = make([]byte, 2*crypto.DigestSize)
+	copy(buf[:], txid[:])
+	copy(buf[crypto.DigestSize:], stib[:])
+	return
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
+}
 
 func TestTxnMerkleProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -60,7 +77,8 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
-	for i := 0; i < 10; i++ {
+	// we do not want to have a full tree in order the catch an empty element edge case
+	for i := 0; i < 5; i++ {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
@@ -71,14 +89,6 @@ func TestTxnMerkleProof(t *testing.T) {
 	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
 	a.NoError(err)
 
-	for i := 0; i < 10; i++ {
-		accti, err := client.GenerateAddress(walletHandle)
-		a.NoError(err)
-
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
-		a.NoError(err)
-	}
-
 	txid := tx.ID()
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
@@ -86,24 +96,34 @@ func TestTxnMerkleProof(t *testing.T) {
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	var proof []crypto.Digest
+	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
+	a.NoError(err)
+
+	var proof merklearray.Proof
+	proof.HashFactory = crypto.HashFactory{HashType: hashtype}
+	proof.TreeDepth = uint8(proofresp.Treedepth)
+	a.NotEqual(proof.TreeDepth, 0)
 	proofconcat := []byte(proofresp.Proof)
 	for len(proofconcat) > 0 {
 		var d crypto.Digest
 		copy(d[:], proofconcat)
-		proof = append(proof, d)
+		proof.Path = append(proof.Path, d[:])
 		proofconcat = proofconcat[len(d):]
 	}
 
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	merkleNode := []byte(protocol.TxnMerkleLeaf)
-	merkleNode = append(merkleNode, txid[:]...)
-	merkleNode = append(merkleNode, proofresp.Stibhash...)
+	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	copy(element.Stib[:], proofresp.Stibhash[:])
 
-	elems := make(map[uint64]crypto.Digest)
-	elems[proofresp.Idx] = crypto.Hash(merkleNode)
-	err = merklearray.Verify(blk.TxnRoot, elems, proof)
-	a.NoError(err)
+	elems := make(map[uint64]crypto.Hashable)
+
+	elems[proofresp.Idx] = &element
+	err = merklearray.Verify(blk.TxnRoot.ToSlice(), elems, &proof)
+	if err != nil {
+		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
+		a.NoError(err)
+	}
+
 }

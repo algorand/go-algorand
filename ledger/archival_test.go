@@ -730,6 +730,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
@@ -784,6 +788,9 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), earliest)
 	require.Equal(t, basics.Round(0), latest)
+
+	// Minimize the impact of the memory consumption here on other tests.
+	runtime.GC()
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {

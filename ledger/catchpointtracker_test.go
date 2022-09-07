@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"runtime"
 
-	//"runtime"
 	"sync/atomic"
 	"testing"
 	"time"

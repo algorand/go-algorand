@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
@@ -51,7 +50,14 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
+	consensusParams.EnableStateProofKeyregCheck = true
 	configurableConsensus[consensusVersion] = consensusParams
+
+	tmp := config.Consensus[protocol.ConsensusFuture]
+	config.Consensus[protocol.ConsensusFuture] = consensusParams
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = tmp
+	}()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
@@ -135,7 +141,7 @@ func TestCompactCerts(t *testing.T) {
 			err = protocol.Decode(nextCertBlockRaw, &nextCertBlockDecoded)
 			r.NoError(err)
 
-			var votersRoot crypto.Digest
+			var votersRoot = make([]byte, compactcert.HashSize)
 			copy(votersRoot[:], lastCertBlock.CompactCertVoters)
 
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
@@ -144,7 +150,7 @@ func TestCompactCerts(t *testing.T) {
 			ccparams := compactcert.Params{
 				Msg:          nextCertBlockDecoded.Block.BlockHeader,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(nextCertBlock.Round + 1),
+				SigRound:     basics.Round(nextCertBlock.Round),
 				SecKQ:        consensusParams.CompactCertSecKQ,
 			}
 			verif := compactcert.MkVerifier(ccparams, votersRoot)

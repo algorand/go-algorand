@@ -113,6 +113,11 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 		},
 	}
 
+	if record.StateProof != nil {
+		tmp := record.StateProof[:]
+		participationKey.Key.StateProofKey = &tmp
+	}
+
 	// These are pointers but should always be present.
 	if record.Voting != nil {
 		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
@@ -291,7 +296,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	myLedger := v2.Node.LedgerForAPI()
 
 	// count total # of resources, if max limit is set
-	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
+	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
 		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
 		if err != nil {
 			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -299,13 +304,13 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
 			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
-			return ctx.JSON(http.StatusBadRequest, generated.AccountErrorResponse{
-				Message:             "Result limit exceeded",
-				MaxResults:          &maxResults,
-				TotalAssets:         &record.TotalAssets,
-				TotalCreatedAssets:  &record.TotalAppLocalStates,
-				TotalAppsLocalState: &record.TotalAppLocalStates,
-				TotalCreatedApps:    &record.TotalAppParams,
+			return ctx.JSON(http.StatusBadRequest, generated.AccountsErrorResponse{
+				Message:            "Result limit exceeded",
+				MaxResults:         &maxResults,
+				TotalAssetsOptedIn: &record.TotalAssets,
+				TotalCreatedAssets: &record.TotalAppLocalStates,
+				TotalAppsOptedIn:   &record.TotalAppLocalStates,
+				TotalCreatedApps:   &record.TotalAppParams,
 			})
 		}
 	}
@@ -368,6 +373,10 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
+		if !record.StateProofID.IsEmpty() {
+			tmp := record.StateProofID[:]
+			apiParticipation.StateProofKey = &tmp
+		}
 	}
 
 	pendingRewards, overflowed := basics.OSubA(record.MicroAlgos, amountWithoutPendingRewards)
@@ -388,9 +397,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		Participation:               apiParticipation,
 		TotalCreatedAssets:          record.TotalAssetParams,
 		TotalCreatedApps:            record.TotalAppParams,
-		TotalAssets:                 record.TotalAssets,
+		TotalAssetsOptedIn:          record.TotalAssets,
 		AuthAddr:                    addrOrNil(record.AuthAddr),
-		TotalAppsLocalState:         record.TotalAppLocalStates,
+		TotalAppsOptedIn:            record.TotalAppLocalStates,
 		AppsTotalSchema: &generated.ApplicationStateSchema{
 			NumByteSlice: record.TotalAppSchema.NumByteSlice,
 			NumUint:      record.TotalAppSchema.NumUint,
@@ -429,7 +438,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 
 	// return msgpack response
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, model.AccountResourceToAccountResourceModel(record))
+		data, err := encode(handle, model.AccountResourceToAccountAssetModel(record))
 		if err != nil {
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}
@@ -471,7 +480,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	ledger := v2.Node.LedgerForAPI()
 
 	lastRound := ledger.Latest()
-	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AssetCreatable)
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AppCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -482,7 +491,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 
 	// return msgpack response
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, model.AccountResourceToAccountResourceModel(record))
+		data, err := encode(handle, model.AccountResourceToAccountApplicationModel(record))
 		if err != nil {
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}
@@ -584,22 +593,19 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
 			}
 
-			proof, err := tree.Prove([]uint64{uint64(idx)})
+			proof, err := tree.ProveSingleLeaf(uint64(idx))
 			if err != nil {
 				return internalError(ctx, err, "generating proof", v2.Log)
-			}
-
-			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
-				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Proof:    proofconcat,
-				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
+				Proof:     proof.GetConcatenatedProof(),
+				Stibhash:  stibhash[:],
+				Idx:       uint64(idx),
+				Treedepth: uint64(proof.TreeDepth),
+				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)

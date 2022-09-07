@@ -41,22 +41,22 @@ func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error
 	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
 }
 
-func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AppParams[aidx]
 	return ledgercore.AppParamsDelta{Params: &params}, ok, nil // XXX make a copy?
 }
 
-func (ml *mockLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+func (ml *mockLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AssetParams[aidx]
 	return ledgercore.AssetParamsDelta{Params: &params}, ok, nil
 }
 
-func (ml *mockLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+func (ml *mockLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AppLocalStates[aidx]
 	return ledgercore.AppLocalStateDelta{LocalState: &params}, ok, nil
 }
 
-func (ml *mockLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+func (ml *mockLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].Assets[aidx]
 	return ledgercore.AssetHoldingDelta{Holding: &params}, ok, nil
 }

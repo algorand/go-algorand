@@ -69,6 +69,10 @@ func AccountDataToAccount(
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
+		if !record.StateProofID.IsEmpty() {
+			tmp := record.StateProofID[:]
+			apiParticipation.StateProofKey = &tmp
+		}
 	}
 
 	createdApps := make([]generated.Application, 0, len(record.AppParams))
@@ -126,10 +130,10 @@ func AccountDataToAccount(
 		CreatedApps:                 &createdApps,
 		TotalCreatedApps:            uint64(len(createdApps)),
 		Assets:                      &assets,
-		TotalAssets:                 uint64(len(assets)),
+		TotalAssetsOptedIn:          uint64(len(assets)),
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
-		TotalAppsLocalState:         uint64(len(appsLocalState)),
+		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
 		MinBalance:                  minBalance.Raw,

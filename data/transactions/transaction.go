@@ -276,6 +276,11 @@ var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tr
 var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
+var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
+var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
+var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
+var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
+var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -330,6 +335,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
 
+		}
+
+		if err := tx.stateProofPKWellFormed(proto); err != nil {
+			return err
 		}
 
 	case protocol.AssetConfigTx:
@@ -565,6 +574,44 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
+	return nil
+}
+
+func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
+	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
+	if !proto.EnableStateProofKeyregCheck {
+		// make certain empty key is stored.
+		if !isEmpty {
+			return errKeyregTxnNotEmptyStateProofPK
+		}
+		return nil
+	}
+
+	if proto.MaxKeyregValidPeriod != 0 && uint64(tx.VoteLast.SubSaturate(tx.VoteFirst)) > proto.MaxKeyregValidPeriod {
+		return errKeyRegTxnValidityPeriodTooLong
+	}
+
+	if tx.Nonparticipation {
+		// make certain that set offline request clears the stateProofPK.
+		if !isEmpty {
+			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
+		}
+		return nil
+	}
+
+	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
+		if !isEmpty {
+			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
+		}
+		return nil
+	}
+
+	// online transactions:
+	// setting online cannot set an empty stateProofPK
+	if isEmpty {
+		return errKeyRegEmptyStateProofPK
+	}
+
 	return nil
 }
 

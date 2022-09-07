@@ -46,7 +46,7 @@ type Account struct {
 
 	// \[apar\] parameters of assets created by this account.
 	//
-	// Note: the raw account uses `map[int] -> AssetParams` for this type.
+	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
 	// MicroAlgo balance required by the account.
@@ -81,11 +81,11 @@ type Account struct {
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
 
-	// The count of all application local data (AppLocalState objects) stored in this account.
-	TotalAppsLocalState uint64 `json:"total-apps-local-state"`
+	// The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.
+	TotalAppsOptedIn uint64 `json:"total-apps-opted-in"`
 
-	// The count of all assets (AssetHolding objects) held by this account.
-	TotalAssets uint64 `json:"total-assets"`
+	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
+	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
 	// The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
@@ -94,22 +94,14 @@ type Account struct {
 	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
-// AccountErrorResponse defines model for AccountErrorResponse.
-type AccountErrorResponse struct {
-	Data                *string `json:"data,omitempty"`
-	MaxResults          *uint64 `json:"max-results,omitempty"`
-	Message             string  `json:"message"`
-	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
-	TotalAssets         *uint64 `json:"total-assets,omitempty"`
-	TotalCreatedApps    *uint64 `json:"total-created-apps,omitempty"`
-	TotalCreatedAssets  *uint64 `json:"total-created-assets,omitempty"`
-}
-
 // AccountParticipation defines model for AccountParticipation.
 type AccountParticipation struct {
 
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
+
+	// \[stprf\] Root of the state proof key (if any)
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
@@ -130,6 +122,17 @@ type AccountStateDelta struct {
 
 	// Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AccountsErrorResponse defines model for AccountsErrorResponse.
+type AccountsErrorResponse struct {
+	Data               *string `json:"data,omitempty"`
+	MaxResults         *uint64 `json:"max-results,omitempty"`
+	Message            string  `json:"message"`
+	TotalAppsOptedIn   *uint64 `json:"total-apps-opted-in,omitempty"`
+	TotalAssetsOptedIn *uint64 `json:"total-assets-opted-in,omitempty"`
+	TotalCreatedApps   *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
 }
 
 // Application defines model for Application.
@@ -711,6 +714,11 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
+	// The type of hash function used to create the proof, must be one of:
+	// * sumhash
+	// * sha512_256
+	Hashtype string `json:"hashtype"`
+
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -719,6 +727,9 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

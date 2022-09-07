@@ -1,6 +1,7 @@
 {
     "Genesis": {
         "NetworkName": "tbd",
+        "LastPartKeyRound": 3000,
         "Wallets": [
             {
                 "Name": "W1",

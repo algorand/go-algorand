@@ -14,22 +14,39 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklearray
+package util
 
 import (
-	"testing"
-
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
+	"fmt"
+	"time"
 )
 
-func TestLayerHash(t *testing.T) {
-	partitiontest.PartitionTest(t)
+const spinningCursorTickDuration = 100 * time.Millisecond
 
-	var p pair
-	crypto.RandBytes(p.l[:])
-	crypto.RandBytes(p.r[:])
-	if crypto.HashObj(&p) != p.Hash() {
-		t.Error("hash mismatch")
+// RunFuncWithSpinningCursor runs a given function in a go-routine,
+// while displaying a spinning cursor to the CLI
+func RunFuncWithSpinningCursor(asyncFunc func()) {
+	doneChan := make(chan struct{}, 1)
+	go func() {
+		asyncFunc()
+		doneChan <- struct{}{}
+	}()
+
+	progressStrings := [...]string{"/", "-", "\\", "|"}
+
+	finished := false
+	i := 0
+	ticker := time.NewTicker(spinningCursorTickDuration)
+	for !finished {
+		select {
+		case <-doneChan:
+			finished = true
+			ticker.Stop()
+			break
+		case <-ticker.C:
+			fmt.Print(progressStrings[i])
+			fmt.Print("\b")
+			i = (i + 1) % len(progressStrings)
+		}
 	}
 }

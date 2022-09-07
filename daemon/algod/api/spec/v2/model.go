@@ -22,30 +22,34 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// AccountResourceModel used to encode AccountResource
-type AccountResourceModel struct {
+// AccountAssetModel is returned by AccountAssetInformation when msgpack format is specified
+type AccountAssetModel struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	AssetParams   basics.AssetParams   `codec:"asset-params"`
-	AssetHolding  basics.AssetHolding  `codec:"asset-holding"`
-	AppLocalState basics.AppLocalState `codec:"app-local-state"`
-	AppParams     basics.AppParams     `codec:"app-params"`
+	AssetParams  *basics.AssetParams  `codec:"asset-params"`
+	AssetHolding *basics.AssetHolding `codec:"asset-holding"`
 }
 
-// AccountResourceToAccountResourceModel converts AccountResource to AccountResourceModel
-func AccountResourceToAccountResourceModel(resource ledgercore.AccountResource) AccountResourceModel {
-	resourceModel := AccountResourceModel{}
-	if resource.AssetParams != nil {
-		resourceModel.AssetParams = *resource.AssetParams
+// AccountApplicationModel is returned by AccountApplicationInformation when msgpack format is specified
+type AccountApplicationModel struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	AppLocalState *basics.AppLocalState `codec:"app-local-state"`
+	AppParams     *basics.AppParams     `codec:"app-params"`
+}
+
+// AccountResourceToAccountAssetModel converts AccountResource to AccountAssetModel
+func AccountResourceToAccountAssetModel(resource ledgercore.AccountResource) AccountAssetModel {
+	return AccountAssetModel{
+		AssetParams:  resource.AssetParams,
+		AssetHolding: resource.AssetHolding,
 	}
-	if resource.AssetHolding != nil {
-		resourceModel.AssetHolding = *resource.AssetHolding
+}
+
+// AccountResourceToAccountApplicationModel converts AccountResource to AccountApplicationModel
+func AccountResourceToAccountApplicationModel(resource ledgercore.AccountResource) AccountApplicationModel {
+	return AccountApplicationModel{
+		AppParams:     resource.AppParams,
+		AppLocalState: resource.AppLocalState,
 	}
-	if resource.AppParams != nil {
-		resourceModel.AppParams = *resource.AppParams
-	}
-	if resource.AppLocalState != nil {
-		resourceModel.AppLocalState = *resource.AppLocalState
-	}
-	return resourceModel
 }

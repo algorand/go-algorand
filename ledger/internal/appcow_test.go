@@ -47,19 +47,19 @@ func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	return ledgercore.AccountData{}, nil
 }
 
-func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	return ledgercore.AppParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
 	return ledgercore.AssetParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	return ledgercore.AppLocalStateDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	return ledgercore.AssetHoldingDelta{}, true, nil
 }
 
@@ -706,7 +706,7 @@ func TestApplyChild(t *testing.T) {
 		a.Empty(delta.action)
 		a.Empty(*delta.counts)
 		a.Empty(*delta.maxCounts)
-		a.Equal(0, len(delta.kvCow))
+		a.Zero(len(delta.kvCow))
 	}
 
 	parent.applyChild(&child)
@@ -897,9 +897,9 @@ func TestApplyStorageDelta(t *testing.T) {
 	// no op
 	cow := applyAll(kv, &sdu)
 	params1, params2, state1, state2 := getAllFromCow(cow)
-	a.Equal(0, len(params1.GlobalState))
+	a.Zero(len(params1.GlobalState))
 	a.Equal(len(kv), len(params2.GlobalState))
-	a.Equal(0, len(state1.KeyValue))
+	a.Zero(len(state1.KeyValue))
 	a.Equal(len(kv), len(state2.KeyValue))
 
 	// check dealloc action

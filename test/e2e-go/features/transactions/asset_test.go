@@ -636,9 +636,18 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	err = client0.BroadcastTransactionGroup(stxns)
 	a.NoError(err)
 
-	_, curRound := fixture.GetBalanceAndRound(account0)
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	status0, err := client0.Status()
+	a.NoError(err)
+
+	confirmed := fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
+
+	status0, err = client0.Status()
+	a.NoError(err)
+
+	// wait for client1 to reach the same round as client0
+	_, err = client1.WaitForRound(status0.LastRound)
+	a.NoError(err)
 
 	txids = make(map[string]string)
 
@@ -655,9 +664,17 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = account0
 
-	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	status0, err = client0.Status()
+	a.NoError(err)
+	confirmed = fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
+
+	status0, err = client0.Status()
+	a.NoError(err)
+
+	// wait for client1 to reach the same round as client0
+	_, err = client1.WaitForRound(status0.LastRound)
+	a.NoError(err)
 
 	// asset 3 (create + destroy) not available
 	_, err = client1.AssetInformation(assetID3)

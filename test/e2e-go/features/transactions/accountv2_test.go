@@ -204,8 +204,14 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	txInfo, err := fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound := *txInfo.ConfirmedRound
+
 	// 1 global state update in total, 1 local state updates
-	checkEvalDelta(t, &client, round, round+5, 1, 1)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
 	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
@@ -270,8 +276,14 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound = *txInfo.ConfirmedRound
+
 	// 2 global state update in total, 1 local state updates
-	checkEvalDelta(t, &client, round+2, round+5, 2, 1)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 2, 1)
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
@@ -314,6 +326,12 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(3), value.Uint)
 
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txInfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
+	txnRound = *txInfo.ConfirmedRound
+
 	// 3 global state update in total, 2 local state updates
-	checkEvalDelta(t, &client, round, round+5, 3, 2)
+	checkEvalDelta(t, &client, txnRound, txnRound+1, 3, 2)
 }

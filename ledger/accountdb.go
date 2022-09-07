@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -159,6 +160,12 @@ type persistedAccountData struct {
 //msgp:ignore persistedResourcesData
 type persistedResourcesData struct {
 	// addrid is the rowid of the account address that holds this resource.
+	// it is used in update/delete operations so must be filled for existing records.
+	// resolution is a multi stage process:
+	// - baseResources cache might have valid entries
+	// - baseAccount cache might have an entry for the address with rowid set
+	// - when loading non-cached resources in resourcesLoadOld
+	// - when creating new accounts in accountsNewRound
 	addrid int64
 	// creatable index
 	aidx basics.CreatableIndex
@@ -406,6 +413,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				newEntry.newResource.SetAssetData(res.Params, res.Holding)
+				// baseResources caches deleted entries, and they have addrid = 0
+				// need to handle this and prevent such entries to be treated as fully resolved
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
@@ -1074,6 +1083,7 @@ type baseOnlineAccountData struct {
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
+	StateProofID    merklesignature.Verifier        `codec:"F"`
 }
 
 type baseAccountData struct {
@@ -1117,6 +1127,7 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.VoteID.MsgIsZero() &&
 		ba.SelectionID.MsgIsZero() &&
+		ba.StateProofID.MsgIsZero() &&
 		ba.VoteFirstValid == 0 &&
 		ba.VoteLastValid == 0 &&
 		ba.VoteKeyDilution == 0
@@ -1133,6 +1144,7 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1153,6 +1165,7 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1187,6 +1200,7 @@ func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 		VotingData: ledgercore.VotingData{
 			VoteID:          ba.VoteID,
 			SelectionID:     ba.SelectionID,
+			StateProofID:    ba.StateProofID,
 			VoteFirstValid:  ba.VoteFirstValid,
 			VoteLastValid:   ba.VoteLastValid,
 			VoteKeyDilution: ba.VoteKeyDilution,
@@ -1202,6 +1216,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		VoteID:             ba.VoteID,
 		SelectionID:        ba.SelectionID,
+		StateProofID:       ba.StateProofID,
 		VoteFirstValid:     ba.VoteFirstValid,
 		VoteLastValid:      ba.VoteLastValid,
 		VoteKeyDilution:    ba.VoteKeyDilution,
@@ -1553,52 +1568,50 @@ func accountDataResources(
 	accountData *basics.AccountData, rowid int64,
 	outputResourceCb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, rd *resourcesData) error,
 ) error {
-	// does this account have any assets ?
-	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
-		for aidx, holding := range accountData.Assets {
-			var rd resourcesData
-			rd.SetAssetHolding(holding)
-			if ap, has := accountData.AssetParams[aidx]; has {
-				rd.SetAssetParams(ap, true)
-				delete(accountData.AssetParams, aidx)
-			}
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+	// handle all the assets we can find:
+	for aidx, holding := range accountData.Assets {
+		var rd resourcesData
+		rd.SetAssetHolding(holding)
+		if ap, has := accountData.AssetParams[aidx]; has {
+			rd.SetAssetParams(ap, true)
+			delete(accountData.AssetParams, aidx)
 		}
-		for aidx, aparams := range accountData.AssetParams {
-			var rd resourcesData
-			rd.SetAssetParams(aparams, false)
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
 		}
 	}
-	// does this account have any applications ?
-	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
-		for aidx, localState := range accountData.AppLocalStates {
-			var rd resourcesData
-			rd.SetAppLocalState(localState)
-			if ap, has := accountData.AppParams[aidx]; has {
-				rd.SetAppParams(ap, true)
-				delete(accountData.AppParams, aidx)
-			}
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
-		}
-		for aidx, aparams := range accountData.AppParams {
-			var rd resourcesData
-			rd.SetAppParams(aparams, false)
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+	for aidx, aparams := range accountData.AssetParams {
+		var rd resourcesData
+		rd.SetAssetParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
 		}
 	}
+
+	// handle all the applications we can find:
+	for aidx, localState := range accountData.AppLocalStates {
+		var rd resourcesData
+		rd.SetAppLocalState(localState)
+		if ap, has := accountData.AppParams[aidx]; has {
+			rd.SetAppParams(ap, true)
+			delete(accountData.AppParams, aidx)
+		}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+	for aidx, aparams := range accountData.AppParams {
+		var rd resourcesData
+		rd.SetAppParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1787,16 +1800,15 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // the full AccountData because we need to store a large number of these
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
-		VoteID:                  ad.VoteID,
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		VoteKeyDilution:         ad.VoteKeyDilution,
+		StateProofID:            ad.StateProofID,
 	}
 }
 
@@ -2242,7 +2254,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		copy(addr[:], addrbuf)
 		ad := data.GetLedgerCoreAccountData()
-		res[addr] = accountDataToOnline(addr, ad, proto)
+		res[addr] = accountDataToOnline(addr, &ad, proto)
 	}
 
 	return res, rows.Err()
@@ -2602,7 +2614,7 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
 					return
 				}
 				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
@@ -2636,7 +2648,7 @@ func accountsNewRoundImpl(
 				continue
 			} else {
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
 					return
 				}
 				var rowsAffected int64

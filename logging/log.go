@@ -394,6 +394,13 @@ func (l logger) GetTelemetrySession() string {
 	return l.loggerState.telemetry.telemetryConfig.SessionGUID
 }
 
+func (l logger) GetTelemetryVersion() string {
+	if !l.GetTelemetryEnabled() {
+		return ""
+	}
+	return l.loggerState.telemetry.telemetryConfig.Version
+}
+
 func (l logger) GetTelemetryHostName() string {
 	if !l.GetTelemetryEnabled() {
 		return ""

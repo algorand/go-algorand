@@ -513,7 +513,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			} else if resDelta.oldResource.data.IsApp() {
 				ctype = basics.AppCreatable
 			} else {
-				err = fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.oldResource.addrid, resDelta.oldResource.aidx, resDelta.oldResource.data)
+				return fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.oldResource.addrid, resDelta.oldResource.aidx, resDelta.oldResource.data)
 			}
 			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
@@ -534,7 +534,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			} else if resDelta.newResource.IsApp() {
 				ctype = basics.AppCreatable
 			} else {
-				err = fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.oldResource.aidx, resDelta.newResource)
+				return fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.oldResource.aidx, resDelta.newResource)
 			}
 			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
 			added, err = ct.balancesTrie.Add(addHash)

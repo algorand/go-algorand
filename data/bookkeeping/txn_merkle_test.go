@@ -80,9 +80,8 @@ func TestTxnMerkle(t *testing.T) {
 		for i := uint64(0); i < ntxn; i++ {
 			proof, err := tree.Prove([]uint64{i})
 			require.NoError(t, err)
-
-			elemVerif := make(map[uint64]crypto.Digest)
-			elemVerif[i] = elems[i].Hash()
+			elemVerif := make(map[uint64]crypto.Hashable)
+			elemVerif[i] = &elems[i]
 			err = merklearray.Verify(root, elemVerif, proof)
 			require.NoError(t, err)
 		}
@@ -142,4 +141,25 @@ func BenchmarkTxnRoots(b *testing.B) {
 	})
 
 	_ = r
+}
+
+func txnMerkleToRawAppend(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) []byte {
+	buf := make([]byte, 0, 2*crypto.DigestSize)
+	buf = append(buf, txid[:]...)
+	return append(buf, stib[:]...)
+}
+func BenchmarkTxnMerkleToRaw(b *testing.B) {
+	digest1 := crypto.Hash([]byte{1, 2, 3})
+	digest2 := crypto.Hash([]byte{4, 5, 6})
+
+	b.Run("copy", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRaw(digest1, digest2)
+		}
+	})
+	b.Run("append", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRawAppend(digest1, digest2)
+		}
+	})
 }

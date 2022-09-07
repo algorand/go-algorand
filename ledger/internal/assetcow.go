@@ -28,14 +28,7 @@ func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIn
 			Creator: addr,
 			Created: true,
 		}
-	} else {
-		aa := ledgercore.AccountAsset{
-			Address: addr,
-			Asset:   index,
-		}
-		cs.mods.ModifiedAssetHoldings[aa] = true
 	}
-
 	return nil
 }
 
@@ -46,13 +39,6 @@ func (cs *roundCowState) DeallocateAsset(addr basics.Address, index basics.Asset
 			Creator: addr,
 			Created: false,
 		}
-	} else {
-		aa := ledgercore.AccountAsset{
-			Address: addr,
-			Asset:   index,
-		}
-		cs.mods.ModifiedAssetHoldings[aa] = false
 	}
-
 	return nil
 }

@@ -1,4 +1,5 @@
 {
+    "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "EnableBlockStats": true,
     "EnableTelemetry": true,

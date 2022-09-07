@@ -134,18 +134,36 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 	a.Contains(genesisInitState.Accounts, userLocal2)
 
-	expectedCreatorBase, err := hex.DecodeString("84a16101a162ce009d2290a16704a16b01")
-	a.NoError(err)
-	expectedCreatorResource, err := hex.DecodeString("85a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903")
-	a.NoError(err)
-	expectedUserOptInBase, err := hex.DecodeString("84a16101a162ce00a02fd0a16701a16c01")
-	a.NoError(err)
-	expectedUserOptInResource, err := hex.DecodeString("81a16f01")
-	a.NoError(err)
-	expectedUserLocalBase, err := hex.DecodeString("84a16101a162ce00a33540a16701a16c01")
-	a.NoError(err)
-	expectedUserLocalResource, err := hex.DecodeString("82a16f01a17081a26c6b82a27462a56c6f63616ca2747401")
-	a.NoError(err)
+	var expectedCreatorBase, expectedCreatorResource, expectedUserOptInBase, expectedUserOptInResource, expectedUserLocalBase, expectedUserLocalResource []byte
+	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
+	// the consensus upgrade, and affects only nodes that have been updated.
+	if proto.EnableAccountDataResourceSeparation {
+		expectedCreatorBase, err = hex.DecodeString("85a16101a162ce009d2290a16704a16b01a17a01")
+		a.NoError(err)
+		expectedCreatorResource, err = hex.DecodeString("86a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903a17a01")
+		a.NoError(err)
+		expectedUserOptInBase, err = hex.DecodeString("85a16101a162ce00a02fd0a16701a16c01a17a02")
+		a.NoError(err)
+		expectedUserOptInResource, err = hex.DecodeString("82a16f01a17a02")
+		a.NoError(err)
+		expectedUserLocalBase, err = hex.DecodeString("85a16101a162ce00a33540a16701a16c01a17a04")
+		a.NoError(err)
+		expectedUserLocalResource, err = hex.DecodeString("83a16f01a17081a26c6b82a27462a56c6f63616ca2747401a17a04")
+		a.NoError(err)
+	} else {
+		expectedCreatorBase, err = hex.DecodeString("84a16101a162ce009d2290a16704a16b01")
+		a.NoError(err)
+		expectedCreatorResource, err = hex.DecodeString("85a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903")
+		a.NoError(err)
+		expectedUserOptInBase, err = hex.DecodeString("84a16101a162ce00a02fd0a16701a16c01")
+		a.NoError(err)
+		expectedUserOptInResource, err = hex.DecodeString("81a16f01")
+		a.NoError(err)
+		expectedUserLocalBase, err = hex.DecodeString("84a16101a162ce00a33540a16701a16c01")
+		a.NoError(err)
+		expectedUserLocalResource, err = hex.DecodeString("82a16f01a17081a26c6b82a27462a56c6f63616ca2747401")
+		a.NoError(err)
+	}
 
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
