@@ -272,7 +272,7 @@ function check_for_updater() {
 
         # try signature validation
         if [ "$GPG_VERIFY" = "1" ]; then
-            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
+            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="$UPDATER_TEMPDIR/key.pub"
             # try downloading public key
             if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
                 GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
