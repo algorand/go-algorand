@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -1144,21 +1145,21 @@ func TestStateproofTransactionForRound(t *testing.T) {
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, time.Minute)
 	a.NoError(err)
 	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000)
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, time.Minute)
 	a.NoError(err)
 	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000)
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000, time.Minute)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
+	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), time.Minute)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1179,6 +1180,27 @@ func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, time.Minute)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+}
+
+func TestStateproofTransactionForRoundTimeouts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
+			},
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, 0)
+	a.ErrorIs(err, v2.ErrTimeout)
 }

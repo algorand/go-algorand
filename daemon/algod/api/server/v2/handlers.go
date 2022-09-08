@@ -155,7 +155,7 @@ var ErrTimeout = errors.New("timed out on request")
 
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
-func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round) (transactions.Transaction, error) {
+func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round, timeout time.Duration) (transactions.Transaction, error) {
 	hdr, err := txnFetcher.BlockHdr(round)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -165,7 +165,7 @@ func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Roun
 		return transactions.Transaction{}, ErrNoStateProofForRound
 	}
 
-	timer := time.NewTimer(time.Minute)
+	timer := time.NewTimer(timeout)
 	for i := round + 1; i <= latestRound; i++ {
 		select {
 		case <-timer.C:
@@ -1275,7 +1275,7 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}
@@ -1311,7 +1311,7 @@ func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) err
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}
