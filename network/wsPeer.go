@@ -500,7 +500,6 @@ func (wp *wsPeer) readLoop() {
 		case protocol.VoteBundleTag:
 		default: // unrecognized tag
 			wp.OutOfProtocol = true
-			continue // drop message, skip adding it to the queue
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
