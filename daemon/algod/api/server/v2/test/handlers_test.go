@@ -1161,3 +1161,24 @@ func TestStateproofTransactionForRound(t *testing.T) {
 	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
+
+func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusV30, // should have StateProofInterval == 0 .
+			},
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+}
