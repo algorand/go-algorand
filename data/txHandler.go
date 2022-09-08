@@ -144,6 +144,7 @@ func (rts *requestedTxnSet) Push(x interface{}) {
 func (rts *requestedTxnSet) Pop() interface{} {
 	last := len(rts.ar) - 1
 	out := rts.ar[last]
+	rts.ar[last] = nil
 	out.heapPos = -1
 	rts.ar = rts.ar[:last]
 	return out
@@ -166,6 +167,12 @@ func (rts *requestedTxnSet) popByTxid(txid transactions.Txid) (x *requestedTxn, 
 	x, ok = rts.byTxid[txid]
 	if ok {
 		delete(rts.byTxid, txid)
+		if x.heapPos < 0 {
+			panic(fmt.Sprintf("txid %s heapPos %d", txid.String(), x.heapPos))
+		}
+		if x.heapPos >= len(rts.ar) {
+			panic(fmt.Sprintf("txid %s heapPos %d of %d", txid.String(), x.heapPos, len(rts.ar)))
+		}
 		heap.Remove(rts, x.heapPos)
 	}
 	return x, ok
@@ -616,6 +623,7 @@ func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest 
 			heap.Fix(&handler.txRequests, 0)
 		} else {
 			heap.Pop(&handler.txRequests)
+			delete(handler.txRequests.byTxid, req.txid)
 		}
 		if len(handler.txRequests.ar) == 0 {
 			break
