@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -2643,4 +2644,69 @@ func TestSemiColon(t *testing.T) {
 		`byte "test;this"; ; pop;`,
 		`byte "test;this";;;pop;`,
 	)
+}
+
+func TestAssembleSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// fail when wrong number of targets are present
+	source := `
+	pushint 1
+	switchi 2 label1 label2 label3
+	label1:
+	label2:
+	label3:
+	`
+	testProg(t, source, 8, NewExpect(3, "switch operation requires 2 labels but contains 3"))
+
+	// fail when target doesn't correspond to existing label
+	source = `
+	pushint 1
+	switchi 2 label1 label2
+	label1:
+	`
+	testProg(t, source, 8, NewExpect(3, "reference to undefined label \"label2\""))
+
+	// confirm size of varuint list size
+	source = `
+	pushint 1
+	switchi 2 label1 label2
+	label1:
+	label2:
+	`
+	ops, err := AssembleStringWithVersion(source, 8)
+	require.NoError(t, err)
+	val, bytesUsed := binary.Uvarint(ops.Program[4:])
+	require.Equal(t, uint64(2), val)
+	require.Equal(t, 1, bytesUsed)
+
+	var labelReferences []string
+	for i := 0; i < (1 << 9); i++ {
+		labelReferences = append(labelReferences, fmt.Sprintf("label%d", i))
+	}
+
+	var labels []string
+	for i := 0; i < (1 << 9); i++ {
+		labels = append(labels, fmt.Sprintf("label%d:", i))
+	}
+
+	source = fmt.Sprintf(`
+	pushint 1
+	switchi %d %s
+	%s
+	`, (1 << 9), strings.Join(labelReferences, " "), strings.Join(labels, "\n"))
+	ops, err = AssembleStringWithVersion(source, 8)
+	require.NoError(t, err)
+	val, bytesUsed = binary.Uvarint(ops.Program[4:])
+	require.Equal(t, uint64(1<<9), val)
+	require.Equal(t, 2, bytesUsed)
+
+	// allow duplicate label reference
+	source = `
+	pushint 1
+	switchi 2 label1 label1
+	label1:
+	`
+	testProg(t, source, 8)
 }
