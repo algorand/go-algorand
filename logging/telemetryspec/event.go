@@ -292,6 +292,8 @@ type PeerConnectionDetails struct {
 	Endpoint string `json:",omitempty"`
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
+	// OutOfProtocol tells us if a node is not using the protocol faithfully.
+	OutOfProtocol bool
 }
 
 // CatchpointGenerationEvent event

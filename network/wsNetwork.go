@@ -1752,6 +1752,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
 			TelemetryGUID:      peer.TelemetryGUID,
 			InstanceName:       peer.InstanceName,
+			OutOfProtocol:      peer.OutOfProtocol,
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
