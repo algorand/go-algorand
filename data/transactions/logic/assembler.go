@@ -830,7 +830,7 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
-	ops.referToLabel(ops.pending.Len(), args[0], ops.pending.Len()+spec.Size)
+	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
@@ -2012,6 +2012,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		for i := range ops.labelReferences {
 			if ops.labelReferences[i].position > position {
 				ops.labelReferences[i].position += positionDelta
+				ops.labelReferences[i].offsetPosition += positionDelta
 			}
 		}
 
@@ -2248,11 +2249,8 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			offset := (uint(dis.program[pc]) << 8) | uint(dis.program[pc+1])
+			offset := int16((uint(dis.program[pc]) << 8) | uint(dis.program[pc+1]))
 			target := int(offset) + pc + 2
-			if target > 0xffff {
-				target -= 0x10000
-			}
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2313,6 +2311,31 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 				out += fmt.Sprintf("0x%s", hex.EncodeToString(bv))
 			}
+			pc = nextpc
+		case immLabels:
+			targets, nextpc, err := parseSwitch(dis.program, pc)
+			if err != nil {
+				return "", err
+			}
+
+			var labels []string
+			for _, target := range targets {
+				var label string
+				if dis.numericTargets {
+					label = fmt.Sprintf("%d", target)
+				} else {
+					if known, ok := dis.pendingLabels[target]; ok {
+						label = known
+					} else {
+						dis.labelCount++
+						label = fmt.Sprintf("label%d", dis.labelCount)
+						dis.putLabel(label, target)
+					}
+				}
+				labels = append(labels, label)
+			}
+			out += strconv.Itoa(len(targets)) + " "
+			out += strings.Join(labels, " ")
 			pc = nextpc
 		default:
 			return "", fmt.Errorf("unknown immKind %d", imm.kind)
@@ -2465,6 +2488,31 @@ func checkByteConstBlock(cx *EvalContext) error {
 	}
 	cx.nextpc = pos
 	return nil
+}
+
+func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
+	numOffsets, bytesUsed := binary.Uvarint(program[pos:])
+	if bytesUsed <= 0 {
+		err = fmt.Errorf("could not decode switch target list size at pc=%d", pos)
+		return
+	}
+	pc := pos
+	pos += bytesUsed
+	if numOffsets > uint64(len(program)) {
+		err = errTooManyItems
+		return
+	}
+
+	end := pos + int(2*numOffsets) // end of op: offset is applied to this position
+	for i := 0; i < int(numOffsets); i++ {
+		offset := int16(uint16(program[pos])<<8 | uint16(program[pos+1]))
+		target := int(offset) + int(end)
+		targets = append(targets, target)
+		pos += 2
+		fmt.Println(fmt.Sprintf("%d %d %d", pc, pos, target))
+	}
+	nextpc = pos
+	return
 }
 
 func allPrintableASCII(bytes []byte) bool {

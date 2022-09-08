@@ -189,7 +189,7 @@ func detSwitch() OpDetails {
 	d.asm = asmSwitch
 	d.check = checkSwitch
 	d.Size = 0
-	d.Immediates = []immediate{imm("uint", immInt), imm("target ...", immLabels)}
+	d.Immediates = []immediate{imm("target ...", immLabels)}
 	return d
 }
 
