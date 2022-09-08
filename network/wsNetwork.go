@@ -1183,6 +1183,10 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 	}
 }
 
+func (wn *WebsocketNetwork) wantsTag(tag Tag) bool {
+	return wn.handlers.wantsTag(tag)
+}
+
 func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
 

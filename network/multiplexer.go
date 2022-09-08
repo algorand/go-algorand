@@ -57,6 +57,15 @@ func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
 	return nil, false
 }
 
+// wantsTag returns true if there is a registered handler for the specified tag
+func (m *Multiplexer) wantsTag(tag Tag) bool {
+	if handlers := m.getHandlersMap(); handlers != nil {
+		_, ok := handlers[tag]
+		return ok
+	}
+	return false
+}
+
 // Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
 func (m *Multiplexer) Handle(msg IncomingMessage) OutgoingMessage {
 	handler, ok := m.getHandler(msg.Tag)

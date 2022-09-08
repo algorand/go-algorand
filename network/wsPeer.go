@@ -487,6 +487,11 @@ func (wp *wsPeer) readLoop() {
 			wp.handleFilterMessage(msg)
 			continue
 		}
+		// this has to be _after_ the above switch statements because there are not handlers registered for those low-level protocol message tags
+		if !wp.net.wantsTag(msg.Tag) {
+			// drop message
+			continue
+		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
