@@ -1136,6 +1136,9 @@ func TestStateproofTransactionForRound(t *testing.T) {
 		var blk bookkeeping.Block
 		blk.BlockHeader = bookkeeping.BlockHeader{
 			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
 		}
 		blk = addStateProofIfNeeded(blk)
 		ledger.blocks = append(ledger.blocks, blk)
