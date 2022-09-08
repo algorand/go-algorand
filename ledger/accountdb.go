@@ -59,6 +59,10 @@ type onlineAccountsDbQueries struct {
 	lookupOnlineTotalsStmt  *sql.Stmt
 }
 
+type stateProofVerificationDbQueries struct {
+	lookupStateProofVerificationData *sql.Stmt
+}
+
 var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS acctrounds (
 		id string primary key,
@@ -5063,4 +5067,36 @@ func pruneOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, targetR
 		return err
 	}
 	return db.Retry(f)
+}
+
+func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
+	var err error
+	qs := &stateProofVerificationDbQueries{}
+
+	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	if err != nil {
+		return nil, err
+	}
+
+	return qs, nil
+}
+
+func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	data := ledgercore.StateProofVerificationData{}
+	queryFunc := func() error {
+		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
+		var buf []byte
+		err := row.Scan(&buf)
+		if err != nil {
+			return err
+		}
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	err := db.Retry(queryFunc)
+	return &data, err
 }

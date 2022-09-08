@@ -19,10 +19,15 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+var (
+	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is too far in the future")
 )
 
 // TODO: Handle state proofs not being enabled
@@ -35,6 +40,8 @@ type stateProofFlushData struct {
 }
 
 type stateProofVerificationTracker struct {
+	dbQueries stateProofVerificationDbQueries
+
 	trackedData []ledgercore.StateProofVerificationData
 
 	stateProofsToFlush []stateProofFlushData
@@ -132,6 +139,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
 	// TODO: can this be in postCommitUnlocked?
 	spt.trackedData = spt.trackedData[len(dcc.committedStateProofVerificationData):]
+	// TODO: empty flushed data
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
@@ -143,5 +151,19 @@ func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitC
 }
 
 func (spt *stateProofVerificationTracker) close() {
+}
 
+// TODO: must lock here
+
+func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	if len(spt.trackedData) == 0 || stateProofLastAttestedRound < spt.trackedData[0].TargetStateProofRound {
+		// TODO: bound check here too, for descriptive errors
+		return spt.dbQueries.lookupData(stateProofLastAttestedRound)
+	}
+
+	if stateProofLastAttestedRound > spt.trackedData[len(spt.trackedData)-1].TargetStateProofRound {
+		return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+	}
+
+	return &spt.trackedData[spt.roundToTrackedIndex(stateProofLastAttestedRound)], nil
 }

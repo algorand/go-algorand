@@ -454,6 +454,13 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
+// StateProofVerificationData returns the data required to verify state proofs
+func (l *Ledger) StateProofVerificationData(rnd basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	// TODO: input check
+	// TODO: locks
+	return l.stateProofVerification.LookupVerificationData(rnd)
+}
+
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
