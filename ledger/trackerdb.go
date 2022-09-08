@@ -226,7 +226,6 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 // The accountbase would get initialized with the au.initAccounts
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
 	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, config.Consensus[tu.initProto])
@@ -251,7 +250,6 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context
 //
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (err error) {
 	var modifiedAccounts uint
 	if tu.newDatabase {
@@ -302,7 +300,6 @@ schemaUpdateComplete:
 // This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (err error) {
 	if !tu.newDatabase {
 		tu.vacuumOnStartup = true

@@ -21,7 +21,7 @@ import (
 	"os"
 )
 
-//BootstrappedNetwork contains the specs for generating db files
+// BootstrappedNetwork contains the specs for generating db files
 type BootstrappedNetwork struct {
 	NumRounds                 uint64  `json:"numRounds"`
 	RoundTransactionsCount    uint64  `json:"roundTransactionsCount"`

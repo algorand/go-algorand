@@ -1396,7 +1396,7 @@ func isFullSpec(spec OpSpec) bool {
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
-//by creating a new proto that is a combination of all the pseudo-op's possibilities
+// by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes

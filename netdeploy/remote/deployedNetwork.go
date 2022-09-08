@@ -348,7 +348,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	return
 }
 
-//GenerateDatabaseFiles generates database files according to the configurations
+// GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
 	accounts := make(map[basics.Address]basics.AccountData)

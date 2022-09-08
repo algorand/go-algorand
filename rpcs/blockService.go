@@ -96,6 +96,7 @@ type EncodedBlockCert struct {
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
 // using a pre-encoded Block and Certificate in msgpack format.
+//
 //msgp:ignore PreEncodedBlockCert
 type PreEncodedBlockCert struct {
 	Block       codec.Raw `codec:"block"`

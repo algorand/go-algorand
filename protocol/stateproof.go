@@ -35,6 +35,7 @@ const (
 
 // SortStateProofType implements sorting by StateProofType keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortStateProofType
 //msgp:sort StateProofType SortStateProofType
 type SortStateProofType []StateProofType

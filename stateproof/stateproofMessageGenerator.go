@@ -35,6 +35,7 @@ var errOutOfBound = errors.New("request pos is out of array bounds")
 var errProvenWeightOverflow = errors.New("overflow computing provenWeight")
 
 // The Array implementation for block headers, required to build the merkle tree from them.
+//
 //msgp:ignore lightBlockHeaders
 type lightBlockHeaders []bookkeeping.LightBlockHeader
 

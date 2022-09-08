@@ -509,7 +509,7 @@ func TestGetAllKeys(t *testing.T) {
 	a.Equal(0, len(keys))
 }
 
-//#region Helper Functions
+// #region Helper Functions
 func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, Signature) {
 	msg := genMsgForTest()
 

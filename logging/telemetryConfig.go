@@ -56,8 +56,9 @@ func TelemetryOverride(env string, telemetryConfig *TelemetryConfig) bool {
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
 // Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
-//       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
-//       a "dev" branch check.
+//
+//	from various tools and goal commands and affect the future default settings for telemetry, we need to inject
+//	a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
 

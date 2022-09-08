@@ -115,7 +115,6 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 // T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively,
 // and P is set to lnProvenWeight argument.
 //
-//
 // more details can be found on the Algorand's spec
 func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint64) (uint64, error) {
 	// in order to make the code more readable and reusable we will define the following expressions:

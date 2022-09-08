@@ -42,6 +42,7 @@ import (
 // For correctness, all Roots should have no more than one Participation
 // globally active at any time. If this condition is violated, the Root may
 // equivocate. (Algorand tolerates a limited fraction of misbehaving accounts.)
+//
 //msgp:ignore Participation
 type Participation struct {
 	Parent basics.Address
@@ -103,6 +104,7 @@ func (part Participation) ID() ParticipationID {
 // PersistedParticipation encapsulates the static state of the participation
 // for a single address at any given moment, while providing the ability
 // to handle persistence and deletion of secrets.
+//
 //msgp:ignore PersistedParticipation
 type PersistedParticipation struct {
 	Participation

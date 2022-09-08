@@ -37,6 +37,7 @@ var ErrIndexOutOfBound = errors.New("index is out of bound")
 // committableSignatureSlotArray is used to create a merkle tree on the stateproof's
 // signature array. it serializes the MSS signatures using a specific format
 // state proof signature array.
+//
 //msgp:ignore committableSignatureSlotArray
 type committableSignatureSlotArray []sigslot
 

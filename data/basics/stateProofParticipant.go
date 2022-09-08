@@ -73,6 +73,7 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 
 // ParticipantsArray implements merklearray.Array and is used to commit
 // to a Merkle tree of online accounts.
+//
 //msgp:ignore ParticipantsArray
 type ParticipantsArray []Participant
 

@@ -25,6 +25,7 @@ import (
 // Component is an enum identifying a specific type of Event
 // TODO Maybe this should be called ComponentEventType (and change Event to ComponentEvent),
 // since these are not actually types of components
+//
 //go:generate stringer -type=Component
 type Component int
 

@@ -136,7 +136,6 @@ func (rps roundperiodstep) Format(f fmt.State, c rune) {
 	fmt.Fprintf(f, "%s%s.%s.%s", leadingspaces, colorize(r), colorize(p), colorize(s))
 }
 
-//
 func setupInputStream() io.ReadCloser {
 	var inputStream io.ReadCloser = os.Stdin
 

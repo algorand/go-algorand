@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//msgp: ignore storageAction
+// msgp: ignore storageAction
 type storageAction uint64
 
 const (
@@ -74,6 +74,7 @@ func (vd valueDelta) serialize() (vdelta basics.ValueDelta, ok bool) {
 }
 
 // stateDelta is similar to basics.StateDelta but stores both values before and after change
+//
 //msgp:ignore stateDelta
 type stateDelta map[string]valueDelta
 

@@ -184,7 +184,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-//-------------------------------------------------------
+// -------------------------------------------------------
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 

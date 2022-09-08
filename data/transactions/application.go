@@ -50,6 +50,7 @@ const (
 
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
+//
 //go:generate stringer -type=OnCompletion -output=application_string.go
 type OnCompletion uint64
 

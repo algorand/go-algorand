@@ -3247,10 +3247,11 @@ intc_1
 import random
 
 def foo():
-    for i in range(64):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('+')
+
+	for i in range(64):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('+')
 */
 const addBenchmarkSource = `int 20472989571761113
 int 80135167795737348
@@ -3385,10 +3386,11 @@ int 28939890412103745
 import random
 
 def foo():
-    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-        print('+')
+
+	print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	    print('+')
 */
 const addBenchmark2Source = `int 8371863094338737
 int 29595196041051360

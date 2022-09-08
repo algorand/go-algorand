@@ -3929,6 +3929,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+//
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -4117,6 +4118,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
+//
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 

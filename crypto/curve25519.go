@@ -210,7 +210,6 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // signed a Hashable message.
 //
 // It returns true if this is the case; otherwise, it returns false.
-//
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))

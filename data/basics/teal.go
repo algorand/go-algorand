@@ -69,6 +69,7 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
+//
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
 type StateDelta map[string]ValueDelta
 
@@ -226,6 +227,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
+//
 //msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
 type TealKeyValue map[string]TealValue
 

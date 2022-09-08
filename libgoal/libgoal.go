@@ -507,11 +507,11 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 //
 // validRounds | lastValid | result (lastValid)
 // -------------------------------------------------
-// 	  	 0     |     0     | firstValid + maxTxnLife
-// 		 0     |     N     | lastValid
-// 		 M     |     0     | first + validRounds - 1
-// 		 M     |     M     | error
 //
+//	  	 0     |     0     | firstValid + maxTxnLife
+//		 0     |     N     | lastValid
+//		 M     |     0     | first + validRounds - 1
+//		 M     |     M     | error
 func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.SuggestedParams()
 	if err != nil {
