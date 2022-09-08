@@ -201,7 +201,7 @@ type GossipNode interface {
 	// this node to send corresponding MsgOfInterest notifications to any
 	// newly connecting peers.  This should be called before the network
 	// is started.
-	RegisterMessageInterest(protocol.Tag)
+	RegisterMessageInterest(...protocol.Tag)
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
@@ -2309,7 +2309,7 @@ func SetUserAgentHeader(header http.Header) {
 // this node to send corresponding MsgOfInterest notifications to any
 // newly connecting peers.  This should be called before the network
 // is started.
-func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
+func (wn *WebsocketNetwork) RegisterMessageInterest(moitags ...protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2320,12 +2320,14 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
 		}
 	}
 
-	wn.messagesOfInterest[t] = true
+	for _, t := range moitags {
+		wn.messagesOfInterest[t] = true
+	}
 	wn.updateMessagesOfInterestEnc()
 }
 
 // DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
-func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
+func (wn *WebsocketNetwork) DeregisterMessageInterest(moitags ...protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2336,7 +2338,9 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 		}
 	}
 
-	delete(wn.messagesOfInterest, t)
+	for _, t := range moitags {
+		delete(wn.messagesOfInterest, t)
+	}
 	wn.updateMessagesOfInterestEnc()
 }
 
@@ -2358,10 +2362,10 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
-			wn.RegisterMessageInterest(protocol.TxnTag)
+			wn.RegisterMessageInterest(protocol.TxnTag, protocol.TxnAdvertiseTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-			wn.DeregisterMessageInterest(protocol.TxnTag)
+			wn.DeregisterMessageInterest(protocol.TxnTag, protocol.TxnAdvertiseTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}
 	}
