@@ -408,7 +408,7 @@ const randomnessCompiled = "81ffff03d101d000"
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
 	randomnessCompiled + "800243218001775c0280018881015d"
 
-const v8Compiled = v7Compiled + pairingCompiled
+const v8Compiled = v7Compiled + pairingCompiled + "8101e002fff800008101"
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -473,8 +473,6 @@ func TestAssemble(t *testing.T) {
 			expectedBytes, _ := hex.DecodeString(compiled[v])
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
-			fmt.Println(hex.EncodeToString(ops.Program))
-			fmt.Println(compiled[v])
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
 	}

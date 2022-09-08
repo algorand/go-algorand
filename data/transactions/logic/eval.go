@@ -2052,6 +2052,9 @@ func checkSwitch(cx *EvalContext) error {
 		}
 		cx.branchTargets[target] = true
 	}
+
+	// this opcode's size is dynamic so nextpc must be set here
+	cx.nextpc = cx.pc + opSize
 	return nil
 }
 

@@ -5515,3 +5515,33 @@ func TestTypeComplaints(t *testing.T) {
 	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }
+
+func TestSwitchInt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, `
+int 0
+start:
+int 1
++
+dup
+int 1
+-
+switchi 2 start end
+err
+end:
+pop
+int 1
+`, 8)
+
+	// test code fails when target index is out of bounds
+	testPanics(t, `
+int 2
+switchi 2 start end
+err
+start:
+end:
+int 1
+`, 8)
+}
