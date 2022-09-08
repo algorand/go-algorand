@@ -497,8 +497,9 @@ func (wp *wsPeer) readLoop() {
 		case protocol.UniCatchupReqTag:
 		case protocol.UniEnsBlockReqTag:
 		case protocol.VoteBundleTag:
-		default: // catch and ignore unrecognized tags, rather than queueing them to be ignored
-			continue
+		default: // unrecognized tag
+			wp.net.log.Debugf("peer reported unrecognized tag %x: %s", tag, wp.conn.RemoteAddr().String())
+			continue // drop message, skip adding it to the queue
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
