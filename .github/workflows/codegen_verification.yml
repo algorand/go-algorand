@@ -1,5 +1,8 @@
 name: "codegen verification"
 on:
+  push:
+    branches:
+      - master
   pull_request:
 jobs:
   codegen_verification:

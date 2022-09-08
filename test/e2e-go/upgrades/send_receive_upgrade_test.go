@@ -47,35 +47,43 @@ func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"), "")
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"), "")
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"), "")
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV23toV24(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"))
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"), "")
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV24toV25(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV24Upgrade.json"))
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV24Upgrade.json"), "")
+}
+
+func TestAccountsCanSendMoneyAcrossUpgradeV32toV35(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	targetVersion := consensusTestFastUpgrade(protocol.ConsensusV35)
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV32Upgrade.json"), targetVersion)
 }
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
@@ -112,7 +120,7 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 	return
 }
 
-func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
+func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string, targetVersion protocol.ConsensusVersion) {
 	//t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -123,17 +131,17 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
 
-	verifyAccountsCanSendMoneyAcrossUpgrade(a, &fixture)
+	verifyAccountsCanSendMoneyAcrossUpgrade(a, &fixture, targetVersion)
 }
 
-func verifyAccountsCanSendMoneyAcrossUpgrade(a *require.Assertions, fixture *fixtures.RestClientFixture) {
-	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(a, fixture)
+func verifyAccountsCanSendMoneyAcrossUpgrade(a *require.Assertions, fixture *fixtures.RestClientFixture, targetVersion protocol.ConsensusVersion) {
+	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(a, fixture, targetVersion)
 
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
 }
 
-func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
+func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture, targetVersion protocol.ConsensusVersion) (uint64, uint64, uint64, uint64) {
 	c := fixture.LibGoalClient
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
@@ -152,7 +160,9 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 	pongAccount := pongAccountList[0]
 
 	pingBalance, err := c.GetBalance(pingAccount)
+	a.NoError(err)
 	pongBalance, err := c.GetBalance(pongAccount)
+	a.NoError(err)
 
 	a.Equal(pingBalance, pongBalance, "both accounts should start with same balance")
 	a.NotEqual(pingAccount, pongAccount, "accounts under study should be different")
@@ -200,13 +210,27 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 		pingWalletHandle, err = pingClient.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		iterationDuration := time.Now().Sub(iterationStartTime)
+		iterationDuration := time.Since(iterationStartTime)
 		if iterationDuration < 500*time.Millisecond {
 			time.Sleep(500*time.Millisecond - iterationDuration)
 		}
 
 		if time.Now().After(startTime.Add(5 * time.Minute)) {
 			a.Fail("upgrade taking too long")
+		}
+	}
+
+	// optionally wait until the target version if set
+	startTime = time.Now()
+	if targetVersion != protocol.ConsensusVersion("") {
+		for curStatus.LastVersion != string(targetVersion) {
+			time.Sleep(500 * time.Millisecond)
+
+			if time.Now().After(startTime.Add(5 * time.Minute)) {
+				a.Fail("upgrade to target taking too long")
+			}
+			curStatus, err = pongClient.Status()
+			a.NoError(err)
 		}
 	}
 
@@ -243,7 +267,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 		pingWalletHandle, err = pingClient.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		iterationDuration := time.Now().Sub(iterationStartTime)
+		iterationDuration := time.Since(iterationStartTime)
 		if iterationDuration < 500*time.Millisecond {
 			time.Sleep(500*time.Millisecond - iterationDuration)
 		}

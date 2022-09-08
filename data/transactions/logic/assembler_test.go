@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -739,7 +740,7 @@ func TestOpUint(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
-			ops.Uint(0xcafebabe)
+			ops.IntLiteral(0xcafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
@@ -755,9 +756,8 @@ func TestOpUint64(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			t.Parallel()
 			ops := newOpStream(v)
-			ops.Uint(0xcafebabecafebabe)
+			ops.IntLiteral(0xcafebabecafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
@@ -778,6 +778,7 @@ func TestOpBytes(t *testing.T) {
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
 			require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+			testProg(t, "byte 0x7; len", v, Expect{1, "...odd length hex string"})
 		})
 	}
 }
@@ -883,6 +884,125 @@ func TestAssembleBytesString(t *testing.T) {
 			testLine(t, `byte "foo bar // not a comment"`, v, "")
 		})
 	}
+}
+
+func TestManualCBlocks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Despite appearing twice, 500s are pushints because of manual intcblock
+	ops := testProg(t, "intcblock 1; int 500; int 500; ==", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["pushint"].Opcode)
+
+	ops = testProg(t, "intcblock 2 3; intcblock 4 10; int 5", AssemblerMaxVersion)
+	text, err := Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, text, "pushint 5")
+
+	ops = testProg(t, "intcblock 2 3; intcblock 4 10; intc_3", AssemblerMaxVersion)
+	text, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, text, "intc_3\n") // That is, no commented value for intc_3 is shown
+
+	// In old straight-line versions, allow mixing int and intc if the ints all
+	// reference manual block.  Since conditionals do make it possible that
+	// different cblocks could be in effect depending on earlier path choices,
+	// maybe we should not even allow this.
+	checkSame(t, 3,
+		"intcblock 4 5 1; intc_0; intc_2; +; intc_1; ==",
+		"intcblock 4 5 1; int 4; int 1; +; intc_1; ==",
+		"intcblock 4 5 1; intc_0; int 1; +; int 5; ==")
+	checkSame(t, 3,
+		"bytecblock 0x44 0x55 0x4455; bytec_0; bytec_1; concat; bytec_2; ==",
+		"bytecblock 0x44 0x55 0x4455; byte 0x44; bytec_1; concat; byte 0x4455; ==",
+		"bytecblock 0x44 0x55 0x4455; bytec_0; byte 0x55; concat; bytec_2; ==")
+
+	// But complain if they do not
+	testProg(t, "intcblock 4; int 3;", 3, Expect{1, "int 3 used without 3 in intcblock"})
+	testProg(t, "bytecblock 0x44; byte 0x33;", 3, Expect{1, "byte/addr/method used without value in bytecblock"})
+
+	// Or if the ref comes before the constant block, even if they match
+	testProg(t, "int 5; intcblock 4;", 3, Expect{1, "intcblock following int"})
+	testProg(t, "int 4; intcblock 4;", 3, Expect{1, "intcblock following int"})
+	testProg(t, "addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4; bytecblock 0x44", 3, Expect{1, "bytecblock following byte/addr/method"})
+
+	// But we can't complain precisely once backjumps are allowed, so we force
+	// compile to push*. (We don't analyze the CFG, so we don't know if we can
+	// use what is in the user defined block. Perhaps we could special case
+	// single cblocks at start of program.
+	checkSame(t, 4,
+		"intcblock 4 5 1; int 4; int 1; +; int 5; ==",
+		"intcblock 4 5 1; pushint 4; pushint 1; +; pushint 5; ==")
+	checkSame(t, 4,
+		"bytecblock 0x44 0x55 0x4455; byte 0x44; byte 0x55; concat; byte 0x4455; ==",
+		"bytecblock 0x44 0x55 0x4455; pushbytes 0x44; pushbytes 0x55; concat; pushbytes 0x4455; ==")
+	// Can't switch to push* after the fact.
+	testProg(t, "int 5; intcblock 4;", 4, Expect{1, "intcblock following int"})
+	testProg(t, "int 4; intcblock 4;", 4, Expect{1, "intcblock following int"})
+	testProg(t, "addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4; bytecblock 0x44", 4, Expect{1, "bytecblock following byte/addr/method"})
+
+	// Ignore manually added cblocks in deadcode, so they can be added easily to
+	// existing programs. There are proposals to put metadata there.
+	ops = testProg(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[3], 4) // <intcblock> 1 4 <intc_0>
+	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["intc_0"].Opcode)
+	ops = testProg(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[3], 4)
+
+	ops = testProg(t, "byte 0x44; byte 0x44; concat; len; return; bytecblock 0x11", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[4], 0x44) // <bytecblock> 1 1 0x44 <bytec_0>
+	require.Equal(t, ops.Program[5], OpsByName[ops.Version]["bytec_0"].Opcode)
+	ops = testProg(t, "b skip; bytecblock 0x11; skip: byte 0x44; byte 0x44; concat; len; int 4; ==", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[4], 0x44)
+}
+
+func TestManualCBlocksPreBackBranch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Before backbranch enabled, the assembler is willing to assemble an `int`
+	// reference after an intcblock as an intc. It uses the most recent seen
+	// non-deadcode intcblock, so it *could* be wrong.
+	testProg(t, "intcblock 10 20; int 10;", backBranchEnabledVersion-1)
+	// By the same token, assembly complains if that intcblock doesn't have the
+	// constant. In v3, and v3 only, it *could* pushint.
+	testProg(t, "intcblock 10 20; int 30;", backBranchEnabledVersion-1, Expect{1, "int 30 used..."})
+
+	// Since the second intcblock is dead, the `int 10` "sees" the first block, not the second
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1,
+		Expect{1, "int 3 used..."})
+
+	// Here, the intcblock in effect is unknowable, better to force the user to
+	// use intc (unless pushint is available to save the day).
+
+	// backBranchEnabledVersion-1 contains pushint
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1)
+
+	// backBranchEnabledVersion-2 does not
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-2,
+		Expect{1, "int 10 used with manual intcblocks. Use intc."})
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-2,
+		Expect{1, "int 3 used with manual intcblocks. Use intc."})
+
+	// REPEAT ABOVE, BUT FOR BYTE BLOCKS
+
+	testProg(t, "bytecblock 0x10 0x20; byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; byte 0x30;", backBranchEnabledVersion-1, Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1,
+		Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x10 used with manual bytecblocks. Use bytec."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x03 used with manual bytecblocks. Use bytec."})
 }
 
 func TestAssembleOptimizedConstants(t *testing.T) {
@@ -2613,12 +2733,14 @@ func checkSame(t *testing.T, version uint64, first string, compares ...string) {
 	if version == 0 {
 		version = assemblerNoVersion
 	}
-	ops, err := AssembleStringWithVersion(first, version)
-	require.NoError(t, err, first)
+	ops := testProg(t, first, version)
 	for _, compare := range compares {
-		other, err := AssembleStringWithVersion(compare, version)
-		assert.NoError(t, err, compare)
-		assert.Equal(t, other.Program, ops.Program, "%s unlike %s", first, compare)
+		other := testProg(t, compare, version)
+		if bytes.Compare(other.Program, ops.Program) != 0 {
+			t.Log(Disassemble(ops.Program))
+			t.Log(Disassemble(other.Program))
+		}
+		assert.Equal(t, ops.Program, other.Program, "%s unlike %s", first, compare)
 	}
 }
 
