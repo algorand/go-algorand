@@ -153,9 +153,12 @@ var ErrNoStateProofForRound = errors.New("no state proof can be found for that r
 // ErrTimeout indicates a task took too long, and the server canceled it.
 var ErrTimeout = errors.New("timed out on request")
 
+// ErrShutdown represents the error for the string errServiceShuttingDown
+var ErrShutdown = errors.New(errServiceShuttingDown)
+
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
-func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round, timeout time.Duration) (transactions.Transaction, error) {
+func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round, latestRound basics.Round, timeout time.Duration, stop <-chan struct{}) (transactions.Transaction, error) {
 	hdr, err := txnFetcher.BlockHdr(round)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -168,6 +171,8 @@ func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Roun
 	timer := time.NewTimer(timeout)
 	for i := round + 1; i <= latestRound; i++ {
 		select {
+		case <-stop:
+			return transactions.Transaction{}, ErrShutdown
 		case <-timer.C:
 			timer.Stop()
 			return transactions.Transaction{}, ErrTimeout
@@ -1275,7 +1280,7 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute)
+	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute, v2.Shutdown)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}
@@ -1311,7 +1316,7 @@ func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) err
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute)
+	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute, v2.Shutdown)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}
