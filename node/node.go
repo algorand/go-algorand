@@ -318,7 +318,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	persistBuilders := false // TODO: persistBuilders := someConfigurationFlag
+	persistBuilders := true // TODO: persistBuilders := someConfigurationFlag
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node, persistBuilders)
 
 	return node, err

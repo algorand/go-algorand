@@ -32,13 +32,15 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// StateProofTopVoters used for allocbound of msgpacked map
+const StateProofTopVoters = stateproof.StateProofTopVoters
+
 type builder struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	*stateproof.Builder
+	*stateproof.Builder `codec:"bldr"`
 
-	Round     basics.Round            `codec:"rnd"`
-	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.StateProofTopVoters"`
+	AddrToPos map[Address]uint64      `codec:"addr,allocbound=StateProofTopVoters"`
 	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
 	Message   stateproofmsg.Message   `codec:"msg"`
 }
@@ -61,9 +63,9 @@ type Worker struct {
 
 	// builders is indexed by the round of the block being signed.
 	builders map[basics.Round]builder
-	// Builder for the nextStateProofRound (as per the current blockheader value)
+	// builder for the nextStateProofRound (as per the current blockheader value)
 	nextStateProofRoundBuilder builder
-	// Builder for the latest round StateProof, allowing for later StateProof signatures to be processed,
+	// builder for the latest round StateProof, allowing for later StateProof signatures to be processed,
 	// even if StateProofNextRound is lagging behind,
 	latestRoundBuilder builder
 	// Flag to indicate if builders data should be persisted to the disk (required for recoverability of lagging StateProof chain)

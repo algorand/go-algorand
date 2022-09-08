@@ -636,7 +636,7 @@ func TestBuilder_BuildStateProofCache(t *testing.T) {
 // It is used for msgpack allocbound (needs to be static)
 func TestBuilder_StateProofTopVoters(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	require.Equal(t, config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters, StateProofTopVoters)
+	require.Equal(t, config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters, uint64(StateProofTopVoters))
 }
 
 func BenchmarkBuildVerify(b *testing.B) {

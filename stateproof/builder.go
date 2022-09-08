@@ -103,7 +103,6 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	var res builder
-	res.Round = rnd
 	res.VotersHdr = votersHdr
 	res.AddrToPos = voters.AddrToPos
 	res.Message = msg
@@ -401,10 +400,6 @@ func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
-	if !spw.persistBuilders {
-		return
-	}
-
 	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
 	spw.mu.Lock()
@@ -416,11 +411,13 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 		}
 	}
 
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deleteBuilders(tx, oldestRoundToRemove)
-	})
-	if err != nil {
-		spw.log.Errorf("deleteOldBuilders: failed to delete builders from database: %w", err)
+	if spw.persistBuilders {
+		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return deleteBuilders(tx, oldestRoundToRemove)
+		})
+		if err != nil {
+			spw.log.Errorf("deleteOldBuilders: failed to delete builders from database: %w", err)
+		}
 	}
 }
 

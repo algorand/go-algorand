@@ -19,7 +19,6 @@ package stateproof
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -262,4 +261,9 @@ func (b *Builder) Build() (*StateProof, error) {
 	s.PositionsToReveal = revealsSequence
 	b.cachedProof = s
 	return s, nil
+}
+
+// AllocSigs should only be used after decoding msgpacked Builder, as the sigs field is not exported and encoded
+func (b *Builder) AllocSigs() {
+	b.sigs = make([]sigslot, len(b.Participants))
 }

@@ -262,7 +262,7 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 }
 
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
-	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
+	return NewWorker(dba, logging.TestingLog(t), s, s, s, s, true)
 }
 
 func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
@@ -454,6 +454,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 
 func TestWorkerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
@@ -491,8 +492,10 @@ func TestWorkerRestart(t *testing.T) {
 		w.Shutdown()
 	}
 
-	require.True(t, formedAt > 1)
-	require.True(t, formedAt < 5)
+	a.Greater(formedAt, 1)
+	a.Less(formedAt, 5)
+	//a.True(formedAt > 1)
+	//a.True(formedAt < 5)
 }
 
 func TestWorkerHandleSig(t *testing.T) {
@@ -575,7 +578,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	logger := logging.NewLogger()
 	logger.SetOutput(io.Discard)
 
-	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s, false)
 
 	w.Start()
 	defer w.Shutdown()
@@ -782,9 +785,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	spw = newTestWorker(t, tns)
 
 	// Prepare the database
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(spw.db)
 	require.NoError(t, err)
 
 	// All the keys are for round 255. This way, starting the period at 256,
@@ -1122,9 +1123,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 
 	msg.Sig = sig
 	// Create the database
-	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err = makeStateProofDB(w.db)
 	require.NoError(t, err)
 
 	msgBytes := protocol.Encode(&msg)

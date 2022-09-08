@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -114,4 +115,58 @@ func TestPendingSigDB(t *testing.T) {
 			require.Equal(t, psigsThis[r][0].signer[4], byte(0))
 		}
 	}
+}
+
+func TestBuildersDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+	err := makeStateProofDB(dbs.Wdb)
+	a.NoError(err)
+
+	builders := make([]builder, 100)
+	for i := uint64(0); i < 100; i++ {
+		var b builder
+		b.Builder = &stateproof.Builder{}
+		b.Round = i
+		builders[i] = b
+
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return insertBuilder(tx, basics.Round(i), &builders[i])
+		})
+		a.NoError(err)
+	}
+
+	var count int
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		return err
+	})
+	a.NoError(err)
+	a.Equal(100, count)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deleteBuilders(tx, basics.Round(35))
+	})
+	a.NoError(err)
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		return err
+	})
+	a.NoError(err)
+	a.Equal(100-35, count)
+
+	var b builder
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return getBuilder(tx, basics.Round(34), &b)
+	})
+	a.ErrorIs(err, sql.ErrNoRows)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return getBuilder(tx, basics.Round(35), &b)
+	})
+	a.NoError(err)
+	a.Equal(uint64(35), b.Round)
 }
