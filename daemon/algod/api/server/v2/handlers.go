@@ -18,6 +18,7 @@ package v2
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -158,7 +159,7 @@ var ErrShutdown = errors.New(errServiceShuttingDown)
 
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
-func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round, latestRound basics.Round, timeout time.Duration, stop <-chan struct{}) (transactions.Transaction, error) {
+func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForAPI, round, latestRound basics.Round, stop <-chan struct{}) (transactions.Transaction, error) {
 	hdr, err := txnFetcher.BlockHdr(round)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -168,13 +169,11 @@ func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round, latestRoun
 		return transactions.Transaction{}, ErrNoStateProofForRound
 	}
 
-	timer := time.NewTimer(timeout)
 	for i := round + 1; i <= latestRound; i++ {
 		select {
 		case <-stop:
 			return transactions.Transaction{}, ErrShutdown
-		case <-timer.C:
-			timer.Stop()
+		case <-ctx.Done():
 			return transactions.Transaction{}, ErrTimeout
 		default:
 		}
@@ -1276,11 +1275,15 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 // GetStateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx.Request().Context(), time.Minute)
+	defer cancel()
+
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute, v2.Shutdown)
+
+	tx, err := GetStateProofTransactionForRound(ctxWithTimeout, ledger, basics.Round(round), ledger.Latest(), v2.Shutdown)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}
@@ -1311,12 +1314,14 @@ func (v2 *Handlers) wrapStateproofError(ctx echo.Context, err error) error {
 // GetLightBlockHeaderProof Gets a proof of a light block header for a given round
 // (GET /v2/blocks/{round}/lightheader/proof)
 func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx.Request().Context(), time.Minute)
+	defer cancel()
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest(), time.Minute, v2.Shutdown)
+	stateProof, err := GetStateProofTransactionForRound(ctxWithTimeout, ledger, basics.Round(round), ledger.Latest(), v2.Shutdown)
 	if err != nil {
 		return v2.wrapStateproofError(ctx, err)
 	}

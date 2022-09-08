@@ -18,6 +18,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1145,21 +1146,23 @@ func TestStateproofTransactionForRound(t *testing.T) {
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, time.Minute, nil)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cncl()
+	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
 	a.NoError(err)
 	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, time.Minute, nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, nil)
 	a.NoError(err)
 	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000, time.Minute, nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, 999, 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), time.Minute, nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1179,8 +1182,9 @@ func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
 		blk = addStateProofIfNeeded(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
-
-	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, time.Minute, nil)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1201,7 +1205,9 @@ func TestStateproofTransactionForRoundTimeouts(t *testing.T) {
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, 0, nil)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrTimeout)
 }
 
@@ -1224,6 +1230,8 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 
 	stoppedChan := make(chan struct{})
 	close(stoppedChan)
-	_, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, time.Minute, stoppedChan)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
 }
