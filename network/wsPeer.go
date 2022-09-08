@@ -49,6 +49,9 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
+// allowCustomTags is set by tests to allow non-protocol-defined message tags.
+var allowCustomTags bool
+
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -500,6 +503,9 @@ func (wp *wsPeer) readLoop() {
 		case protocol.VoteBundleTag:
 		default: // unrecognized tag
 			wp.OutOfProtocol = true
+			if !allowCustomTags {
+				continue // drop message, skip adding it to queue
+			}
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {

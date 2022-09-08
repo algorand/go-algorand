@@ -51,6 +51,10 @@ import (
 
 const sendBufferLength = 1000
 
+func init() {
+	allowCustomTags = true
+}
+
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
 	os.Exit(m.Run())
