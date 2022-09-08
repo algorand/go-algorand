@@ -19,44 +19,53 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type stateProofVerificationData struct {
-	VotersCommitment crypto.GenericDigest
-	ProvenWeight     basics.MicroAlgos
+// TODO: Handle state proofs not being enabled
+// TODO: Add locks where needed
+// TODO: renaming
+
+type stateProofFlushData struct {
+	stateProofLastAttestedRound basics.Round
+	stateProofTransactionRound  basics.Round
 }
 
 type stateProofVerificationTracker struct {
-	earliestLastAttestedRound basics.Round
-	trackedData               []stateProofVerificationData
+	trackedData []ledgercore.StateProofVerificationData
+
+	stateProofsToFlush []stateProofFlushData
 }
 
-// TODO: What if the interval changes?
-func (spt *stateProofVerificationTracker) roundToTrackedIndex(round basics.Round) uint64 {
-	return uint64(round.SubSaturate(spt.earliestLastAttestedRound)) / config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
-}
-
-func (spt *stateProofVerificationTracker) removeOlder(lastAttestedRound basics.Round) {
-	if lastAttestedRound <= spt.earliestLastAttestedRound {
-		return
+// TODO: Should use binary search
+func (spt *stateProofVerificationTracker) roundToPrunedStateProof(round basics.Round) basics.Round {
+	latestStateProofRound := basics.Round(0)
+	for _, flushData := range spt.stateProofsToFlush {
+		if flushData.stateProofTransactionRound < round {
+			latestStateProofRound = flushData.stateProofLastAttestedRound
+		}
 	}
 
-	// TODO: zero some elements?
-	trackedIndex := spt.roundToTrackedIndex(lastAttestedRound)
+	return latestStateProofRound
+}
 
-	spt.trackedData = spt.trackedData[trackedIndex:]
-	spt.earliestLastAttestedRound = lastAttestedRound
+// TODO: Should use binary search
+func (spt *stateProofVerificationTracker) roundToTrackedIndex(round basics.Round) uint64 {
+	for index, verificationData := range spt.trackedData {
+		if verificationData.TargetStateProofRound > round {
+			return uint64(index)
+		}
+	}
+
+	return uint64(len(spt.trackedData))
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
 	// TODO: Decide on slice size
-	spt.trackedData = make([]stateProofVerificationData, 0, 1000)
+	spt.trackedData = make([]ledgercore.StateProofVerificationData, 0, 1000)
 	return nil
 }
 
@@ -66,36 +75,63 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, _ ledg
 	}
 
 	if uint64(blk.Round())%blk.ConsensusProtocol().StateProofInterval == 0 {
-		verificationData := stateProofVerificationData{
-			VotersCommitment: blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-			ProvenWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		verificationData := ledgercore.StateProofVerificationData{
+			VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+			ProvenWeight:          blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+			TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
 		}
 		spt.trackedData = append(spt.trackedData, verificationData)
 	}
 
 	lastAttestedRound := blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound.SubSaturate(
 		basics.Round(blk.ConsensusProtocol().StateProofInterval))
-
-	spt.removeOlder(lastAttestedRound)
+	// TODO: What about the first state proof transaction?
+	// TODO: Bigger than?
+	if lastAttestedRound != spt.stateProofsToFlush[len(spt.stateProofsToFlush)-1].stateProofLastAttestedRound {
+		flushData := stateProofFlushData{
+			stateProofLastAttestedRound: lastAttestedRound,
+			stateProofTransactionRound:  blk.Round(),
+		}
+		spt.stateProofsToFlush = append(spt.stateProofsToFlush, flushData)
+	}
 }
 
 func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
 	return round, 0
 }
 
-func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+// We do not need to influence the chosen offset or db round.
+func (spt *stateProofVerificationTracker) produceCommittingTask(_ basics.Round, _ basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
 }
 
-func (spt *stateProofVerificationTracker) prepareCommit(*deferredCommitContext) error {
+// TODO: maybe be clever and remove from memory before flushing to DB?
+func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitContext) error {
+	lastDataToCommitIndex := spt.roundToTrackedIndex(basics.Round(dcc.offset))
+	dcc.committedStateProofVerificationData = make([]ledgercore.StateProofVerificationData, lastDataToCommitIndex)
+	copy(dcc.committedStateProofVerificationData, spt.trackedData[:lastDataToCommitIndex])
+
+	dcc.staleStateProofRound = spt.roundToPrunedStateProof(dcc.newBase)
 	return nil
 }
 
-func (spt *stateProofVerificationTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
+func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+	err = insertStateProofVerificationData(ctx, tx, &dcc.committedStateProofVerificationData)
+	if err != nil {
+		return err
+	}
+
+	// TODO: can this in postCommitUnlocked?
+	err = pruneOldStateProofVerificationData(ctx, tx, dcc.staleStateProofRound)
+
+	// TODO: caching mechanism for oldest data
+	return err
+
 }
 
-func (spt *stateProofVerificationTracker) postCommit(context.Context, *deferredCommitContext) {
+func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
+	// TODO: can this be in postCommitUnlocked?
+	spt.trackedData = spt.trackedData[len(dcc.committedStateProofVerificationData):]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {

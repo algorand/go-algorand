@@ -166,7 +166,7 @@ const createUnfinishedCatchpointsTable = `
 
 const createStateProofVerificationTable = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
-	lastattestedround integer primary key NOT NULL,
+	targetstateproofround integer primary key NOT NULL,
 	verificationdata blob NOT NULL)`
 
 var accountsResetExprs = []string{
@@ -5037,8 +5037,8 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, lastAttestedRound basics.Round, data *[]ledgercore.StateProofVerificationData) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationdata) VALUES(?, ?)")
+func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data *[]ledgercore.StateProofVerificationData) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
 
 	if err != nil {
 		return err
@@ -5055,4 +5055,12 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, lastAttes
 	}
 
 	return nil
+}
+
+func pruneOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, targetRound basics.Round) error {
+	f := func() error {
+		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE round <= ?", targetRound)
+		return err
+	}
+	return db.Retry(f)
 }
