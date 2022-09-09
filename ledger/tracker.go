@@ -228,7 +228,7 @@ type deferredCommitRange struct {
 	catchpointSecondStage bool
 }
 
-// deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
+// deferredCommitContext is used in order to synchronize the persistence of a given deferredCommitRange.
 // prepareCommit, commitRound and postCommit are all using it to exchange data.
 type deferredCommitContext struct {
 	deferredCommitRange

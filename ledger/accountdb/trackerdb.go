@@ -21,16 +21,15 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -57,7 +56,7 @@ type trackerDBSchemaInitializer struct {
 	log logging.Logger
 }
 
-type trackerDBInitParams struct {
+type trackerDBInitResult struct {
 	schemaVersion   int32
 	VacuumOnStartup bool
 }
@@ -76,12 +75,12 @@ type LedgerForTrackerDBInit interface {
 // TrackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBInitParams, err error) {
+func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPathPrefix string) (res trackerDBInitResult, err error) {
 	dbs := l.TrackerDB()
 	bdbs := l.BlockDB()
 	log := l.TrackerLog()
 
-	lastestBlockRound := l.Latest()
+	latestBlockRound := l.Latest()
 
 	if l.GenesisAccounts() == nil {
 		err = fmt.Errorf("trackerDBInitialize: initAccounts not set")
@@ -97,22 +96,22 @@ func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPat
 			BlockDb:           bdbs,
 		}
 		var err0 error
-		mgr, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
+		res, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, err := AccountsRound(tx)
-		if err != nil {
-			return err
+		lastBalancesRound, err0 := AccountsRound(tx)
+		if err0 != nil {
+			return err0
 		}
 		// Check for blocks DB and tracker DB un-sync
-		if lastBalancesRound > lastestBlockRound {
-			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
+		if lastBalancesRound > latestBlockRound {
+			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, latestBlockRound)
 			err0 = AccountsReset(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
-			mgr, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
+			res, err0 = RunMigrations(ctx, tx, tp, log, AccountDBVersion)
 			if err0 != nil {
 				return err0
 			}
@@ -120,17 +119,17 @@ func TrackerDBInitialize(l LedgerForTrackerDBInit, catchpointEnabled bool, dbPat
 		return nil
 	})
 
-	return
+	return res, err
 }
 
 // RunMigrations initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerDBInitParams, err error) {
+func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerDBInitResult, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
+		return trackerDBInitResult{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
 
 	tu := trackerDBSchemaInitializer{
@@ -196,13 +195,13 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log 
 					return
 				}
 			default:
-				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
+				return trackerDBInitResult{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
 		}
 		tu.log.Infof("trackerDBInitialize database schema upgrade complete")
 	}
 
-	return trackerDBInitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
+	return trackerDBInitResult{tu.schemaVersion, tu.vacuumOnStartup}, nil
 }
 
 func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {

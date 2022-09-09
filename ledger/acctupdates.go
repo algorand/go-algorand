@@ -281,8 +281,7 @@ func (au *accountUpdates) close() {
 		au.accountsq.Close()
 		au.accountsq = nil
 	}
-	au.baseAccounts.Prune(0)
-	au.baseResources.Prune(0)
+	au.resetLRUCaches()
 }
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
@@ -1512,56 +1511,9 @@ func (au *accountUpdates) latest() basics.Round {
 	return au.cachedDBRound + basics.Round(len(au.deltas))
 }
 
-// the vacuumDatabase performs a full vacuum of the accounts database.
-func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
-	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
-	// rowid are flushed.
+func (au *accountUpdates) resetLRUCaches() {
 	au.baseAccounts.Prune(0)
 	au.baseResources.Prune(0)
-
-	startTime := time.Now()
-	vacuumExitCh := make(chan struct{}, 1)
-	vacuumLoggingAbort := sync.WaitGroup{}
-	vacuumLoggingAbort.Add(1)
-	// vacuuming the database can take a while. A long while. We want to have a logging function running in a separate go-routine that would log the progress to the log file.
-	// also, when we're done vacuuming, we should sent an event notifying of the total time it took to vacuum the database.
-	go func() {
-		defer vacuumLoggingAbort.Done()
-		au.log.Infof("Vacuuming accounts database started")
-		for {
-			select {
-			case <-time.After(5 * time.Second):
-				au.log.Infof("Vacuuming accounts database in progress")
-			case <-vacuumExitCh:
-				return
-			}
-		}
-	}()
-
-	ledgerVacuumCount.Inc(nil)
-	vacuumStats, err := au.dbs.Wdb.Vacuum(ctx)
-	close(vacuumExitCh)
-	vacuumLoggingAbort.Wait()
-
-	if err != nil {
-		au.log.Warnf("Vacuuming account database failed : %v", err)
-		return err
-	}
-	vacuumElapsedTime := time.Since(startTime)
-	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
-
-	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
-
-	vacuumTelemetryStats := telemetryspec.BalancesAccountVacuumEventDetails{
-		VacuumTimeNanoseconds:  vacuumElapsedTime.Nanoseconds(),
-		BeforeVacuumPageCount:  vacuumStats.PagesBefore,
-		AfterVacuumPageCount:   vacuumStats.PagesAfter,
-		BeforeVacuumSpaceBytes: vacuumStats.SizeBefore,
-		AfterVacuumSpaceBytes:  vacuumStats.SizeAfter,
-	}
-
-	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.BalancesAccountVacuumEvent, vacuumTelemetryStats)
-	return
 }
 
 var ledgerGetcatchpointCount = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
@@ -1572,5 +1524,3 @@ var ledgerCommitroundCount = metrics.NewCounter("ledger_commitround_count", "cal
 var ledgerCommitroundMicros = metrics.NewCounter("ledger_commitround_micros", "µs spent")
 var ledgerGeneratecatchpointCount = metrics.NewCounter("ledger_generatecatchpoint_count", "calls")
 var ledgerGeneratecatchpointMicros = metrics.NewCounter("ledger_generatecatchpoint_micros", "µs spent")
-var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
-var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "µs spent")

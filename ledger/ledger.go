@@ -200,7 +200,7 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// init tracker db
-	trackerDBInitParams, err := accountdb.TrackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
+	trackerDBInitRes, err := accountdb.TrackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
 	if err != nil {
 		return err
 	}
@@ -232,8 +232,8 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// post-init actions
-	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
-		err = l.accts.vacuumDatabase(context.Background())
+	if trackerDBInitRes.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
+		err = l.vacuumDatabase(context.Background())
 		if err != nil {
 			return err
 		}
@@ -245,6 +245,14 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 	return nil
+}
+
+func (l *Ledger) vacuumDatabase(ctx context.Context) (err error) {
+	// vacuuming the database would modify the some of the tables rowid,
+	// so we need to make sure any stored in-memory rowid are flushed.
+	l.accts.resetLRUCaches()
+	err = accountdb.VacuumDatabase(context.Background(), l.trackerDBs.Wdb, l.log)
+	return err
 }
 
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.

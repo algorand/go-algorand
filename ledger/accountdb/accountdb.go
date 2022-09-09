@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -41,8 +42,10 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // accountsDbQueries is used to cache a prepared SQL statement to look up
@@ -5312,3 +5315,53 @@ func GenerateCommitDeltasTest(accessor db.Accessor, proto config.ConsensusParams
 		return UpdateAccountsHashRound(ctx, tx, 1)
 	})
 }
+
+// the VacuumDatabase performs a full vacuum of the accounts database.
+func VacuumDatabase(ctx context.Context, wdb db.Accessor, log logging.Logger) (err error) {
+	startTime := time.Now()
+	vacuumExitCh := make(chan struct{}, 1)
+	vacuumLoggingAbort := sync.WaitGroup{}
+	vacuumLoggingAbort.Add(1)
+	// vacuuming the database can take a while. A long while. We want to have a logging function running in a separate go-routine that would log the progress to the log file.
+	// also, when we're done vacuuming, we should sent an event notifying of the total time it took to vacuum the database.
+	go func() {
+		defer vacuumLoggingAbort.Done()
+		log.Infof("Vacuuming accounts database started")
+		for {
+			select {
+			case <-time.After(5 * time.Second):
+				log.Infof("Vacuuming accounts database in progress")
+			case <-vacuumExitCh:
+				return
+			}
+		}
+	}()
+
+	ledgerVacuumCount.Inc(nil)
+	vacuumStats, err := wdb.Vacuum(ctx)
+	close(vacuumExitCh)
+	vacuumLoggingAbort.Wait()
+
+	if err != nil {
+		log.Warnf("Vacuuming account database failed : %v", err)
+		return err
+	}
+	vacuumElapsedTime := time.Since(startTime)
+	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
+
+	log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
+
+	vacuumTelemetryStats := telemetryspec.BalancesAccountVacuumEventDetails{
+		VacuumTimeNanoseconds:  vacuumElapsedTime.Nanoseconds(),
+		BeforeVacuumPageCount:  vacuumStats.PagesBefore,
+		AfterVacuumPageCount:   vacuumStats.PagesAfter,
+		BeforeVacuumSpaceBytes: vacuumStats.SizeBefore,
+		AfterVacuumSpaceBytes:  vacuumStats.SizeAfter,
+	}
+
+	log.EventWithDetails(telemetryspec.Accounts, telemetryspec.BalancesAccountVacuumEvent, vacuumTelemetryStats)
+	return
+}
+
+var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
+var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "µs spent")
