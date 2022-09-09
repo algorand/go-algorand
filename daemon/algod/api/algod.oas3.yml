@@ -2747,6 +2747,16 @@
             },
             "description": "Could not create proof since some data is missing"
           },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3618,6 +3628,16 @@
               }
             },
             "description": "Could not find a state proof that covers a given round"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
           },
           "500": {
             "content": {
