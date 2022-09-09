@@ -63,13 +63,13 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 
 	var elem txnMerkleElem
 	elem.hashType = tma.hashType
-	elem.stib = tma.block.Payset[pos]
+	elem.stib = &tma.block.Payset[pos]
 
-	stxn, _, err := tma.block.DecodeSignedTxn(elem.stib)
+	stxn, _, err := tma.block.DecodeSignedTxn(tma.block.Payset[pos])
 	if err != nil {
 		return nil, err
 	}
-	elem.txn = stxn.Txn
+	elem.txn = &stxn.Txn
 
 	return &elem, nil
 }
@@ -84,8 +84,8 @@ func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) 
 // txnMerkleElem represents a leaf in the Merkle tree of all transactions
 // in a block.
 type txnMerkleElem struct {
-	txn      transactions.Transaction
-	stib     transactions.SignedTxnInBlock
+	txn      *transactions.Transaction
+	stib     *transactions.SignedTxnInBlock
 	hashType crypto.HashType
 }
 
