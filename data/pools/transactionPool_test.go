@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"testing"
@@ -1101,16 +1102,18 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 	}
 }
 
-func TestTransactionPoolRecompute(t *testing.T) {
+func BenchmarkTransactionPoolRecompute(b *testing.B) {
+	b.Log("Running with b.N", b.N)
 	poolSize := 100000
 	numOfAccounts := 10
 	numTransactions := 75000
-	blockSize := 25000
+	blockTxnCount := 25000
 
-	// make new protocol supporting bigger blocks
 	myVersion := protocol.ConsensusVersion("test-large-blocks")
 	myProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	myProto.MaxTxnBytesPerBlock = 5000000
+	if myProto.MaxTxnBytesPerBlock != 5*1024*1024 {
+		b.FailNow() // intended to use with 5MB blocks
+	}
 	config.Consensus[myVersion] = myProto
 
 	// Generate accounts
@@ -1124,12 +1127,12 @@ func TestTransactionPoolRecompute(t *testing.T) {
 		addresses[i] = addr
 	}
 
-	l := mockLedger(t, initAccFixed(addresses, 1<<32), myVersion)
+	l := mockLedger(b, initAccFixed(addresses, 1<<32), myVersion)
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 	cfg.EnableProcessBlockStats = false
 
-	setupPool := func() (*TransactionPool, map[transactions.Txid]basics.Round, uint) {
+	setupPool := func() (*TransactionPool, map[transactions.Txid]ledgercore.IncludedTransactions, uint) {
 		transactionPool := MakeTransactionPool(l, cfg, logging.Base())
 
 		// make some transactions
@@ -1151,57 +1154,61 @@ func TestTransactionPoolRecompute(t *testing.T) {
 					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 				},
 			}
-			//tx.Note = make([]byte, 8, 8)
-			//crypto.RandBytes(tx.Note)
 
 			signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-			require.NoError(t, err)
+			require.NoError(b, err)
 			signedTransactions = append(signedTransactions, signedTx)
 		}
 
 		// add all txns to pool
 		for _, txn := range signedTransactions {
 			err := transactionPool.RememberOne(txn)
-			//stats := telemetryspec.AssembleBlockMetrics{}
-			//err := transactionPool.add(pooldata.SignedTxGroup{Transactions: []transactions.SignedTxn{txn}}, &stats)
-			require.NoError(t, err)
+			require.NoError(b, err)
 		}
 
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
 		var knownCommitted uint
-		committedTxIds := make(map[transactions.Txid]basics.Round)
-		for i := 0; i < blockSize; i++ {
+		committedTxIds := make(map[transactions.Txid]ledgercore.IncludedTransactions)
+		for i := 0; i < blockTxnCount; i++ {
 			knownCommitted++
-			committedTxIds[signedTransactions[i].ID()] = basics.Round(1)
+			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
+			committedTxIds[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
 		}
+		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds, %d knownCommitted",
+			len(signedTransactions), len(committedTxIds), knownCommitted)
+		b.Logf("transactionPool pendingTxGroups %d rememberedTxGroups %d",
+			len(transactionPool.pendingTxGroups), len(transactionPool.rememberedTxGroups))
 		return transactionPool, committedTxIds, knownCommitted
 	}
 
-	// N := 1
-	// transactionPool := make([]*TransactionPool, N)
-	// committedTxIds := make([]map[transactions.Txid]basics.Round, N)
-	// knownCommitted := make([]uint, N)
-	// for i := 0; i < N; i++ {
-	// 	transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
-	// }
-	transactionPool, committedTxIds, knownCommitted := setupPool()
+	transactionPool := make([]*TransactionPool, b.N)
+	committedTxIds := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
+	knownCommitted := make([]uint, b.N)
+	for i := 0; i < b.N; i++ {
+		transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+	}
 	time.Sleep(time.Second)
-
-	// CPU profiler
-	f, err := os.Create(fmt.Sprintf("lastrun-%d.prof", crypto.RandUint64()))
-	require.NoError(t, err)
+	runtime.GC()
+	// CPU profiler if CPUPROFILE set
+	var profF *os.File
+	if os.Getenv("CPUPROFILE") != "" {
+		var err error
+		profF, err = os.Create(fmt.Sprintf("recomputePool-%d-%d.prof", b.N, crypto.RandUint64()))
+		require.NoError(b, err)
+	}
 
 	// call recomputeBlockEvaluator
-	t.Logf("calling recomputeBlockEvaluator on %d txn IDs", len(committedTxIds))
-	pprof.StartCPUProfile(f)
-	start := time.Now()
-	// for i := 0; i < N; i++ {
-	// 	transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
-	// }
-	transactionPool.recomputeBlockEvaluator(committedTxIds, knownCommitted)
-	end := time.Since(start)
-	pprof.StopCPUProfile()
-	t.Logf("recomputeBlockEvaluator took %v", end)
+	if profF != nil {
+		pprof.StartCPUProfile(profF)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+	}
+	b.StopTimer()
+	if profF != nil {
+		pprof.StopCPUProfile()
+	}
 	//t.Log("pool.assemblyResults.blk payset len", len(transactionPool.assemblyResults.blk.Block().Payset))
 	//t.Log("pool.pendingBlockEvaluation.block.Payset len", transactionPool.pendingBlockEvaluator.PaySetSize())
 }
