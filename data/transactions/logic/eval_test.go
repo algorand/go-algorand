@@ -5543,7 +5543,9 @@ int 1
 switchi start end
 err
 end:
-pop
+int 2
+==
+assert
 int 1
 `, 8)
 
@@ -5551,7 +5553,6 @@ int 1
 	testPanics(t, `
 int 2
 switchi start end
-err
 start:
 end:
 int 1
