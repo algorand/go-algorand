@@ -4367,13 +4367,16 @@ func opAcctParamsGet(cx *EvalContext) error {
 	case AcctAuthAddr:
 		value.Bytes = account.AuthAddr[:]
 
+	case AcctTotalExtraAppPages:
+		value.Uint = uint64(account.TotalExtraAppPages)
+
 	case AcctTotalAppsCreated:
 		value.Uint = account.TotalAppParams
 	case AcctTotalAppsOptedIn:
 		value.Uint = account.TotalAppLocalStates
 	case AcctTotalAssetsCreated:
 		value.Uint = account.TotalAssetParams
-	case AcctTotalAssetsOptedIn:
+	case AcctTotalAssets:
 		value.Uint = account.TotalAssets
 	case AcctTotalBoxes:
 		value.Uint = account.TotalBoxes

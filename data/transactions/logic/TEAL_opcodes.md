@@ -997,12 +997,13 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 | 0 | AcctBalance | uint64 |      | Account balance in microalgos |
 | 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
 | 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
-| 3 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created this account. |
-| 4 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
-| 5 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
-| 6 | AcctTotalAssetsOptedIn | uint64 | v8  | The numbers of ASAs this account is opted into. Includes ASAs created by this account. |
-| 7 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
-| 8 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes in this account's app's boxes. |
+| 3 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
+| 4 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created this account. |
+| 5 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
+| 6 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
+| 7 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account. |
+| 8 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
+| 9 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes in this account's app's boxes. |
 
 
 ## min_balance

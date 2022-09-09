@@ -1500,14 +1500,15 @@
         "AcctBalance",
         "AcctMinBalance",
         "AcctAuthAddr",
+        "AcctTotalExtraAppPages",
         "AcctTotalAppsCreated",
         "AcctTotalAppsOptedIn",
         "AcctTotalAssetsCreated",
-        "AcctTotalAssetsOptedIn",
+        "AcctTotalAssets",
         "AcctTotalBoxes",
         "AcctTotalBoxBytes"
       ],
-      "ArgEnumTypes": "UUBUUUUUU",
+      "ArgEnumTypes": "UUBUUUUUUU",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "Groups": [

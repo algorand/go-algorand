@@ -1205,14 +1205,17 @@ const (
 	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
 	AcctAuthAddr
 
+	// AcctTotalExtraAppPages is the extra ocde pages across all apps
+	AcctTotalExtraAppPages
+
 	// AcctTotalAppsCreated is the number of apps created by this account
 	AcctTotalAppsCreated
 	// AcctTotalAppsOptedIn is the number of apps opted in by this account
 	AcctTotalAppsOptedIn
 	// AcctTotalAssetsCreated is the number of ASAs created by this account
 	AcctTotalAssetsCreated
-	// AcctTotalAssetsOptedIn is the number of ASAs opted in by this account (always includes AcctTotalAssetsCreated)
-	AcctTotalAssetsOptedIn
+	// AcctTotalAssets is the number of ASAs opted in by this account (always includes AcctTotalAssetsCreated)
+	AcctTotalAssets
 	// AcctTotalBoxes is the number of boxes created by the app this account is associated with
 	AcctTotalBoxes
 	// AcctTotalBoxBytes is the number of bytes in all boxes of this app account
@@ -1254,10 +1257,11 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
 
 	// expose (most of) the components of min balance
+	{AcctTotalExtraAppPages, StackUint64, 8, "The number of extra app code pages used by this account."},
 	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created this account."},
 	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},
 	{AcctTotalAssetsCreated, StackUint64, 8, "The number of existing ASAs created by this account."},
-	{AcctTotalAssetsOptedIn, StackUint64, 8, "The numbers of ASAs this account is opted into. Includes ASAs created by this account."},
+	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
 	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes in this account's app's boxes."},
 }

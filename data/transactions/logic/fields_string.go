@@ -183,18 +183,19 @@ func _() {
 	_ = x[AcctBalance-0]
 	_ = x[AcctMinBalance-1]
 	_ = x[AcctAuthAddr-2]
-	_ = x[AcctTotalAppsCreated-3]
-	_ = x[AcctTotalAppsOptedIn-4]
-	_ = x[AcctTotalAssetsCreated-5]
-	_ = x[AcctTotalAssetsOptedIn-6]
-	_ = x[AcctTotalBoxes-7]
-	_ = x[AcctTotalBoxBytes-8]
-	_ = x[invalidAcctParamsField-9]
+	_ = x[AcctTotalExtraAppPages-3]
+	_ = x[AcctTotalAppsCreated-4]
+	_ = x[AcctTotalAppsOptedIn-5]
+	_ = x[AcctTotalAssetsCreated-6]
+	_ = x[AcctTotalAssets-7]
+	_ = x[AcctTotalBoxes-8]
+	_ = x[AcctTotalBoxBytes-9]
+	_ = x[invalidAcctParamsField-10]
 }
 
-const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsOptedInAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
+const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
 
-var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 57, 77, 99, 121, 135, 152, 174}
+var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 59, 79, 99, 121, 136, 150, 167, 189}
 
 func (i AcctParamsField) String() string {
 	if i < 0 || i >= AcctParamsField(len(_AcctParamsField_index)-1) {
