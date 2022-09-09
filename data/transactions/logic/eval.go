@@ -1965,12 +1965,17 @@ func opArgs(cx *EvalContext) error {
 	return opArgN(cx, n)
 }
 
+func decodeBranchOffset(program []byte, pos int) int {
+	// tricky casting to preserve signed value
+	return int(int16(program[pos])<<8 | int16(program[pos+1]))
+}
+
 func branchTarget(cx *EvalContext) (int, error) {
-	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
+	offset := decodeBranchOffset(cx.program, cx.pc+1)
 	if offset < 0 && cx.version < backBranchEnabledVersion {
 		return 0, fmt.Errorf("negative branch offset %x", offset)
 	}
-	target := cx.pc + 3 + int(offset)
+	target := cx.pc + 3 + offset
 	var branchTooFar bool
 	if cx.version >= 2 {
 		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
@@ -1994,13 +1999,13 @@ func switchTarget(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
 		return 0, 0, fmt.Errorf("provided branch index %d exceeds max offset index %d", branchIdx, numOffsets-1)
 	}
 
-	end := cx.pc + 1 + bytesUsed         // end of opcode + number of offsets, beginning of offset list
-	pos := uint64(end) + (2 * branchIdx) // position of referenced offset: each offset is 2 bytes
-	if pos >= uint64(len(cx.program)-1) {
+	end := cx.pc + 1 + bytesUsed  // end of opcode + number of offsets, beginning of offset list
+	pos := end + int(2*branchIdx) // position of referenced offset: each offset is 2 bytes
+	if pos >= len(cx.program)-1 {
 		return 0, 0, fmt.Errorf("invalid byte code: expected offset value but reached end of program")
 	}
 
-	offset := int16(uint16(cx.program[pos])<<8 | uint16(cx.program[pos+1]))
+	offset := decodeBranchOffset(cx.program, pos)
 	target := end + 2*int(numOffsets) + int(offset) // offset is applied to the end of this opcode
 
 	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,

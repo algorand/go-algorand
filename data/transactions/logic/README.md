@@ -594,7 +594,6 @@ Account fields used in the `acct_params_get` opcode.
 | `assert` | immediately fail unless A is a non-zero number |
 | `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
 | `retsub` | pop the top instruction from the call stack and branch to it |
-| `switchi n target[0] ... target[n-1]` | branch unconditionally to TARGET[A] |
 
 ### State Access
 

@@ -2326,8 +2326,8 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			offset := int16((uint(dis.program[pc]) << 8) | uint(dis.program[pc+1]))
-			target := int(offset) + pc + 2
+			offset := decodeBranchOffset(dis.program, pc)
+			target := offset + pc + 2
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2573,7 +2573,6 @@ func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error)
 		err = fmt.Errorf("could not decode switch target list size at pc=%d", pos)
 		return
 	}
-	pc := pos
 	pos += bytesUsed
 	if numOffsets > uint64(len(program)) {
 		err = errTooManyItems
@@ -2582,11 +2581,10 @@ func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error)
 
 	end := pos + int(2*numOffsets) // end of op: offset is applied to this position
 	for i := 0; i < int(numOffsets); i++ {
-		offset := int16(uint16(program[pos])<<8 | uint16(program[pos+1]))
+		offset := decodeBranchOffset(program, pos)
 		target := int(offset) + int(end)
 		targets = append(targets, target)
 		pos += 2
-		fmt.Println(fmt.Sprintf("%d %d %d", pc, pos, target))
 	}
 	nextpc = pos
 	return
