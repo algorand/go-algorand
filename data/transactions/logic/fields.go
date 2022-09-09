@@ -1250,16 +1250,16 @@ func (fs acctParamsFieldSpec) Note() string {
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
-	{AcctMinBalance, StackUint64, 6, "Minimum required blance for account, in microalgos"},
+	{AcctMinBalance, StackUint64, 6, "Minimum required balance for account, in microalgos"},
 	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
 
 	// expose (most of) the components of min balance
-	{AcctTotalAppsCreated, StackUint64, 8, ""},
-	{AcctTotalAppsOptedIn, StackUint64, 8, ""},
-	{AcctTotalAssetsCreated, StackUint64, 8, ""},
-	{AcctTotalAssetsOptedIn, StackUint64, 8, ""},
-	{AcctTotalBoxes, StackUint64, 8, ""},
-	{AcctTotalBoxBytes, StackUint64, 8, ""},
+	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created this account."},
+	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},
+	{AcctTotalAssetsCreated, StackUint64, 8, "The number of existing ASAs created by this account."},
+	{AcctTotalAssetsOptedIn, StackUint64, 8, "The numbers of ASAs this account is opted into. Includes ASAs created by this account."},
+	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
+	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes in this account's app's boxes."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

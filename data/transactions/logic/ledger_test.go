@@ -249,12 +249,40 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 	schemaTotal := basics.StateSchema{}
 	pagesTotal := uint32(0)
 
+	boxesTotal := 0
+	boxBytesTotal := 0
+
 	apps := make(map[basics.AppIndex]basics.AppParams)
 	for a, p := range l.applications {
 		if p.Creator == addr {
 			apps[a] = p.AppParams
 			schemaTotal = schemaTotal.AddSchema(p.GlobalStateSchema)
-			pagesTotal = p.ExtraProgramPages
+			pagesTotal += p.ExtraProgramPages
+		}
+		if a.Address() == addr {
+			// We found the app that corresponds to this app account. Get box info from there.
+			boxesTotal = len(p.boxes)
+			for k, v := range p.boxes {
+				boxBytesTotal += len(k) + len(v)
+			}
+			for k, v := range p.boxMods {
+				base, ok := p.boxes[k]
+				if ok {
+					if v == nil {
+						// deleted, so remove from totals
+						boxesTotal--
+						boxBytesTotal -= len(k) + len(base)
+						continue
+					}
+					if len(*v) != len(base) {
+						panic(fmt.Sprintf("mismatch %v %v", *v, base))
+					}
+					continue
+				}
+				// fresh box in mods, count it
+				boxesTotal++
+				boxBytesTotal += len(k) + len(*v)
+			}
 		}
 	}
 
@@ -274,6 +302,9 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 			TotalAppLocalStates: uint64(len(locals)),
 			TotalAssetParams:    uint64(len(assets)),
 			TotalAssets:         uint64(len(br.holdings)),
+
+			TotalBoxes:    uint64(boxesTotal),
+			TotalBoxBytes: uint64(boxBytesTotal),
 		},
 	}, nil
 }
