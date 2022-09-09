@@ -69,8 +69,8 @@ func TestTxnMerkle(t *testing.T) {
 
 			var e txnMerkleElem
 			e.hashType = crypto.Sha512_256
-			e.txn = txn
-			e.stib = stib
+			e.txn = &txn
+			e.stib = &stib
 			elems = append(elems, e)
 		}
 
@@ -120,8 +120,8 @@ func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
 
 			var e txnMerkleElem
 			e.hashType = crypto.Sha256
-			e.txn = txn
-			e.stib = stib
+			e.txn = &txn
+			e.stib = &stib
 			elems = append(elems, e)
 		}
 
