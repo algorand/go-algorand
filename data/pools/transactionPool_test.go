@@ -1105,7 +1105,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	b.Log("Running with b.N", b.N)
 	poolSize := 100000
-	numOfAccounts := 10
+	numOfAccounts := 100
 	numTransactions := 75000
 	blockTxnCount := 25000
 
@@ -1127,7 +1127,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 		addresses[i] = addr
 	}
 
-	l := mockLedger(b, initAccFixed(addresses, 1<<32), myVersion)
+	l := mockLedger(b, initAccFixed(addresses, 1<<50), myVersion)
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 	cfg.EnableProcessBlockStats = false
@@ -1138,8 +1138,6 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 		// make some transactions
 		var signedTransactions []transactions.SignedTxn
 		for i := 0; i < numTransactions; i++ {
-			var receiver basics.Address
-			crypto.RandBytes(receiver[:])
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
@@ -1150,8 +1148,8 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 					GenesisHash: l.GenesisHash(),
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: receiver,
-					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+					Receiver: addresses[rand.Intn(numOfAccounts)],
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance + uint64(rand.Intn(1<<32))},
 				},
 			}
 
