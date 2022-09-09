@@ -195,6 +195,7 @@ func MakeCatchpointDataFilePath(accountsRound basics.Round) string {
 	return strconv.FormatInt(int64(accountsRound), 10) + ".Data"
 }
 
+// MakeCatchpointFilePath returns a catchpoint file name for a given round
 func MakeCatchpointFilePath(round basics.Round) string {
 	irnd := int64(round) / 256
 	outStr := ""

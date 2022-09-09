@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// TrackerDBParams contains parameters for initializing trackerDB
 type TrackerDBParams struct {
 	InitAccounts      map[basics.Address]basics.AccountData
 	InitProto         protocol.ConsensusVersion

@@ -415,6 +415,9 @@ type CompactResourcesDeltas struct {
 	misses []int
 }
 
+// AccountDelta is an extension to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
+// all the pending changes were written and that there are no outstanding writes missing.
 type AccountDelta struct {
 	oldAcct     persistedAccountData
 	newAcct     BaseAccountData
@@ -422,9 +425,7 @@ type AccountDelta struct {
 	address     basics.Address
 }
 
-// CompactAccountDeltas and AccountDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
-// number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
-// all the pending changes were written and that there are no outstanding writes missing.
+// CompactAccountDeltas stores a list of AccountDeltas with a cache.
 type CompactAccountDeltas struct {
 	// actual account deltas
 	deltas []AccountDelta
@@ -447,6 +448,7 @@ type OnlineAccountDelta struct {
 	newStatus         []basics.Status
 }
 
+// CompactOnlineAccountDeltas stores a list of OnlineAccountDelta with a cache.
 type CompactOnlineAccountDeltas struct {
 	// actual account deltas
 	deltas []OnlineAccountDelta
@@ -483,7 +485,8 @@ const (
 	// CatchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to CatchpointStateCatchupBalancesRound,
 	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
 	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
-	CatchpointStateCatchupHashRound   = CatchpointState("catchpointCatchupHashRound")
+	CatchpointStateCatchupHashRound = CatchpointState("catchpointCatchupHashRound")
+	// CatchpointStateCatchpointLookback is the number of rounds we keep catchpoints for
 	CatchpointStateCatchpointLookback = CatchpointState("catchpointLookback")
 )
 
@@ -1341,6 +1344,7 @@ func WriteCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []Nor
 	return nil
 }
 
+// ResetCatchpointStagingBalances resets all catchpoint staging tables
 func ResetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
 	s := []string{
 		"DROP TABLE IF EXISTS catchpointbalances",
@@ -1593,6 +1597,7 @@ func AccountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	return nil
 }
 
+// AccountsCreateOnlineRoundParamsTable creates the onlineRoundParams table in the database.
 func AccountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createOnlineRoundParamsTable {
 		_, err = tx.ExecContext(ctx, stmt)
@@ -1603,6 +1608,7 @@ func AccountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err 
 	return nil
 }
 
+// AccountsCreateCatchpointFirstStageInfoTable creates the catchpointFirstStageInfo table in the database.
 func AccountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Executable) error {
 	_, err := e.ExecContext(ctx, createCatchpointFirstStageInfoTable)
 	return err
@@ -1613,6 +1619,7 @@ func accountsCreateUnfinishedCatchpointsTable(ctx context.Context, e db.Executab
 	return err
 }
 
+// BaseVotingData is the base struct used to store voting data
 type BaseVotingData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -1624,6 +1631,7 @@ type BaseVotingData struct {
 	StateProofID    merklesignature.Commitment      `codec:"F"`
 }
 
+// BaseOnlineAccountData is the base struct used to store online account data
 type BaseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -1633,6 +1641,7 @@ type BaseOnlineAccountData struct {
 	RewardsBase uint64            `codec:"Z"`
 }
 
+// BaseAccountData is the base struct used to store account data
 type BaseAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -1698,7 +1707,7 @@ func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.BaseVotingData.SetCoreAccountData(ad)
 }
 
-// SetCoreAccountData initializes BaseAccountData from a basics.AccountData
+// SetAccountData initializes BaseAccountData from a basics.AccountData
 func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
@@ -1749,7 +1758,7 @@ func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 	}
 }
 
-// GetLedgerCoreAccountBaseData gets ledgercore.VotingData from BaseAccountData
+// GetLedgerCoreVotingData gets ledgercore.VotingData from BaseAccountData
 func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	return ledgercore.VotingData{
 		VoteID:          ba.VoteID,
@@ -1761,7 +1770,7 @@ func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	}
 }
 
-// GetLedgerCoreAccountBaseData gets basics.AccountData from BaseAccountData
+// GetAccountData gets basics.AccountData from BaseAccountData
 func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
 		Status:             ba.Status,
