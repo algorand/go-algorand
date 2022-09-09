@@ -975,7 +975,12 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	eval.block.Payset = append(eval.block.Payset, txibs...)
+	if !eval.blockGenerated {
+		// Don't append txns to the Payset if it has already been generated.
+		eval.block.Payset = append(eval.block.Payset, txibs...)
+	}
+	// We need to keep the blockTxBytes count going after the block has been generated,
+	// so that the ErrNoSpace error will be caught by the transactionPool to adjust fees.
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
 
