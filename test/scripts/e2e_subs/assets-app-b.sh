@@ -125,4 +125,4 @@ ${xcmd} --from $MANAGER destroy
 # clear bob
 ${xcmd} --from $BOB clear
 
-date "+$scriptname done %Y%m%d_%H%M%S"
+date "+$scriptname OK %Y%m%d_%H%M%S"

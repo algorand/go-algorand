@@ -188,21 +188,21 @@ func SecretKeyToSeed(secret PrivateKey) (Seed, error) {
 func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 	pk0, sk := ed25519GenerateKeySeed(ed25519Seed(seed))
 	pk := SignatureVerifier(pk0)
-	cryptoGenSigSecretsTotal.Inc(map[string]string{})
+	cryptoGenSigSecretsTotal.Inc(nil)
 	return &SignatureSecrets{SignatureVerifier: pk, SK: sk}
 }
 
 // Sign produces a cryptographic Signature of a Hashable message, given
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
-	cryptoSigSecretsSignTotal.Inc(map[string]string{})
+	cryptoSigSecretsSignTotal.Inc(nil)
 	return s.SignBytes(HashRep(message))
 }
 
 // SignBytes signs a message directly, without first hashing.
 // Caller is responsible for domain separation.
 func (s *SignatureSecrets) SignBytes(message []byte) Signature {
-	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
+	cryptoSigSecretsSignBytesTotal.Inc(nil)
 	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
 }
 
@@ -212,7 +212,7 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // It returns true if this is the case; otherwise, it returns false.
 //
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
-	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
+	cryptoSigSecretsVerifyTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
 }
 
@@ -220,6 +220,6 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
 func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
-	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
+	cryptoSigSecretsVerifyBytesTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

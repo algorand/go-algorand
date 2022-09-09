@@ -70,7 +70,14 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
-		defer dl.endBlock()
+		defer func() {
+			// only advance if the txn was supposed to succeed
+			if len(problem) > 0 {
+				dl.eval = nil
+			} else {
+				dl.endBlock()
+			}
+		}()
 	}
 	txn(dl.t, dl.generator, dl.eval, tx, problem...)
 }
@@ -90,7 +97,14 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
-		defer dl.endBlock()
+		defer func() {
+			// only advance if the txgroup was supposed to succeed
+			if problem != "" {
+				dl.eval = nil
+			} else {
+				dl.endBlock()
+			}
+		}()
 	}
 	err := txgroup(dl.t, dl.generator, dl.eval, txns...)
 	if problem == "" {
@@ -113,6 +127,11 @@ func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
 	checkBlock(dl.t, dl.validator, vb)
 	dl.eval = nil // Ensure it's not used again
 	return vb
+}
+
+func (dl *DoubleLedger) reloadLedgers() {
+	require.NoError(dl.t, dl.generator.ReloadLedger())
+	require.NoError(dl.t, dl.validator.ReloadLedger())
 }
 
 func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.ValidatedBlock) {

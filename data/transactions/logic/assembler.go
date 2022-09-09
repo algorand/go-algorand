@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/abi"
+	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -224,11 +224,13 @@ type OpStream struct {
 
 	intc         []uint64       // observed ints in code. We'll put them into a intcblock
 	intcRefs     []intReference // references to int pseudo-op constants, used for optimization
-	hasIntcBlock bool           // prevent prepending intcblock because asm has one
+	cntIntcBlock int            // prevent prepending intcblock because asm has one
+	hasPseudoInt bool           // were any `int` pseudo ops used?
 
 	bytec         [][]byte        // observed bytes in code. We'll put them into a bytecblock
 	bytecRefs     []byteReference // references to byte/addr pseudo-op constants, used for optimization
-	hasBytecBlock bool            // prevent prepending bytecblock because asm has one
+	cntBytecBlock int             // prevent prepending bytecblock because asm has one
+	hasPseudoByte bool            // were any `byte` (or equivalent) pseudo ops used?
 
 	// tracks information we know to be true at the point being assembled
 	known        ProgramKnowledge
@@ -247,6 +249,9 @@ type OpStream struct {
 	OffsetToLine map[int]int
 
 	HasStatefulOps bool
+
+	// Need new copy for each opstream
+	versionedPseudoOps map[string]map[int]OpSpec
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -370,18 +375,18 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 func (ops *OpStream) Intc(constIndex uint) {
 	switch constIndex {
 	case 0:
-		ops.pending.WriteByte(0x22) // intc_0
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_0"].Opcode)
 	case 1:
-		ops.pending.WriteByte(0x23) // intc_1
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_1"].Opcode)
 	case 2:
-		ops.pending.WriteByte(0x24) // intc_2
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_2"].Opcode)
 	case 3:
-		ops.pending.WriteByte(0x25) // intc_3
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_3"].Opcode)
 	default:
 		if constIndex > 0xff {
 			ops.error("cannot have more than 256 int constants")
 		}
-		ops.pending.WriteByte(0x21) // intc
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc"].Opcode)
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.intc)) {
@@ -391,8 +396,10 @@ func (ops *OpStream) Intc(constIndex uint) {
 	}
 }
 
-// Uint writes opcodes for loading a uint literal
-func (ops *OpStream) Uint(val uint64) {
+// IntLiteral writes opcodes for loading a uint literal
+func (ops *OpStream) IntLiteral(val uint64) {
+	ops.hasPseudoInt = true
+
 	found := false
 	var constIndex uint
 	for i, cv := range ops.intc {
@@ -402,7 +409,11 @@ func (ops *OpStream) Uint(val uint64) {
 			break
 		}
 	}
+
 	if !found {
+		if ops.cntIntcBlock > 0 {
+			ops.errorf("int %d used without %d in intcblock", val, val)
+		}
 		constIndex = uint(len(ops.intc))
 		ops.intc = append(ops.intc, val)
 	}
@@ -417,18 +428,18 @@ func (ops *OpStream) Uint(val uint64) {
 func (ops *OpStream) Bytec(constIndex uint) {
 	switch constIndex {
 	case 0:
-		ops.pending.WriteByte(0x28) // bytec_0
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_0"].Opcode)
 	case 1:
-		ops.pending.WriteByte(0x29) // bytec_1
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_1"].Opcode)
 	case 2:
-		ops.pending.WriteByte(0x2a) // bytec_2
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_2"].Opcode)
 	case 3:
-		ops.pending.WriteByte(0x2b) // bytec_3
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_3"].Opcode)
 	default:
 		if constIndex > 0xff {
 			ops.error("cannot have more than 256 byte constants")
 		}
-		ops.pending.WriteByte(0x27) // bytec
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec"].Opcode)
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.bytec)) {
@@ -441,6 +452,8 @@ func (ops *OpStream) Bytec(constIndex uint) {
 // ByteLiteral writes opcodes and data for loading a []byte literal
 // Values are accumulated so that they can be put into a bytecblock
 func (ops *OpStream) ByteLiteral(val []byte) {
+	ops.hasPseudoByte = true
+
 	found := false
 	var constIndex uint
 	for i, cv := range ops.bytec {
@@ -451,6 +464,9 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 		}
 	}
 	if !found {
+		if ops.cntBytecBlock > 0 {
+			ops.errorf("byte/addr/method used without value in bytecblock")
+		}
 		constIndex = uint(len(ops.bytec))
 		ops.bytec = append(ops.bytec, val)
 	}
@@ -465,23 +481,46 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
 	}
+
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntIntcBlock > 0 && ops.Version >= backBranchEnabledVersion {
+		// We don't understand control-flow, so use pushint
+		ops.warnf("int %s used with explicit intcblock. must pushint", args[0])
+		pushint := OpsByName[ops.Version]["pushint"]
+		return asmPushInt(ops, &pushint, args)
+	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntIntcBlock > 1 {
+		pushint, ok := OpsByName[ops.Version]["pushint"]
+		if ok {
+			return asmPushInt(ops, &pushint, args)
+		}
+		return ops.errorf("int %s used with manual intcblocks. Use intc.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// intcblock dominates the current instruction. If so, we could use it.
+
 	// check txn type constants
 	i, ok := txnTypeMap[args[0]]
 	if ok {
-		ops.Uint(i)
+		ops.IntLiteral(i)
 		return nil
 	}
 	// check OnCompetion constants
 	oc, isOCStr := onCompletionMap[args[0]]
 	if isOCStr {
-		ops.Uint(oc)
+		ops.IntLiteral(oc)
 		return nil
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	ops.Uint(val)
+	ops.IntLiteral(val)
 	return nil
 }
 
@@ -542,7 +581,7 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func base32DecdodeAnyPadding(x string) (val []byte, err error) {
+func base32DecodeAnyPadding(x string) (val []byte, err error) {
 	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
 	if err != nil {
 		// try again with standard padding
@@ -564,7 +603,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = errors.New("byte base32 arg lacks close paren")
 			return
 		}
-		val, err = base32DecdodeAnyPadding(arg[open+1 : close])
+		val, err = base32DecodeAnyPadding(arg[open+1 : close])
 		if err != nil {
 			return
 		}
@@ -592,7 +631,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = fmt.Errorf("need literal after 'byte %s'", arg)
 			return
 		}
-		val, err = base32DecdodeAnyPadding(args[1])
+		val, err = base32DecodeAnyPadding(args[1])
 		if err != nil {
 			return
 		}
@@ -693,6 +732,29 @@ func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
+
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntBytecBlock > 0 && ops.Version >= backBranchEnabledVersion {
+		// We don't understand control-flow, so use pushbytes
+		ops.warnf("byte %s used with explicit bytecblock. must pushbytes", args[0])
+		pushbytes := OpsByName[ops.Version]["pushbytes"]
+		return asmPushBytes(ops, &pushbytes, args)
+	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntBytecBlock > 1 {
+		pushbytes, ok := OpsByName[ops.Version]["pushbytes"]
+		if ok {
+			return asmPushBytes(ops, &pushbytes, args)
+		}
+		return ops.errorf("byte %s used with manual bytecblocks. Use bytec.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// bytecblock dominates the current instruction. If so, we could use it.
+
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
@@ -720,7 +782,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error()) // nolint:errcheck
+			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error())
 		}
 		hash := sha512.Sum512_256(methodSig)
 		ops.ByteLiteral(hash[0:4])
@@ -731,11 +793,10 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
+	ivals := make([]uint64, len(args))
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:l])
-	ops.intcRefs = nil
-	ops.intc = make([]uint64, len(args))
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
@@ -743,9 +804,21 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
-		ops.intc[i] = cu
+		if !ops.known.deadcode {
+			ivals[i] = cu
+		}
 	}
-	ops.hasIntcBlock = true
+	if !ops.known.deadcode {
+		// If we previously processed an `int`, we thought we could insert our
+		// own intcblock, but now we see a manual one.
+		if ops.hasPseudoInt {
+			ops.error("intcblock following int")
+		}
+		ops.intcRefs = nil
+		ops.intc = ivals
+		ops.cntIntcBlock++
+	}
+
 	return nil
 }
 
@@ -760,8 +833,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			// intcblock, but parseBinaryArgs would have
 			// to return a useful consumed value even in
 			// the face of errors.  Hard.
-			ops.error(err)
-			return nil
+			return ops.error(err)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -774,9 +846,16 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(scratch[:l])
 		ops.pending.Write(bv)
 	}
-	ops.bytecRefs = nil
-	ops.bytec = bvals
-	ops.hasBytecBlock = true
+	if !ops.known.deadcode {
+		// If we previously processed a pseudo `byte`, we thought we could
+		// insert our own bytecblock, but now we see a manual one.
+		if ops.hasPseudoByte {
+			ops.error("bytecblock following byte/addr/method")
+		}
+		ops.bytecRefs = nil
+		ops.bytec = bvals
+		ops.cntBytecBlock++
+	}
 	return nil
 }
 
@@ -857,43 +936,6 @@ func simpleImm(value string, label string) (byte, error) {
 	return byte(res), err
 }
 
-// asmTxn2 delegates to asmTxn or asmTxna depending on number of operands
-func asmTxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	switch len(args) {
-	case 1:
-		txn := OpsByName[1]["txn"] // v1 txn opcode does not have array names
-		return asmDefault(ops, &txn, args)
-	case 2:
-		txna := OpsByName[ops.Version]["txna"]
-		return asmDefault(ops, &txna, args)
-	default:
-		return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-	}
-}
-
-func asmGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 2 {
-		gtxn := OpsByName[1]["gtxn"] // v1 gtxn opcode does not have array names
-		return asmDefault(ops, &gtxn, args)
-	}
-	if len(args) == 3 {
-		gtxna := OpsByName[ops.Version]["gtxna"]
-		return asmDefault(ops, &gtxna, args)
-	}
-	return ops.errorf("%s expects 2 or 3 immediate arguments", spec.Name)
-}
-
-func asmGtxns(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 1 {
-		return asmDefault(ops, spec, args)
-	}
-	if len(args) == 2 {
-		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
-		return asmDefault(ops, &gtxnsa, args)
-	}
-	return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
-}
-
 func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return asmDefault(ops, spec, args)
@@ -929,7 +971,7 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())
@@ -949,19 +991,52 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
+		var correctImmediates []string
+		var numImmediatesWithField []int
+		pseudos, isPseudoName := ops.versionedPseudoOps[spec.Name]
 		switch imm.kind {
 		case immByte:
 			if imm.Group != nil {
 				fs, ok := imm.Group.SpecByName(args[i])
 				if !ok {
+					_, err := simpleImm(args[i], "")
+					if err == nil {
+						// User supplied a uint, so we see if any of the other immediates take uints
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group == nil {
+								correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
+						}
+					}
+					if isPseudoName {
+						for numImms, ps := range pseudos {
+							for _, psImm := range ps.OpDetails.Immediates {
+								if psImm.kind == immByte && psImm.Group != nil {
+									if _, ok := psImm.Group.SpecByName(args[i]); ok {
+										numImmediatesWithField = append(numImmediatesWithField, numImms)
+									}
+								}
+							}
+						}
+						if len(numImmediatesWithField) > 0 {
+							return ops.errorf("%#v field of %s can only be used with %s", args[i], spec.Name, joinIntsOnOr("immediate", numImmediatesWithField...))
+						}
+					}
 					return ops.errorf("%s unknown field: %#v", spec.Name, args[i])
 				}
-				// refine the typestack now, so it is maintain even if there's a version error
+				// refine the typestack now, so it is maintained even if there's a version error
 				if fs.Type().Typed() {
 					ops.returns(spec, fs.Type())
 				}
 				if fs.Version() > ops.Version {
-					return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?",
+					return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?",
 						spec.Name, args[i], fs.Version())
 				}
 				ops.pending.WriteByte(fs.Field())
@@ -969,6 +1044,23 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				// simple immediate that must be a number from 0-255
 				val, err := simpleImm(args[i], imm.Name)
 				if err != nil {
+					if strings.Contains(err.Error(), "unable to parse") {
+						// Perhaps the field works in a different order
+						for j, otherImm := range spec.OpDetails.Immediates {
+							if otherImm.kind == immByte && otherImm.Group != nil {
+								if _, match := otherImm.Group.SpecByName(args[i]); match {
+									correctImmediates = append(correctImmediates, strconv.Itoa(j+1))
+								}
+							}
+						}
+						if len(correctImmediates) > 0 {
+							errMsg := spec.Name
+							if isPseudoName {
+								errMsg += " with " + joinIntsOnOr("immediate", len(args))
+							}
+							return ops.errorf("%s can only use %#v as immediate %s", errMsg, args[i], strings.Join(correctImmediates, " or "))
+						}
+					}
 					return ops.errorf("%s %w", spec.Name, err)
 				}
 				ops.pending.WriteByte(val)
@@ -1184,17 +1276,178 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return nil, StackTypes{scratchType}
 }
 
-// keywords or "pseudo-ops" handle parsing and assembling special asm language
-// constructs like 'addr' We use an OpSpec here, but it's somewhat degenerate,
-// since they don't have opcodes or eval functions. But it does need a lot of
-// OpSpec, in order to support assembly - Mode, typing info, etc.
-var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, proto(":i"), 1, assembler(asmInt)},
-	"byte": {0, "byte", nil, proto(":b"), 1, assembler(asmByte)},
+func joinIntsOnOr(singularTerminator string, list ...int) string {
+	if len(list) == 1 {
+		switch list[0] {
+		case 0:
+			return "no " + singularTerminator + "s"
+		case 1:
+			return "1 " + singularTerminator
+		default:
+			return fmt.Sprintf("%d %ss", list[0], singularTerminator)
+		}
+	}
+	sort.Ints(list)
+	errMsg := ""
+	for i, val := range list {
+		if i+1 < len(list) {
+			errMsg += fmt.Sprintf("%d or ", val)
+		} else {
+			errMsg += fmt.Sprintf("%d ", val)
+		}
+	}
+	return errMsg + singularTerminator + "s"
+}
+
+func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
+	immediateCounts := make([]int, len(specs))
+	i := 0
+	for numImms := range specs {
+		immediateCounts[i] = numImms
+		i++
+	}
+	ops.error(name + " expects " + joinIntsOnOr("immediate argument", immediateCounts...))
+}
+
+// getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
+// Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
+// The returned string is the spec's name, annotated if it was a pseudoOp with no immediates to help disambiguate typetracking errors
+func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
+	pseudoSpecs, ok := ops.versionedPseudoOps[name]
+	if ok {
+		pseudo, ok := pseudoSpecs[len(args)]
+		if !ok {
+			// Could be that pseudoOp wants to handle immediates itself so check -1 key
+			pseudo, ok = pseudoSpecs[anyImmediates]
+			if !ok {
+				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
+				pseudoImmediatesError(ops, name, pseudoSpecs)
+				proto, version, ok := mergeProtos(pseudoSpecs)
+				if !ok {
+					return OpSpec{}, "", false
+				}
+				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{asm: func(*OpStream, *OpSpec, []string) error { return nil }}}
+			}
+		}
+		pseudo.Name = name
+		if pseudo.Version > ops.Version {
+			ops.errorf("%s opcode with %s was introduced in v%d", pseudo.Name, joinIntsOnOr("immediate", len(args)), pseudo.Version)
+		}
+		if len(args) == 0 {
+			return pseudo, pseudo.Name + " without immediates", true
+		}
+		return pseudo, pseudo.Name, true
+	}
+	spec, ok := OpsByName[ops.Version][name]
+	if !ok {
+		spec, ok = OpsByName[AssemblerMaxVersion][name]
+		if ok {
+			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
+		} else {
+			ops.errorf("unknown opcode: %s", name)
+		}
+	}
+	return spec, spec.Name, ok
+}
+
+// pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
+// Immediates key of -1 means asmfunc handles number of immediates
+// These will then get transferred over into a per-opstream versioned table during assembly
+const anyImmediates = -1
+
+var pseudoOps = map[string]map[int]OpSpec{
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, proto(":b"), 1, assembler(asmAddr)},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, proto(":b"), 1, assembler(asmMethod)},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
+	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
+	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
+	"extract": {0: OpSpec{Name: "extract3"}, 2: OpSpec{Name: "extract"}},
+	"replace": {0: OpSpec{Name: "replace3"}, 1: OpSpec{Name: "replace2"}},
+}
+
+func addPseudoDocTags() {
+	for name, specs := range pseudoOps {
+		for i, spec := range specs {
+			if spec.Name == name || i == anyImmediates {
+				continue
+			}
+			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
+			desc, ok := opDocByName[spec.Name]
+			if ok {
+				opDocByName[spec.Name] = desc + "<br />" + msg
+			} else {
+				opDocByName[spec.Name] = msg
+			}
+		}
+	}
+}
+
+func init() {
+	addPseudoDocTags()
+}
+
+// Differentiates between specs in pseudoOps that can be assembled on their own and those that need to grab a different spec
+func isFullSpec(spec OpSpec) bool {
+	return spec.asm != nil
+}
+
+// mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
+//by creating a new proto that is a combination of all the pseudo-op's possibilities
+func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
+	var args StackTypes
+	var returns StackTypes
+	var minVersion uint64
+	i := 0
+	for _, spec := range specs {
+		if i == 0 {
+			args = spec.Arg.Types
+			returns = spec.Return.Types
+			minVersion = spec.Version
+		} else {
+			if spec.Version < minVersion {
+				minVersion = spec.Version
+			}
+			if len(args) != len(spec.Arg.Types) || len(returns) != len(spec.Return.Types) {
+				return Proto{}, 0, false
+			}
+			for j := range args {
+				if args[j] != spec.Arg.Types[j] {
+					args[j] = StackAny
+				}
+			}
+			for j := range returns {
+				if returns[j] != spec.Return.Types[j] {
+					returns[j] = StackAny
+				}
+			}
+		}
+		i++
+	}
+	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+}
+
+func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
+	m := make(map[string]map[int]OpSpec)
+	for name, specs := range pseudoOps {
+		m[name] = make(map[int]OpSpec)
+		for numImmediates, spec := range specs {
+			if isFullSpec(spec) {
+				m[name][numImmediates] = spec
+				continue
+			}
+			newSpec, ok := OpsByName[version][spec.Name]
+			if ok {
+				m[name][numImmediates] = newSpec
+			} else {
+				m[name][numImmediates] = OpsByName[AssemblerMaxVersion][spec.Name]
+			}
+		}
+	}
+	return m
 }
 
 type lineError struct {
@@ -1222,25 +1475,29 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-var spaces = [256]uint8{'\t': 1, ' ': 1}
+// newline not included since handled in scanner
+var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
-func fieldsFromLine(line string) []string {
-	var fields []string
+func tokensFromLine(line string) []string {
+	var tokens []string
 
 	i := 0
-	for i < len(line) && spaces[line[i]] != 0 {
+	for i < len(line) && tokenSeparators[line[i]] {
+		if line[i] == ';' {
+			tokens = append(tokens, ";")
+		}
 		i++
 	}
 
 	start := i
-	inString := false
-	inBase64 := false
+	inString := false // tracked to allow spaces and comments inside
+	inBase64 := false // tracked to allow '//' inside
 	for i < len(line) {
-		if spaces[line[i]] == 0 { // if not space
+		if !tokenSeparators[line[i]] { // if not space
 			switch line[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+					if i == 0 || i > 0 && tokenSeparators[line[i-1]] {
 						inString = true
 					}
 				} else {
@@ -1251,9 +1508,9 @@ func fieldsFromLine(line string) []string {
 			case '/': // is a comment?
 				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
 					if start != i { // if a comment without whitespace
-						fields = append(fields, line[start:i])
+						tokens = append(tokens, line[start:i])
 					}
-					return fields
+					return tokens
 				}
 			case '(': // is base64( seq?
 				prefix := line[start:i]
@@ -1269,19 +1526,29 @@ func fieldsFromLine(line string) []string {
 			i++
 			continue
 		}
+
+		// we've hit a space, end last token unless inString
+
 		if !inString {
-			field := line[start:i]
-			fields = append(fields, field)
-			if field == "base64" || field == "b64" {
-				inBase64 = true
-			} else if inBase64 {
+			token := line[start:i]
+			tokens = append(tokens, token)
+			if line[i] == ';' {
+				tokens = append(tokens, ";")
+			}
+			if inBase64 {
 				inBase64 = false
+			} else if token == "base64" || token == "b64" {
+				inBase64 = true
 			}
 		}
 		i++
 
+		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && spaces[line[i]] != 0 {
+			for i < len(line) && tokenSeparators[line[i]] {
+				if line[i] == ';' {
+					tokens = append(tokens, ";")
+				}
 				i++
 			}
 			start = i
@@ -1290,10 +1557,10 @@ func fieldsFromLine(line string) []string {
 
 	// add rest of the string if any
 	if start < len(line) {
-		fields = append(fields, line[start:i])
+		tokens = append(tokens, line[start:i])
 	}
 
-	return fields
+	return tokens
 }
 
 func (ops *OpStream) trace(format string, args ...interface{}) {
@@ -1354,6 +1621,16 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+// splitTokens breaks tokens into two slices at the first semicolon.
+func splitTokens(tokens []string) (current, rest []string) {
+	for i, token := range tokens {
+		if token == ";" {
+			return tokens[:i], tokens[i+1:]
+		}
+	}
+	return tokens, nil
+}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	fin := strings.NewReader(text)
@@ -1364,93 +1641,82 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if len(line) == 0 {
-			ops.trace("%3d: 0 line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			ops.trace("%3d: // line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "#pragma") {
-			ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			ops.pragma(line)
-			continue
-		}
-		fields := fieldsFromLine(line)
-		if len(fields) == 0 {
-			ops.trace("%3d: no fields\n", ops.sourceLine)
-			continue
-		}
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		opstring := fields[0]
-
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			fields = fields[1:]
-			if len(fields) == 0 {
-				ops.trace("%3d: label only\n", ops.sourceLine)
+		tokens := tokensFromLine(line)
+		if len(tokens) > 0 {
+			if first := tokens[0]; first[0] == '#' {
+				directive := first[1:]
+				switch directive {
+				case "pragma":
+					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
+					ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				default:
+					ops.errorf("Unknown directive: %s", directive)
+				}
 				continue
 			}
-			opstring = fields[0]
 		}
-
-		spec, ok := OpsByName[ops.Version][opstring]
-		if !ok {
-			spec, ok = keywords[opstring]
-			if spec.Version > 1 && spec.Version > ops.Version {
-				ok = false
+		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
+			if len(current) == 0 {
+				continue
 			}
-		}
-		if !ok {
-			// If the problem is only the version, it's useful to lookup the
-			// opcode from latest version, so we proceed with assembly well
-			// enough to report follow-on errors.  Of course, we still have to
-			// bail out on the assembly as a whole.
-			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+			}
+			opstring := current[0]
+			if opstring[len(opstring)-1] == ':' {
+				ops.createLabel(opstring[:len(opstring)-1])
+				current = current[1:]
+				if len(current) == 0 {
+					ops.trace("%3d: label only\n", ops.sourceLine)
+					continue
+				}
+				opstring = current[0]
+			}
+			spec, expandedName, ok := getSpec(ops, opstring, current[1:])
 			if ok {
-				ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
-			} else {
-				spec, ok = keywords[opstring]
-			}
-		}
-		if ok {
-			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-			ops.recordSourceLine()
-			if spec.Modes == modeApp {
-				ops.HasStatefulOps = true
-			}
-			args, returns := spec.Arg.Types, spec.Return.Types
-			if spec.OpDetails.refine != nil {
-				nargs, nreturns := spec.OpDetails.refine(&ops.known, fields[1:])
-				if nargs != nil {
-					args = nargs
+				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+				ops.recordSourceLine()
+				if spec.Modes == modeApp {
+					ops.HasStatefulOps = true
 				}
-				if nreturns != nil {
-					returns = nreturns
+				args, returns := spec.Arg.Types, spec.Return.Types
+				if spec.refine != nil {
+					nargs, nreturns := spec.refine(&ops.known, current[1:])
+					if nargs != nil {
+						args = nargs
+					}
+					if nreturns != nil {
+						returns = nreturns
+					}
 				}
-			}
-			ops.trackStack(args, returns, fields)
-			spec.asm(ops, &spec, fields[1:])
-			if spec.deadens() { // An unconditional branch deadens the following code
-				ops.known.deaden()
-			}
-			if spec.Name == "callsub" {
-				// since retsub comes back to the callsub, it is an entry point like a label
-				ops.known.label()
+				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
+				spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+
+				if spec.deadens() { // An unconditional branch deadens the following code
+					ops.known.deaden()
+				}
+				if spec.Name == "callsub" {
+					// since retsub comes back to the callsub, it is an entry point like a label
+					ops.known.label()
+				}
 			}
 			ops.trace("\n")
 			continue
-		} else {
-			ops.errorf("unknown opcode: %s", opstring)
 		}
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
+	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			err = errors.New("line too long")
+		}
+		ops.error(err)
+	}
+
+	// backward compatibility: do not allow jumps past last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
@@ -1477,21 +1743,20 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(line string) error {
-	fields := strings.Split(line, " ")
-	if fields[0] != "#pragma" {
-		return ops.errorf("invalid syntax: %s", fields[0])
+func (ops *OpStream) pragma(tokens []string) error {
+	if tokens[0] != "#pragma" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
-	if len(fields) < 2 {
+	if len(tokens) < 2 {
 		return ops.error("empty pragma")
 	}
-	key := fields[1]
+	key := tokens[1]
 	switch key {
 	case "version":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no version value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		var ver uint64
 		if ops.pending.Len() > 0 {
 			return ops.error("#pragma version is only allowed before instructions")
@@ -1506,7 +1771,7 @@ func (ops *OpStream) pragma(line string) error {
 
 		// We initialize Version with assemblerNoVersion as a marker for
 		// non-specified version because version 0 is valid
-		// version for TEAL v1.
+		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
 		} else if ops.Version != ver {
@@ -1516,10 +1781,10 @@ func (ops *OpStream) pragma(line string) error {
 		}
 		return nil
 	case "typetrack":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no typetrack value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		on, err := strconv.ParseBool(value)
 		if err != nil {
 			return ops.errorf("bad #pragma typetrack: %#v", value)
@@ -1553,7 +1818,7 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
@@ -1611,7 +1876,7 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
 func (ops *OpStream) optimizeIntcBlock() error {
-	if ops.hasIntcBlock {
+	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
@@ -1654,7 +1919,7 @@ func (ops *OpStream) optimizeIntcBlock() error {
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
 func (ops *OpStream) optimizeBytecBlock() error {
-	if ops.hasBytecBlock {
+	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
@@ -1829,8 +2094,8 @@ func (ops *OpStream) prependCBlocks() []byte {
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 && !ops.hasIntcBlock {
-		prebytes.WriteByte(0x20) // intcblock
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
+		prebytes.WriteByte(OpsByName[ops.Version]["intcblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
 		for _, iv := range ops.intc {
@@ -1838,8 +2103,8 @@ func (ops *OpStream) prependCBlocks() []byte {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 && !ops.hasBytecBlock {
-		prebytes.WriteByte(0x26) // bytecblock
+	if len(ops.bytec) > 0 && ops.cntBytecBlock == 0 {
+		prebytes.WriteByte(OpsByName[ops.Version]["bytecblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])
 		for _, bv := range ops.bytec {
@@ -2077,7 +2342,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				return "", err
 			}
 
-			dis.intc = append(dis.intc, intc...)
+			dis.intc = intc
 			for i, iv := range intc {
 				if i != 0 {
 					out += " "
@@ -2090,7 +2355,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			dis.bytec = append(dis.bytec, bytec...)
+			dis.bytec = bytec
 			for i, bv := range bytec {
 				if i != 0 {
 					out += " "
@@ -2111,7 +2376,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	if strings.HasPrefix(spec.Name, "bytec_") {
 		b := spec.Name[len(spec.Name)-1] - byte('0')
-		if int(b) < len(dis.intc) {
+		if int(b) < len(dis.bytec) {
 			out += fmt.Sprintf(" // %s", guessByteFormat(dis.bytec[b]))
 		}
 	}

@@ -1,5 +1,8 @@
 name: "ReviewDog workflow"
 on:
+  push:
+    branches:
+      - master
   pull_request:
 jobs:
   # Blocking Errors Section
@@ -18,12 +21,13 @@ jobs:
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
-          golangci_lint_version: "v1.41.1"
+          golangci_lint_version: "v1.47.3"
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
-          reporter: "github-pr-review"
+          reporter: "github-pr-check"
           tool_name: "Lint Errors"
           level: "error"
           fail_on_error: true
+          filter_mode: "nofilter"
   # Non-Blocking Warnings Section
   reviewdog-warnings:
     runs-on: ubuntu-latest
@@ -44,7 +48,7 @@ jobs:
       - name: Install specific golang
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17.9'
+          go-version: '1.17.13'
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
@@ -59,7 +63,7 @@ jobs:
         run: |
           cd cicdtmp/golangci-lint
           git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/v1.41.1
+          git checkout tags/v1.47.3
           CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
           ./golangci-lint-cgo --version
           cd ../../

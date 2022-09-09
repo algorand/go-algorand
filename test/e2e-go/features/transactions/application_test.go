@@ -66,7 +66,7 @@ func TestApplication(t *testing.T) {
 	a.NoError(err)
 
 	creator := accountList[0].Address
-	wh, err := client.GetUnencryptedWalletHandle()
+	_, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
 	fee := uint64(1000)
@@ -101,7 +101,7 @@ log
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
-	wh, err = client.GetUnencryptedWalletHandle()
+	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	signedTxn, err := client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
@@ -122,6 +122,7 @@ log
 	logs[31] = "c"
 
 	b, err := client.BookkeepingBlock(round)
+	a.NoError(err)
 	for _, ps := range b.Payset {
 		ed := ps.ApplyData.EvalDelta
 		ok = checkEqual(logs, ed.Logs)

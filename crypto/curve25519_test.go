@@ -97,7 +97,7 @@ func BenchmarkSign(b *testing.B) {
 		_ = c.Sign(s)
 	}
 }
-func BenchmarkVerify(b *testing.B) {
+func BenchmarkVerify25519(b *testing.B) {
 	c := makeCurve25519Secret()
 	strs := make([]TestingHashable, b.N)
 	sigs := make([]Signature, b.N)

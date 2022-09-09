@@ -203,15 +203,12 @@ func doDownloadCatchpoint(url string, wdReader util.WatchdogStreamReader, out io
 
 	for {
 		n, err := wdReader.Read(tempBytes)
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return err
 		}
 		totalBytes += n
-		_, err = out.Write(tempBytes[:n])
-		if err != nil {
+		writtenBytes, err := out.Write(tempBytes[:n])
+		if err != nil || n != writtenBytes {
 			return err
 		}
 
@@ -306,7 +303,9 @@ func deleteLedgerFiles(deleteTracker bool) error {
 
 func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
 	// delete current ledger files.
-	deleteLedgerFiles(true)
+	if err := deleteLedgerFiles(true); err != nil {
+		reportWarnf("Error deleting ledger files: %v", err)
+	}
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
@@ -314,7 +313,11 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 		return err
 	}
 
-	defer deleteLedgerFiles(!loadOnly)
+	defer func() {
+		if err := deleteLedgerFiles(!loadOnly); err != nil {
+			reportWarnf("Error deleting ledger files: %v", err)
+		}
+	}()
 	defer l.Close()
 
 	catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())

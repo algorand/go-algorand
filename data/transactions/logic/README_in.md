@@ -47,9 +47,7 @@ programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
 bytecode, the version is an incrementing integer, currently 6, and
-denoted vX throughout this document. User friendly version numbers
-that correspond to programmer expectations, such as `AVM 1.0` map to
-these integers.  AVM 0.9 is v4. AVM 1.0 is v5. AVM 1.1 is v6.
+denoted vX throughout this document.
 
 ## Execution Modes
 
@@ -277,9 +275,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 
 @@ Loading_Values.md @@
 
-**Transaction Fields**
-
+#### Transaction Fields
+##### Scalar Fields
 @@ txn_fields.md @@
+##### Array Fields
+@@ txna_fields.md @@
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
 
@@ -370,7 +370,7 @@ The assembler parses line by line. Ops that only take stack arguments
 appear on a line by themselves. Immediate arguments follow the opcode
 on the same line, separated by whitespace.
 
-The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate AVM bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting v2. By default, the assembler targets v1.
 
 Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
@@ -421,25 +421,26 @@ A compiled program starts with a varuint declaring the version of the compiled c
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
 
-It is important to prevent newly-introduced transaction fields from
-breaking assumptions made by older versions of the AVM. If one of the
-transactions in a group will execute a program whose version predates
-a given field, that field must not be set anywhere in the transaction
-group, or the group will be rejected. For example, executing a version
-1 program on a transaction with RekeyTo set to a nonzero address will
-cause the program to fail, regardless of the other contents of the
-program itself.
+It is important to prevent newly-introduced transaction types and
+fields from breaking assumptions made by programs written before they
+existed. If one of the transactions in a group will execute a program
+whose version predates a transaction type or field that can violate
+expectations, that transaction type or field must not be used anywhere
+in the transaction group.
+
+Concretely, the above requirement is translated as follows: A v1
+program included in a transaction group that includes a
+ApplicationCall transaction or a non-zero RekeyTo field will fail
+regardless of the program itself.
 
 This requirement is enforced as follows:
 
 * For every transaction, compute the earliest version that supports
-  all the fields and values in this transaction. For example, a
-  transaction with a nonzero RekeyTo field will be (at least) v2.
+  all the fields and values in this transaction.
+  
+* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that program will fail.
 
-* Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
-
-In addition, applications must be version 6 or greater to be eligible
-for being called in an inner transaction.
+In addition, applications must be v4 or greater to be called in an inner transaction.
 
 ## Varuint
 

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -205,7 +204,7 @@ func debugLocal(args []string) {
 		programNames = make([]string, len(args))
 		programBlobs = make([][]byte, len(args))
 		for i, file := range args {
-			data, err := ioutil.ReadFile(file)
+			data, err := os.ReadFile(file)
 			if err != nil {
 				log.Fatalf("Error program reading %s: %s", file, err)
 			}
@@ -217,7 +216,7 @@ func debugLocal(args []string) {
 	var err error
 	var txnBlob []byte
 	if len(txnFile) > 0 {
-		txnBlob, err = ioutil.ReadFile(txnFile)
+		txnBlob, err = os.ReadFile(txnFile)
 		if err != nil {
 			log.Fatalf("Error txn reading %s: %s", txnFile, err)
 		}
@@ -225,7 +224,7 @@ func debugLocal(args []string) {
 
 	var balanceBlob []byte
 	if len(balanceFile) > 0 {
-		balanceBlob, err = ioutil.ReadFile(balanceFile)
+		balanceBlob, err = os.ReadFile(balanceFile)
 		if err != nil {
 			log.Fatalf("Error balance reading %s: %s", balanceFile, err)
 		}
@@ -233,7 +232,7 @@ func debugLocal(args []string) {
 
 	var ddrBlob []byte
 	if len(ddrFile) > 0 {
-		ddrBlob, err = ioutil.ReadFile(ddrFile)
+		ddrBlob, err = os.ReadFile(ddrFile)
 		if err != nil {
 			log.Fatalf("Error dryrun-dump reading %s: %s", ddrFile, err)
 		}

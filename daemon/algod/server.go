@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
@@ -264,13 +263,25 @@ func (s *Server) Start() {
 	// quit earlier than these service files get created
 	s.pidFile = filepath.Join(s.RootPath, "algod.pid")
 	s.netFile = filepath.Join(s.RootPath, "algod.net")
-	ioutil.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
-	ioutil.WriteFile(s.netFile, []byte(fmt.Sprintf("%s\n", addr)), 0644)
+	err = os.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
+	if err != nil {
+		fmt.Printf("pidfile error: %v\n", err)
+		os.Exit(1)
+	}
+	err = os.WriteFile(s.netFile, []byte(fmt.Sprintf("%s\n", addr)), 0644)
+	if err != nil {
+		fmt.Printf("netfile error: %v\n", err)
+		os.Exit(1)
+	}
 
 	listenAddr, listening := s.node.ListeningAddress()
 	if listening {
 		s.netListenFile = filepath.Join(s.RootPath, "algod-listen.net")
-		ioutil.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
+		err = os.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
+		if err != nil {
+			fmt.Printf("netlistenfile error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	errChan := make(chan error, 1)

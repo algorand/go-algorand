@@ -74,7 +74,7 @@ for data in "${data_files[@]}"; do
 done
 
 if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p "${PKG_ROOT}/var/lib/algorand/genesis/${dir}"
         cp "${REPO_DIR}/installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json"
@@ -82,7 +82,7 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     done
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
     cp "${PKG_ROOT}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
-elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
+elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta"|| "${CHANNEL}" == "alpha" ]]; then
     cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
     #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/var/lib/algorand/genesis.json --releasedir ${REPO_DIR}/installer/genesis
 else

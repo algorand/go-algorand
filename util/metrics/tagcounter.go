@@ -24,6 +24,22 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+// NewTagCounterFiltered makes a set of metrics under rootName for tagged counting.
+// "{TAG}" in rootName is replaced by the tag, otherwise "_{TAG}" is appended.
+// Tags not in allowedTags will be filtered out and ignored.
+// unknownTag may be "" or a value that will be counted for tags not in allowedTags.
+func NewTagCounterFiltered(rootName, desc string, allowedTags []string, unknownTag string) *TagCounter {
+	tc := &TagCounter{Name: rootName, Description: desc, UnknownTag: unknownTag}
+	if len(allowedTags) != 0 {
+		tc.AllowedTags = make(map[string]bool, len(allowedTags))
+		for _, tag := range allowedTags {
+			tc.AllowedTags[tag] = true
+		}
+	}
+	DefaultRegistry().Register(tc)
+	return tc
+}
+
 // NewTagCounter makes a set of metrics under rootName for tagged counting.
 // "{TAG}" in rootName is replaced by the tag, otherwise "_{TAG}" is appended.
 // Optionally provided declaredTags counters for these names up front (making them easier to discover).
@@ -41,6 +57,10 @@ type TagCounter struct {
 	Name        string
 	Description string
 
+	AllowedTags map[string]bool
+
+	UnknownTag string
+
 	// a read only race-free reference to tags
 	tagptr atomic.Value
 
@@ -54,6 +74,13 @@ type TagCounter struct {
 
 // Add t[tag] += val, fast and multithread safe
 func (tc *TagCounter) Add(tag string, val uint64) {
+	if (tc.AllowedTags != nil) && (!tc.AllowedTags[tag]) {
+		if len(tc.UnknownTag) != 0 {
+			tag = tc.UnknownTag
+		} else {
+			return
+		}
+	}
 	for {
 		var tags map[string]*uint64
 		tagptr := tc.tagptr.Load()

@@ -18,8 +18,6 @@ package gen
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -37,9 +35,7 @@ import (
 func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
-	tempDir, err := ioutil.TempDir("", "loadkey-test-")
-	a.NoError(err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	const numThreads = 100
 	var wg sync.WaitGroup
@@ -78,9 +74,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
-	tempDir, err := ioutil.TempDir("", "loadkey-test-")
-	a.NoError(err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	wallet := filepath.Join(tempDir, "wallet1")
 	rootDB, err := db.MakeErasableAccessor(wallet)

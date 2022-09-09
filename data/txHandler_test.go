@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -32,16 +33,18 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
 func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
-	const numRounds = 10
 	const numUsers = 100
 	log := logging.TestingLog(b)
+	log.SetLevel(logging.Warn)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
@@ -119,5 +122,94 @@ func BenchmarkTimeAfter(b *testing.B) {
 		} else {
 			before++
 		}
+	}
+}
+
+func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
+	stxns := make([]transactions.SignedTxn, num)
+	result := make([]byte, 0, num*200)
+	for i := 0; i < num; i++ {
+		var sig crypto.Signature
+		crypto.RandBytes(sig[:])
+		var addr basics.Address
+		crypto.RandBytes(addr[:])
+		stxns[i] = transactions.SignedTxn{
+			Sig:      sig,
+			AuthAddr: addr,
+			Txn: transactions.Transaction{
+				Header: transactions.Header{
+					Sender: addr,
+					Fee:    basics.MicroAlgos{Raw: crypto.RandUint64()},
+					Note:   sig[:],
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: crypto.RandUint64()},
+				},
+			},
+		}
+
+		d2 := protocol.Encode(&stxns[i])
+		result = append(result, d2...)
+	}
+	return stxns, result
+}
+
+func TestTxHandlerProcessIncomingTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const numTxns = 11
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, 1),
+	}
+	stxns, blob := makeRandomTransactions(numTxns)
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg := <-handler.backlogQueue
+	require.Equal(t, numTxns, len(msg.unverifiedTxGroup))
+	for i := 0; i < numTxns; i++ {
+		require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+	}
+}
+
+const benchTxnNum = 25_000
+
+func BenchmarkTxHandlerDecoder(b *testing.B) {
+	_, blob := makeRandomTransactions(benchTxnNum)
+	var err error
+	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
+	for i := 0; i < b.N; i++ {
+		dec := protocol.NewDecoderBytes(blob)
+		var idx int
+		for {
+			err = dec.Decode(&stxns[idx])
+			if err == io.EOF {
+				break
+			}
+			require.NoError(b, err)
+			idx++
+		}
+		require.Equal(b, benchTxnNum, idx)
+	}
+}
+
+func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
+	_, blob := makeRandomTransactions(benchTxnNum)
+	var err error
+	stxns := make([]transactions.SignedTxn, benchTxnNum+1)
+	for i := 0; i < b.N; i++ {
+		dec := protocol.NewMsgpDecoderBytes(blob)
+		var idx int
+		for {
+			err = dec.Decode(&stxns[idx])
+			if err == io.EOF {
+				break
+			}
+			require.NoError(b, err)
+			idx++
+		}
+		require.Equal(b, benchTxnNum, idx)
 	}
 }
