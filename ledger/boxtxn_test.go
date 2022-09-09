@@ -86,14 +86,15 @@ var boxAppSource = main(`
         err
 `)
 
+const boxVersion = 35
+
 // TestBoxCreate tests MBR changes around allocation, deallocation
 func TestBoxCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	ledgertesting.TestConsensusRange(t, 36, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
@@ -151,8 +152,7 @@ func TestBoxCreateAvailability(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	ledgertesting.TestConsensusRange(t, 36, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
@@ -255,8 +255,7 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	ledgertesting.TestConsensusRange(t, 36, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 

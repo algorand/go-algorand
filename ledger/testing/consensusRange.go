@@ -94,6 +94,7 @@ func TestConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, v
 	if stop == 0 { // Treat 0 as "future"
 		stop = len(consensusByNumber) - 1
 	}
+	require.LessOrEqual(t, start, stop)
 	for i := start; i <= stop; i++ {
 		var version string
 		if i == len(consensusByNumber)-1 {

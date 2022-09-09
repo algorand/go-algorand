@@ -3276,8 +3276,8 @@ func TestReloadWithTxns(t *testing.T) {
 }
 
 // TestEvalAppState ensures txns in a group can't violate app state schema
-// limits the test ensures that commitToParent -> applyChild copies child's cow
-// state usage counts into parent and the usage counts correctly propagated from
+// limits. It ensures that commitToParent -> applyChild copies child's cow state
+// usage counts into parent and the usage counts are correctly propagated from
 // parent cow to child cow and back. When limits are not violated, the test
 // ensures that the updates are correct.
 func TestEvalAppState(t *testing.T) {
