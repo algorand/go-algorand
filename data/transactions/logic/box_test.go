@@ -345,7 +345,6 @@ func TestBoxTotals(t *testing.T) {
 	                  acct_params_get AcctTotalBoxes; pop; !; `, ep)
 	// Create a 31 byte box with a 4 byte name
 	logic.TestApp(t, `byte "self"; int 31; box_create`, ep)
-	fmt.Printf("%+v\n", ep.Ledger)
 	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
 	                  acct_params_get AcctTotalBoxes; pop; int 1; ==`, ep)
 	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;

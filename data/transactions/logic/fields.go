@@ -1205,7 +1205,7 @@ const (
 	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
 	AcctAuthAddr
 
-	// AcctTotalExtraAppPages is the extra ocde pages across all apps
+	// AcctTotalExtraAppPages is the extra code pages across all apps
 	AcctTotalExtraAppPages
 
 	// AcctTotalAppsCreated is the number of apps created by this account
@@ -1258,12 +1258,12 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 
 	// expose (most of) the components of min balance
 	{AcctTotalExtraAppPages, StackUint64, 8, "The number of extra app code pages used by this account."},
-	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created this account."},
+	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created by this account."},
 	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},
 	{AcctTotalAssetsCreated, StackUint64, 8, "The number of existing ASAs created by this account."},
-	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account."},
+	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
-	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes in this account's app's boxes."},
+	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {
