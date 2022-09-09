@@ -915,22 +915,14 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
-	numOffsets, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return err
-	}
-
-	if len(args)-1 != int(numOffsets) {
-		return ops.errorf("switch operation requires %d labels but contains %d", numOffsets, len(args)-1)
-	}
-
+	numOffsets := uint64(len(args))
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
-	vlen := binary.PutUvarint(scratch[:], numOffsets)
+	vlen := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:vlen])
 	opEndPos := ops.pending.Len() + 2*int(numOffsets)
-	for i := 1; i <= int(numOffsets); i++ {
-		ops.referToLabel(ops.pending.Len(), args[i], opEndPos)
+	for _, arg := range args {
+		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
 		// zero bytes will get replaced with actual offset in resolveLabels()
 		ops.pending.WriteByte(0)
 		ops.pending.WriteByte(0)
@@ -2411,7 +2403,6 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 				labels = append(labels, label)
 			}
-			out += strconv.Itoa(len(targets)) + " "
 			out += strings.Join(labels, " ")
 			pc = nextpc
 		default:

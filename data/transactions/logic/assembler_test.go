@@ -398,7 +398,7 @@ replace3
 const v8Nonsense = v7Nonsense + pairingNonsense + `
 switch_label0:
 pushint 1
-switchi 2 switch_label0 switch_label1
+switchi switch_label0 switch_label1
 switch_label1:
 pushint 1
 `
@@ -1558,7 +1558,6 @@ txna ClearStateProgramPages 0
 	}
 	ops := testProg(t, text, AssemblerMaxVersion)
 	t2, err := Disassemble(ops.Program)
-	fmt.Println(t2)
 	require.Equal(t, text, t2)
 	require.NoError(t, err)
 }
@@ -2772,20 +2771,10 @@ func TestAssembleSwitch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// fail when wrong number of targets are present
+	// fail when target doesn't correspond to existing label
 	source := `
 	pushint 1
-	switchi 2 label1 label2 label3
-	label1:
-	label2:
-	label3:
-	`
-	testProg(t, source, 8, NewExpect(3, "switch operation requires 2 labels but contains 3"))
-
-	// fail when target doesn't correspond to existing label
-	source = `
-	pushint 1
-	switchi 2 label1 label2
+	switchi label1 label2
 	label1:
 	`
 	testProg(t, source, 8, NewExpect(3, "reference to undefined label \"label2\""))
@@ -2793,7 +2782,7 @@ func TestAssembleSwitch(t *testing.T) {
 	// confirm size of varuint list size
 	source = `
 	pushint 1
-	switchi 2 label1 label2
+	switchi label1 label2
 	label1:
 	label2:
 	`
@@ -2815,9 +2804,9 @@ func TestAssembleSwitch(t *testing.T) {
 
 	source = fmt.Sprintf(`
 	pushint 1
-	switchi %d %s
+	switchi %s
 	%s
-	`, (1 << 9), strings.Join(labelReferences, " "), strings.Join(labels, "\n"))
+	`, strings.Join(labelReferences, " "), strings.Join(labels, "\n"))
 	ops, err = AssembleStringWithVersion(source, 8)
 	require.NoError(t, err)
 	val, bytesUsed = binary.Uvarint(ops.Program[4:])
@@ -2827,7 +2816,7 @@ func TestAssembleSwitch(t *testing.T) {
 	// allow duplicate label reference
 	source = `
 	pushint 1
-	switchi 2 label1 label1
+	switchi label1 label1
 	label1:
 	`
 	testProg(t, source, 8)

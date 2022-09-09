@@ -5540,7 +5540,7 @@ int 1
 dup
 int 1
 -
-switchi 2 start end
+switchi start end
 err
 end:
 pop
@@ -5550,7 +5550,7 @@ int 1
 	// test code fails when target index is out of bounds
 	testPanics(t, `
 int 2
-switchi 2 start end
+switchi start end
 err
 start:
 end:
