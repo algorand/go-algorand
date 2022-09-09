@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -134,10 +135,13 @@ func setupEnv(dbTempDir, name string, numAccts int) (l0,
 	if err != nil {
 		return nil, nil, basics.Address{}, nil, nil, err
 	}
+	err = l1.AddBlock(vblk.Block(), cert)
+	if err != nil {
+		return nil, nil, basics.Address{}, nil, nil, err
+	}
 
 	return l0, l1, creator, accts, aIdxs, nil
 }
-
 
 func BenchmarkBlockValidationMix(b *testing.B) {
 	numAssets := 10000
@@ -147,7 +151,6 @@ func BenchmarkBlockValidationMix(b *testing.B) {
 func BenchmarkBlockValidationPayments(b *testing.B) {
 	benchmarkBlockValidationMix(b, 0)
 }
-
 
 func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 	l0, l1, creator, accts, aIdxs, err :=
@@ -160,6 +163,9 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 	var txPerBlock int
 	var numAss, numPay int
 	fmt.Printf("Preparing transactions and adding the blocks (/%d): ", numBlocks)
+	ss1 := float64(0)
+	s2 := time.Now()
+
 	for i := 0; i < numBlocks; i++ {
 		// Construct evaluator for next block
 		prev, err := l0.BlockHdr(basics.Round(i + 2))
@@ -192,8 +198,9 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 			var stxn transactions.SignedTxn
 			stxn.Txn = tx
 			stxn.Sig = crypto.Signature{1}
+			s1 := time.Now()
 			err = eval.Transaction(stxn, transactions.ApplyData{})
-
+			ss1 += time.Since(s1).Seconds()
 			// check if block is full
 			if err == ledgercore.ErrNoSpace {
 				txPerBlock += eval.PaySetSize()
@@ -202,21 +209,23 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 				require.NoError(b, err)
 			}
 			numPay++
-
 		}
 		vblk, err := eval.GenerateBlock()
 		require.NoError(b, err)
 		err = l0.AddBlock(vblk.Block(), cert)
 		require.NoError(b, err)
+		blocks = append(blocks, vblk.Block())
 		if i*10%numBlocks == 0 {
 			fmt.Printf("%d ", i)
 		}
 	}
-	fmt.Printf("\n")
+	fmt.Printf("\n%s sec total (eval: %fsec)", time.Since(s2).String(), ss1)
+
 	b.Logf("built %d blocks, each with %d txns: %d assets %d pay", numBlocks, txPerBlock/numBlocks, numAss/numBlocks, numPay/numBlocks)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
+	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range blocks {
 		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
@@ -224,6 +233,7 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
+	fmt.Printf("%s sec for %d block(s)\n", time.Since(tt).String(), numBlocks)
 }
 
 func createPaymentTransaction(
