@@ -69,7 +69,7 @@ func setupEnv(dbTempDir, name string, numAccts int) (l0,
 	}
 
 	// open ledger
-	const inMem = true
+	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l0, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
