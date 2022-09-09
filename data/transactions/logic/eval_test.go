@@ -4681,9 +4681,11 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
 	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
+	testPanics(t, "int 65; bzero; byte 0x01; b/; int 1; return", 4)
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
+	testPanics(t, "int 65; bzero; byte 0x10; b%", 4)
 
 	// Even 128 byte outputs are ok
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
@@ -4708,6 +4710,7 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b<=", 4)
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
 	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 
@@ -4716,6 +4719,7 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>=", 4)
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b>=", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
@@ -4726,6 +4730,7 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
 	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b!=", 4)
 }
 
 func TestBytesBits(t *testing.T) {
