@@ -627,6 +627,7 @@ var OpSpecs = []OpSpec{
 	{0xf2, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i")},
 	{0xf3, "pushn", opPushN, proto(":", "", "[N zeros]"), fpVersion, stacky(typePushN, "n").trust()},
 	{0xf4, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, stacky(typePopN, "n").trust()},
+	{0xf5, "dupn", opDupN, proto("a:", "", "A [N copies of A]"), fpVersion, stacky(typePushN, "n").trust()},
 }
 
 type sortByOpcode []OpSpec

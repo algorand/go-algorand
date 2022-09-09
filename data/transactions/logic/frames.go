@@ -101,3 +101,14 @@ func opPopN(cx *EvalContext) error {
 	cx.stack = cx.stack[:top] // pop value
 	return nil
 }
+func opDupN(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // value
+
+	n := int(cx.program[cx.pc+1])
+	copies := make([]stackValue, n)
+	for i := 0; i < n; i++ {
+		copies[i] = cx.stack[last]
+	}
+	cx.stack = append(cx.stack, copies...)
+	return nil
+}
