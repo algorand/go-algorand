@@ -163,8 +163,10 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 	var txPerBlock int
 	var numAss, numPay int
 	fmt.Printf("Preparing transactions and adding the blocks (/%d): ", numBlocks)
-	ss1 := float64(0)
+	evalTime := float64(0)
+	addBlockTime := float64(0)
 	s2 := time.Now()
+	s3 := time.Now()
 
 	for i := 0; i < numBlocks; i++ {
 		// Construct evaluator for next block
@@ -198,9 +200,9 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 			var stxn transactions.SignedTxn
 			stxn.Txn = tx
 			stxn.Sig = crypto.Signature{1}
-			s1 := time.Now()
+			et := time.Now()
 			err = eval.Transaction(stxn, transactions.ApplyData{})
-			ss1 += time.Since(s1).Seconds()
+			evalTime += time.Since(et).Seconds()
 			// check if block is full
 			if err == ledgercore.ErrNoSpace {
 				txPerBlock += eval.PaySetSize()
@@ -212,14 +214,17 @@ func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
 		}
 		vblk, err := eval.GenerateBlock()
 		require.NoError(b, err)
+		abt := time.Now()
 		err = l0.AddBlock(vblk.Block(), cert)
+		addBlockTime += time.Since(abt).Seconds()
 		require.NoError(b, err)
 		blocks = append(blocks, vblk.Block())
 		if i*10%numBlocks == 0 {
-			fmt.Printf("%d ", i)
+			fmt.Printf("%d%% (%.1fsec) ", i*100/numBlocks, time.Since(s3).Seconds())
+			s3 = time.Now()
 		}
 	}
-	fmt.Printf("\n%s sec total (eval: %fsec)", time.Since(s2).String(), ss1)
+	fmt.Printf("\n%s sec total (eval: %.1fsec  addBlock: %.1fsec)\n", time.Since(s2).String(), evalTime, addBlockTime)
 
 	b.Logf("built %d blocks, each with %d txns: %d assets %d pay", numBlocks, txPerBlock/numBlocks, numAss/numBlocks, numPay/numBlocks)
 
