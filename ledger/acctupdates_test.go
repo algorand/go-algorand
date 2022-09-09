@@ -387,7 +387,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 		}
 
 		for _, rec := range rdelta.GetAllAppResources() {
-			key := ledgercore.AccountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			key := ledgercore.AccountCreatable{Address: rec.Addr, Index: basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
 			entry.resource.AppLocalState = rec.State.LocalState
 			entry.resource.AppParams = rec.Params.Params
@@ -395,7 +395,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			resources[key] = entry
 		}
 		for _, rec := range rdelta.GetAllAssetResources() {
-			key := ledgercore.AccountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			key := ledgercore.AccountCreatable{Address: rec.Addr, Index: basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
 			entry.resource.AssetHolding = rec.Holding.Holding
 			entry.resource.AssetParams = rec.Params.Params

@@ -173,7 +173,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 		encoded, _ := tail.Encode()
 		roundData = append(roundData, encoded)
 	}
-	err = accountdb.TxtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	err = accountdb.TxTailNewRound(context.Background(), tx, startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
 	return nil

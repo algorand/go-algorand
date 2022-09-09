@@ -48,7 +48,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-// accountsDbQueries is used to cache a prepared SQL statement to look up
+// AccountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type AccountsDbQueries struct {
 	listCreatablesStmt     *sql.Stmt
@@ -58,6 +58,8 @@ type AccountsDbQueries struct {
 	lookupCreatorStmt      *sql.Stmt
 }
 
+// OnlineAccountsDbQueries is used to cache a prepared SQL statement to look up
+// the state of a single online account.
 type OnlineAccountsDbQueries struct {
 	lookupOnlineStmt        *sql.Stmt
 	lookupOnlineHistoryStmt *sql.Stmt
@@ -248,6 +250,7 @@ func (pad persistedAccountData) before(other *PersistedAccountData) bool {
 	return pad.round < (*other).Round()
 }
 
+// PersistedOnlineAccountData is exported view of persistedOnlineAccountData
 type PersistedOnlineAccountData interface {
 	Addr() basics.Address
 	AccountData() *BaseOnlineAccountData
@@ -296,10 +299,11 @@ func (poad persistedOnlineAccountData) UpdRound() basics.Round {
 
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
-func (pac persistedOnlineAccountData) before(other *PersistedOnlineAccountData) bool {
-	return pac.round < (*other).Round()
+func (poad persistedOnlineAccountData) before(other *PersistedOnlineAccountData) bool {
+	return poad.round < (*other).Round()
 }
 
+// PersistedResourcesData is exported view of persistedResourcesData
 type PersistedResourcesData interface {
 	Addrid() int64
 	Aidx() basics.CreatableIndex
@@ -307,7 +311,6 @@ type PersistedResourcesData interface {
 	Round() basics.Round
 	before(other *PersistedResourcesData) bool
 	AccountResource() ledgercore.AccountResource
-	SetRoundTest(round basics.Round)
 }
 
 //msgp:ignore PersistedResourcesData
@@ -376,15 +379,17 @@ func (prd persistedResourcesData) AccountResource() ledgercore.AccountResource {
 	return ret
 }
 
-func (prd persistedResourcesData) SetRoundTest(round basics.Round) {
+func (prd *persistedResourcesData) SetRoundTest(round basics.Round) {
 	prd.round = round
 }
 
+// UpdatedAccounts is an exported view of a list of persistedAccountData
 type UpdatedAccounts struct {
 	data  []persistedAccountData
 	Count int
 }
 
+// UpdatedOnlineAccounts is an exported view of a list of persistedOnlineAccountData
 type UpdatedOnlineAccounts struct {
 	Data  []persistedOnlineAccountData
 	Count int
@@ -457,20 +462,20 @@ type CatchpointState string
 const (
 	// CatchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
 	CatchpointStateLastCatchpoint = CatchpointState("lastCatchpoint")
-	// This state variable is set to 1 if catchpoint's first stage is unfinished,
+	// CatchpointStateWritingFirstStageInfo is set to 1 if catchpoint's first stage is unfinished,
 	// and is 0 otherwise. Used to clear / restart the first stage after a crash.
 	// This key is set in the same db transaction as the account updates, so the
 	// unfinished first stage corresponds to the current db round.
 	CatchpointStateWritingFirstStageInfo = CatchpointState("writingFirstStageInfo")
-	// If there is an unfinished catchpoint, this state variable is set to
-	// the catchpoint's round. Otherwise, it is set to 0.
+	// CatchpointStateWritingCatchpoint is set to the catchpoint's round if there is an unfinished catchpoint.
+	// Otherwise, it is set to 0.
 	// DEPRECATED.
 	CatchpointStateWritingCatchpoint = CatchpointState("writingCatchpoint")
-	// catchpointCatchupState is the state of the catchup process. The variable is stored only during the catchpoint catchup process, and removed afterward.
+	// CatchpointStateCatchupState is the state of the catchup process. The variable is stored only during the catchpoint catchup process, and removed afterward.
 	CatchpointStateCatchupState = CatchpointState("catchpointCatchupState")
 	// CatchpointStateCatchupLabel is the label to which the currently catchpoint catchup process is trying to catchup to.
 	CatchpointStateCatchupLabel = CatchpointState("catchpointCatchupLabel")
-	// catchpointCatchupBlockRound is the block round that is associated with the current running catchpoint catchup.
+	// CatchpointStateCatchupBlockRound is the block round that is associated with the current running catchpoint catchup.
 	CatchpointStateCatchupBlockRound = CatchpointState("catchpointCatchupBlockRound")
 	// CatchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
 	// equal to CatchpointStateCatchupBlockRound - 320.
@@ -501,10 +506,12 @@ type NormalizedAccountBalance struct {
 	encodedResources map[basics.CreatableIndex][]byte
 }
 
+// Address returns the address
 func (n *NormalizedAccountBalance) Address() basics.Address {
 	return n.address
 }
 
+// ResourcesCount returns the number of resources of each type in the resources map
 func (n *NormalizedAccountBalance) ResourcesCount() (totalAppParams uint64, totalAppLocalStates uint64, totalAssetParams uint64, totalAssets uint64) {
 	for _, resData := range n.resources {
 		if resData.IsApp() && resData.IsOwning() {
@@ -523,6 +530,7 @@ func (n *NormalizedAccountBalance) ResourcesCount() (totalAppParams uint64, tota
 	return
 }
 
+// ExpectedResourcesCount returns the expected number of resources of each type
 func (n *NormalizedAccountBalance) ExpectedResourcesCount() (totalAppParams uint64, totalAppLocalStates uint64, totalAssetParams uint64, totalAssets uint64) {
 	totalAppParams = n.accountData.TotalAppParams
 	totalAppLocalStates = n.accountData.TotalAppLocalStates
@@ -531,6 +539,7 @@ func (n *NormalizedAccountBalance) ExpectedResourcesCount() (totalAppParams uint
 	return
 }
 
+// HasCreatables returns whether the account has any creatables
 func (n *NormalizedAccountBalance) HasCreatables() bool {
 	for _, res := range n.resources {
 		if res.IsOwning() {
@@ -540,6 +549,7 @@ func (n *NormalizedAccountBalance) HasCreatables() bool {
 	return false
 }
 
+// AccountHashesLen returns the number of account hashes
 func (n *NormalizedAccountBalance) AccountHashesLen() int {
 	return len(n.accountHashes)
 }
@@ -656,7 +666,7 @@ func (ad *AccountDelta) NumDeltas() int {
 	return ad.nAcctDeltas
 }
 
-// NumDeltas returns number of account deltas
+// Address returns the address
 func (ad *AccountDelta) Address() basics.Address {
 	return ad.address
 }
@@ -846,10 +856,12 @@ func (a *CompactResourcesDeltas) get(addr basics.Address, index basics.Creatable
 	return a.deltas[idx], idx
 }
 
+// Len returns the number of deltas
 func (a *CompactResourcesDeltas) Len() int {
 	return len(a.deltas)
 }
 
+// GetByIdx returns the delta at a particular index
 func (a *CompactResourcesDeltas) GetByIdx(i int) ResourceDelta {
 	return a.deltas[i]
 }
@@ -992,14 +1004,17 @@ func (a *CompactAccountDeltas) get(addr basics.Address) (AccountDelta, int) {
 	return a.deltas[idx], idx
 }
 
+// Len returns the number of deltas
 func (a *CompactAccountDeltas) Len() int {
 	return len(a.deltas)
 }
 
+// GetByIdx returns the delta at a particular index
 func (a *CompactAccountDeltas) GetByIdx(i int) AccountDelta {
 	return a.deltas[i]
 }
 
+// KnownAddresses returns a map of addresses in the deltas to the ids
 func (a *CompactAccountDeltas) KnownAddresses() map[basics.Address]int64 {
 	knownAddresses := make(map[basics.Address]int64, a.Len())
 	for _, delta := range a.deltas {
@@ -1042,15 +1057,17 @@ func (c *OnlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound
 	c.newStatus = append(c.newStatus, acctDelta.Status)
 }
 
+// NumDeltas returns nOnlineAcctDeltas
 func (c *OnlineAccountDelta) NumDeltas() int {
 	return c.nOnlineAcctDeltas
 }
 
+// Address returns the address
 func (c *OnlineAccountDelta) Address() basics.Address {
 	return c.address
 }
 
-// MakeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// MakeCompactOnlineAccountDeltas takes an array of account OnlineAccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the NAcctDeltas field of the AccountDeltaCount/ModifiedCreatable.
 func MakeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts LRUOnlineAccounts) (outAccountDeltas CompactOnlineAccountDeltas) {
@@ -1151,10 +1168,12 @@ func (a *CompactOnlineAccountDeltas) get(addr basics.Address) (OnlineAccountDelt
 	return a.deltas[idx], idx
 }
 
+// Len returns the number of deltas
 func (a *CompactOnlineAccountDeltas) Len() int {
 	return len(a.deltas)
 }
 
+// GetByIdx returns the delta at a particular index
 func (a *CompactOnlineAccountDeltas) GetByIdx(i int) OnlineAccountDelta {
 	return a.deltas[i]
 }
@@ -1399,6 +1418,7 @@ func ApplyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	return
 }
 
+// GetCatchpoint fetches the catchpoint for a specific round from the db.
 func GetCatchpoint(ctx context.Context, q db.Queryable, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = q.QueryRowContext(ctx, "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
@@ -1542,6 +1562,7 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// AccountsCreateOnlineAccountsTable creates the onlineaccounts table in the database.
 func AccountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 	var exists bool
 	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('onlineaccounts') WHERE name='address'").Scan(&exists)
@@ -1561,6 +1582,7 @@ func AccountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// AccountsCreateTxTailTable creates the txtail table in the database.
 func AccountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
 		_, err = tx.ExecContext(ctx, stmt)
@@ -1653,10 +1675,12 @@ func (ba *BaseAccountData) IsEmpty() bool {
 		ba.BaseVotingData.IsEmpty()
 }
 
+// NormalizedOnlineBalance returns the normalized balance
 func (ba *BaseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
 
+// SetCoreAccountData initialized BaseAccountData from a ledgercore.AccountData
 func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
@@ -1674,6 +1698,7 @@ func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.BaseVotingData.SetCoreAccountData(ad)
 }
 
+// SetCoreAccountData initializes BaseAccountData from a basics.AccountData
 func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
@@ -1696,6 +1721,7 @@ func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.BaseVotingData.VoteKeyDilution = ad.VoteKeyDilution
 }
 
+// GetLedgerCoreAccountData gets ledgercore.AccountData from BaseAccountData
 func (ba *BaseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	return ledgercore.AccountData{
 		AccountBaseData: ba.GetLedgerCoreAccountBaseData(),
@@ -1703,6 +1729,7 @@ func (ba *BaseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	}
 }
 
+// GetLedgerCoreAccountBaseData gets ledgercore.AccountBaseData from BaseAccountData
 func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
 	return ledgercore.AccountBaseData{
 		Status:             ba.Status,
@@ -1722,6 +1749,7 @@ func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 	}
 }
 
+// GetLedgerCoreAccountBaseData gets ledgercore.VotingData from BaseAccountData
 func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	return ledgercore.VotingData{
 		VoteID:          ba.VoteID,
@@ -1733,6 +1761,7 @@ func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 	}
 }
 
+// GetLedgerCoreAccountBaseData gets basics.AccountData from BaseAccountData
 func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
 		Status:             ba.Status,
@@ -1816,10 +1845,12 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 	}
 }
 
+// NormalizedOnlineBalance returns the normalized balance
 func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
 }
 
+// SetCoreAccountData initializes BaseOnlineAccountData from ledgercore.AccountData
 func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bo.BaseVotingData.SetCoreAccountData(ad)
 
@@ -2396,7 +2427,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 			tailRounds = append(tailRounds, encodedTail)
 		}
 
-		return TxtailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
+		return TxTailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
 	})
 
 	return err
@@ -2674,11 +2705,13 @@ func AccountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	}
 }
 
+// ResetAccountHashes resets accounthashes table
 func ResetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, `DELETE FROM accounthashes`)
 	return
 }
 
+// AccountsReset resets all account related tables
 func AccountsReset(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
 		_, err := tx.ExecContext(ctx, stmt)
@@ -2710,6 +2743,7 @@ func AccountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, e
 	return
 }
 
+// AccountsInitDbQueries initializes the prepared account db queries
 func AccountsInitDbQueries(q db.Queryable) (*AccountsDbQueries, error) {
 	var err error
 	qs := &AccountsDbQueries{}
@@ -2742,6 +2776,7 @@ func AccountsInitDbQueries(q db.Queryable) (*AccountsDbQueries, error) {
 	return qs, nil
 }
 
+// OnlineAccountsInitDbQueries initializes the prepared online account db queries
 func OnlineAccountsInitDbQueries(r db.Queryable) (*OnlineAccountsDbQueries, error) {
 	var err error
 	qs := &OnlineAccountsDbQueries{}
@@ -2796,6 +2831,7 @@ func (qs *AccountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
+// LookupCreator returns the creator for a particular creatable
 func (qs *AccountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
@@ -2820,6 +2856,7 @@ func (qs *AccountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
+// LookupResources returns the resource data for a creatable
 func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
@@ -2856,6 +2893,7 @@ func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 	return
 }
 
+// LookupAllResources returns all resource data for an address
 func (qs *AccountsDbQueries) LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for all resources
@@ -2901,7 +2939,7 @@ func (qs *AccountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 	return
 }
 
-// lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
+// Lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
 func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data persistedAccountData, err error) {
@@ -2931,6 +2969,7 @@ func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data persistedAccountD
 	return
 }
 
+// LookupOnline returns the online account data for an address and round
 func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
@@ -2960,6 +2999,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.
 	return
 }
 
+// LookupOnlineTotalsHistory returns the online total at a certain round
 func (qs *OnlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
 	data := ledgercore.OnlineRoundParamsData{}
 	err := db.Retry(func() error {
@@ -2978,6 +3018,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
+// LookupOnlineHistory returns history of online account data for an address
 func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
@@ -3005,6 +3046,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 	return
 }
 
+// StoreCatchpoint stores a catchpoint into the db
 func StoreCatchpoint(ctx context.Context, e db.Executable, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		query := "DELETE FROM storedcatchpoints WHERE round=?"
@@ -3020,6 +3062,7 @@ func StoreCatchpoint(ctx context.Context, e db.Executable, round basics.Round, f
 	return
 }
 
+// GetOldestCatchpointFiles gets the oldest catchpoint files
 func GetOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
@@ -3048,6 +3091,7 @@ func GetOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int
 	return
 }
 
+// ReadCatchpointStateUint64 returns the intval of a catchpoint
 func ReadCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName CatchpointState) (val uint64, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT intval FROM catchpointstate WHERE id=?"
@@ -3067,6 +3111,7 @@ func ReadCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName Ca
 	return val, err
 }
 
+// WriteCatchpointStateUint64 writes intval of a catchpoint
 func WriteCatchpointStateUint64(ctx context.Context, e db.Executable, stateName CatchpointState, setValue uint64) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == 0 {
@@ -3081,6 +3126,7 @@ func WriteCatchpointStateUint64(ctx context.Context, e db.Executable, stateName 
 	return err
 }
 
+// ReadCatchpointStateString returns the catchpoint string
 func ReadCatchpointStateString(ctx context.Context, q db.Queryable, stateName CatchpointState) (val string, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT strval FROM catchpointstate WHERE id=?"
@@ -3101,6 +3147,7 @@ func ReadCatchpointStateString(ctx context.Context, q db.Queryable, stateName Ca
 	return val, err
 }
 
+// WriteCatchpointStateString writes the catchpoint string
 func WriteCatchpointStateString(ctx context.Context, e db.Executable, stateName CatchpointState, setValue string) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == "" {
@@ -3121,6 +3168,7 @@ func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName C
 	return err
 }
 
+// Close closes the db queries
 func (qs *AccountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
@@ -3137,6 +3185,7 @@ func (qs *AccountsDbQueries) Close() {
 	}
 }
 
+// Close closes the db queries
 func (qs *OnlineAccountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.lookupOnlineStmt,
@@ -3214,6 +3263,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 	return res, rows.Err()
 }
 
+// OnlineAccountsAll returns all online account data
 func OnlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]PersistedOnlineAccountData, error) {
 	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
@@ -3255,6 +3305,7 @@ func OnlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]PersistedOnlineAccount
 	return result, nil
 }
 
+// AccountsTotals returns account totals
 func AccountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
@@ -3269,6 +3320,7 @@ func AccountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool)
 	return
 }
 
+// AccountsPutTotals write account totals to db
 func AccountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
 	if catchpointStaging {
@@ -3283,6 +3335,7 @@ func AccountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
+// AccountsOnlineRoundParams returns recent online round params
 func AccountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
 	rows, err := tx.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
 	if err != nil {
@@ -3308,6 +3361,7 @@ func AccountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 	return
 }
 
+// AccountsPutOnlineRoundParams writes online round params to db
 func AccountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
 	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
 	if err != nil {
@@ -3323,6 +3377,7 @@ func AccountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore
 	return nil
 }
 
+// AccountsPruneOnlineRoundParams prunes outdated online round params from db
 func AccountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
 	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
 		deleteBeforeRound,
@@ -3553,7 +3608,7 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 	return
 }
 
-// AccountsNewRound is a convenience wrapper for AccountsNewRoundImpl
+// AccountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func AccountsNewRound(
 	tx *sql.Tx,
 	updates CompactAccountDeltas, resources CompactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -3580,6 +3635,7 @@ func AccountsNewRound(
 	return
 }
 
+// OnlineAccountsNewRound is a convenience wrapper for onlineAccountsNewRoundImpl
 func OnlineAccountsNewRound(
 	tx *sql.Tx,
 	updates CompactOnlineAccountDeltas,
@@ -4025,7 +4081,7 @@ func OnlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
 	return onlineAccountsDeleteByRowIDs(tx, rowids)
 }
 
-// updates the round number associated with the current account data.
+// UpdateAccountsRound updates the round number associated with the current account data.
 func UpdateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
@@ -4055,7 +4111,7 @@ func UpdateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 	return
 }
 
-// updates the round number associated with the hash of current account data.
+// UpdateAccountsHashRound updates the round number associated with the hash of current account data.
 func UpdateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
 	res, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
@@ -4893,6 +4949,7 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	return
 }
 
+// LookupAccountAddressFromAddressID returns address given address id
 func LookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
 	var addrbuf []byte
 	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
@@ -5001,6 +5058,7 @@ func (t *TxTailRound) Encode() ([]byte, crypto.Digest) {
 	return tailData, hash
 }
 
+// TxTailRoundFromBlock returns TxTailRound from a block
 func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
@@ -5027,7 +5085,8 @@ func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 	return tail, nil
 }
 
-func TxtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
+// TxTailNewRound process a new round for the TxTail
+func TxTailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(rnd, data) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -5045,6 +5104,7 @@ func TxtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, rou
 	return err
 }
 
+// LoadTxTail fetches txtail from the db
 func LoadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := tx.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
 	if err != nil {
@@ -5096,6 +5156,7 @@ type CatchpointFirstStageInfo struct {
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
+// InsertOrReplaceCatchpointFirstStageInfo puts CatchpointFirstStageInfo into the db
 func InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *CatchpointFirstStageInfo) error {
 	infoSerialized := protocol.Encode(info)
 	f := func() error {
@@ -5106,6 +5167,7 @@ func InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executabl
 	return db.Retry(f)
 }
 
+// SelectCatchpointFirstStageInfo fetches CatchpointFirstStageInfo from the db
 func SelectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
@@ -5135,6 +5197,7 @@ func SelectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round b
 	return res, true, nil
 }
 
+// SelectOldCatchpointFirstStageInfoRounds fetches rounds with old catchpoints
 func SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
 	var res []basics.Round
 
@@ -5166,6 +5229,7 @@ func SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable
 	return res, nil
 }
 
+// DeleteOldCatchpointFirstStageInfo deletes a CatchpointFirstStageInfo
 func DeleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, maxRoundToDelete basics.Round) error {
 	f := func() error {
 		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
@@ -5175,6 +5239,7 @@ func DeleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, max
 	return db.Retry(f)
 }
 
+// InsertUnfinishedCatchpoint writes an unfinished catchpoint to the db
 func InsertUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round, blockHash crypto.Digest) error {
 	f := func() error {
 		query := "INSERT INTO unfinishedcatchpoints(round, blockhash) VALUES(?, ?)"
@@ -5189,6 +5254,7 @@ type unfinishedCatchpointRecord struct {
 	BlockHash crypto.Digest
 }
 
+// SelectUnfinishedCatchpoints fetches an unfinished catchpoint from the db
 func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinishedCatchpointRecord, error) {
 	var res []unfinishedCatchpointRecord
 
@@ -5222,6 +5288,7 @@ func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 	return res, nil
 }
 
+// DeleteUnfinishedCatchpoint deletes an unfinished catchpoint from the db
 func DeleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round) error {
 	f := func() error {
 		query := "DELETE FROM unfinishedcatchpoints WHERE round = ?"
@@ -5316,7 +5383,7 @@ func GenerateCommitDeltasTest(accessor db.Accessor, proto config.ConsensusParams
 	})
 }
 
-// the VacuumDatabase performs a full vacuum of the accounts database.
+// VacuumDatabase performs a full vacuum of the accounts database.
 func VacuumDatabase(ctx context.Context, wdb db.Accessor, log logging.Logger) (err error) {
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

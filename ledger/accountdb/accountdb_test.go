@@ -1070,7 +1070,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.Address)
 	a.Equal(sample1, data)
 
-	sample2 := ResourceDelta{NewResource: resourcesData{Total: 456}, Address: addr, OldResource:persistedResourcesData{aidx: 1}}
+	sample2 := ResourceDelta{NewResource: resourcesData{Total: 456}, Address: addr, OldResource: persistedResourcesData{aidx: 1}}
 	ad.upsert(sample2)
 	data, idx = ad.get(addr, 1)
 	a.NotEqual(-1, idx)
@@ -3596,7 +3596,7 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 		roundData[i-1] = protocol.Encode(&data)
 	}
 	forgetBefore := (endRound + 1).SubSaturate(retainSize)
-	err = TxtailNewRound(context.Background(), tx, startRound, roundData, forgetBefore)
+	err = TxTailNewRound(context.Background(), tx, startRound, roundData, forgetBefore)
 	require.NoError(t, err)
 
 	data, _, baseRound, err := LoadTxTail(context.Background(), tx, endRound)

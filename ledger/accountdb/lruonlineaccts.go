@@ -39,7 +39,7 @@ type LRUOnlineAccounts struct {
 	pendingWritesWarnThreshold int
 }
 
-// init initializes the lruAccounts for use.
+// Init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *LRUOnlineAccounts) Init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = newPersistedOnlineAccountList().allocateFreeNodes(pendingWrites)
@@ -49,7 +49,7 @@ func (m *LRUOnlineAccounts) Init(log logging.Logger, pendingWrites int, pendingW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the lruAccounts has for the given address.
+// Read the persistedAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
 func (m *LRUOnlineAccounts) Read(addr basics.Address) (data PersistedOnlineAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
@@ -58,7 +58,7 @@ func (m *LRUOnlineAccounts) Read(addr basics.Address) (data PersistedOnlineAccou
 	return persistedOnlineAccountData{}, false
 }
 
-// flushPendingWrites flushes the pending writes to the main lruAccounts cache.
+// FlushPendingWrites flushes the pending writes to the main lruAccounts cache.
 // thread locking semantics : write lock
 func (m *LRUOnlineAccounts) FlushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
@@ -104,7 +104,7 @@ func (m *LRUOnlineAccounts) Write(acctData PersistedOnlineAccountData) {
 	}
 }
 
-// Write a slice of persistedOnlineAccountData to the LRUOnlineAccounts cache.
+// WriteAccounts writes a slice of persistedOnlineAccountData to the LRUOnlineAccounts cache.
 // thread locking semantics : write lock
 func (m *LRUOnlineAccounts) WriteAccounts(updatedPersistedAccounts UpdatedOnlineAccounts) {
 	for _, persistedAcct := range updatedPersistedAccounts.Data {
@@ -112,7 +112,7 @@ func (m *LRUOnlineAccounts) WriteAccounts(updatedPersistedAccounts UpdatedOnline
 	}
 }
 
-// prune adjust the current size of the lruAccounts cache, by dropping the least
+// Prune adjust the current size of the lruAccounts cache, by dropping the least
 // recently used entries.
 // thread locking semantics : write lock
 func (m *LRUOnlineAccounts) Prune(newSize int) (removed int) {
