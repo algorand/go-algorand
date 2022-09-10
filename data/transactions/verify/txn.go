@@ -132,7 +132,7 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
-	batchVerifier := crypto.MakeBatchVerifier()
+	batchVerifier := crypto.MakeBatchVerifierWithHint(txnGroupSignatureHint(stxs))
 
 	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, ledger, batchVerifier); err != nil {
 		return nil, err
@@ -146,6 +146,17 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 		return nil, err
 	}
 
+	return
+}
+
+func txnGroupSignatureHint(stxs []transactions.SignedTxn) (count int) {
+	for i := range stxs {
+		if stxs[i].Sig != (crypto.Signature{}) {
+			count++
+		} else if !stxs[i].Msig.Blank() {
+			count += len(stxs[i].Msig.Subsigs)
+		}
+	}
 	return
 }
 
@@ -236,7 +247,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return logicSigBatchVerify(s, txnIdx, groupCtx)
+		return logicSigVerify(s, txnIdx, groupCtx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -244,7 +255,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
-	batchVerifier := crypto.MakeBatchVerifier()
+	batchVerifier := crypto.MakeBatchVerifierWithHint(logicSigSignatureHint(txn))
 
 	if err := LogicSigSanityCheckBatchVerify(txn, groupIndex, groupCtx, batchVerifier); err != nil {
 		return err
@@ -256,6 +267,13 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	}
 
 	return batchVerifier.Verify()
+}
+
+func logicSigSignatureHint(txn *transactions.SignedTxn) int {
+	if !txn.Lsig.Msig.Blank() {
+		return len(txn.Lsig.Msig.Subsigs)
+	}
+	return 1
 }
 
 // LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.
@@ -330,9 +348,8 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	return nil
 }
 
-// logicSigBatchVerify checks that the signature is valid, executing the program.
-// it is the caller responsibility to call batchVerifier.verify()
-func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+// logicSigVerify checks that the signature is valid, executing the program.
+func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err

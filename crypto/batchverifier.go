@@ -50,6 +50,10 @@ type BatchVerifier struct {
 
 const minBatchVerifierAlloc = 16
 
+// minBatchVerifierBatchSize sets a threshold for whether to use batch verification, or
+// one-by-one single verification.
+const minBatchVerifierBatchSize = 3
+
 // Batch verifications errors
 var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
@@ -112,8 +116,10 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 // Verify verifies that all the signatures are valid. in that case nil is returned
 // if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
+	if cnt := b.GetNumberOfEnqueuedSignatures(); cnt == 0 {
 		return ErrZeroTransactionInBatch
+	} else if cnt < minBatchVerifierBatchSize {
+		return b.verifyOneByOne()
 	}
 
 	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
@@ -125,6 +131,16 @@ func (b *BatchVerifier) Verify() error {
 	}
 	return ErrBatchVerificationFailed
 
+}
+
+func (b *BatchVerifier) verifyOneByOne() error {
+	for i := range b.messages {
+		verifier := b.publicKeys[i]
+		if !verifier.Verify(b.messages[i], b.signatures[i]) {
+			return ErrBatchVerificationFailed
+		}
+	}
+	return nil
 }
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
