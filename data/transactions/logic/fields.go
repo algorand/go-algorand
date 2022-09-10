@@ -1202,8 +1202,13 @@ const (
 	AcctBalance AcctParamsField = iota
 	// AcctMinBalance is algos needed for this accounts apps and assets
 	AcctMinBalance
-	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
+	// AcctAuthAddr is the rekeyed address if any, else ZeroAddress
 	AcctAuthAddr
+
+	// AcctTotalNumUint is the count of all uints from created global apps or opted in locals
+	AcctTotalNumUint
+	// AcctTotalNumByteSlice is the count of all byte slices from created global apps or opted in locals
+	AcctTotalNumByteSlice
 
 	// AcctTotalExtraAppPages is the extra code pages across all apps
 	AcctTotalExtraAppPages
@@ -1256,7 +1261,8 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctMinBalance, StackUint64, 6, "Minimum required balance for account, in microalgos"},
 	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
 
-	// expose (most of) the components of min balance
+	{AcctTotalNumUint, StackUint64, 8, "The total number of uint64 values allocated by this account in Global and Local States."},
+	{AcctTotalNumByteSlice, StackUint64, 8, "The total number of byte array values allocated by this account in Global and Local States."},
 	{AcctTotalExtraAppPages, StackUint64, 8, "The number of extra app code pages used by this account."},
 	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created by this account."},
 	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},

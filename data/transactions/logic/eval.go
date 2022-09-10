@@ -4367,6 +4367,10 @@ func opAcctParamsGet(cx *EvalContext) error {
 	case AcctAuthAddr:
 		value.Bytes = account.AuthAddr[:]
 
+	case AcctTotalNumUint:
+		value.Uint = uint64(account.TotalAppSchema.NumUint)
+	case AcctTotalNumByteSlice:
+		value.Uint = uint64(account.TotalAppSchema.NumByteSlice)
 	case AcctTotalExtraAppPages:
 		value.Uint = uint64(account.TotalExtraAppPages)
 

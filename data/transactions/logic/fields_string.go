@@ -183,19 +183,21 @@ func _() {
 	_ = x[AcctBalance-0]
 	_ = x[AcctMinBalance-1]
 	_ = x[AcctAuthAddr-2]
-	_ = x[AcctTotalExtraAppPages-3]
-	_ = x[AcctTotalAppsCreated-4]
-	_ = x[AcctTotalAppsOptedIn-5]
-	_ = x[AcctTotalAssetsCreated-6]
-	_ = x[AcctTotalAssets-7]
-	_ = x[AcctTotalBoxes-8]
-	_ = x[AcctTotalBoxBytes-9]
-	_ = x[invalidAcctParamsField-10]
+	_ = x[AcctTotalNumUint-3]
+	_ = x[AcctTotalNumByteSlice-4]
+	_ = x[AcctTotalExtraAppPages-5]
+	_ = x[AcctTotalAppsCreated-6]
+	_ = x[AcctTotalAppsOptedIn-7]
+	_ = x[AcctTotalAssetsCreated-8]
+	_ = x[AcctTotalAssets-9]
+	_ = x[AcctTotalBoxes-10]
+	_ = x[AcctTotalBoxBytes-11]
+	_ = x[invalidAcctParamsField-12]
 }
 
-const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
+const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNumUintAcctTotalNumByteSliceAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
 
-var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 59, 79, 99, 121, 136, 150, 167, 189}
+var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 226}
 
 func (i AcctParamsField) String() string {
 	if i < 0 || i >= AcctParamsField(len(_AcctParamsField_index)-1) {
