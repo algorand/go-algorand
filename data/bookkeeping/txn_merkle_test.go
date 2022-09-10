@@ -33,7 +33,10 @@ import (
 func TestTxnMerkleElemHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var tme txnMerkleElem
+	tme := txnMerkleElem{
+		txn:  &transactions.Transaction{},
+		stib: &transactions.SignedTxnInBlock{},
+	}
 	crypto.RandBytes(tme.stib.SignedTxn.Txn.Header.Sender[:])
 	require.Equal(t, crypto.HashObj(&tme), tme.Hash())
 }
