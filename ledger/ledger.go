@@ -762,6 +762,7 @@ func (l *Ledger) BlockDB() db.Pair {
 	return l.blockDBs
 }
 
+// TrackerLog returns the ledger's log
 func (l *Ledger) TrackerLog() logging.Logger {
 	return l.log
 }

@@ -311,6 +311,7 @@ type PersistedResourcesData interface {
 	Round() basics.Round
 	before(other *PersistedResourcesData) bool
 	AccountResource() ledgercore.AccountResource
+	WithRound(round basics.Round) persistedResourcesData
 }
 
 //msgp:ignore PersistedResourcesData
@@ -379,8 +380,10 @@ func (prd persistedResourcesData) AccountResource() ledgercore.AccountResource {
 	return ret
 }
 
-func (prd *persistedResourcesData) SetRoundTest(round basics.Round) {
+// Used for testing only
+func (prd persistedResourcesData) WithRound(round basics.Round) persistedResourcesData {
 	prd.round = round
+	return prd
 }
 
 // UpdatedAccounts is an exported view of a list of persistedAccountData
