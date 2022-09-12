@@ -238,6 +238,9 @@ func cleanupSqliteDb(t *testing.T, path string) {
 
 func TestDBConcurrencyRW(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Skip()
+	}
 
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -491,6 +494,10 @@ func TestLockingTableWhileWritingJournal(t *testing.T) {
 func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
 
 	dbParams := []string{"_secure_delete=on"} // not required but used in ErasableAccessor, so I'd like it to be tested here as well
 	if useWAL {
