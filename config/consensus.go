@@ -1235,7 +1235,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
 	// Boxes (unlimited global storage)
-	vFuture.MaxBoxSize = 4 * 8096
+	vFuture.MaxBoxSize = 32768
 	vFuture.BoxFlatMinBalance = 2500
 	vFuture.BoxByteMinBalance = 400
 	vFuture.MaxAppBoxReferences = 8
