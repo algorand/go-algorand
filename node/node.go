@@ -297,11 +297,13 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
-		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger, node.config)
+		accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
+		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, accessor, node.config)
 		if err != nil {
 			log.Errorf("unable to create catchpoint catchup service: %v", err)
 			return nil, err
 		}
+		node.log.Infof("resuming catchpoint catchup from state %d", catchpointCatchupState)
 	}
 
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
@@ -1117,7 +1119,8 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
 	var err error
-	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger, node.config)
+	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
+	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
 		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
 		return err
@@ -1144,12 +1147,12 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 }
 
 // SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back, it returns a
-// channel which contains the updated node context. This function need to work asyncronisly so that the caller could
-// detect and handle the usecase where the node is being shut down while we're switching to/from catchup mode without
+// channel which contains the updated node context. This function need to work asynchronously so that the caller could
+// detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
 func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
 	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
-	// is imporant, as it allows us to syncronize the "receiving" of the new context before canceling of the previous
+	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
 	// one.
 	ctxCh := make(chan context.Context)
 	outCtxCh = ctxCh

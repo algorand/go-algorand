@@ -103,3 +103,7 @@ func (m *MockCatchpointCatchupAccessor) EnsureFirstBlock(ctx context.Context) (b
 func (m *MockCatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (err error) {
 	return nil
 }
+
+func (m *MockCatchpointCatchupAccessor) Ledger() (l ledger.LedgerForCatchpointService) {
+	return nil
+}
