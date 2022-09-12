@@ -1153,41 +1153,29 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	castedMax := nilToZero(params.Max)
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
 
-	// compute `maxReturnNum` from `castedMax` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
-	// `maxReturnNum == 0` for returning everything
-	// - `castedMax == 0` and `maxBoxThreshold == 0`,
-	//       return everything
-	// - `castedMax == 0` and `maxBoxThreshold > 0`,
-	//       returns up to `maxBoxThreshold`, check if exceeds
-	// - `castedMax > 0` and `maxBoxThreshold == 0`,
-	//       return up to `castedMax`
-	// - `castedMax > 0` and `maxBoxThreshold > 0`,
-	//       return up to min(castedMax, maxBoxThreshold),
-	//       if return size is `maxBoxThreshold`, check if exceeds
+	maxKeys := func() uint64 {
+		algodSupportsUnlimitedResults := maxBoxThreshold == 0
+		noRequestProvidedLimit := castedMax == 0
+		dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || algodSupportsUnlimitedResults)
+		returnsAll := noRequestProvidedLimit && algodSupportsUnlimitedResults
 
-	var boxKeys []string
-	var err error
+		if dominatedByQryParams || returnsAll {
+			return castedMax
+		}
+		return maxBoxThreshold + 1
+	}
 
-	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || maxBoxThreshold == 0)
-	returnsAll := castedMax == 0 && maxBoxThreshold == 0
+	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxKeys())
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
 
-	if dominatedByQryParams || returnsAll {
-		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, castedMax)
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-		}
-	} else {
-		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxBoxThreshold+1)
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-		}
-		if uint64(len(boxKeys)) > maxBoxThreshold {
-			v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
-			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
-				Message: "Result limit exceeded",
-				Data:    nil,
-			})
-		}
+	if uint64(len(boxKeys)) > maxBoxThreshold {
+		v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
+		return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+			Message: "Result limit exceeded",
+			Data:    nil,
+		})
 	}
 
 	prefixLen := len(keyPrefix)
@@ -1227,7 +1215,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	response := generated.BoxResponse{
-		Name:  []byte(boxName),
+		Name:  boxName,
 		Value: []byte(*value),
 	}
 	return ctx.JSON(http.StatusOK, response)
