@@ -1102,6 +1102,9 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 	}
 }
 
+// BenchmarkTransactionPoolRecompute attempts to build a transaction pool of 3x block size
+// and then calls recomputeBlockEvaluator, to update the pool given the just-committed txns.
+// For b.N is does this process repeatedly given the size of N.
 func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	b.Log("Running with b.N", b.N)
 	poolSize := 100000
