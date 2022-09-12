@@ -426,9 +426,12 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
 		}
-		// give a rank to the download, as the download was successful.
-		peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		if psp != nil {
+			// give a rank to the download, as the download was successful.
+			// if the block might have been retrieved from the local ledger, nothing to rank
+			peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		}
 
 		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
 		if err != nil {
