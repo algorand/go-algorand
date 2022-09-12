@@ -455,7 +455,7 @@ type Local struct {
 
 	// MaxAPIBoxPerApplication defines the maximum total number of boxes per application that will be returned
 	// in GetApplicationBoxes REST API responses.
-	MaxAPIBoxPerApplication uint64 `version[24]:"10000"`
+	MaxAPIBoxPerApplication uint64 `version[24]:"100000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
