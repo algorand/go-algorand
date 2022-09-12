@@ -1153,15 +1153,9 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 				},
 			}
 
-			signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-			require.NoError(b, err)
+			signedTx := tx.Sign(secrets[i%numOfAccounts])
 			signedTransactions = append(signedTransactions, signedTx)
-		}
-
-		// add all txns to pool
-		for _, txn := range signedTransactions {
-			err := transactionPool.RememberOne(txn)
-			require.NoError(b, err)
+			require.NoError(b, transactionPool.RememberOne(signedTx))
 		}
 
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
@@ -1207,8 +1201,6 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	if profF != nil {
 		pprof.StopCPUProfile()
 	}
-	//t.Log("pool.assemblyResults.blk payset len", len(transactionPool.assemblyResults.blk.Block().Payset))
-	//t.Log("pool.pendingBlockEvaluation.block.Payset len", transactionPool.pendingBlockEvaluator.PaySetSize())
 }
 
 func BenchmarkTransactionPoolSteadyState(b *testing.B) {
