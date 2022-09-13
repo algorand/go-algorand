@@ -18,7 +18,6 @@ package network
 
 import (
 	"encoding/binary"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -115,7 +114,7 @@ func TestTagCounterFiltering(t *testing.T) {
 		"networkMessageSentByTag":     networkMessageSentByTag,
 	}
 	for name, tag := range tagCounterTags {
-		t.Run(fmt.Sprintf("%s", name), func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			require.NotZero(t, len(tag.AllowedTags))
 			tag.Add("TEST_TAG", 1)
 			b := strings.Builder{}
