@@ -513,7 +513,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
 
-		var numBlocks uint64 = 0
+		var numBlocks uint64
 		var validatedBlock *ledgercore.ValidatedBlock
 
 		// there are might more transactions than MaxTxnBytesPerBlock allows

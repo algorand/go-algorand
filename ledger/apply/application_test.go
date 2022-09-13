@@ -760,7 +760,6 @@ func TestAppCallOptIn(t *testing.T) {
 		}
 		sender = getRandomAddress(a)
 		b.balances = map[basics.Address]basics.AccountData{sender: {}}
-		var appIdx basics.AppIndex = appIdx
 		for i := 0; i < cparams.MaxAppsOptedIn; i++ {
 			appIdx = appIdx + basics.AppIndex(i)
 			err = optInApplication(b, sender, appIdx, aparams)

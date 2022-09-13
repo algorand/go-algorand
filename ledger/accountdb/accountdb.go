@@ -2869,7 +2869,8 @@ func (qs *AccountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype bas
 }
 
 // LookupResources returns the resource data for a creatable
-func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
+func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (res PersistedResourcesData, err error) {
+	data := persistedResourcesData{}
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -2902,7 +2903,7 @@ func (qs *AccountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 		}
 		return err
 	})
-	return
+	return data, err
 }
 
 // LookupAllResources returns all resource data for an address
@@ -2954,7 +2955,8 @@ func (qs *AccountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 // Lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data persistedAccountData, err error) {
+func (qs *AccountsDbQueries) Lookup(addr basics.Address) (result PersistedAccountData, err error) {
+	data := persistedAccountData{}
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -2978,11 +2980,12 @@ func (qs *AccountsDbQueries) Lookup(addr basics.Address) (data persistedAccountD
 
 		return err
 	})
-	return
+	return data, err
 }
 
 // LookupOnline returns the online account data for an address and round
-func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
+func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (res PersistedOnlineAccountData, err error) {
+	data := persistedOnlineAccountData{}
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -3008,7 +3011,7 @@ func (qs *OnlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.
 
 		return err
 	})
-	return
+	return data, err
 }
 
 // LookupOnlineTotalsHistory returns the online total at a certain round
@@ -3191,7 +3194,7 @@ func (qs *AccountsDbQueries) Close() {
 	}
 	for _, preparedQuery := range preparedQueries {
 		if (*preparedQuery) != nil {
-			(*preparedQuery).Close()
+			_ = (*preparedQuery).Close()
 			*preparedQuery = nil
 		}
 	}
@@ -3205,7 +3208,7 @@ func (qs *OnlineAccountsDbQueries) Close() {
 	}
 	for _, preparedQuery := range preparedQueries {
 		if (*preparedQuery) != nil {
-			(*preparedQuery).Close()
+			_ = (*preparedQuery).Close()
 			*preparedQuery = nil
 		}
 	}
@@ -4180,7 +4183,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		if scannedAccounts%1000 == 0 {
 			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 			// message, which would let us know that it failed anyway.
-			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+			_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 		}
 
 		var addrbuf []byte
@@ -4436,8 +4439,8 @@ const (
 	oaiStepDone = orderedAccountsIterStep(8)
 )
 
-// orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
-type orderedAccountsIter struct {
+// OrderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
+type OrderedAccountsIter struct {
 	step               orderedAccountsIterStep
 	accountBaseRows    *sql.Rows
 	hashesRows         *sql.Rows
@@ -4452,8 +4455,8 @@ type orderedAccountsIter struct {
 
 // MakeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func MakeOrderedAccountsIter(tx *sql.Tx, accountCount int, resourceCount int) *orderedAccountsIter {
-	return &orderedAccountsIter{
+func MakeOrderedAccountsIter(tx *sql.Tx, accountCount int, resourceCount int) *OrderedAccountsIter {
+	return &OrderedAccountsIter{
 		tx:            tx,
 		accountCount:  accountCount,
 		resourceCount: resourceCount,
@@ -4767,8 +4770,8 @@ func LoadAllFullAccounts(
 	return
 }
 
-// accountAddressHash is used by Next to return a single account address and the associated hash.
-type accountAddressHash struct {
+// AccountAddressHash is used by Next to return a single account address and the associated hash.
+type AccountAddressHash struct {
 	Addrid int64
 	Digest []byte
 }
@@ -4781,7 +4784,7 @@ type accountAddressHash struct {
 // the processedRecords would be zero. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
-func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHash, processedRecords int, err error) {
+func (iterator *OrderedAccountsIter) Next(ctx context.Context) (acct []AccountAddressHash, processedRecords int, err error) {
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
@@ -4908,7 +4911,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHash, iterator.accountCount)
+		acct = make([]AccountAddressHash, iterator.accountCount)
 		acctIdx := 0
 		for iterator.hashesRows.Next() {
 			err = iterator.hashesRows.Scan(&(acct[acctIdx].Addrid), &(acct[acctIdx].Digest))
@@ -4940,7 +4943,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 }
 
 // Close shuts down the orderedAccountsBuilderIter, releasing database resources.
-func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
+func (iterator *OrderedAccountsIter) Close(ctx context.Context) (err error) {
 	if iterator.accountBaseRows != nil {
 		iterator.accountBaseRows.Close()
 		iterator.accountBaseRows = nil
@@ -5261,14 +5264,15 @@ func InsertUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-type unfinishedCatchpointRecord struct {
+// UnfinishedCatchpointRecord describes not-finished-yet catchpoints
+type UnfinishedCatchpointRecord struct {
 	Round     basics.Round
 	BlockHash crypto.Digest
 }
 
 // SelectUnfinishedCatchpoints fetches an unfinished catchpoint from the db
-func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinishedCatchpointRecord, error) {
-	var res []unfinishedCatchpointRecord
+func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]UnfinishedCatchpointRecord, error) {
+	var res []UnfinishedCatchpointRecord
 
 	f := func() error {
 		query := "SELECT round, blockhash FROM unfinishedcatchpoints ORDER BY round"
@@ -5280,7 +5284,7 @@ func SelectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 		// Clear `res` in case this function is repeated.
 		res = res[:0]
 		for rows.Next() {
-			var record unfinishedCatchpointRecord
+			var record UnfinishedCatchpointRecord
 			var blockHash []byte
 			err = rows.Scan(&record.Round, &blockHash)
 			if err != nil {

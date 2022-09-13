@@ -91,8 +91,9 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	d, err := aq.Lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, d.round)
-	require.Equal(t, d.accountData, BaseAccountData{})
+	pad := d.(persistedAccountData)
+	require.Equal(t, rnd, pad.round)
+	require.Equal(t, pad.accountData, BaseAccountData{})
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3816,7 +3817,7 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 
 	ret, err := SelectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
 	require.NoError(t, err)
-	expected := []unfinishedCatchpointRecord{
+	expected := []UnfinishedCatchpointRecord{
 		{
 			Round:     3,
 			BlockHash: d3,
@@ -3833,7 +3834,7 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 
 	ret, err = SelectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
 	require.NoError(t, err)
-	expected = []unfinishedCatchpointRecord{
+	expected = []UnfinishedCatchpointRecord{
 		{
 			Round:     5,
 			BlockHash: d5,

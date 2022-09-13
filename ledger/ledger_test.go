@@ -2250,11 +2250,8 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 := accountdb.AccountsCreateOnlineRoundParamsTable(ctx, tx); err0 != nil {
 			return err0
 		}
-		if err0 := accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
-			return err0
-		}
-
-		return nil
+		err0 = accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+		return err0
 	})
 	require.NoError(t, err)
 
@@ -2418,10 +2415,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		if err := accountdb.AccountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
-			return err
-		}
-		return nil
+		return accountdb.AccountsCreateCatchpointFirstStageInfoTable(ctx, tx)
 	})
 	require.NoError(t, err)
 
