@@ -1146,13 +1146,13 @@ func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 		if algodMax == 0 {
 			return 0 // unlimited results when both requested and algod max are 0
 		}
-		return algodMax + 1 // API limit dominates
+		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
 	}
 
 	if requestedMax <= algodMax || algodMax == 0 {
 		return requestedMax // requested limit dominates
 	}
-	return algodMax + 1 // API limit dominates
+	return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
 }
 
 // GetApplicationBoxes returns the box names of an application
