@@ -1166,7 +1166,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	// cast param.Max to zero, if param.Max points to some value, we keep the value
 	castedMax := nilToZero(params.Max)
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
-	algodLimitsResults := maxBoxThreshold >= 0
+	algodLimitsResults := maxBoxThreshold > 0
 
 	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, applicationBoxesMaxKeys(castedMax, maxBoxThreshold))
 	if err != nil {
