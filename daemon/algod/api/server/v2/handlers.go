@@ -1142,15 +1142,17 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 }
 
 func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
-	algodSupportsUnlimitedResults := algodMax == 0
-	noRequestProvidedLimit := requestedMax == 0
-	dominatedByQryParams := requestedMax > 0 && (algodMax >= requestedMax || algodSupportsUnlimitedResults)
-	returnsAll := noRequestProvidedLimit && algodSupportsUnlimitedResults
-
-	if dominatedByQryParams || returnsAll {
-		return requestedMax
+	if requestedMax == 0 {
+		if algodMax == 0 {
+			return 0 // unlimited results when both requested and algod max are 0
+		}
+		return algodMax + 1 // API limit dominates
 	}
-	return algodMax + 1
+
+	if requestedMax <= algodMax || algodMax == 0 {
+		return requestedMax // requested limit dominates
+	}
+	return algodMax + 1 // API limit dominates
 }
 
 // GetApplicationBoxes returns the box names of an application
