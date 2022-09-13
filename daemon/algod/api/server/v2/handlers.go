@@ -1153,8 +1153,9 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	castedMax := nilToZero(params.Max)
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
 
+	algodSupportsUnlimitedResults := maxBoxThreshold == 0
+
 	maxKeys := func() uint64 {
-		algodSupportsUnlimitedResults := maxBoxThreshold == 0
 		noRequestProvidedLimit := castedMax == 0
 		dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || algodSupportsUnlimitedResults)
 		returnsAll := noRequestProvidedLimit && algodSupportsUnlimitedResults
@@ -1170,7 +1171,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	if uint64(len(boxKeys)) > maxBoxThreshold {
+	if !algodSupportsUnlimitedResults && uint64(len(boxKeys)) > maxBoxThreshold {
 		v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
 		return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
 			Message: "Result limit exceeded",
