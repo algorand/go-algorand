@@ -59,9 +59,9 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 
 	// Response size limited by algod max.
 	{
-		requestedMax := randomUint64(3, math.MaxUint64)
-		algodMax := requestedMax - 2 // algodMax > 0
-		equals(algodMax+1, example{requestedMax, algodMax})
+		requestedMax := randomUint64(0, math.MaxUint64-1)
+		algodMax := requestedMax + 1 // algodMax > 0
+		equals(requestedMax, example{requestedMax, algodMax})
 	}
 
 	// Response size _not_ limited
