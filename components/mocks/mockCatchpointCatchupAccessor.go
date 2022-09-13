@@ -104,7 +104,7 @@ func (m *MockCatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (er
 	return nil
 }
 
-// Ledger returns ledger instance as LedgerForCatchpointService interface
-func (m *MockCatchpointCatchupAccessor) Ledger() (l ledger.LedgerForCatchpointService) {
+// Ledger returns ledger instance as CatchupAccessorClientLedger interface
+func (m *MockCatchpointCatchupAccessor) Ledger() (l ledger.CatchupAccessorClientLedger) {
 	return nil
 }

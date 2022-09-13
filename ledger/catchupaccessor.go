@@ -88,7 +88,7 @@ type CatchpointCatchupAccessor interface {
 	CompleteCatchup(ctx context.Context) (err error)
 
 	// Ledger returns a narrow subset of Ledger methods needed by CatchpointCatchupAccessor clients
-	Ledger() (l LedgerForCatchpointService)
+	Ledger() (l CatchupAccessorClientLedger)
 }
 
 // CatchpointCatchupAccessorImpl is the concrete implementation of the CatchpointCatchupAccessor interface
@@ -125,8 +125,8 @@ const (
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
 
-// LedgerForCatchpointService represents ledger interface needed for catchpoint accessor clients
-type LedgerForCatchpointService interface {
+// CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
+type CatchupAccessorClientLedger interface {
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	GenesisHash() crypto.Digest
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
@@ -985,8 +985,8 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	return err
 }
 
-// Ledger returns ledger instance as LedgerForCatchpointService interface
-func (c *CatchpointCatchupAccessorImpl) Ledger() (l LedgerForCatchpointService) {
+// Ledger returns ledger instance as CatchupAccessorClientLedger interface
+func (c *CatchpointCatchupAccessorImpl) Ledger() (l CatchupAccessorClientLedger) {
 	return c.ledger
 }
 

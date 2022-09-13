@@ -84,7 +84,7 @@ type CatchpointCatchupService struct {
 	// net is the underlying network module
 	net network.GossipNode
 	// ledger points to the ledger object
-	ledger ledger.LedgerForCatchpointService
+	ledger ledger.CatchupAccessorClientLedger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
 	// config is a copy of the node configuration
