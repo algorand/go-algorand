@@ -890,12 +890,14 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			return
 		}
 
+		nextSendTime := time.Now()
 		for _, aidx := range aidxs {
 			appAddr := basics.AppIndex(aidx).Address()
 			mbr := proto.MinBalance +
 				proto.BoxFlatMinBalance*uint64(cfg.NumBox) +
 				proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(cfg.NumBox)
 
+			schedule(pps.cfg.TxnPerSec, &nextSendTime)
 			var txn transactions.Transaction
 			txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, accounts[cfg.SrcAccount])
 			if err != nil {
