@@ -1141,6 +1141,18 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	return ctx.JSON(http.StatusOK, response)
 }
 
+func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
+	algodSupportsUnlimitedResults := algodMax == 0
+	noRequestProvidedLimit := requestedMax == 0
+	dominatedByQryParams := requestedMax > 0 && (algodMax >= requestedMax || algodSupportsUnlimitedResults)
+	returnsAll := noRequestProvidedLimit && algodSupportsUnlimitedResults
+
+	if dominatedByQryParams || returnsAll {
+		return requestedMax
+	}
+	return algodMax + 1
+}
+
 // GetApplicationBoxes returns the box names of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxesParams) error {
@@ -1155,18 +1167,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 
 	algodSupportsUnlimitedResults := maxBoxThreshold == 0
 
-	maxKeys := func() uint64 {
-		noRequestProvidedLimit := castedMax == 0
-		dominatedByQryParams := castedMax > 0 && (maxBoxThreshold >= castedMax || algodSupportsUnlimitedResults)
-		returnsAll := noRequestProvidedLimit && algodSupportsUnlimitedResults
-
-		if dominatedByQryParams || returnsAll {
-			return castedMax
-		}
-		return maxBoxThreshold + 1
-	}
-
-	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxKeys())
+	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, applicationBoxesMaxKeys(castedMax, maxBoxThreshold))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
