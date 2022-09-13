@@ -1166,15 +1166,14 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	// cast param.Max to zero, if param.Max points to some value, we keep the value
 	castedMax := nilToZero(params.Max)
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
-
-	algodSupportsUnlimitedResults := maxBoxThreshold == 0
+	algodLimitsResults := maxBoxThreshold >= 0
 
 	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, applicationBoxesMaxKeys(castedMax, maxBoxThreshold))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	if !algodSupportsUnlimitedResults && uint64(len(boxKeys)) > maxBoxThreshold {
+	if algodLimitsResults && uint64(len(boxKeys)) > maxBoxThreshold {
 		v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
 		return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
 			Message: "Result limit exceeded",
