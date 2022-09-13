@@ -18,12 +18,14 @@ package network
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,14 +92,36 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	}
 }
 
-// TestAtomicVariablesAligment ensures that the 64-bit atomic variables
+// TestAtomicVariablesAlignment ensures that the 64-bit atomic variables
 // offsets are 64-bit aligned. This is required due to go atomic library
 // limitation.
-func TestAtomicVariablesAligment(t *testing.T) {
+func TestAtomicVariablesAlignment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	p := wsPeer{}
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
+}
+
+func TestTagCounterFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tagCounterTags := map[string]*metrics.TagCounter{
+		"networkSentBytesByTag":       networkSentBytesByTag,
+		"networkReceivedBytesByTag":   networkReceivedBytesByTag,
+		"networkMessageReceivedByTag": networkMessageReceivedByTag,
+		"networkMessageSentByTag":     networkMessageSentByTag,
+	}
+	for name, tag := range tagCounterTags {
+		t.Run(name, func(t *testing.T) {
+			require.NotZero(t, len(tag.AllowedTags))
+			tag.Add("TEST_TAG", 1)
+			b := strings.Builder{}
+			tag.WriteMetric(&b, "")
+			result := b.String()
+			require.Contains(t, result, "_UNK")
+			require.NotContains(t, result, "TEST_TAG")
+		})
+	}
 }

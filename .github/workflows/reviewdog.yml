@@ -1,5 +1,8 @@
 name: "ReviewDog workflow"
 on:
+  push:
+    branches:
+      - master
   pull_request:
 jobs:
   # Blocking Errors Section

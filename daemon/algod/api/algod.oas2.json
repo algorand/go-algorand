@@ -1282,6 +1282,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -1334,6 +1340,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
