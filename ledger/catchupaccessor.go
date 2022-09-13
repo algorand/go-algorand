@@ -125,6 +125,7 @@ const (
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
 
+// LedgerForCatchpointService represents ledger interface needed for catchpoint accessor clients
 type LedgerForCatchpointService interface {
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	GenesisHash() crypto.Digest
@@ -984,6 +985,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	return err
 }
 
+// Ledger returns ledger instance as LedgerForCatchpointService interface
 func (c *CatchpointCatchupAccessorImpl) Ledger() (l LedgerForCatchpointService) {
 	return c.ledger
 }
