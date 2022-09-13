@@ -113,7 +113,7 @@ func (sv stackValue) address() (addr basics.Address, err error) {
 
 func (sv stackValue) uint() (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, errors.New("not a uint64")
+		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
 	}
 	return sv.Uint, nil
 }
@@ -646,10 +646,6 @@ func (st StackType) Typed() bool {
 		return true
 	}
 	return false
-}
-
-func (sts StackTypes) plus(other StackTypes) StackTypes {
-	return append(sts, other...)
 }
 
 // PanicError wraps a recover() catching a panic()

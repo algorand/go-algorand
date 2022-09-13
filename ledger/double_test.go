@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"testing"
@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -44,8 +43,8 @@ import (
 type DoubleLedger struct {
 	t *testing.T
 
-	generator *ledger.Ledger
-	validator *ledger.Ledger
+	generator *Ledger
+	validator *Ledger
 
 	eval *internal.BlockEvaluator
 }
@@ -57,8 +56,8 @@ func (dl DoubleLedger) Close() {
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
 func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) DoubleLedger {
-	g := newTestLedgerWithConsensusVersion(t, balances, cv)
-	v := newTestLedgerFull(t, balances, cv, g.GenesisHash())
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash())
 	return DoubleLedger{t, g, v, nil}
 }
 
@@ -157,7 +156,7 @@ func (dl *DoubleLedger) reloadLedgers() {
 	require.NoError(dl.t, dl.validator.ReloadLedger())
 }
 
-func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.ValidatedBlock) {
+func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
 	bl := vb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block
@@ -183,9 +182,9 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 		err := check.TransactionGroup(group)
 		require.NoError(t, err, "%+v", reconstituted.Payset)
 	}
-	check.SetGenerate(true)
+	check.SetGenerateForTesting(true)
 	cb := endBlock(t, checkLedger, check)
-	check.SetGenerate(false)
+	check.SetGenerateForTesting(false)
 	require.Equal(t, vb.Block(), cb.Block())
 
 	// vb.Delta() need not actually be Equal, in the sense of require.Equal
@@ -202,7 +201,7 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
 }
 
-func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
+func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)

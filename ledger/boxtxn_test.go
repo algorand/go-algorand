@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"bytes"
@@ -26,11 +26,12 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-var appSource = main(`
+var boxAppSource = main(`
 		txn ApplicationArgs 0
         byte "create"			// create box named arg[1]
         ==
@@ -85,21 +86,22 @@ var appSource = main(`
         err
 `)
 
+const boxVersion = 35
+
 // TestBoxCreate tests MBR changes around allocation, deallocation
 func TestBoxCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	testConsensusRange(t, 36, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		// increment for a size 24 box with 4 letter name
 		const mbr = 2500 + 28*400
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, appSource)
+		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -150,9 +152,8 @@ func TestBoxCreateAvailability(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	testConsensusRange(t, 36, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		accessInCreate := txntest.Txn{
@@ -254,16 +255,15 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 36
-	testConsensusRange(t, 36, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		var bufNewLogger bytes.Buffer
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, appSource)
+		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],

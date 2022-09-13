@@ -1102,19 +1102,49 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 			if resData.IsOwning() {
 				// determine if it's an asset
 				if resData.IsAsset() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AssetCreatable)
 					if err != nil {
 						return err
 					}
 				}
 				// determine if it's an application
 				if resData.IsApp() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AppCreatable)
 					if err != nil {
 						return err
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// writeCatchpointStagingKVs inserts all the KVs in the provided array into the
+// catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
+func writeCatchpointStagingKVs(ctx context.Context, tx *sql.Tx, kvrs []encodedKVRecordV6) error {
+	insertKV, err := tx.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertKV.Close()
+
+	insertHash, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+	defer insertHash.Close()
+
+	for _, kvr := range kvrs {
+		_, err := insertKV.ExecContext(ctx, kvr.Key, kvr.Value)
+		if err != nil {
+			return err
+		}
+
+		hash := kvHashBuilderV6(string(kvr.Key), string(kvr.Value))
+		_, err = insertHash.ExecContext(ctx, hash)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1127,6 +1157,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointkvstore",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1147,6 +1178,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
@@ -1170,11 +1203,13 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"DROP TABLE IF EXISTS assetcreators",
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
+		"DROP TABLE IF EXISTS kvstore",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
 	}
 
 	for _, stmt := range stmts {
@@ -4240,8 +4275,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		iterator.Close()
 		return
 	}
-	// we just finished reading the table.
-	iterator.Close()
+	// Do not Close() the iterator here.  It is the caller's responsibility to
+	// do so, signalled by the return of an empty chunk. If we Close() here, the
+	// next call to Next() will start all over!
 	return
 }
 

@@ -117,6 +117,10 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field XferAsset;"), ep, "not a uint64")
 	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field AssetAmount;"), ep, "not a uint64")
 
+	// get coverage on uintMaxed()
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field ExtraProgramPages;"), ep, "not a uint64")
+	// get coverage on bool()
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Nonparticipation;"), ep, "not a uint64")
 }
 
 func appAddr(id int) basics.Address {
@@ -770,6 +774,8 @@ func TestFieldSetting(t *testing.T) {
 		"not an address")
 
 	TestApp(t, "itxn_begin; int 6; bzero; itxn_field ConfigAssetUnitName; int 1", ep)
+	TestApp(t, NoTrack("itxn_begin; int 6; itxn_field ConfigAssetUnitName; int 1"), ep,
+		"not a byte array")
 	TestApp(t, "itxn_begin; int 7; bzero; itxn_field ConfigAssetUnitName; int 1", ep,
 		"value is too long")
 

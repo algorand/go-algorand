@@ -272,7 +272,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	round, _, err0 := ledgercore.ParseCatchpointLabel(label)
 
 	if err0 != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to parse label : %v", err0))
 	}
 
 	// download balances file.

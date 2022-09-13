@@ -1448,6 +1448,12 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 	return &vb, nil
 }
 
+// SetGenerateForTesting is exported so that a ledger being used for testing can
+// force a block evalator to create a block and compare it to another.
+func (eval *BlockEvaluator) SetGenerateForTesting(g bool) {
+	eval.generate = g
+}
+
 type evalTxValidator struct {
 	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block

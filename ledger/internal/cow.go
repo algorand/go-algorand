@@ -128,6 +128,21 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 			}
 		}
 	}
+
+	// Populate old values by looking through parent
+	for key, value := range cb.mods.KvMods {
+		old, ok, err := cb.lookupParent.kvGet(key) // Because of how boxes are prefetched, value will be cached
+		if err != nil {
+			panic(fmt.Errorf("Error looking up %v : %w", key, err))
+		}
+		if ok {
+			value.OldData = &old
+		} else {
+			value.OldData = nil
+		}
+		cb.mods.KvMods[key] = value
+	}
+
 	return cb.mods
 }
 

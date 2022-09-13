@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"encoding/hex"
 	"fmt"
-	"strings"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,28 +27,13 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-// main wraps up some TEAL source in a header and footer so that it is
-// an app that does nothing at create time, but otherwise runs source,
-// then approves, if the source avoids panicing and leaves the stack
-// empty.
-func main(source string) string {
-	return strings.Replace(fmt.Sprintf(`txn ApplicationID
-            bz end
-            %s
-       end: int 1`, source), ";", "\n", -1)
-}
 
 // TestPayAction ensures a pay in teal affects balances
 func TestPayAction(t *testing.T) {
@@ -57,8 +42,8 @@ func TestPayAction(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// Inner txns start in v30
-	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		ai := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
@@ -173,10 +158,8 @@ func TestAxferAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusFuture)
 	defer l.Close()
 
 	asa := txntest.Txn{
@@ -362,33 +345,6 @@ submit:  itxn_submit
 	require.Equal(t, uint64(0), amount)
 	back, _ := holding(t, l, addrs[0], asaIndex)
 	require.Equal(t, uint64(20000), back-left)
-}
-
-func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *ledger.Ledger {
-	return newTestLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
-}
-
-func newTestLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *ledger.Ledger {
-	var genHash crypto.Digest
-	crypto.RandBytes(genHash[:])
-	return newTestLedgerFull(t, balances, cv, genHash)
-}
-
-func newTestLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest) *ledger.Ledger {
-	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
-	require.NoError(t, err)
-	require.False(t, genBlock.FeeSink.IsZero())
-	require.False(t, genBlock.RewardsPool.IsZero())
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := ledger.OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
-		Block:       genBlock,
-		Accounts:    balances.Balances,
-		GenesisHash: genHash,
-	}, cfg)
-	require.NoError(t, err)
-	return l
 }
 
 // TestClawbackAction ensures an app address can act as clawback address.
@@ -1398,8 +1354,8 @@ func TestCreateAndUse(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 the asset reference is illegal, then from v31 it works.
-	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1468,8 +1424,8 @@ func TestGtxnEffects(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 `gtxn CreatedAssetId is illegal, then from v31 it works.
-	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1530,8 +1486,8 @@ func TestBasicReentry(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		app0 := txntest.Txn{
@@ -1724,8 +1680,8 @@ func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v31 = inner appl
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		program := `
@@ -1884,8 +1840,8 @@ func TestInnerAppVersionCalling(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	// 31 allowed inner appls. v34 lowered proto.MinInnerApplVersion
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		three, err := logic.AssembleStringWithVersion("int 1", 3)
@@ -2078,8 +2034,8 @@ func TestAppDowngrade(t *testing.T) {
 
 	// Confirm that in old protocol version, downgrade is legal
 	// Start at 28 because we want to v4 app to downgrade to v3
-	testConsensusRange(t, 28, 30, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 28, 30, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2109,8 +2065,8 @@ func TestAppDowngrade(t *testing.T) {
 		dl.fullBlock(&update)
 	})
 
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2354,7 +2310,7 @@ func executeMegaContract(b *testing.B) {
 	var cv protocol.ConsensusVersion = "temp test"
 	config.Consensus[cv] = vTest
 
-	l := newTestLedgerWithConsensusVersion(b, genBalances, cv)
+	l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
 	defer l.Close()
 	defer delete(config.Consensus, cv)
 
@@ -2780,7 +2736,7 @@ func TestClearStateInnerPay(t *testing.T) {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 
 			genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-			l := newTestLedgerWithConsensusVersion(t, genBalances, test.consensus)
+			l := newSimpleLedgerWithConsensusVersion(t, genBalances, test.consensus)
 			defer l.Close()
 
 			app0 := txntest.Txn{
@@ -3100,8 +3056,8 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3166,8 +3122,8 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3220,8 +3176,8 @@ func TestForeignAppAccountsMutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3301,9 +3257,8 @@ func TestReloadWithTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 34, 0, func(t *testing.T, ver int) {
-		fmt.Printf("testConsensus %d\n", ver)
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		dl.fullBlock() // So that the `block` opcode has a block to inspect
@@ -3317,5 +3272,489 @@ func TestReloadWithTxns(t *testing.T) {
 		dl.fullBlock(&lookHdr)
 
 		dl.reloadLedgers()
+	})
+}
+
+// TestEvalAppState ensures txns in a group can't violate app state schema
+// limits. It ensures that commitToParent -> applyChild copies child's cow state
+// usage counts into parent and the usage counts are correctly propagated from
+// parent cow to child cow and back. When limits are not violated, the test
+// ensures that the updates are correct.
+func TestEvalAppState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		appcall1 := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[0],
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`,
+			ClearStateProgram: "#pragma version 2\nint 1",
+		}
+
+		appcall2 := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[0],
+			ApplicationID: 1,
+		}
+
+		dl.beginBlock()
+		dl.txgroup("store bytes count 2 exceeds schema bytes count 1", &appcall1, &appcall2)
+
+		appcall1.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
+		dl.txgroup("", &appcall1, &appcall2)
+		vb := dl.endBlock()
+		deltas := vb.Delta()
+
+		params, ok := deltas.Accts.GetAppParams(addrs[0], 1)
+		require.True(t, ok)
+		state := params.Params.GlobalState
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["caller"])
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["creator"])
+	})
+}
+
+func TestGarbageClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   "int 1",
+			ClearStateProgram: []byte{},
+		}
+
+		dl.txn(&createTxn, "invalid program (empty)")
+
+		createTxn.ClearStateProgram = []byte{0xfe} // bad uvarint
+		dl.txn(&createTxn, "invalid version")
+	})
+}
+
+func TestRewardsInAD(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v15 put rewards into ApplyData
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
+		nonpartTxn := txntest.Txn{Type: protocol.KeyRegistrationTx, Sender: addrs[2], Nonparticipation: true}
+		payNonPart := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[2]}
+
+		if ver < 18 { // Nonpart reyreg happens in v18
+			dl.txn(&nonpartTxn, "tries to mark an account as nonparticipating")
+		} else {
+			dl.fullBlock(&nonpartTxn)
+		}
+
+		// Build up Residue in RewardsState so it's ready to pay
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		vb := dl.fullBlock(&payTxn, &payNonPart)
+		payInBlock := vb.Block().Payset[0]
+		nonPartInBlock := vb.Block().Payset[1]
+		if ver >= 15 {
+			require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
+			require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+			// Sender is not due for more, and Receiver is nonpart
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			if ver < 18 {
+				require.Greater(t, nonPartInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			} else {
+				require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
+			}
+		} else {
+			require.Zero(t, payInBlock.ApplyData.SenderRewards)
+			require.Zero(t, payInBlock.ApplyData.ReceiverRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
+		}
+	})
+}
+
+// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistantKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// AVM v2 (apps)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		const appID basics.AppIndex = 1
+
+		createTxn := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+byte "missing_global"
+app_global_del
+int 0
+byte "missing_local"
+app_local_del
+`),
+		}
+
+		optInTxn := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.OptInOC,
+		}
+
+		vb := dl.fullBlock(&createTxn, &optInTxn)
+		require.Len(t, vb.Block().Payset[1].EvalDelta.GlobalDelta, 0)
+		// For a while, we encoded an empty localdelta
+		deltas := 1
+		if ver >= 27 {
+			deltas = 0
+		}
+		require.Len(t, vb.Block().Payset[1].EvalDelta.LocalDeltas, deltas)
+	})
+}
+
+func TestDuplicates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: addrs[1],
+			Amount:   10,
+		}
+		dl.txn(&pay)
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Test same transaction in a later block
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Change the note so it can go in again
+		pay.Note = []byte("1")
+		dl.txn(&pay)
+
+		// Change note again, but try the txn twice in same group
+		if dl.generator.GenesisProto().MaxTxGroupSize > 1 {
+			pay.Note = []byte("2")
+			dl.txgroup("transaction already in ledger", &pay, &pay)
+		}
+	})
+}
+
+// TestHeaderAccess tests FirstValidTime and `block` which can access previous
+// block headers.
+func TestHeaderAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Added in v34
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		fvt := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			FirstValid:      0,
+			ApprovalProgram: "txn FirstValidTime",
+		}
+		dl.txn(&fvt, "round 0 is not available")
+
+		// advance current to 2
+		pay := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]}
+		dl.fullBlock(&pay)
+
+		fvt.FirstValid = 1
+		dl.txn(&fvt, "round 0 is not available")
+
+		fvt.FirstValid = 2
+		dl.txn(&fvt) // current becomes 3
+
+		// Advance current round far enough to test access MaxTxnLife ago
+		for i := 0; i < int(config.Consensus[cv].MaxTxnLife); i++ {
+			dl.fullBlock()
+		}
+
+		// current should be 1003. Confirm.
+		require.EqualValues(t, 1002, dl.generator.Latest())
+		require.EqualValues(t, 1002, dl.validator.Latest())
+
+		fvt.FirstValid = 1003
+		fvt.LastValid = 1010
+		dl.txn(&fvt) // success advances the round
+		// now we're confident current is 1004, so construct a txn that is as
+		// old as possible, and confirm access.
+		fvt.FirstValid = 1004 - basics.Round(config.Consensus[cv].MaxTxnLife)
+		fvt.LastValid = 1004
+		dl.txn(&fvt)
+	})
+
+}
+
+// TestLogsInBlock ensures that logs appear in the block properly
+func TestLogsInBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Run tests from v30 onward
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "byte \"APP\"\n log\n int 1",
+			// Fail the clear state
+			ClearStateProgram: "byte \"CLR\"\n log\n int 0",
+		}
+		vb := dl.fullBlock(&createTxn)
+		createInBlock := vb.Block().Payset[0]
+		appID := createInBlock.ApplyData.ApplicationID
+		require.Equal(t, "APP", createInBlock.ApplyData.EvalDelta.Logs[0])
+
+		optInTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.OptInOC,
+		}
+		vb = dl.fullBlock(&optInTxn)
+		optInInBlock := vb.Block().Payset[0]
+		require.Equal(t, "APP", optInInBlock.ApplyData.EvalDelta.Logs[0])
+
+		clearTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.ClearStateOC,
+		}
+		vb = dl.fullBlock(&clearTxn)
+		clearInBlock := vb.Block().Payset[0]
+		// Logs do not appear if the ClearState failed
+		require.Len(t, clearInBlock.ApplyData.EvalDelta.Logs, 0)
+	})
+}
+
+// TestUnfundedSenders confirms that accounts that don't even exist
+// can be the Sender in some situations.  If some other transaction
+// covers the fee, and the transaction itself does not require an
+// asset or a min balance, it's fine.
+func TestUnfundedSenders(t *testing.T) {
+	/*
+		In a 0-fee transaction from unfunded sender, we still call balances.Move
+		to “pay” the fee.  Move() does not short-circuit a Move of 0 (for good
+		reason, it allows compounding rewards).  Therefore, in Move, we do
+		rewards processing on the unfunded account.  Before
+		proto.UnfundedSenders, the rewards procesing would set the RewardsBase,
+		which would require the account be written to DB, and therefore the MBR
+		check would kick in (and fail). Now it skips the update if the account
+		has less than RewardsUnit, as the update is meaningless anyway.
+	*/
+
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		asaIndex := basics.AssetIndex(1)
+
+		ghost := basics.Address{0x01}
+
+		asaCreate := txntest.Txn{
+			Type:   "acfg",
+			Sender: addrs[0],
+			AssetParams: basics.AssetParams{
+				Total:    10,
+				Clawback: ghost,
+				Freeze:   ghost,
+				Manager:  ghost,
+			},
+		}
+
+		appCreate := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		dl.fullBlock(&asaCreate, &appCreate)
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		fmt.Printf("addrs[0] = %+v\n", addrs[0])
+		fmt.Printf("addrs[1] = %+v\n", addrs[1])
+
+		benefactor := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: addrs[0],
+			Fee:      2000,
+		}
+
+		ephemeral := []txntest.Txn{
+			{
+				Type:     "pay",
+				Amount:   0,
+				Sender:   ghost,
+				Receiver: ghost,
+				Fee:      0,
+			},
+			{ // Axfer of 0
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: basics.Address{0x02},
+				XferAsset:     basics.AssetIndex(1),
+				Fee:           0,
+			},
+			{ // Clawback
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: addrs[0],
+				AssetSender:   addrs[1],
+				XferAsset:     asaIndex,
+				Fee:           0,
+			},
+			{ // Freeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   true,
+				Fee:           0,
+			},
+			{ // Unfreeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   false,
+				Fee:           0,
+			},
+			{ // App call
+				Type:          "appl",
+				Sender:        ghost,
+				ApplicationID: basics.AppIndex(2),
+				Fee:           0,
+			},
+			{ // App creation (only works because it's also deleted)
+				Type:         "appl",
+				Sender:       ghost,
+				OnCompletion: transactions.DeleteApplicationOC,
+				Fee:          0,
+			},
+		}
+
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 34 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		for i, e := range ephemeral {
+			dl.txgroup(problem, benefactor.Noted(strconv.Itoa(i)), &e)
+		}
+	})
+}
+
+// TestAppCallAppDuringInit is similar to TestUnfundedSenders test, but now the
+// unfunded sender is a newly created app.  The fee has been paid by the outer
+// transaction, so the app should be able to make an app call as that requires
+// no min balance.
+func TestAppCallAppDuringInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		approve := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		// construct a simple app
+		vb := dl.fullBlock(&approve)
+
+		// now make a new app that calls it during init
+		approveID := vb.Block().Payset[0].ApplicationID
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		callInInit := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `
+			  itxn_begin
+			  int appl
+			  itxn_field TypeEnum
+			  txn Applications 1
+			  itxn_field ApplicationID
+			  itxn_submit
+              int 1
+            `,
+			ForeignApps: []basics.AppIndex{approveID},
+			Fee:         2000, // Enough to have the inner fee paid for
+		}
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 34 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		dl.txn(&callInInit, problem)
 	})
 }

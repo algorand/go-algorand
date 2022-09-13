@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,9 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/internal"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -39,20 +39,13 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-var minFee basics.MicroAlgos
-
-func init() {
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
-	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
-}
-
 func TestBlockEvaluator(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -233,7 +226,7 @@ func TestRekeying(t *testing.T) {
 	// Bring up a ledger
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -323,80 +316,230 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-// nextBlock begins evaluation of a new block, after ledger creation or endBlock()
-func nextBlock(t testing.TB, ledger *ledger.Ledger) *internal.BlockEvaluator {
-	rnd := ledger.Latest()
-	hdr, err := ledger.BlockHdr(rnd)
-	require.NoError(t, err)
+func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, consensusVersion)
+	defer l.Close()
 
-	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	nextHdr.TimeStamp = hdr.TimeStamp + 1 // ensure deterministic tests
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
-		Generate: true,
-		Validate: true, // Do the complete checks that a new txn would be subject to
-	})
-	require.NoError(t, err)
-	return eval
-}
+	eval := nextBlock(t, l)
 
-func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn) {
-	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
-		txn.GenesisHash = ledger.GenesisHash()
-	}
-	if txn.FirstValid == 0 {
-		txn.FirstValid = eval.Round()
+	appcall1 := txntest.Txn{
+		Sender:            addrs[0],
+		Type:              protocol.ApplicationCallTx,
+		GlobalStateSchema: schema,
+		ApprovalProgram:   approvalProgram,
 	}
 
-	txn.FillDefaults(ledger.GenesisProto())
-}
-
-func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) {
-	t.Helper()
-	for _, txn1 := range txns {
-		txn(t, ledger, eval, txn1)
+	appcall2 := txntest.Txn{
+		Sender:        addrs[0],
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: basics.AppIndex(1),
 	}
+
+	appcall3 := txntest.Txn{
+		Sender:        addrs[1],
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: basics.AppIndex(1),
+	}
+
+	return txgroup(t, l, eval, &appcall1, &appcall2, &appcall3)
 }
 
-func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
-	t.Helper()
-	fillDefaults(t, ledger, eval, txn)
-	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
-	if err != nil {
-		if len(problem) == 1 && problem[0] != "" {
-			require.Contains(t, err.Error(), problem[0])
-		} else {
-			require.NoError(t, err) // Will obviously fail
+// TestEvalAppPooledBudgetWithTxnGroup ensures 3 app call txns can successfully pool
+// budgets in a group txn and return an error if the budget is exceeded
+func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := func(n int, m int) string {
+		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
+			strings.Repeat("substring 0 4\n", m) + "pop\nint 1\n"
+	}
+
+	params := []protocol.ConsensusVersion{
+		protocol.ConsensusV29,
+		protocol.ConsensusFuture,
+	}
+
+	cases := []struct {
+		prog                 string
+		isSuccessV29         bool
+		isSuccessVFuture     bool
+		expectedErrorV29     string
+		expectedErrorVFuture string
+	}{
+		{source(5, 47), true, true,
+			"",
+			""},
+		{source(5, 48), false, true,
+			"pc=157 dynamic cost budget exceeded, executing pushint",
+			""},
+		{source(16, 17), false, true,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			""},
+		{source(16, 18), false, false,
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"pc= 78 dynamic cost budget exceeded, executing pushint"},
+	}
+
+	for i, param := range params {
+		for j, testCase := range cases {
+			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
+				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+				}
+			})
 		}
-		return
 	}
-	require.True(t, len(problem) == 0 || problem[0] == "")
 }
 
-func txgroup(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) error {
-	t.Helper()
-	for _, txn := range txns {
-		fillDefaults(t, ledger, eval, txn)
-	}
-	txgroup := txntest.SignedTxns(txns...)
+func TestMinBalanceChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusCurrentVersion)
+	defer l.Close()
+
+	createTxn := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:    3,
+			Manager:  addrs[1],
+			Reserve:  addrs[2],
+			Freeze:   addrs[3],
+			Clawback: addrs[4],
+		},
+	}
+
+	const expectedID basics.AssetIndex = 1
+	optInTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[5],
+	}
+
+	ad0init, _, _, err := l.LookupLatest(addrs[0])
+	require.NoError(t, err)
+	ad5init, _, _, err := l.LookupLatest(addrs[5])
+	require.NoError(t, err)
+
+	eval := nextBlock(t, l)
+	txns(t, l, eval, &createTxn, &optInTxn)
+	endBlock(t, l, eval)
+
+	ad0new, _, _, err := l.LookupLatest(addrs[0])
+	require.NoError(t, err)
+	ad5new, _, _, err := l.LookupLatest(addrs[5])
+	require.NoError(t, err)
+
+	proto := l.GenesisProto()
+	// Check balance and min balance requirement changes
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
+	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+
+	optOutTxn := txntest.Txn{
+		Type:          "axfer",
+		Sender:        addrs[5],
+		XferAsset:     expectedID,
+		AssetReceiver: addrs[0],
+		AssetCloseTo:  addrs[0],
+	}
+
+	closeTxn := txntest.Txn{
+		Type:        "acfg",
+		Sender:      addrs[1], // The manager, not the creator
+		ConfigAsset: expectedID,
+	}
+
+	eval = nextBlock(t, l)
+	txns(t, l, eval, &optOutTxn, &closeTxn)
+	endBlock(t, l, eval)
+
+	ad0final, _, _, err := l.LookupLatest(addrs[0])
+	require.NoError(t, err)
+	ad5final, _, _, err := l.LookupLatest(addrs[5])
+	require.NoError(t, err)
+	// Check we got our balance "back"
+	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
+	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
 }
 
-// endBlock completes the block being created, returns the ValidatedBlock for inspection
-func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
-	require.NoError(t, err)
-	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
-	require.NoError(t, err)
-	// `rndBQ` gives the latest known block round added to the ledger
-	// we should wait until `rndBQ` block to be committed to blockQueue,
-	// in case there is a data race, noted in
-	// https://github.com/algorand/go-algorand/issues/4349
-	// where writing to `callTxnGroup` after `dl.fullBlock` caused data race,
-	// because the underlying async goroutine `go bq.syncer()` is reading `callTxnGroup`.
-	// A solution here would be wait until all new added blocks are committed,
-	// then we return the result and continue the execution.
-	rndBQ := ledger.Latest()
-	ledger.WaitForCommit(rndBQ)
-	return validatedBlock
+// TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
+// and do not cause any MaximumMinimumBalance problems
+func TestAppInsMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusV30)
+	defer l.Close()
+
+	const appid basics.AppIndex = 1
+
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
+	require.Greater(t, maxAppsOptedIn, 0)
+	maxAppsCreated := config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	require.Greater(t, maxAppsCreated, 0)
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusV30].MaxLocalSchemaEntries
+	require.Greater(t, maxLocalSchemaEntries, uint64(0))
+
+	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)
+	txnsOptIn := make([]*txntest.Txn, 0, maxAppsOptedIn)
+	appsCreated := make(map[basics.Address]int, len(addrs)-1)
+
+	acctIdx := 0
+	for i := 0; i < maxAppsOptedIn; i++ {
+		creator := addrs[acctIdx]
+		createTxn := txntest.Txn{
+			Type:             protocol.ApplicationCallTx,
+			Sender:           creator,
+			ApprovalProgram:  "int 1",
+			LocalStateSchema: basics.StateSchema{NumByteSlice: maxLocalSchemaEntries},
+			Note:             ledgertesting.RandomNote(),
+		}
+		txnsCreate = append(txnsCreate, &createTxn)
+		count := appsCreated[creator]
+		count++
+		appsCreated[creator] = count
+		if count == maxAppsCreated {
+			acctIdx++
+		}
+
+		optInTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[9],
+			ApplicationID: appid + basics.AppIndex(i),
+			OnCompletion:  transactions.OptInOC,
+		}
+		txnsOptIn = append(txnsOptIn, &optInTxn)
+	}
+
+	eval := nextBlock(t, l)
+	txns1 := append(txnsCreate, txnsOptIn...)
+	txns(t, l, eval, txns1...)
+	vb := endBlock(t, l, eval)
+	mods := vb.Delta()
+	appAppResources := mods.Accts.GetAllAppResources()
+	appParamsCount := 0
+	appLocalStatesCount := 0
+	for _, ap := range appAppResources {
+		if ap.Params.Params != nil {
+			appParamsCount++
+		}
+		if ap.State.LocalState != nil {
+			appLocalStatesCount++
+		}
+	}
+	require.Equal(t, appLocalStatesCount, 50)
+	require.Equal(t, appParamsCount, 50)
 }
