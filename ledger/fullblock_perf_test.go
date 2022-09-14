@@ -48,15 +48,15 @@ type benchConfig struct {
 	b         *testing.B
 	creator   basics.Address
 	accts     []basics.Address
-	acctToAst map[basics.Address]map[basics.AssetIndex]struct{}
+	acctToAst map[basics.Address]map[basics.AssetIndex]uint64
 	acctToApp map[basics.Address]map[basics.AppIndex]struct{}
 	l0        *Ledger
 	l1        *Ledger
 	eval      *internal.BlockEvaluator
-	numPay uint64
-	numAst uint64
-	numApp uint64
-	blocks []bookkeeping.Block
+	numPay    uint64
+	numAst    uint64
+	numApp    uint64
+	blocks    []bookkeeping.Block
 }
 
 func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
@@ -74,7 +74,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
 	// maintain a map from accounts to a map of assets and apps
-	acctToAst := make(map[basics.Address]map[basics.AssetIndex]struct{})
+	acctToAst := make(map[basics.Address]map[basics.AssetIndex]uint64)
 	acctToApp := make(map[basics.Address]map[basics.AppIndex]struct{})
 	accts := make([]basics.Address, 0, numAccts)
 	// creator is the special rich account
@@ -145,20 +145,22 @@ func sendAssetEvent(bc *benchConfig, newAccount bool) {
 	}
 
 	var assIdx basics.AssetIndex
-	if len(bc.acctToAst[randAcct1]) == 0 {
-		assIdx = createAssetForAcct(bc, randAcct1)
-	} else {
-		for key := range bc.acctToAst[randAcct1] {
+	for key, val := range bc.acctToAst[randAcct1] {
+		if val > 1 {
 			assIdx = key
 			break
 		}
+	}
+
+	if assIdx == 0 {
+		assIdx = createAssetForAcct(bc, randAcct1)
 	}
 
 	// opt in to the asset
 	if _, have := bc.acctToAst[randAcct2][assIdx]; !have {
 		sendAssetTo(bc, randAcct2, randAcct2, assIdx, 0)
 	}
-	sendAssetTo(bc, randAcct1, randAcct2, assIdx, 100000)
+	sendAssetTo(bc, randAcct1, randAcct2, assIdx, 1)
 }
 
 func payEvent(bc *benchConfig, newAccount bool) {
@@ -194,9 +196,9 @@ func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.Asset
 	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
 	aIdx := basics.AssetIndex(addTransaction(bc, stxn))
 	if len(bc.acctToAst[acct]) == 0 {
-		bc.acctToAst[acct] = make(map[basics.AssetIndex]struct{})
+		bc.acctToAst[acct] = make(map[basics.AssetIndex]uint64)
 	}
-	bc.acctToAst[acct][aIdx] = struct{}{}
+	bc.acctToAst[acct][aIdx] = 3000000
 	return aIdx
 }
 
@@ -210,7 +212,7 @@ func fundNewAccount(bc *benchConfig) (acct basics.Address) {
 	return acct
 }
 
-func addTransaction(bc *benchConfig, stxn transactions.SignedTxn)uint64 {
+func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
 	err := bc.eval.Transaction(stxn, transactions.ApplyData{})
 	if err == ledgercore.ErrNoSpace {
 		addBlock(bc)
@@ -241,16 +243,21 @@ func addBlock(bc *benchConfig) {
 }
 
 func BenchmarkBlockValidationMix(b *testing.B) {
-	numAstets := 100
-	benchmarkBlockValidationMix(b, numAstets)
+	numAccts := 50000
+	newAcctProb := 0 //5
+
+	payProb := 3
+	astProb := 5
+	// appsProb := 2
+	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
 func BenchmarkBlockValidationPayments(b *testing.B) {
-	benchmarkBlockValidationMix(b, 0)
+	//	benchmarkBlockValidationMix(b, 0)
 }
 
-func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
-	bc := setupEnv(b, numAstets)
+func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb, numAccts int) {
+	bc := setupEnv(b, numAccts)
 
 	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
@@ -260,25 +267,19 @@ func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
 	s2 := time.Now()
 	s3 := time.Now()
 
-	newAcctProb := 5
-
-	paymentProb := 3	
-	assetProb := 5
-	// appsProb := 2
-
 	for bc.round-1 < numBlocks {
 		currentRound := bc.round
 		for bc.round == currentRound {
 			randNum := mrand.Intn(10)
-			if randNum < paymentProb {
+			if randNum < payProb {
 				// add pay transaction
-				payEvent(bc, mrand.Intn(10)<newAcctProb)
-			} else if randNum < paymentProb+assetProb {
+				payEvent(bc, mrand.Intn(10) < newAcctProb)
+			} else if randNum < payProb+astProb {
 				// add asset transactions
-				sendAssetEvent(bc, mrand.Intn(10)<newAcctProb)
+				sendAssetEvent(bc, mrand.Intn(10) < newAcctProb)
 			} else {
 				// add app transaction
-				
+
 			}
 		}
 		if (currentRound+1)*10%numBlocks == 0 {
@@ -288,7 +289,7 @@ func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
 
 	}
 	fmt.Printf("\n%s sec total (eval: %.1fsec  addBlock: %.1fsec)\n", time.Since(s2).String(), evalTime, addBlockTime)
-	fmt.Printf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)",
+	fmt.Printf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)\n",
 		numBlocks, bc.numPay/numBlocks, bc.numAst/numBlocks, bc.numApp/numBlocks)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
