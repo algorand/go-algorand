@@ -239,14 +239,7 @@ commands:
       - checkout
       - prepare_go
       - restore_libsodium
-      - restore_cache:
-          keys:
-            - 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-      - restore_cache:
-          keys:
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v4-{{ arch }}-'
+      - restore_go_caches
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -258,14 +251,41 @@ commands:
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
+      - save_go_caches
+
+  save_go_caches:
+    description: Cache Go source and build caches
+    parameters:
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    steps:
       - save_cache:
-          key: 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          name: Saving Go mod source cache
+          key: go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+          name: Saving Go build cache
+          key: go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
           paths:
             - tmp/go-cache
+
+  restore_go_caches:
+    description: Restore Go source and build caches
+    steps:
+      - restore_cache:
+          name: Restoring Go mod source cache
+          keys:
+            - go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-mod-v5-{{ .Branch }}-
+            - go-mod-v5-master-
+      - restore_cache:
+          name: Restoring Go build cache
+          keys:
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-
+            - go-cache-v5-{{ arch }}-master-
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -276,6 +296,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
+          name: Save cached libsodium build
           key: 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
@@ -289,6 +310,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
+          name: Restore cached libsodium build
           keys:
             - 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 

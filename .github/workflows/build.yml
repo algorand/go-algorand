@@ -1,5 +1,8 @@
 name: "Build Windows"
 on:
+  push:
+    branches:
+      - master
   pull_request:
 jobs:
   build-windows:

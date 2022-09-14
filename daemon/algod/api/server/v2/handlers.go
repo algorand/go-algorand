@@ -18,6 +18,7 @@ package v2
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -152,10 +153,33 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 // ErrNoStateProofForRound returned when a state proof transaction could not be found
 var ErrNoStateProofForRound = errors.New("no state proof can be found for that round")
 
+// ErrTimeout indicates a task took too long, and the server canceled it.
+var ErrTimeout = errors.New("timed out on request")
+
+// ErrShutdown represents the error for the string errServiceShuttingDown
+var ErrShutdown = errors.New(errServiceShuttingDown)
+
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
-func GetStateProofTransactionForRound(txnFetcher LedgerForAPI, round basics.Round, latestRound basics.Round) (transactions.Transaction, error) {
+func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForAPI, round, latestRound basics.Round, stop <-chan struct{}) (transactions.Transaction, error) {
+	hdr, err := txnFetcher.BlockHdr(round)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	if config.Consensus[hdr.CurrentProtocol].StateProofInterval == 0 {
+		return transactions.Transaction{}, ErrNoStateProofForRound
+	}
+
 	for i := round + 1; i <= latestRound; i++ {
+		select {
+		case <-stop:
+			return transactions.Transaction{}, ErrShutdown
+		case <-ctx.Done():
+			return transactions.Transaction{}, ErrTimeout
+		default:
+		}
+
 		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
 		if err != nil {
 			return transactions.Transaction{}, err
@@ -567,7 +591,12 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	if handle == protocol.CodecHandle {
 		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
 		if err != nil {
-			return internalError(ctx, err, err.Error(), v2.Log)
+			switch err.(type) {
+			case ledgercore.ErrNoEntry:
+				return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+			default:
+				return internalError(ctx, err, err.Error(), v2.Log)
+			}
 		}
 
 		ctx.Response().Writer.Header().Add("X-Algorand-Struct", "block-v1")
@@ -577,7 +606,12 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	ledger := v2.Node.LedgerForAPI()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
@@ -1335,16 +1369,17 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 // GetStateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx.Request().Context(), time.Minute)
+	defer cancel()
+
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+
+	tx, err := GetStateProofTransactionForRound(ctxWithTimeout, ledger, basics.Round(round), ledger.Latest(), v2.Shutdown)
 	if err != nil {
-		if errors.Is(err, ErrNoStateProofForRound) {
-			return notFound(ctx, err, err.Error(), v2.Log)
-		}
-		return internalError(ctx, err, err.Error(), v2.Log)
+		return v2.wrapStateproofError(ctx, err)
 	}
 
 	response := generated.StateProofResponse{
@@ -1360,20 +1395,29 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+func (v2 *Handlers) wrapStateproofError(ctx echo.Context, err error) error {
+	if errors.Is(err, ErrNoStateProofForRound) {
+		return notFound(ctx, err, err.Error(), v2.Log)
+	}
+	if errors.Is(err, ErrTimeout) {
+		return timeout(ctx, err, err.Error(), v2.Log)
+	}
+	return internalError(ctx, err, err.Error(), v2.Log)
+}
+
 // GetLightBlockHeaderProof Gets a proof of a light block header for a given round
 // (GET /v2/blocks/{round}/lightheader/proof)
 func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx.Request().Context(), time.Minute)
+	defer cancel()
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	stateProof, err := GetStateProofTransactionForRound(ctxWithTimeout, ledger, basics.Round(round), ledger.Latest(), v2.Shutdown)
 	if err != nil {
-		if errors.Is(err, ErrNoStateProofForRound) {
-			return notFound(ctx, err, err.Error(), v2.Log)
-		}
-		return internalError(ctx, err, err.Error(), v2.Log)
+		return v2.wrapStateproofError(ctx, err)
 	}
 
 	lastAttestedRound := stateProof.Message.LastAttestedRound
