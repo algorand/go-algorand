@@ -18,8 +18,9 @@ package execpool
 
 import (
 	"context"
-	"runtime/pprof"
 	"sync"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // A backlog for an execution pool. The typical usage of this is to
@@ -68,9 +69,7 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 	bl.buffer = make(chan backlogItemTask, backlogSize)
 
 	bl.wg.Add(1)
-	pprof.Do(context.Background(), pprof.Labels(profLabels...), func(_ context.Context) {
-		go bl.worker()
-	})
+	go bl.worker(profLabels)
 	return bl
 }
 
@@ -126,10 +125,11 @@ func (b *backlog) Shutdown() {
 	}
 }
 
-func (b *backlog) worker() {
+func (b *backlog) worker(profLabels []string) {
 	var t backlogItemTask
 	var ok bool
 	defer b.wg.Done()
+	util.SetGoroutineLabels(profLabels...)
 
 	for {
 

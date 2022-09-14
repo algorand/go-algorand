@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime/pprof"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -33,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -103,9 +103,7 @@ func (handler *TxHandler) Start() {
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 	handler.backlogWg.Add(1)
-	pprof.Do(context.Background(), pprof.Labels("worker", "TxHandler.backlogWorker"), func(_ context.Context) {
-		go handler.backlogWorker()
-	})
+	go handler.backlogWorker()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
@@ -126,6 +124,7 @@ func reencode(stxns []transactions.SignedTxn) []byte {
 // and dispatches them further.
 func (handler *TxHandler) backlogWorker() {
 	defer handler.backlogWg.Done()
+	util.SetGoroutineLabels("func", "TxHandler.backlogWorker")
 	for {
 		// prioritize the postVerificationQueue
 		select {

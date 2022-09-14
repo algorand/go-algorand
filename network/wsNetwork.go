@@ -30,7 +30,6 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -812,9 +811,7 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	if wn.listener != nil {
 		wn.wg.Add(1)
-		pprof.Do(context.Background(), pprof.Labels("worker", "httpdThread"), func(ctx context.Context) {
-			go wn.httpdThread()
-		})
+		go wn.httpdThread()
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
@@ -824,13 +821,11 @@ func (wn *WebsocketNetwork) Start() {
 		wn.peersConnectivityCheckTicker.Stop()
 	}
 	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
-	pprof.Do(context.Background(), pprof.Labels("worker", "messageHandlerThread"), func(_ context.Context) {
-		for i := 0; i < incomingThreads; i++ {
-			wn.wg.Add(1)
-			// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
-			go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
-		}
-	})
+	for i := 0; i < incomingThreads; i++ {
+		wn.wg.Add(1)
+		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
+		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
+	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
 	if wn.prioScheme != nil {
@@ -845,6 +840,7 @@ func (wn *WebsocketNetwork) Start() {
 
 func (wn *WebsocketNetwork) httpdThread() {
 	defer wn.wg.Done()
+	util.SetGoroutineLabels("func", "network.httpdThread")
 	var err error
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		err = wn.server.ServeTLS(wn.listener, wn.config.TLSCertFile, wn.config.TLSKeyFile)
@@ -1190,6 +1186,7 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 
 func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
+	util.SetGoroutineLabels("func", "network.messageHandlerThread")
 
 	for {
 		select {

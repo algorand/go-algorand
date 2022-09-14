@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -50,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -384,9 +384,7 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(2)
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
-	pprof.Do(context.Background(), pprof.Labels("worker", "oldKeyDeletionThread"), func(_ context.Context) {
-		go node.oldKeyDeletionThread(node.ctx.Done())
-	})
+	go node.oldKeyDeletionThread(node.ctx.Done())
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
 }
@@ -990,6 +988,7 @@ var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_coun
 
 func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	util.SetGoroutineLabels("func", "node.txPoolGaugeThread")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
@@ -1029,6 +1028,8 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	util.SetGoroutineLabels("func", "node.oldKeyDeletionThread")
+
 	for {
 		select {
 		case <-done:

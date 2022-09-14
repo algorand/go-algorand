@@ -19,12 +19,12 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
-	"runtime/pprof"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
@@ -144,12 +144,8 @@ func (s *Service) Start() {
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
-	pprof.Do(context.Background(), pprof.Labels("worker", "agreement.demux"), func(_ context.Context) {
-		go s.demuxLoop(ctx, input, output, ready)
-	})
-	pprof.Do(context.Background(), pprof.Labels("worker", "agreement.main"), func(_ context.Context) {
-		go s.mainLoop(input, output, ready)
-	})
+	go s.demuxLoop(ctx, input, output, ready)
+	go s.mainLoop(input, output, ready)
 }
 
 // Shutdown the execution of the protocol.
@@ -164,6 +160,7 @@ func (s *Service) Shutdown() {
 
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
 func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan externalDemuxSignals) {
+	util.SetGoroutineLabels("func", "agreement.demuxLoop")
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
@@ -188,6 +185,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 3. Drive the state machine with this input to obtain a slice of pending actions.
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
+	util.SetGoroutineLabels("func", "agreement.mainLoop")
 	// setup
 	var clock timers.Clock
 	var router rootRouter

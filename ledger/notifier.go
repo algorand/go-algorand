@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"runtime/pprof"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -27,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/util"
 )
 
 // BlockListener represents an object that needs to get notified on new blocks.
@@ -51,6 +51,7 @@ type blockNotifier struct {
 
 func (bn *blockNotifier) worker() {
 	defer bn.closing.Done()
+	util.SetGoroutineLabels("func", "blockNotifier.worker")
 	bn.mu.Lock()
 
 	for {
@@ -93,9 +94,7 @@ func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error 
 	bn.running = true
 	bn.pendingBlocks = nil
 	bn.closing.Add(1)
-	pprof.Do(context.Background(), pprof.Labels("worker", "blockNotifier"), func(_ context.Context) {
-		go bn.worker()
-	})
+	go bn.worker()
 	return nil
 }
 

@@ -19,8 +19,9 @@ package execpool
 import (
 	"context"
 	"runtime"
-	"runtime/pprof"
 	"sync"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // The list of all valid priority values. When adding new ones, add them before numPrios.
@@ -82,11 +83,9 @@ func MakePool(owner interface{}, profLabels ...string) ExecutionPool {
 	}
 
 	p.wg.Add(p.numCPUs)
-	pprof.Do(context.Background(), pprof.Labels(profLabels...), func(_ context.Context) {
-		for i := 0; i < p.numCPUs; i++ {
-			go p.worker()
-		}
-	})
+	for i := 0; i < p.numCPUs; i++ {
+		go p.worker(profLabels)
+	}
 	return p
 }
 
@@ -138,12 +137,14 @@ func (p *pool) Shutdown() {
 
 // worker function blocks until a new task is pending on any of the channels and execute the above task.
 // the implementation below would give higher priority for channels that are on higher priority slot.
-func (p *pool) worker() {
+func (p *pool) worker(profLabels []string) {
 	var t enqueuedTask
 	var ok bool
 	lowPrio := p.inputs[LowPriority]
 	highPrio := p.inputs[HighPriority]
 	defer p.wg.Done()
+	util.SetGoroutineLabels(profLabels...)
+
 	for {
 
 		select {
