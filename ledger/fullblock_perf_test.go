@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	mrand "math/rand"
 	"path/filepath"
 	"testing"
 	"time"
@@ -41,8 +42,23 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func setupEnv(b *testing.B, numAccts int) (l0,
-	l1 *Ledger, creator basics.Address, accts []basics.Address, aIdxs []uint64, appIdxs []uint64, err error) {
+type benchConfig struct {
+	i         uint64
+	round     uint64
+	b         *testing.B
+	creator   basics.Address
+	accts     []basics.Address
+	acctToAst map[basics.Address]map[basics.AssetIndex]struct{}
+	acctToApp map[basics.Address]map[basics.AppIndex]struct{}
+	l0        *Ledger
+	l1        *Ledger
+	eval      *internal.BlockEvaluator
+	numPay uint64
+	numAst uint64
+	numApp uint64
+}
+
+func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	dbTempDir := b.TempDir()
 	name := b.Name()
 	dbName := fmt.Sprintf("%s.%d", name, crypto.RandUint64())
@@ -56,30 +72,38 @@ func setupEnv(b *testing.B, numAccts int) (l0,
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
-	creator = basics.Address{}
-	_, err = rand.Read(creator[:])
-	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 12345678900000})
+	// maintain a map from accounts to a map of assets and apps
+	acctToAst := make(map[basics.Address]map[basics.AssetIndex]struct{})
+	acctToApp := make(map[basics.Address]map[basics.AppIndex]struct{})
+	accts := make([]basics.Address, 0, numAccts)
+	// creator is the special rich account
+	creator := basics.Address{}
+	_, err := rand.Read(creator[:])
+	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
+	// start the ledger with a pool of accounts
 	for i := 0; i < numAccts; i++ {
 		acct := basics.Address{}
 		_, err = rand.Read(acct[:])
 		require.NoError(b, err)
-		genesisInitState.Accounts[acct] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+		genesisInitState.Accounts[acct] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000})
 		accts = append(accts, acct)
 	}
 
-	// open ledger
-	const inMem = false
+	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
+	inMem := true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l0, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
+	inMem = false
 	dbName = fmt.Sprintf("%s.%d.2", name, crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
+	// init the first block
 	blk := genesisInitState.Block
 	blk.BlockHeader.Round++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -95,168 +119,190 @@ func setupEnv(b *testing.B, numAccts int) (l0,
 	eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
 	require.NoError(b, err)
 
-	// Add accounts, create and opt in to assets and apps
-	for i, acct := range accts {
-		tx := createAssetTransaction(uint64(i), 1, creator, crypto.Digest{1})
-		stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
-		eval = addTransaction(b, stxn, eval, l0, l1)
-
-		// opt in to the asset
-		aIdx := eval.TestingTxnCounter()
-		tx = sendAssetTransaction(uint64(i), 1, acct, 0, crypto.Digest{1}, basics.AssetIndex(aIdx), acct)
-		aIdxs = append(aIdxs, aIdx)
-		stxn = transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
-		eval = addTransaction(b, stxn, eval, l0, l1)
-
-		// create app txn
-		appTxn, err := makeAppTransaction(uint64(i), 1, creator, crypto.Digest{1})
-		require.NoError(b, err)
-		stxn = transactions.SignedTxn{Txn: appTxn, Sig: crypto.Signature{1}}
-		eval = addTransaction(b, stxn, eval, l0, l1)
-
-		// opt in to the app
-		appIdx := eval.TestingTxnCounter()
-		appTxn = makeOptInAppTransaction(uint64(i), basics.AppIndex(appIdx), 1, acct, crypto.Digest{1})
-		appIdxs = append(appIdxs, appIdx)
-		stxn = transactions.SignedTxn{Txn: appTxn, Sig: crypto.Signature{1}}
-		eval = addTransaction(b, stxn, eval, l0, l1)
+	bc = &benchConfig{
+		i:         0,
+		round:     1,
+		b:         b,
+		creator:   creator,
+		accts:     accts,
+		acctToAst: acctToAst,
+		acctToApp: acctToApp,
+		l0:        l0,
+		l1:        l1,
+		eval:      eval,
 	}
-
-	addBlock(b, eval, l0, l1)
-	return l0, l1, creator, accts, aIdxs, appIdxs, nil
+	return bc
 }
 
-func addTransaction(b *testing.B, stxn transactions.SignedTxn,
-	eval *internal.BlockEvaluator, l0, l1 *Ledger) (*internal.BlockEvaluator) {
-	err := eval.Transaction(stxn, transactions.ApplyData{})
-	if err == ledgercore.ErrNoSpace {
-		eval = addBlock(b, eval, l0, l1)
-		addTransaction(b, stxn, eval, l0, l1)
+func sendAssetEvent(bc *benchConfig, newAccount bool) {
+
+	// pick a random account
+	randAcct1 := bc.accts[mrand.Intn(len(bc.accts))]
+	randAcct2 := bc.accts[mrand.Intn(len(bc.accts))]
+	if newAccount {
+		randAcct2 = fundNewAccount(bc)
+	}
+
+	var assIdx basics.AssetIndex
+	if len(bc.acctToAst[randAcct1]) == 0 {
+		assIdx = createAssetForAcct(bc, randAcct1)
 	} else {
-		require.NoError(b, err)
+		for key := range bc.acctToAst[randAcct1] {
+			assIdx = key
+			break
+		}
 	}
-	return eval
+
+	// opt in to the asset
+	if _, have := bc.acctToAst[randAcct2][assIdx]; !have {
+		sendAssetTo(bc, randAcct2, randAcct2, assIdx, 0)
+	}
+	sendAssetTo(bc, randAcct1, randAcct2, assIdx, 100000)
 }
 
-func addBlock(b *testing.B, eval *internal.BlockEvaluator,
-	l0, l1 *Ledger) (*internal.BlockEvaluator) {
-	vblk, err := eval.GenerateBlock()
-	cert := agreement.Certificate{}
-	require.NoError(b, err)
-	err = l0.AddBlock(vblk.Block(), cert)
-	require.NoError(b, err)
-	err = l1.AddBlock(vblk.Block(), cert)
-	require.NoError(b, err)
+func payEvent(bc *benchConfig, newAccount bool) {
+	// pick a random account
+	randAcct1 := bc.accts[mrand.Intn(len(bc.accts))]
+	randAcct2 := bc.accts[mrand.Intn(len(bc.accts))]
+	if newAccount {
+		randAcct2 = fundNewAccount(bc)
+	}
+	payTo(bc, randAcct1, randAcct2, 10)
+}
 
-	_, last := l0.LatestCommitted()
-	prev, err := l0.BlockHdr(basics.Round(last))
-	require.NoError(b, err)
+func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIndex, amt uint64) {
+	tx := sendAssetTransaction(bc.i, bc.round, from, to, assIdx, amt)
+	var stxn transactions.SignedTxn
+	stxn.Txn = tx
+	stxn.Sig = crypto.Signature{1}
+	addTransaction(bc, stxn)
+	bc.numAst++
+}
+
+func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
+	tx := createPaymentTransaction(uint64(bc.i), bc.round, from, to, amt)
+	var stxn transactions.SignedTxn
+	stxn.Txn = tx
+	stxn.Sig = crypto.Signature{1}
+	addTransaction(bc, stxn)
+	bc.numPay++
+}
+
+func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.AssetIndex) {
+	tx := createAssetTransaction(bc.i, bc.round, acct)
+	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	aIdx := basics.AssetIndex(addTransaction(bc, stxn))
+	if len(bc.acctToAst[acct]) == 0 {
+		bc.acctToAst[acct] = make(map[basics.AssetIndex]struct{})
+	}
+	bc.acctToAst[acct][aIdx] = struct{}{}
+	return aIdx
+}
+
+func fundNewAccount(bc *benchConfig) (acct basics.Address) {
+
+	acct = basics.Address{}
+	_, err := rand.Read(acct[:])
+	require.NoError(bc.b, err)
+	bc.accts = append(bc.accts, acct)
+	payTo(bc, bc.creator, acct, 100000000)
+	return acct
+}
+
+func addTransaction(bc *benchConfig, stxn transactions.SignedTxn)uint64 {
+	err := bc.eval.Transaction(stxn, transactions.ApplyData{})
+	if err == ledgercore.ErrNoSpace {
+		addBlock(bc)
+		addTransaction(bc, stxn)
+	} else {
+		require.NoError(bc.b, err)
+		bc.i++
+	}
+	return bc.eval.TestingTxnCounter()
+}
+
+func addBlock(bc *benchConfig) {
+	vblk, err := bc.eval.GenerateBlock()
+	cert := agreement.Certificate{}
+	require.NoError(bc.b, err)
+	err = bc.l0.AddBlock(vblk.Block(), cert)
+	require.NoError(bc.b, err)
+	err = bc.l1.AddBlock(vblk.Block(), cert)
+	require.NoError(bc.b, err)
+
+	_, last := bc.l0.LatestCommitted()
+	prev, err := bc.l0.BlockHdr(basics.Round(last))
+	require.NoError(bc.b, err)
 	newBlk := bookkeeping.MakeBlock(prev)
-	eval, err = l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
-	require.NoError(b, err)
-	return eval
+	bc.eval, err = bc.l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	bc.round++
+	require.NoError(bc.b, err)
 }
 
 func BenchmarkBlockValidationMix(b *testing.B) {
-	numAssets := 10000
-	benchmarkBlockValidationMix(b, numAssets)
+	numAstets := 10000
+	benchmarkBlockValidationMix(b, numAstets)
 }
 
 func BenchmarkBlockValidationPayments(b *testing.B) {
 	benchmarkBlockValidationMix(b, 0)
 }
 
-func benchmarkBlockValidationMix(b *testing.B, numAssets int) {
-	l0, l1, creator, accts, aIdxs, appIdxs, err :=
-		setupEnv(b, numAssets)
-	require.NoError(b, err)
+func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
+	bc := setupEnv(b, numAstets)
 
-	numBlocks := b.N
+	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
 	var blocks []bookkeeping.Block
-	var txPerBlock int
-	var numAss, numApp, numPay int
 	fmt.Printf("Preparing transactions and adding the blocks (/%d): ", numBlocks)
 	evalTime := float64(0)
 	addBlockTime := float64(0)
 	s2 := time.Now()
 	s3 := time.Now()
-	_, oldRounds := l0.LatestCommitted()
-	for i := 0; i < numBlocks; i++ {
-		// Construct evaluator for next block
-		prev, err := l0.BlockHdr(basics.Round(i) + oldRounds)
-		require.NoError(b, err)
-		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
-		require.NoError(b, err)
 
-		var j int
-		// add asset transactions
-		for a, acct := range accts {
-			j++
-			tx := sendAssetTransaction(uint64(j), uint64(i+1), creator, 1, crypto.Digest{1}, basics.AssetIndex(aIdxs[a]), acct)
-			stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
-			err = eval.Transaction(stxn, transactions.ApplyData{})
-			require.NoError(b, err)
-			numAss++
+	newAcctProb := 5
 
-			tx = callAppTransaction(basics.AppIndex(appIdxs[a]), uint64(i+1), creator, crypto.Digest{1})
-			stxn = transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
-			err = eval.Transaction(stxn, transactions.ApplyData{})
-			require.NoError(b, err)
-			numApp++
-		}
+	paymentProb := 3	
+	assetProb := 5
+	// appsProb := 2
 
-		// fill the remainder of the block with payment transactions
-		receiver := creator
-		receiver[1] = receiver[2]
-		amt := uint64(100000)
-		for {
-			j++
-			tx := createPaymentTransaction(uint64(j), uint64(i+1), creator, receiver, amt, crypto.Digest{1})
-			amt = 1
-			var stxn transactions.SignedTxn
-			stxn.Txn = tx
-			stxn.Sig = crypto.Signature{1}
-			et := time.Now()
-			err = eval.Transaction(stxn, transactions.ApplyData{})
-			evalTime += time.Since(et).Seconds()
-			// check if block is full
-			if err == ledgercore.ErrNoSpace {
-				txPerBlock += eval.PaySetSize()
-				break
+	for bc.round-1 < numBlocks {
+		currentRound := bc.round
+		for bc.round == currentRound {
+			randNum := mrand.Intn(10)
+			if randNum < paymentProb {
+				// add pay transaction
+				payEvent(bc, mrand.Intn(10)<newAcctProb)
+			} else if randNum < paymentProb+assetProb {
+				// add asset transactions
+				sendAssetEvent(bc, mrand.Intn(10)<newAcctProb)
 			} else {
-				require.NoError(b, err)
+				// add app transaction
+				
 			}
-			numPay++
 		}
-		vblk, err := eval.GenerateBlock()
-		require.NoError(b, err)
-		abt := time.Now()
-		err = l0.AddBlock(vblk.Block(), cert)
-		addBlockTime += time.Since(abt).Seconds()
-		require.NoError(b, err)
-		blocks = append(blocks, vblk.Block())
-		if (i+1)*10%numBlocks == 0 {
-			fmt.Printf("%d%% (%.1fsec) ", (i+1)*100/numBlocks, time.Since(s3).Seconds())
+		if (currentRound+1)*10%numBlocks == 0 {
+			fmt.Printf("%d%% (%.1fsec) ", (currentRound+1)*100/numBlocks, time.Since(s3).Seconds())
 			s3 = time.Now()
 		}
+
 	}
 	fmt.Printf("\n%s sec total (eval: %.1fsec  addBlock: %.1fsec)\n", time.Since(s2).String(), evalTime, addBlockTime)
-	b.Logf("building %d blocks, each on overage with %d txns: %d assets %d apps %d pay",
-		numBlocks, txPerBlock/numBlocks, numAss/numBlocks, numApp/numBlocks, numPay/numBlocks)
+	b.Logf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)",
+		numBlocks, bc.numPay/numBlocks, bc.numAst/numBlocks, bc.numApp/numBlocks)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
 	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
+		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
-		err = l1.AddBlock(blk, cert)
+		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
 	fmt.Printf("%s sec for %d block(s)\n", time.Since(tt).String(), numBlocks)
+
 }
 
 func createPaymentTransaction(
@@ -264,8 +310,7 @@ func createPaymentTransaction(
 	round uint64,
 	sender basics.Address,
 	receiver basics.Address,
-	amount uint64,
-	genesisHash crypto.Digest) (txn transactions.Transaction) {
+	amount uint64) (txn transactions.Transaction) {
 
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, counter)
@@ -276,7 +321,7 @@ func createPaymentTransaction(
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 			FirstValid:  basics.Round(round),
 			LastValid:   basics.Round(round + 1000),
-			GenesisHash: genesisHash,
+			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -291,8 +336,7 @@ func createPaymentTransaction(
 func createAssetTransaction(
 	counter uint64,
 	round uint64,
-	sender basics.Address,
-	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
+	sender basics.Address) (assetTx transactions.Transaction) {
 
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, counter)
@@ -303,7 +347,7 @@ func createAssetTransaction(
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 			FirstValid:  basics.Round(round),
 			LastValid:   basics.Round(round + 1000),
-			GenesisHash: genesisHash,
+			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -322,10 +366,9 @@ func sendAssetTransaction(
 	counter uint64,
 	round uint64,
 	sender basics.Address,
-	amt uint64,
-	genesisHash crypto.Digest,
+	receiver basics.Address,
 	assetID basics.AssetIndex,
-	receiver basics.Address) (tx transactions.Transaction) {
+	amt uint64) (tx transactions.Transaction) {
 
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, counter)
@@ -336,7 +379,7 @@ func sendAssetTransaction(
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 			FirstValid:  basics.Round(round),
 			LastValid:   basics.Round(round + 1000),
-			GenesisHash: genesisHash,
+			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
@@ -351,8 +394,7 @@ func sendAssetTransaction(
 func makeAppTransaction(
 	counter uint64,
 	round uint64,
-	sender basics.Address,
-	genesisHash crypto.Digest) (appTx transactions.Transaction, err error) {
+	sender basics.Address) (appTx transactions.Transaction, err error) {
 
 	progCounter := uint64(1)
 	progCounter = counter
@@ -410,7 +452,7 @@ int 1
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 		FirstValid:  basics.Round(round),
 		LastValid:   basics.Round(round + 1000),
-		GenesisHash: genesisHash,
+		GenesisHash: crypto.Digest{1},
 		Note:        note,
 	}
 	appTx.Type = protocol.ApplicationCallTx
@@ -422,8 +464,7 @@ func makeOptInAppTransaction(
 	counter uint64,
 	appIdx basics.AppIndex,
 	round uint64,
-	sender basics.Address,
-	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+	sender basics.Address) (appTx transactions.Transaction) {
 
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, counter)
@@ -437,7 +478,7 @@ func makeOptInAppTransaction(
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 		FirstValid:  basics.Round(round),
 		LastValid:   basics.Round(round + 1000),
-		GenesisHash: genesisHash,
+		GenesisHash: crypto.Digest{1},
 		Note:        note,
 	}
 	appTx.Type = protocol.ApplicationCallTx
@@ -448,8 +489,7 @@ func makeOptInAppTransaction(
 func callAppTransaction(
 	appIdx basics.AppIndex,
 	round uint64,
-	sender basics.Address,
-	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+	sender basics.Address) (appTx transactions.Transaction) {
 
 	appTx = transactions.Transaction{}
 	appTx.ApplicationID = basics.AppIndex(appIdx)
@@ -460,7 +500,7 @@ func callAppTransaction(
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 		FirstValid:  basics.Round(round),
 		LastValid:   basics.Round(round + 1000),
-		GenesisHash: genesisHash,
+		GenesisHash: crypto.Digest{1},
 	}
 	appTx.Type = protocol.ApplicationCallTx
 	return
