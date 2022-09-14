@@ -26,6 +26,7 @@ import (
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	GeneratedRound        basics.Round         `codec:"genround"`
 	TargetStateProofRound basics.Round         `codec:"spround"`
 	VotersCommitment      crypto.GenericDigest `codec:"vc"`
 	ProvenWeight          basics.MicroAlgos    `codec:"pw"`
