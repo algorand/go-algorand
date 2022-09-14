@@ -19,8 +19,6 @@ package v2
 import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"math"
-	"math/rand"
 	"testing"
 )
 
@@ -33,35 +31,30 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 		algodMax     uint64
 	}
 
-	randomUint64 := func(min, max uint64) uint64 {
-		r := rand.Uint64()
-		if r > max {
-			return max
-		} else if r < min {
-			return min
-		}
-		return r
-	}
-
 	equals := func(expected uint64, e example) {
 		require.Equal(t, expected, applicationBoxesMaxKeys(e.requestedMax, e.algodMax), "failing example = %+v", e)
 	}
 
 	// Response size limited by request supplied value.
 	{
-		requestedMax := randomUint64(1, math.MaxUint64-1)
-		algodMax := requestedMax + 1
+		requestedMax := uint64(5)
+		algodMax := uint64(7)
 		equals(requestedMax, example{requestedMax, algodMax})
 
+		requestedMax = uint64(5)
 		algodMax = uint64(0)
 		equals(requestedMax, example{requestedMax, algodMax})
 	}
 
 	// Response size limited by algod max.
 	{
-		requestedMax := randomUint64(0, math.MaxUint64-1)
-		algodMax := requestedMax + 1 // algodMax > 0
-		equals(requestedMax, example{requestedMax, algodMax})
+		requestedMax := uint64(5)
+		algodMax := uint64(1)
+		equals(algodMax+1, example{requestedMax, algodMax})
+
+		requestedMax = uint64(0)
+		algodMax = uint64(1)
+		equals(algodMax+1, example{requestedMax, algodMax})
 	}
 
 	// Response size _not_ limited
