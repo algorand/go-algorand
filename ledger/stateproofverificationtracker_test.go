@@ -17,9 +17,8 @@
 package ledger
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/require"
+	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -84,7 +83,7 @@ func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEn
 	return prevBlock
 }
 
-func TestStateproofVerificationTracker_Addition(t *testing.T) {
+func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -92,11 +91,21 @@ func TestStateproofVerificationTracker_Addition(t *testing.T) {
 	defer ml.Close()
 	defer spt.close()
 
-	expectedNumberOfVerificationData := uint64(2)
+	expectedNumberOfVerificationData := uint64(1)
 	numOfBlocks := expectedNumberOfVerificationData * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	feedBlocks(ml, numOfBlocks, nil, true)
-
 	a.Equal(uint64(len(spt.trackedData)), expectedNumberOfVerificationData)
+
+	ml.trackers.committedUpTo(basics.Round(numOfBlocks))
+	ml.trackers.waitAccountsWriting()
+
+	a.Equal(uint64(len(spt.trackedData)), uint64(0))
+
+	for stateProofVerificationDataIndex := uint64(0); stateProofVerificationDataIndex < expectedNumberOfVerificationData; stateProofVerificationDataIndex++ {
+		targetStateProofRound := basics.Round((stateProofVerificationDataIndex + 2) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+		_, err := spt.LookupVerificationData(targetStateProofRound)
+		a.NoError(err)
+	}
 }
 
 func TestStateproofVerificationTracker_Removal(t *testing.T) {
@@ -116,3 +125,6 @@ func TestStateproofVerificationTracker_Removal(t *testing.T) {
 
 	a.Equal(uint64(len(spt.trackedData)), intervalsToAdd-intervalsToRemove)
 }
+
+// TODO: Test addition and removal after exceeding initial capacity
+// TODO: Test interval size change

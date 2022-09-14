@@ -22,6 +22,7 @@ import (
 )
 
 // TODO: test?
+// TODO: might be able to get rid of GeneratedRound using proto
 
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
