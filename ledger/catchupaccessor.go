@@ -86,6 +86,9 @@ type CatchpointCatchupAccessor interface {
 	// CompleteCatchup completes the catchpoint catchup process by switching the databases tables around
 	// and reloading the ledger.
 	CompleteCatchup(ctx context.Context) (err error)
+
+	// Ledger returns a narrow subset of Ledger methods needed by CatchpointCatchupAccessor clients
+	Ledger() (l CatchupAccessorClientLedger)
 }
 
 // CatchpointCatchupAccessorImpl is the concrete implementation of the CatchpointCatchupAccessor interface
@@ -111,8 +114,8 @@ const (
 	CatchpointCatchupStateInactive = iota
 	// CatchpointCatchupStateLedgerDownload indicates that we're downloading the ledger
 	CatchpointCatchupStateLedgerDownload
-	// CatchpointCatchupStateLastestBlockDownload indicates that we're download the latest block
-	CatchpointCatchupStateLastestBlockDownload
+	// CatchpointCatchupStateLatestBlockDownload indicates that we're download the latest block
+	CatchpointCatchupStateLatestBlockDownload
 	// CatchpointCatchupStateBlocksDownload indicates that we're downloading the blocks prior to the latest one ( total of CatchpointLookback blocks )
 	CatchpointCatchupStateBlocksDownload
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
@@ -121,6 +124,14 @@ const (
 	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
+
+// CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
+type CatchupAccessorClientLedger interface {
+	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	GenesisHash() crypto.Digest
+	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
+	Latest() (rnd basics.Round)
+}
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
 func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) CatchpointCatchupAccessor {
@@ -972,6 +983,11 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	})
 	ledgerCatchpointFinishBalsMicros.AddMicrosecondsSince(start, nil)
 	return err
+}
+
+// Ledger returns ledger instance as CatchupAccessorClientLedger interface
+func (c *CatchpointCatchupAccessorImpl) Ledger() (l CatchupAccessorClientLedger) {
+	return c.ledger
 }
 
 var ledgerResetstagingbalancesCount = metrics.NewCounter("ledger_catchup_resetstagingbalances_count", "calls")
