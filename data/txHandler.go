@@ -148,7 +148,7 @@ func (handler *TxHandler) backlogWorker() {
 			}
 
 			// enqueue the task to the verification pool.
-			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
+			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignatureBatch, wi, nil)
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
@@ -193,27 +193,47 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
-// asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
-func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
-	tx := arg.(*txBacklogMsg)
+// asyncVerifySignatureBatch verifies that the given batch of transaction groups are valid, and updates the txBacklogMsg data structure accordingly.
+func (handler *TxHandler) asyncVerifySignatureBatch(arg interface{}) interface{} {
+	txs := arg.([]*txBacklogMsg)
 
 	// build the transaction verification context
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		tx.verificationErr = fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
+		latestHdrErr := fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
+		for _, tx := range txs {
+			tx.verificationErr = latestHdrErr
+		}
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
+
+		// create verifier shared by all txn groups in this batch task
+		batchVerifier := crypto.MakeBatchVerifierWithHint(len(txs)) // XXX hint might not be enough for multisig, etc
+		for _, tx := range txs {
+			// pass batchVerifier to accumulate signatures to verifier
+			_, tx.verificationErr = verify.TxnGroupBatchVerify(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger, batchVerifier)
+		}
+		if batchVerifier.GetNumberOfEnqueuedSignatures() > 0 {
+			// verify all the signatures in the batch at once
+			if batchVerifier.Verify() != nil {
+				// one of the signatures failed. We must evaluate one-by-one instead.
+				for _, tx := range txs {
+					_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
+				}
+			}
+		}
 	}
 
-	select {
-	case handler.postVerificationQueue <- tx:
-	default:
-		// we failed to write to the output queue, since the queue was full.
-		// adding the metric here allows us to monitor how frequently it happens.
-		transactionMessagesDroppedFromPool.Inc(nil)
+	for _, tx := range txs {
+		select {
+		case handler.postVerificationQueue <- tx:
+		default:
+			// we failed to write to the output queue, since the queue was full.
+			// adding the metric here allows us to monitor how frequently it happens.
+			transactionMessagesDroppedFromPool.Inc(nil)
+		}
 	}
 	return nil
 }
