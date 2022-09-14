@@ -56,6 +56,7 @@ type benchConfig struct {
 	numPay uint64
 	numAst uint64
 	numApp uint64
+	blocks []bookkeeping.Block
 }
 
 func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
@@ -90,7 +91,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	}
 
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
-	inMem := true
+	inMem := false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
@@ -225,9 +226,9 @@ func addBlock(bc *benchConfig) {
 	vblk, err := bc.eval.GenerateBlock()
 	cert := agreement.Certificate{}
 	require.NoError(bc.b, err)
+	bc.blocks = append(bc.blocks, vblk.Block())
+
 	err = bc.l0.AddBlock(vblk.Block(), cert)
-	require.NoError(bc.b, err)
-	err = bc.l1.AddBlock(vblk.Block(), cert)
 	require.NoError(bc.b, err)
 
 	_, last := bc.l0.LatestCommitted()
@@ -240,7 +241,7 @@ func addBlock(bc *benchConfig) {
 }
 
 func BenchmarkBlockValidationMix(b *testing.B) {
-	numAstets := 10000
+	numAstets := 100
 	benchmarkBlockValidationMix(b, numAstets)
 }
 
@@ -253,7 +254,6 @@ func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
 
 	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
-	var blocks []bookkeeping.Block
 	fmt.Printf("Preparing transactions and adding the blocks (/%d): ", numBlocks)
 	evalTime := float64(0)
 	addBlockTime := float64(0)
@@ -282,20 +282,20 @@ func benchmarkBlockValidationMix(b *testing.B, numAstets int) {
 			}
 		}
 		if (currentRound+1)*10%numBlocks == 0 {
-			fmt.Printf("%d%% (%.1fsec) ", (currentRound+1)*100/numBlocks, time.Since(s3).Seconds())
+			fmt.Printf("%d%% (%.1fsec) ", (currentRound)*100/numBlocks, time.Since(s3).Seconds())
 			s3 = time.Now()
 		}
 
 	}
 	fmt.Printf("\n%s sec total (eval: %.1fsec  addBlock: %.1fsec)\n", time.Since(s2).String(), evalTime, addBlockTime)
-	b.Logf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)",
+	fmt.Printf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)",
 		numBlocks, bc.numPay/numBlocks, bc.numAst/numBlocks, bc.numApp/numBlocks)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
 	tt := time.Now()
 	b.ResetTimer()
-	for _, blk := range blocks {
+	for _, blk := range bc.blocks {
 		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
