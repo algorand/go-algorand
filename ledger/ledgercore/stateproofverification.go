@@ -22,7 +22,7 @@ import (
 )
 
 // TODO: test?
-// TODO: might be able to get rid of GeneratedRound using proto
+// TODO: GeneratedRound doesn't have to be saved in the DB
 
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
