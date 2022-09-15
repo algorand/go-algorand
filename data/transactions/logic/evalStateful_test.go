@@ -2374,6 +2374,9 @@ func TestReturnTypes(t *testing.T) {
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 
 		"block": "block BlkSeed",
+
+		"proto": "callsub p; p: proto 0 3",
+		"bury":  ": int 1; int 2; int 3; bury 2; pop; pop;",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2400,9 +2403,8 @@ func TestReturnTypes(t *testing.T) {
 		"bn256_scalar_mul": true,
 		"bn256_pairing":    true,
 
-		"proto":      true,
-		"frame_dig":  true,
-		"frame_bury": true,
+		"frame_dig":  true, // would need a "proto" subroutine
+		"frame_bury": true, // would need a "proto" subroutine
 	}
 
 	byName := OpsByName[LogicVersion]
@@ -2412,7 +2414,7 @@ func TestReturnTypes(t *testing.T) {
 			if (m & spec.Modes) == 0 {
 				continue
 			}
-			if skipCmd[name] {
+			if skipCmd[name] || spec.trusted {
 				continue
 			}
 			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {

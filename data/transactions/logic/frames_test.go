@@ -23,8 +23,9 @@ import (
 )
 
 const frameNonsense = `
+  return						// proto subs must appear in deadcode
  double:
-  proto 1 1
+  proto 1 2
   pushn 1						// one return value
   frame_dig -1
   int 2
@@ -33,9 +34,11 @@ const frameNonsense = `
   retsub
   pushint 2
   popn 1
+  dupn 4
+  bury 9
 `
 
-const frameCompiled = "f00101f301f1ff240bf200898102f401"
+const frameCompiled = "43f001024501f1ff240bf20089810246014704f309"
 
 func TestPushPopN(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -60,11 +63,13 @@ func TestPushPopN(t *testing.T) {
 	testPanics(t, notrack("int 1; int 0; popn 3"), fpVersion)
 
 	testAccepts(t, `pushn 250; pushn 250; pushn 250; pushn 250;
-                    popn 250;  popn 250;  popn 250;  popn 249; !`,
+	               popn 250;  popn 250;  popn 250;  popn 249; !`,
 		fpVersion)
+	// We could detect this in assembler if we checked pgm.stack > maxStackDepth
+	// at each step.
 	testPanics(t, `pushn 250; pushn 250; pushn 250; pushn 251
-                   popn 250;  popn 250;  popn 250;  popn 250; !`,
-		fpVersion)
+	              popn 250;  popn 250;  popn 250;  popn 250; !`,
+		fpVersion, "stack overflow")
 }
 
 func TestPushPopNTyping(t *testing.T) {
@@ -107,21 +112,81 @@ func TestSimpleFrame(t *testing.T) {
 func TestProtoChecks(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	// We should report an unlabeled `proto` at assembly time.  For bonus
-	// points, it should be illegal even if labeled, if the label was not in a
-	// deadcode region.
-	testPanics(t, "proto 0 0; int 1", fpVersion)
+	// We normally report a non-deadcode `proto` at assembly time.  But it still
+	// must fail at evaluation.
+	testPanics(t, notrack("proto 0 0; int 1"), fpVersion, "proto was executed without a callsub")
 	testAccepts(t, "callsub a; a: proto 0 0; int 1", fpVersion)
 
+	// the assembler could detect this, since we know stack height, but it's
+	// rare to KNOW the height, and hard to get the knowledge to the right place
 	testPanics(t, `
-    int 1
     callsub toodeep
-
 toodeep:
     proto 10 1
     int 1
     return
 `, fpVersion, "callsub to proto that requires 10 args")
+
+	// the assembler could detect this, since sub is one basic block
+	testPanics(t, `
+    int 5; int 10; callsub eatsargs
+    int 1; return
+eatsargs:
+    proto 2 1
+    +
+    retsub
+`, fpVersion, "retsub executed with stack below frame")
+
+	// the assembler could detect this, since sub is one basic block
+	testPanics(t, `
+    int 5; int 10; callsub donothing
+    int 1; return
+donothing:						// does not leave return value above args
+    proto 2 1
+    retsub
+`, fpVersion, "retsub executed with no return values on stack")
+
+	// the assembler could detect this, since sub is one basic block
+	testPanics(t, `
+    int 5; int 10; callsub only1
+    int 1; return
+only1:						// leaves only 1 return val
+    proto 2 2
+    dup2; +
+    retsub
+`, fpVersion, "retsub executed with 1 return values on stack")
+
+	testAccepts(t, `
+    int 5; int 10; callsub fine
+    int 1; return
+fine:
+    proto 2 2
+    dup2
+    retsub
+`, fpVersion)
+
+	testAccepts(t, `
+    int 5; int 10; callsub extra
+    int 1; return
+extra:
+    proto 2 2
+    dup2; dup2
+    retsub
+`, fpVersion)
+
+	// the assembler could potentially complain, since the sub is one basic block
+	testAccepts(t, notrack(`
+ int 10
+ int 20
+ callsub main
+ int 1; return
+main:
+ proto 2 1
+ +           // This consumes the top arg. We normally complain in assembly.
+ dup; dup	 // But the dup;dup restores it, so it _evals_ fine.
+ retsub
+`), AssemblerMaxVersion)
+
 }
 
 func TestVoidSub(t *testing.T) {
@@ -244,7 +309,7 @@ func TestFrameAccess(t *testing.T) {
         ==
 `, fpVersion)
 
-	testPanics(t, `
+	testPanics(t, notrack(`
         b main
    add: proto 2 1
         frame_dig -1
@@ -256,9 +321,9 @@ func TestFrameAccess(t *testing.T) {
         callsub add
         int 10
         ==
-`, fpVersion, "frame_dig -3 in sub with 2")
+`), fpVersion, "frame_dig -3 in sub with 2")
 
-	testPanics(t, `
+	testPanics(t, notrack(`
         b main
    add: proto 2 1
         frame_dig -1
@@ -271,9 +336,9 @@ func TestFrameAccess(t *testing.T) {
         callsub add
         int 10
         ==
-`, fpVersion, "frame_bury -3 in sub with 2")
+`), fpVersion, "frame_bury -3 in sub with 2")
 
-	testPanics(t, `
+	source := `
         b main
    add: proto 2 1
         frame_dig 0				// return slot. but wasn't allocated
@@ -283,9 +348,11 @@ func TestFrameAccess(t *testing.T) {
         callsub add
         int 1
         return
-`, fpVersion, "frame_dig above stack")
+`
+	testProg(t, source, fpVersion, Expect{4, "frame_dig above stack"})
+	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 
-	testPanics(t, `
+	source = `
         b main
    add: proto 2 1
         pushn 3					// allocate return slot plus two locals
@@ -296,12 +363,14 @@ func TestFrameAccess(t *testing.T) {
         callsub add
         int 1
         return
-`, fpVersion, "frame_dig above stack")
+`
+	testProg(t, source, fpVersion, Expect{5, "frame_dig above stack"})
+	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 
 	// Note that at the moment of frame_bury, the stack IS big enough, because
 	// the 4 would essentially be written over itself. But because frame_bury
 	// pops, we consider this to be beyond the stack.
-	testPanics(t, `
+	source = `
         b main
    add: proto 2 1
         pushn 3					// allocate return slot plus two locals
@@ -313,53 +382,80 @@ func TestFrameAccess(t *testing.T) {
         callsub add
         int 1
         return
-`, fpVersion, "frame_bury above stack")
+`
+	testProg(t, source, fpVersion, Expect{6, "frame_bury above stack"})
+	testPanics(t, notrack(source), fpVersion, "frame_bury above stack")
 }
 
 func TestFrameDigAtStart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// This is debatable, perhaps we should begin programs with a callstack
-	// where the frame pointer is at 0.  This would allow storing "locals" at
-	// the bottom of the stack, just like a subroutine.
 	testPanics(t, `
         frame_dig 1
 `, fpVersion, "frame_dig with empty callstack")
 
-	// This should certainly panic, but maybe only because the arg is negative,
-	// thus it would be looking below the stack if we start programs with a 0
-	// frame pointer.
 	testPanics(t, `
         frame_dig -1
 `, fpVersion, "frame_dig with empty callstack")
 }
 
-func TestFrameDigAboveStack(t *testing.T) {
+func TestFrameAccessAboveStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testPanics(t, `
+	source := `
      int 1
      callsub main
 main:
      proto 1 1
      pop						// argument popped
      frame_dig -1				// but then frame_dig used to get at it
-`, fpVersion, "frame_dig above stack")
+`
+	testProg(t, source, fpVersion, Expect{7, "frame_dig above stack"})
+	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
+
+	testAccepts(t, `
+     int 2
+     callsub main
+     int 1; ==; return
+main:
+     proto 1 1
+     int 7
+     frame_dig 0; int 7; ==;
+     frame_bury 0;
+     retsub
+`, fpVersion)
+
+	// almost the same but try to use a "local" slot without pushing first
+	source = `
+     int 2
+     callsub main
+     int 1; ==; return
+main:
+     proto 1 1
+     int 7
+     frame_dig 1; int 7; ==;
+     frame_bury 1;
+     retsub
+`
+	testProg(t, source, fpVersion, Expect{8, "frame_dig above stack"})
+	testPanics(t, notrack(source), fpVersion)
 }
 
 func TestFrameAccessBelowStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testPanics(t, `
+	source := `
      int 1
      callsub main
 main:
      proto 1 1
      frame_dig -10				// digging down below arguments
-`, fpVersion, "frame_dig -10 in sub with 1 arg")
+`
+	testProg(t, source, fpVersion, Expect{6, "frame_dig -10 in sub with 1 arg..."})
+	testPanics(t, notrack(source), fpVersion, "frame_dig -10 in sub with 1 arg")
 
 	testPanics(t, `
      int 1
@@ -368,19 +464,45 @@ main:
      frame_dig -10				// digging down below arguments
 `, fpVersion, "frame_dig below stack")
 
-	testPanics(t, `
+	source = `
      int 1
      callsub main
 main:
-     proto 1 1
+     proto 1 15
      frame_bury -10				// burying down below arguments
-`, fpVersion, "frame_bury -10 in sub with 1 arg")
+`
+	testProg(t, source, fpVersion, Expect{6, "frame_bury -10 in sub with 1 arg..."})
+	testPanics(t, notrack(source), fpVersion, "frame_bury -10 in sub with 1 arg")
 
-	testPanics(t, `
+	// Without `proto`, frame_bury can't be checked by assembler, but still panics
+	source = `
      int 1
      callsub main
 main:
      frame_bury -10				// burying down below arguments
-`, fpVersion, "frame_bury below stack")
+`
+	testPanics(t, source, fpVersion, "frame_bury below stack")
 
+}
+
+// TestDirectDig is an example of using dig instead of frame_dig, notice that
+// the offset needs to account for the added stack height of second call.
+func TestDirectDig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+     int 3
+     int 5
+     callsub double_both
+     +
+     int 16; ==; return
+double_both:
+     proto 2 2
+     dig 1; int 2; *			// dig for first arg
+     dig 1; int 2; *			// dig for second
+     retsub
+`
+	testProg(t, source, fpVersion)
+	testAccepts(t, notrack(source), fpVersion)
 }

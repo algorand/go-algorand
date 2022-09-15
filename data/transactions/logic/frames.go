@@ -86,6 +86,18 @@ func opFrameBury(cx *EvalContext) error {
 	cx.stack = cx.stack[:last] // pop value
 	return nil
 }
+func opBury(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // value
+	i := int(cx.program[cx.pc+1])
+
+	idx := last - i
+	if idx < 0 || idx == last {
+		return errors.New("bury outside stack")
+	}
+	cx.stack[idx] = cx.stack[last]
+	cx.stack = cx.stack[:last] // pop value
+	return nil
+}
 
 func opPushN(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]

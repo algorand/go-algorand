@@ -1029,6 +1029,37 @@
       ]
     },
     {
+      "Opcode": 69,
+      "Name": "pushn",
+      "Size": 2,
+      "Doc": "Push N 0s onto the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 70,
+      "Name": "popn",
+      "Size": 2,
+      "Doc": "Remove N values from the top of the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 71,
+      "Name": "dupn",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "duplicate A, N times",
+      "ImmediateNote": "{uint8 copy count}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
       "Opcode": 72,
       "Name": "pop",
       "Args": ".",
@@ -1299,7 +1330,7 @@
       "Size": 2,
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
       "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
-      "ImmediateNote": "{string return type}",
+      "ImmediateNote": "{uint8 return type}",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -2349,20 +2380,11 @@
     },
     {
       "Opcode": 243,
-      "Name": "pushn",
+      "Name": "bury",
+      "Args": ".",
       "Size": 2,
-      "Doc": "Push N 0s onto the stack",
-      "ImmediateNote": "{uint8 stack depth}",
-      "Groups": [
-        "Flow Control"
-      ]
-    },
-    {
-      "Opcode": 244,
-      "Name": "popn",
-      "Size": 2,
-      "Doc": "Remove N values from the top of the stack",
-      "ImmediateNote": "{uint8 stack depth}",
+      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
+      "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
       ]

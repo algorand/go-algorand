@@ -258,10 +258,23 @@ func immKinded(kind immKind, names ...string) OpDetails {
 	return d
 }
 
+// this ought to be removed, but trying to minimize diffs until switch is merged
 func stacky(typer refineFunc, imms ...string) OpDetails {
 	d := immediates(imms...)
 	d.refine = typer
 	return d
+}
+
+func typed(typer refineFunc) OpDetails {
+	d := detDefault()
+	d.refine = typer
+	return d
+}
+
+func (d OpDetails) typed(typer refineFunc) OpDetails {
+	clone := d
+	clone.refine = typer
+	return clone
 }
 
 // field is used to create an opDetails for an opcode with a single field
@@ -493,11 +506,12 @@ var OpSpecs = []OpSpec{
 	{0x42, "b", opB, proto(":"), 2, detBranch()},
 	{0x43, "return", opReturn, proto("i:x"), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
+	{0x45, "pushn", opPushN, proto(":", "", "[N zeros]"), fpVersion, stacky(typePushN, "n").trust()},
+	{0x46, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, stacky(typePopN, "n").trust()},
+	{0x47, "dupn", opDupN, proto("a:", "", "A, b[N copies of A]"), fpVersion, stacky(typeDupN, "n").trust()},
 	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
 	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, stacky(typeDup)},
 	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, stacky(typeDupTwo)},
-	// There must be at least one thing on the stack for dig, but
-	// it would be nice if we did better checking than that.
 	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, stacky(typeDig, "n")},
 	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, stacky(typeSwap)},
 	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, stacky(typeSelect)},
@@ -622,12 +636,10 @@ var OpSpecs = []OpSpec{
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 
 	// protoByte is a named constant because opCallsub needs to know it.
-	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r")},
-	{0xf1, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i")},
-	{0xf2, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i")},
-	{0xf3, "pushn", opPushN, proto(":", "", "[N zeros]"), fpVersion, stacky(typePushN, "n").trust()},
-	{0xf4, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, stacky(typePopN, "n").trust()},
-	{0xf5, "dupn", opDupN, proto("a:", "", "A [N copies of A]"), fpVersion, stacky(typePushN, "n").trust()},
+	{protoByte, "proto", opProto, proto(":"), fpVersion, stacky(typeProto, "a", "r")},
+	{0xf1, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0xf2, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
+	{0xf3, "bury", opBury, proto("a:"), fpVersion, stacky(typeBury, "n")},
 }
 
 type sortByOpcode []OpSpec

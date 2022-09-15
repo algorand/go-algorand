@@ -2147,13 +2147,20 @@ func opRetSub(cx *EvalContext) error {
 		return errors.New("retsub with empty callstack")
 	}
 	frame := cx.callstack[top]
-	if frame.clear {
-		argstart := frame.height - frame.args
+	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
 		expect := frame.height + frame.returns
-		if len(cx.stack) < expect {
-			found := len(cx.stack) - frame.height
-			return fmt.Errorf("retsub expected %d values, found %d", frame.returns, found)
+		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
+			switch {
+			case len(cx.stack) < frame.height:
+				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
+			case len(cx.stack) == frame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			default:
+				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
+					expect-len(cx.stack), frame.returns)
+			}
 		}
+		argstart := frame.height - frame.args
 		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
 		cx.stack = cx.stack[:argstart+frame.returns]
 	}

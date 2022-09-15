@@ -588,7 +588,9 @@ Account fields used in the `acct_params_get` opcode.
 | `pushn n` | Push N 0s onto the stack |
 | `dup` | duplicate A |
 | `dup2` | duplicate A and B |
+| `dupn n` | duplicate A, N times |
 | `dig n` | Nth value from the top of the stack. dig 0 is equivalent to dup |
+| `bury n` | Replace the Nth value from the top of the stack. bury 0 fails. |
 | `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N. |
 | `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N. |
 | `frame_dig i` | Nth (signed) value from the frame pointer. |

@@ -126,7 +126,9 @@ var opDocByName = map[string]string{
 	"pop":     "discard A",
 	"dup":     "duplicate A",
 	"dup2":    "duplicate A and B",
+	"dupn":    "duplicate A, N times",
 	"dig":     "Nth value from the top of the stack. dig 0 is equivalent to dup",
+	"bury":    "Replace the Nth value from the top of the stack. bury 0 fails.",
 	"cover":   "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.",
 	"uncover": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.",
 	"swap":    "swaps A and B on stack",
@@ -244,6 +246,7 @@ var opcodeImmediateNotes = map[string]string{
 	"extract":   "{uint8 start position} {uint8 length}",
 	"replace2":  "{uint8 start position}",
 	"dig":       "{uint8 depth}",
+	"bury":      "{uint8 depth}",
 	"cover":     "{uint8 depth}",
 	"uncover":   "{uint8 depth}",
 
@@ -265,7 +268,7 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{string return type}",
+	"json_ref":      "{uint8 return type}",
 
 	"vrf_verify": "{uint8 parameters index}",
 	"block":      "{uint8 block field}",
@@ -277,6 +280,7 @@ var opcodeImmediateNotes = map[string]string{
 	"frame_bury": "{int8 frame slot}",
 	"pushn":      "{uint8 stack depth}",
 	"popn":       "{uint8 stack depth}",
+	"dupn":       "{uint8 copy count}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -356,7 +360,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "pushn", "dup", "dup2", "dig", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "retsub", "switch", "proto"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "pushn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "retsub", "switch", "proto"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }

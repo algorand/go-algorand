@@ -610,6 +610,27 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
+## pushn n
+
+- Opcode: 0x45 {uint8 stack depth}
+- Stack: ... &rarr; ..., [N zeros]
+- Push N 0s onto the stack
+- Availability: v8
+
+## popn n
+
+- Opcode: 0x46 {uint8 stack depth}
+- Stack: ..., [N items] &rarr; ...
+- Remove N values from the top of the stack
+- Availability: v8
+
+## dupn n
+
+- Opcode: 0x47 {uint8 copy count}
+- Stack: ..., A &rarr; ..., A, b[N copies of A]
+- duplicate A, N times
+- Availability: v8
+
 ## pop
 
 - Opcode: 0x48
@@ -790,7 +811,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## json_ref r
 
-- Opcode: 0x5f {string return type}
+- Opcode: 0x5f {uint8 return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -1442,16 +1463,9 @@ Fails unless the last instruction executed was a `callsub`.
 - Replace the Nth (signed) value from the frame pointer in the stack
 - Availability: v8
 
-## pushn n
+## bury n
 
-- Opcode: 0xf3 {uint8 stack depth}
-- Stack: ... &rarr; ..., [N zeros]
-- Push N 0s onto the stack
-- Availability: v8
-
-## popn n
-
-- Opcode: 0xf4 {uint8 stack depth}
-- Stack: ..., [N items] &rarr; ...
-- Remove N values from the top of the stack
+- Opcode: 0xf3 {uint8 depth}
+- Stack: ..., A &rarr; ...
+- Replace the Nth value from the top of the stack. bury 0 fails.
 - Availability: v8
