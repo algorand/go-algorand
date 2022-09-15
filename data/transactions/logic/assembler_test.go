@@ -2784,6 +2784,13 @@ func TestAssembleSwitch(t *testing.T) {
 	`
 	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
 
+	// fail when target index != uint64
+	testProg(t, `
+	byte "fail"
+    switchi label1
+    labe11:
+	`, AssemblerMaxVersion, Expect{3, "switchi label1 arg 0 wanted type uint64..."})
+
 	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
 	testProg(t, `
 int 0
