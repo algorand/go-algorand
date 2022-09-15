@@ -224,9 +224,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	// set speculative block assembly based on the current local configuration
 	status.SpeculativeAsmTimeDuration = s.parameters.Local.ProposalAssemblyTime + s.parameters.Local.SpeculativeBlockAssemblyGraceTime
 	for {
-		status.ConcensusVersion, err = s.Ledger.ConsensusVersion(status.Round)
+		status.ConsensusVersion, err = s.Ledger.ConsensusVersion(status.Round)
 		if err != nil {
-			s.Panicf("cannot read latest concensus version, round %d: %v", status.Round, err)
+			s.Panicf("cannot read latest consensus version, round %d: %v", status.Round, err)
 		}
 
 		output <- a
