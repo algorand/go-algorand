@@ -246,6 +246,11 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
+		interval := config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval
+		if r%interval == 0 {
+			s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound + basics.Round(interval))
+			continue
+		}
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 }
@@ -570,12 +575,19 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest(3 * proto.StateProofInterval)
+	s.advanceLatest(1 * proto.StateProofInterval) // going to rnd 256
 	// Expect all signatures to be broadcast.
 
 	require.Zero(t, s.GetNumDeletedKeys())
 	w.signStateProof(s.blocks[basics.Round(proto.StateProofInterval)])
-	require.Equal(t, s.GetNumDeletedKeys(), nParticipants)
+	s.advanceLatest(2 * proto.StateProofInterval) // advancing rounds up to 768
+
+	// chose 513 because that is the next round, and the signer must've passed through the deletion function by now.
+	for w.lastSignedBlock() < 513 {
+		time.Sleep(time.Millisecond * 100)
+	}
+
+	require.Equal(t, nParticipants, s.GetNumDeletedKeys())
 }
 
 func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
