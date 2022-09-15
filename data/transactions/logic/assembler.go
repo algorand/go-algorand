@@ -916,11 +916,12 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
-	numOffsets := uint64(len(args))
+	if len(args) > 256 {
+		return ops.errorf("%s cannot take more than 256 labels", spec.Name)
+	}
+	numOffsets := len(args)
 	ops.pending.WriteByte(spec.Opcode)
-	var scratch [binary.MaxVarintLen64]byte
-	vlen := binary.PutUvarint(scratch[:], uint64(len(args)))
-	ops.pending.Write(scratch[:vlen])
+	ops.pending.WriteByte(byte(numOffsets))
 	opEndPos := ops.pending.Len() + 2*int(numOffsets)
 	for _, arg := range args {
 		ops.referToLabel(ops.pending.Len(), arg, opEndPos)

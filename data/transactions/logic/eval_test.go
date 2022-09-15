@@ -5593,4 +5593,18 @@ int 1
 `, 8)
 
 	testPanics(t, notrack("switchi; int 1"), 8)
+
+	// make the switch the final instruction
+	testAccepts(t, `
+int 1
+int 0
+switchi done1 done2; done1: ; done2: ;
+`, 8)
+
+	// make the switch the final instruction, and don't match
+	testAccepts(t, `
+int 1
+int 88
+switchi done1 done2; done1: ; done2: ;
+`, 8)
 }

@@ -18,7 +18,6 @@ package logic
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -395,13 +394,15 @@ pushint 1
 replace3
 `
 
-const v8Nonsense = v7Nonsense + pairingNonsense + `
+const switchNonsense = `
 switch_label0:
 pushint 1
 switchi switch_label0 switch_label1
 switch_label1:
 pushint 1
 `
+
+const v8Nonsense = v7Nonsense + pairingNonsense + switchNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -1971,8 +1972,7 @@ intc_0 // 1
 bnz label1
 label1:
 `, v)
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
+			ops := testProg(t, source, v)
 			dis, err := Disassemble(ops.Program)
 			require.NoError(t, err)
 			require.Equal(t, source, dis)
@@ -2085,8 +2085,7 @@ func TestHasStatefulOps(t *testing.T) {
 	t.Parallel()
 
 	source := "int 1"
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	has, err := HasStatefulOps(ops.Program)
 	require.NoError(t, err)
 	require.False(t, has)
@@ -2096,8 +2095,7 @@ int 1
 app_opted_in
 err
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	has, err = HasStatefulOps(ops.Program)
 	require.NoError(t, err)
 	require.True(t, has)
@@ -2274,46 +2272,38 @@ func TestAssemblePragmaVersion(t *testing.T) {
 	text := `#pragma version 1
 int 1
 `
-	ops, err := AssembleStringWithVersion(text, 1)
-	require.NoError(t, err)
-	ops1, err := AssembleStringWithVersion("int 1", 1)
-	require.NoError(t, err)
+	ops := testProg(t, text, 1)
+	ops1 := testProg(t, "int 1", 1)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	testProg(t, text, 0, Expect{1, "version mismatch..."})
 	testProg(t, text, 2, Expect{1, "version mismatch..."})
 	testProg(t, text, assemblerNoVersion)
 
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
+	ops = testProg(t, text, assemblerNoVersion)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	text = `#pragma version 2
 int 1
 `
-	ops, err = AssembleStringWithVersion(text, 2)
-	require.NoError(t, err)
-	ops2, err := AssembleStringWithVersion("int 1", 2)
-	require.NoError(t, err)
+	ops = testProg(t, text, 2)
+	ops2 := testProg(t, "int 1", 2)
 	require.Equal(t, ops2.Program, ops.Program)
 
 	testProg(t, text, 0, Expect{1, "version mismatch..."})
 	testProg(t, text, 1, Expect{1, "version mismatch..."})
 
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
+	ops = testProg(t, text, assemblerNoVersion)
 	require.Equal(t, ops2.Program, ops.Program)
 
 	// check if no version it defaults to v1
 	text = `byte "test"
 len
 `
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
-	ops1, err = AssembleStringWithVersion(text, 1)
+	ops = testProg(t, text, assemblerNoVersion)
+	ops1 = testProg(t, text, 1)
 	require.Equal(t, ops1.Program, ops.Program)
-	require.NoError(t, err)
-	ops2, err = AssembleString(text)
+	ops2, err := AssembleString(text)
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
@@ -2341,9 +2331,8 @@ func TestErrShortBytecblock(t *testing.T) {
 	t.Parallel()
 
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
-	ops, err := AssembleStringWithVersion(text, 1)
-	require.NoError(t, err)
-	_, _, err = parseIntcblock(ops.Program, 1)
+	ops := testProg(t, text, 1)
+	_, _, err := parseIntcblock(ops.Program, 1)
 	require.Equal(t, err, errShortIntcblock)
 
 	var cx EvalContext
@@ -2385,8 +2374,7 @@ func TestMethodWarning(t *testing.T) {
 	for _, test := range tests {
 		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
-			ops, err := AssembleStringWithVersion(src, v)
-			require.NoError(t, err)
+			ops := testProg(t, src, v)
 
 			if test.pass {
 				require.Len(t, ops.Warnings, 0)
@@ -2689,7 +2677,7 @@ func TestMergeProtos(t *testing.T) {
 func TestGetSpec(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	ops, _ := AssembleStringWithVersion("int 1", AssemblerMaxVersion)
+	ops := testProg(t, "int 1", AssemblerMaxVersion)
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
 	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
@@ -2798,39 +2786,37 @@ switchi
 int 1
 `, AssemblerMaxVersion)
 
-	// confirm size of varuint list size
+	// confirm arg limit
 	source = `
 	pushint 1
 	switchi label1 label2
 	label1:
 	label2:
 	`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	val, bytesUsed := binary.Uvarint(ops.Program[4:])
-	require.Equal(t, uint64(2), val)
-	require.Equal(t, 1, bytesUsed)
-
-	var labelReferences []string
-	for i := 0; i < (1 << 9); i++ {
-		labelReferences = append(labelReferences, fmt.Sprintf("label%d", i))
-	}
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 9) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*2)
 
 	var labels []string
-	for i := 0; i < (1 << 9); i++ {
-		labels = append(labels, fmt.Sprintf("label%d:", i))
+	for i := 0; i < 256; i++ {
+		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 
+	// test that 256 labels is ok
 	source = fmt.Sprintf(`
 	pushint 1
 	switchi %s
 	%s
-	`, strings.Join(labelReferences, " "), strings.Join(labels, "\n"))
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	val, bytesUsed = binary.Uvarint(ops.Program[4:])
-	require.Equal(t, uint64(1<<9), val)
-	require.Equal(t, 2, bytesUsed)
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 517) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*256)
+
+	// 257 is too many
+	source = fmt.Sprintf(`
+	pushint 1
+	switchi %s extra
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switchi cannot take more than 256 labels"})
 
 	// allow duplicate label reference
 	source = `

@@ -194,7 +194,7 @@ var opDocByName = map[string]string{
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
-	"switchi": "branch to target at index A. Fail if index A is out of bounds.",
+	"switchi": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
 }
 
 // OpDoc returns a description of the op
@@ -264,7 +264,7 @@ var opcodeImmediateNotes = map[string]string{
 	"vrf_verify": "{uint8 parameters index}",
 	"block":      "{uint8 block field}",
 
-	"switchi": "{varuint length} [{int16 branch offset, big-endian}, ...]",
+	"switchi": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -327,7 +327,6 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
-	"switchi":  "The `switchi` instruction opcode is followed by `n`, the number of targets, each of which are encoded as 2 byte values indicating the position of the target label relative to the end of the `switchi` instruction (i.e. the offset). The last element on the stack represents the index of the target to branch to. If the index is greater than or equal to n, then evaluation falls through to the next instruction. Otherwise, the program will branch to `pc + 1 + sizeof(n) + 2 * n + target[index]`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.)",
 }
 
 // OpDocExtra returns extra documentation text about an op
