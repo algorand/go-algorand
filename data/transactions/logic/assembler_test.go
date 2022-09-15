@@ -2782,14 +2782,21 @@ func TestAssembleSwitch(t *testing.T) {
 	switchi label1 label2
 	label1:
 	`
-	testProg(t, source, 8, NewExpect(3, "reference to undefined label \"label2\""))
+	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
+
+	// fail when target index != uint64
+	testProg(t, `
+	byte "fail"
+    switchi label1
+    labe11:
+	`, AssemblerMaxVersion, Expect{3, "switchi label1 arg 0 wanted type uint64..."})
 
 	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
 	testProg(t, `
 int 0
 switchi
 int 1
-`, 8)
+`, AssemblerMaxVersion)
 
 	// confirm size of varuint list size
 	source = `
@@ -2798,7 +2805,7 @@ int 1
 	label1:
 	label2:
 	`
-	ops, err := AssembleStringWithVersion(source, 8)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	val, bytesUsed := binary.Uvarint(ops.Program[4:])
 	require.Equal(t, uint64(2), val)
@@ -2819,7 +2826,7 @@ int 1
 	switchi %s
 	%s
 	`, strings.Join(labelReferences, " "), strings.Join(labels, "\n"))
-	ops, err = AssembleStringWithVersion(source, 8)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	val, bytesUsed = binary.Uvarint(ops.Program[4:])
 	require.Equal(t, uint64(1<<9), val)
@@ -2831,5 +2838,5 @@ int 1
 	switchi label1 label1
 	label1:
 	`
-	testProg(t, source, 8)
+	testProg(t, source, AssemblerMaxVersion)
 }
