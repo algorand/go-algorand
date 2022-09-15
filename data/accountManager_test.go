@@ -250,7 +250,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	a.Equal(1, len(res))
 }
 
-func TestAccountManagerOverlappingStateProofKeys1(t *testing.T) {
+func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 

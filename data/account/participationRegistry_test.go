@@ -957,7 +957,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	}
 }
 
-func TestGetRoundSecretsWhithout(t *testing.T) {
+func TestGetRoundSecretsWithNilStateProofVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 	registry, dbfile := getRegistry(t)
