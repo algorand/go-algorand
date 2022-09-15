@@ -87,6 +87,8 @@ var (
 	TransactionMessagesHandled = MetricName{Name: "algod_transaction_messages_handled", Description: "Number of transaction messages handled"}
 	// TransactionMessagesDroppedFromBacklog "Number of transaction messages dropped from backlog"
 	TransactionMessagesDroppedFromBacklog = MetricName{Name: "algod_transaction_messages_dropped_backlog", Description: "Number of transaction messages dropped from backlog"}
+	// TransactionMessagesDroppedFromBatcher "Number of transaction messages dropped from batcher"
+	TransactionMessagesDroppedFromBatcher = MetricName{Name: "algod_transaction_messages_dropped_batcher", Description: "Number of transaction messages dropped from batcher"}
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
 )

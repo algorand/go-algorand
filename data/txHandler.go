@@ -44,6 +44,7 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+var transactionMessagesDroppedFromBatcher = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBatcher)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
@@ -61,8 +62,10 @@ type TxHandler struct {
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
+	batcherQueue          chan *txBacklogMsg
 	postVerificationQueue chan *txBacklogMsg
 	backlogWg             sync.WaitGroup
+	batcherWg             sync.WaitGroup
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
@@ -88,6 +91,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		ledger:                ledger,
 		txVerificationPool:    executionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
+		batcherQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
 	}
@@ -103,12 +107,15 @@ func (handler *TxHandler) Start() {
 	})
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
+	handler.batcherWg.Add(1)
+	go handler.batcherWorker()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Stop() {
 	handler.ctxCancel()
 	handler.backlogWg.Wait()
+	handler.batcherWg.Wait()
 }
 
 func reencode(stxns []transactions.SignedTxn) []byte {
@@ -147,8 +154,13 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			// enqueue the task to the verification pool.
-			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignatureBatch, wi, nil)
+			select {
+			case handler.batcherQueue <- wi:
+			default:
+				// we failed to write to the batcher queue, since the queue was full.
+				// adding the metric here allows us to monitor how frequently it happens.
+				transactionMessagesDroppedFromBatcher.Inc(nil)
+			}
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
@@ -159,6 +171,34 @@ func (handler *TxHandler) backlogWorker() {
 		case <-handler.ctx.Done():
 			return
 		}
+	}
+}
+
+const maxTxBatchSize = 64
+
+// batcherWorker is the worker go routine that process the incoming messages from the postVerificationQueue and backlogQueue channels
+// and dispatches them further.
+func (handler *TxHandler) batcherWorker() {
+	defer handler.batcherWg.Done()
+	for { // loop forever
+		var batch []*txBacklogMsg
+		for {
+			select {
+			case wi, ok := <-handler.batcherQueue:
+				if !ok {
+					return
+				}
+				batch = append(batch, wi)
+				if len(batch) > maxTxBatchSize {
+					break
+				}
+			default:
+				break // break out of the loop
+			}
+		}
+
+		// enqueue the current batch
+		handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignatureBatch, batch, nil)
 	}
 }
 
