@@ -1549,7 +1549,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.Err != nil {
-				logging.Base().Errorf("evaluation error: %w", txgroup.Err)
+				logging.Base().Errorf("eval prefetcher error: %w", txgroup.Err)
 			}
 
 			if txgroup.Err == nil {
@@ -1561,34 +1561,44 @@ transactionGroupLoop:
 				for _, lr := range txgroup.Resources {
 					if lr.Address == nil {
 						// we attempted to look for the creator, and failed.
-						base.creators[creatable{cindex: lr.CreatableIndex, ctype: lr.CreatableType}] =
-							foundAddress{exists: false}
+						creatableKey := creatable{cindex: lr.CreatableIndex, ctype: lr.CreatableType}
+						base.creators[creatableKey] = foundAddress{exists: false}
 						continue
 					}
 					if lr.CreatableType == basics.AssetCreatable {
+						assetKey := ledgercore.AccountAsset{
+							Address: *lr.Address,
+							Asset:   basics.AssetIndex(lr.CreatableIndex),
+						}
+
 						if lr.Resource.AssetHolding != nil {
-							base.assets[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetHolding{value: *lr.Resource.AssetHolding, exists: true}
+							base.assets[assetKey] = cachedAssetHolding{value: *lr.Resource.AssetHolding, exists: true}
 						} else {
-							base.assets[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetHolding{exists: false}
+							base.assets[assetKey] = cachedAssetHolding{exists: false}
 						}
 						if lr.Resource.AssetParams != nil {
-							base.assetParams[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetParams{value: *lr.Resource.AssetParams, exists: true}
-							base.creators[creatable{cindex: lr.CreatableIndex, ctype: basics.AssetCreatable}] = foundAddress{address: *lr.Address, exists: true}
+							creatableKey := creatable{cindex: lr.CreatableIndex, ctype: basics.AssetCreatable}
+							base.assetParams[assetKey] = cachedAssetParams{value: *lr.Resource.AssetParams, exists: true}
+							base.creators[creatableKey] = foundAddress{address: *lr.Address, exists: true}
 						} else {
-							base.assetParams[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetParams{exists: false}
-
+							base.assetParams[assetKey] = cachedAssetParams{exists: false}
 						}
 					} else {
+						appKey := ledgercore.AccountApp{
+							Address: *lr.Address,
+							App:     basics.AppIndex(lr.CreatableIndex),
+						}
 						if lr.Resource.AppLocalState != nil {
-							base.appLocalStates[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppLocalState{value: *lr.Resource.AppLocalState, exists: true}
+							base.appLocalStates[appKey] = cachedAppLocalState{value: *lr.Resource.AppLocalState, exists: true}
 						} else {
-							base.appLocalStates[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppLocalState{exists: false}
+							base.appLocalStates[appKey] = cachedAppLocalState{exists: false}
 						}
 						if lr.Resource.AppParams != nil {
-							base.appParams[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppParams{value: *lr.Resource.AppParams, exists: true}
-							base.creators[creatable{cindex: lr.CreatableIndex, ctype: basics.AppCreatable}] = foundAddress{address: *lr.Address, exists: true}
+							creatableKey := creatable{cindex: lr.CreatableIndex, ctype: basics.AppCreatable}
+							base.appParams[appKey] = cachedAppParams{value: *lr.Resource.AppParams, exists: true}
+							base.creators[creatableKey] = foundAddress{address: *lr.Address, exists: true}
 						} else {
-							base.appParams[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppParams{exists: false}
+							base.appParams[appKey] = cachedAppParams{exists: false}
 						}
 					}
 				}
