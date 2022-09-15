@@ -21,6 +21,9 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"testing"
 	"time"
@@ -1096,6 +1099,110 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		b.Run(fmt.Sprintf("PendingTxGroups-%d", bps), func(b *testing.B) {
 			sub(b, bps)
 		})
+	}
+}
+
+// BenchmarkTransactionPoolRecompute attempts to build a transaction pool of 3x block size
+// and then calls recomputeBlockEvaluator, to update the pool given the just-committed txns.
+// For b.N is does this process repeatedly given the size of N.
+func BenchmarkTransactionPoolRecompute(b *testing.B) {
+	b.Log("Running with b.N", b.N)
+	poolSize := 100000
+	numOfAccounts := 100
+	numTransactions := 75000
+	blockTxnCount := 25000
+
+	myVersion := protocol.ConsensusVersion("test-large-blocks")
+	myProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	if myProto.MaxTxnBytesPerBlock != 5*1024*1024 {
+		b.FailNow() // intended to use with 5MB blocks
+	}
+	config.Consensus[myVersion] = myProto
+
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	l := mockLedger(b, initAccFixed(addresses, 1<<50), myVersion)
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = poolSize
+	cfg.EnableProcessBlockStats = false
+
+	setupPool := func() (*TransactionPool, map[transactions.Txid]ledgercore.IncludedTransactions, uint) {
+		transactionPool := MakeTransactionPool(l, cfg, logging.Base())
+
+		// make some transactions
+		var signedTransactions []transactions.SignedTxn
+		for i := 0; i < numTransactions; i++ {
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      addresses[i%numOfAccounts],
+					Fee:         basics.MicroAlgos{Raw: 20000 + proto.MinTxnFee},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					GenesisHash: l.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: addresses[rand.Intn(numOfAccounts)],
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance + uint64(rand.Intn(1<<32))},
+				},
+			}
+
+			signedTx := tx.Sign(secrets[i%numOfAccounts])
+			signedTransactions = append(signedTransactions, signedTx)
+			require.NoError(b, transactionPool.RememberOne(signedTx))
+		}
+
+		// make args for recomputeBlockEvaluator() like OnNewBlock() would
+		var knownCommitted uint
+		committedTxIds := make(map[transactions.Txid]ledgercore.IncludedTransactions)
+		for i := 0; i < blockTxnCount; i++ {
+			knownCommitted++
+			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
+			committedTxIds[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
+		}
+		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds, %d knownCommitted",
+			len(signedTransactions), len(committedTxIds), knownCommitted)
+		b.Logf("transactionPool pendingTxGroups %d rememberedTxGroups %d",
+			len(transactionPool.pendingTxGroups), len(transactionPool.rememberedTxGroups))
+		return transactionPool, committedTxIds, knownCommitted
+	}
+
+	transactionPool := make([]*TransactionPool, b.N)
+	committedTxIds := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
+	knownCommitted := make([]uint, b.N)
+	for i := 0; i < b.N; i++ {
+		transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+	}
+	time.Sleep(time.Second)
+	runtime.GC()
+	// CPU profiler if CPUPROFILE set
+	var profF *os.File
+	if os.Getenv("CPUPROFILE") != "" {
+		var err error
+		profF, err = os.Create(fmt.Sprintf("recomputePool-%d-%d.prof", b.N, crypto.RandUint64()))
+		require.NoError(b, err)
+	}
+
+	// call recomputeBlockEvaluator
+	if profF != nil {
+		pprof.StartCPUProfile(profF)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+	}
+	b.StopTimer()
+	if profF != nil {
+		pprof.StopCPUProfile()
 	}
 }
 
