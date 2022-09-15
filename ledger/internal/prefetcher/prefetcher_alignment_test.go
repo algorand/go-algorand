@@ -501,7 +501,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 	require.Equal(t, requested, prefetched)
 }
 
-func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
+func TestEvaluatorPrefetcherAlignmentAssetOptInCloseTo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -562,6 +562,96 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 	}
 
 	requested, prefetched := run(t, l, txn)
+
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	assetID := basics.AssetIndex(5)
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
+					TotalAssets:      1,
+					TotalAssetParams: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
+				},
+			},
+			makeAddress(3): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
+				},
+			},
+		},
+		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
+			makeAddress(1): {
+				assetID: {
+					AssetParams:  &basics.AssetParams{},
+					AssetHolding: &basics.AssetHolding{},
+				},
+			},
+			makeAddress(2): {
+				assetID: {
+					AssetHolding: &basics.AssetHolding{Amount: 5},
+				},
+			},
+			makeAddress(3): {
+				assetID: {
+					AssetHolding: &basics.AssetHolding{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(assetID): makeAddress(1),
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     assetID,
+			AssetReceiver: makeAddress(3),
+			AssetAmount:   1,
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
+
+	// zero transfer of any asset
+	txn = transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(1),
+			GenesisHash: genesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     assetID + 12345,
+			AssetReceiver: makeAddress(2),
+			AssetAmount:   0,
+		},
+	}
+
+	requested, prefetched = run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
 	require.Equal(t, requested, prefetched)
