@@ -308,9 +308,5 @@ func (nd *nodeDir) configureDNSBootstrap() (err error) {
 		return
 	}
 
-	if nd.config.DNSBootstrapID == config.GetDefaultLocal().DNSBootstrapID {
-		nd.config.DNSBootstrapID = strings.Replace(nd.config.DNSBootstrapID, "algorand", "algodev", -1)
-		err = nd.saveConfig()
-	}
 	return
 }
