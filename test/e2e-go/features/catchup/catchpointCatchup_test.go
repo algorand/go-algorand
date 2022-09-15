@@ -189,11 +189,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// Let the network make some progress
 	currentRound := uint64(1)
+	// fast catchup downloads some blocks back from catchpoint round - CatchpointLookback
 	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
-	const restrictedBlock = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
-	// calculate the target round: this is the next round after catchpoint that is greater than expectedBlocksToDownload before the restrictedBlock block number
-	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+restrictedBlock)/catchpointInterval + 1) * catchpointInterval
-	targetRound := uint64(targetCatchpointRound) + 1 // 21
+	const restrictedBlockRound = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
+	// calculate the target round: this is the next round after catchpoint
+	// that is greater than expectedBlocksToDownload before the restrictedBlock block number
+	minRound := restrictedBlockRound + catchpointCatchupProtocol.CatchpointLookback
+	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+minRound)/catchpointInterval + 1) * catchpointInterval
+	targetRound := uint64(targetCatchpointRound) + 1
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")

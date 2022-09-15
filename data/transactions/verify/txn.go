@@ -112,10 +112,7 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil
 	}
-	if err := batchVerifier.Verify(); err != nil {
-		return err
-	}
-	return nil
+	return batchVerifier.Verify()
 }
 
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
@@ -258,10 +255,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return nil
 	}
 
-	if err := batchVerifier.Verify(); err != nil {
-		return err
-	}
-	return nil
+	return batchVerifier.Verify()
 }
 
 // LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.

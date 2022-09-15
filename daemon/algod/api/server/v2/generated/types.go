@@ -460,26 +460,29 @@ type StateDelta []EvalDeltaKeyValue
 type StateProof struct {
 
 	// Represents the message that the state proofs are attesting to.
-	Message struct {
-
-		// The vector commitment root on all light block headers within a state proof interval.
-		BlockHeadersCommitment []byte `json:"BlockHeadersCommitment"`
-
-		// The first round the message attests to.
-		FirstAttestedRound uint64 `json:"FirstAttestedRound"`
-
-		// The last round the message attests to.
-		LastAttestedRound uint64 `json:"LastAttestedRound"`
-
-		// An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.
-		LnProvenWeight uint64 `json:"LnProvenWeight"`
-
-		// The vector commitment root of the top N accounts to sign the next StateProof.
-		VotersCommitment []byte `json:"VotersCommitment"`
-	} `json:"Message"`
+	Message StateProofMessage `json:"Message"`
 
 	// The encoded StateProof for the message.
 	StateProof []byte `json:"StateProof"`
+}
+
+// StateProofMessage defines model for StateProofMessage.
+type StateProofMessage struct {
+
+	// The vector commitment root on all light block headers within a state proof interval.
+	BlockHeadersCommitment []byte `json:"BlockHeadersCommitment"`
+
+	// The first round the message attests to.
+	FirstAttestedRound uint64 `json:"FirstAttestedRound"`
+
+	// The last round the message attests to.
+	LastAttestedRound uint64 `json:"LastAttestedRound"`
+
+	// An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.
+	LnProvenWeight uint64 `json:"LnProvenWeight"`
+
+	// The vector commitment root of the top N accounts to sign the next StateProof.
+	VotersCommitment []byte `json:"VotersCommitment"`
 }
 
 // TealKeyValue defines model for TealKeyValue.

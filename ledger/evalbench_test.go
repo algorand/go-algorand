@@ -509,7 +509,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
-	// apply initialization transations if any
+	// apply initialization transactions if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
 

@@ -1282,6 +1282,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -1334,6 +1340,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2683,42 +2695,7 @@
       ],
       "properties": {
         "Message": {
-          "description": "Represents the message that the state proofs are attesting to.",
-          "type": "object",
-          "required": [
-            "BlockHeadersCommitment",
-            "VotersCommitment",
-            "LnProvenWeight",
-            "FirstAttestedRound",
-            "LastAttestedRound"
-          ],
-          "properties": {
-            "BlockHeadersCommitment": {
-              "description": "The vector commitment root on all light block headers within a state proof interval.",
-              "type": "string",
-              "format": "byte"
-            },
-            "VotersCommitment": {
-              "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
-              "type": "string",
-              "format": "byte"
-            },
-            "LnProvenWeight": {
-              "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            },
-            "FirstAttestedRound": {
-              "description": "The first round the message attests to.",
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            },
-            "LastAttestedRound": {
-              "description": "The last round the message attests to.",
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            }
-          }
+          "$ref": "#/definitions/StateProofMessage"
         },
         "StateProof": {
           "description": "The encoded StateProof for the message.",
@@ -2748,6 +2725,44 @@
           "description": "The encoded proof.",
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "StateProofMessage": {
+      "description": "Represents the message that the state proofs are attesting to.",
+      "type": "object",
+      "required": [
+        "BlockHeadersCommitment",
+        "VotersCommitment",
+        "LnProvenWeight",
+        "FirstAttestedRound",
+        "LastAttestedRound"
+      ],
+      "properties": {
+        "BlockHeadersCommitment": {
+          "description": "The vector commitment root on all light block headers within a state proof interval.",
+          "type": "string",
+          "format": "byte"
+        },
+        "VotersCommitment": {
+          "description": "The vector commitment root of the top N accounts to sign the next StateProof.",
+          "type": "string",
+          "format": "byte"
+        },
+        "LnProvenWeight": {
+          "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "FirstAttestedRound": {
+          "description": "The first round the message attests to.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "LastAttestedRound": {
+          "description": "The last round the message attests to.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
         }
       }
     }

@@ -859,15 +859,13 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 						}
 					}
 					stats.TotalLength += uint64(encodedLen)
-					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 					if txib.Txn.Type == protocol.StateProofTx {
 						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
 					}
 				}
-
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 			}
-
+			stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 			var details struct {
 				Round uint64
 			}

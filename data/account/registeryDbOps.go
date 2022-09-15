@@ -21,9 +21,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"strings"
 )
 
 type dbOp interface {
@@ -168,11 +169,7 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 
 		// Create Rolling entry
 		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err = verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
-			return err
-		}
-
-		return nil
+		return verifyExecWithOneRowEffected(err, result, "insert rolling")
 	})
 	return err
 }
