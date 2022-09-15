@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"sort"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -30,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
-	"sort"
 )
 
 // fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist

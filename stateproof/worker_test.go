@@ -284,6 +284,19 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	return part
 }
 
+func countBuildersInDB(store db.Accessor) (nrows int, err error) {
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT COUNT(*) FROM builders")
+		err := row.Scan(&nrows)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return
+}
+
 func TestWorkerAllSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -494,8 +507,6 @@ func TestWorkerRestart(t *testing.T) {
 
 	a.Greater(formedAt, 1)
 	a.Less(formedAt, 5)
-	//a.True(formedAt > 1)
-	//a.True(formedAt < 5)
 }
 
 func TestWorkerHandleSig(t *testing.T) {
@@ -628,6 +639,9 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, len(w.builders))
+	countDB, err := countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(expectedStateProofs, countDB)
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -645,6 +659,9 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(3, len(w.builders))
+	countDB, err = countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(3, countDB)
 
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
@@ -695,6 +712,9 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	// should not give up on rounds
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	countDB, err := countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -717,6 +737,9 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	// should not give up on rounds
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	countDB, err = countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
 	roundSigs = make(map[basics.Round][]pendingSig)
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -1287,4 +1310,46 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 		Data: msgBytes,
 	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+}
+
+func TestWorker_BuildersPersistence_StateProofChainStalled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+
+	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
+	for {
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		if err != nil {
+			break
+		}
+	}
+
+	// In memory
+	a.Equal(9, len(w.builders))
+	// In disk
+	r := basics.Round(512)
+	for i := 0; i < 9; i++ {
+		a.NoError(
+			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+				return getBuilder(tx, r, &builder{})
+			}))
+		r += 256
+	}
 }
