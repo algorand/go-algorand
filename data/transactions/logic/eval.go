@@ -1991,10 +1991,10 @@ func branchTarget(cx *EvalContext) (int, error) {
 }
 
 func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
-	numOffsets := cx.program[cx.pc+1]
+	numOffsets := int(cx.program[cx.pc+1])
 
-	end := cx.pc + 2               // end of opcode + number of offsets, beginning of offset list
-	eoi := end + 2*int(numOffsets) // end of instruction
+	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
+	eoi := end + 2*numOffsets // end of instruction
 
 	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
 		return 0, fmt.Errorf("switch claims to extend beyond program")
@@ -2034,11 +2034,11 @@ func checkBranch(cx *EvalContext) error {
 
 // checks switch is encoded properly (and calculates nextpc)
 func checkSwitch(cx *EvalContext) error {
-	numOffsets := uint64(cx.program[cx.pc+1])
-	eoi := cx.pc + 2 + int(2*numOffsets)
+	numOffsets := int(cx.program[cx.pc+1])
+	eoi := cx.pc + 2 + 2*numOffsets
 
-	for branchIdx := uint64(0); branchIdx < numOffsets; branchIdx++ {
-		target, err := switchTarget(cx, branchIdx)
+	for branchIdx := 0; branchIdx < numOffsets; branchIdx++ {
+		target, err := switchTarget(cx, uint64(branchIdx))
 		if err != nil {
 			return err
 		}

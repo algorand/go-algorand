@@ -916,13 +916,13 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) > 256 {
-		return ops.errorf("%s cannot take more than 256 labels", spec.Name)
-	}
 	numOffsets := len(args)
+	if numOffsets > math.MaxUint8 {
+		return ops.errorf("%s cannot take more than 255 labels", spec.Name)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(byte(numOffsets))
-	opEndPos := ops.pending.Len() + 2*int(numOffsets)
+	opEndPos := ops.pending.Len() + 2*numOffsets
 	for _, arg := range args {
 		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
 		// zero bytes will get replaced with actual offset in resolveLabels()
@@ -2561,19 +2561,10 @@ func checkByteConstBlock(cx *EvalContext) error {
 }
 
 func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
-	numOffsets, bytesUsed := binary.Uvarint(program[pos:])
-	if bytesUsed <= 0 {
-		err = fmt.Errorf("could not decode switch target list size at pc=%d", pos)
-		return
-	}
-	pos += bytesUsed
-	if numOffsets > math.MaxUint16 {
-		err = errors.New("switch with too many labels")
-		return
-	}
-
-	end := pos + int(2*numOffsets) // end of op: offset is applied to this position
-	for i := 0; i < int(numOffsets); i++ {
+	numOffsets := int(program[pos])
+	pos++
+	end := pos + 2*numOffsets // end of op: offset is applied to this position
+	for i := 0; i < numOffsets; i++ {
 		offset := decodeBranchOffset(program, pos)
 		target := end + offset
 		targets = append(targets, target)

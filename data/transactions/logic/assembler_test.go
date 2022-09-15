@@ -2797,26 +2797,26 @@ int 1
 	require.Len(t, ops.Program, 9) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*2)
 
 	var labels []string
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 255; i++ {
 		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 
-	// test that 256 labels is ok
+	// test that 255 labels is ok
 	source = fmt.Sprintf(`
 	pushint 1
 	switchi %s
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 517) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*256)
+	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
 
-	// 257 is too many
+	// 256 is too many
 	source = fmt.Sprintf(`
 	pushint 1
 	switchi %s extra
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
-	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switchi cannot take more than 256 labels"})
+	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switchi cannot take more than 255 labels"})
 
 	// allow duplicate label reference
 	source = `
