@@ -410,7 +410,7 @@ const randomnessCompiled = "81ffff03d101d000"
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
 	randomnessCompiled + "800243218001775c0280018881015d"
 
-const v8Compiled = v7Compiled + pairingCompiled + "8101e002fff800008101"
+const v8Compiled = v7Compiled + pairingCompiled + "81018a02fff800008101"
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -517,16 +517,21 @@ type Expect struct {
 	s string
 }
 
-func testMatch(t testing.TB, actual, expected string) bool {
+func testMatch(t testing.TB, actual, expected string) (ok bool) {
+	defer func() {
+		if !ok {
+			t.Logf("'%s' does not match '%s'", actual, expected)
+		}
+	}()
 	t.Helper()
 	if strings.HasPrefix(expected, "...") && strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, actual, expected[3:len(expected)-3])
+		return strings.Contains(actual, expected[3:len(expected)-3])
 	} else if strings.HasPrefix(expected, "...") {
-		return assert.Contains(t, actual+"^", expected[3:]+"^")
+		return strings.Contains(actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
+		return strings.Contains("^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		return assert.Equal(t, expected, actual)
+		return expected == actual
 	}
 }
 
@@ -597,13 +602,13 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		errors := ops.Errors
 		for _, exp := range expected {
 			if exp.l == 0 {
-				// line 0 means: "must match all"
+				// line 0 means: "must match some line"
 				require.Len(t, expected, 1)
-				fail := false
+				fail := true
 				for _, err := range errors {
 					msg := err.Unwrap().Error()
-					if !testMatch(t, msg, exp.s) {
-						fail = true
+					if testMatch(t, msg, exp.s) {
+						fail = false
 					}
 				}
 				if fail {
@@ -2778,6 +2783,13 @@ func TestAssembleSwitch(t *testing.T) {
 	label1:
 	`
 	testProg(t, source, 8, NewExpect(3, "reference to undefined label \"label2\""))
+
+	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
+	testProg(t, `
+int 0
+switchi
+int 1
+`, 8)
 
 	// confirm size of varuint list size
 	source = `

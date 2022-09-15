@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -2565,15 +2566,15 @@ func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error)
 		return
 	}
 	pos += bytesUsed
-	if numOffsets > uint64(len(program)) {
-		err = errTooManyItems
+	if numOffsets > math.MaxUint16 {
+		err = errors.New("switch with too many labels")
 		return
 	}
 
 	end := pos + int(2*numOffsets) // end of op: offset is applied to this position
 	for i := 0; i < int(numOffsets); i++ {
 		offset := decodeBranchOffset(program, pos)
-		target := int(offset) + int(end)
+		target := end + offset
 		targets = append(targets, target)
 		pos += 2
 	}

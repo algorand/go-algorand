@@ -5530,8 +5530,44 @@ func TestTypeComplaints(t *testing.T) {
 
 func TestSwitchInt(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
+	// take the 0th label
+	testAccepts(t, `
+int 0
+switchi zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label
+	testRejects(t, `
+int 1
+switchi zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// same, but jumping to end of program
+	testAccepts(t, `
+int 1; dup
+switchi zero one
+zero: err
+one:
+`, 8)
+
+	// no match
+	testAccepts(t, `
+int 2
+switchi zero one
+int 1; return					// falls through to here
+zero: int 0; return
+one:  int 0; return
+`, 8)
+
+	// jump forward and backward
 	testAccepts(t, `
 int 0
 start:
@@ -5549,12 +5585,12 @@ assert
 int 1
 `, 8)
 
-	// test code fails when target index is out of bounds
-	testPanics(t, `
-int 2
-switchi start end
-start:
-end:
+	// 0 labels are allowed, but weird!
+	testAccepts(t, `
+int 0
+switchi
 int 1
 `, 8)
+
+	testPanics(t, notrack("switchi; int 1"), 8)
 }

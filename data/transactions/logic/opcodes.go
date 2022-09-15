@@ -544,7 +544,8 @@ var OpSpecs = []OpSpec{
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
 	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault()},
-	// Leave a little room for indirect function calls, or similar
+	{0x8a, "switchi", opSwitchInt, proto("i:"), 8, detSwitch()},
+	// 0x8b will likely be a switch on pairs of values/targets
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
@@ -563,7 +564,6 @@ var OpSpecs = []OpSpec{
 	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
 	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
 	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
-	// leave room here for eip-2537 style opcodes
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("bb:b"), 4, costly(10)},
@@ -606,9 +606,6 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
-
-	// switch on value
-	{0xe0, "switchi", opSwitchInt, proto("i:"), 8, detSwitch()},
 }
 
 type sortByOpcode []OpSpec
