@@ -141,7 +141,8 @@ func sendAssetEvent(bc *benchConfig, newAccount bool) {
 	randAcct1 := bc.accts[mrand.Intn(len(bc.accts))]
 	randAcct2 := bc.accts[mrand.Intn(len(bc.accts))]
 	if newAccount {
-		randAcct2 = fundNewAccount(bc)
+		randAcct2 = addNewAccount(bc)
+		payTo(bc, bc.creator, randAcct2, 100000000)
 	}
 
 	var assIdx basics.AssetIndex
@@ -163,14 +164,50 @@ func sendAssetEvent(bc *benchConfig, newAccount bool) {
 	sendAssetTo(bc, randAcct1, randAcct2, assIdx, 1)
 }
 
+func appCallEvent(bc *benchConfig, newAccount bool) {
+
+	// pick a random account
+	randAcct1 := bc.accts[mrand.Intn(len(bc.accts))]
+	randAcct2 := bc.accts[mrand.Intn(len(bc.accts))]
+	if newAccount {
+		randAcct2 = addNewAccount(bc)
+		payTo(bc, bc.creator, randAcct2, 100000000)
+	}
+
+	var appIdx basics.AppIndex
+	if len(bc.acctToApp) > 0 {
+		randApp := mrand.Intn(len(bc.acctToApp))
+		a := 0
+		for key := range bc.acctToApp[randAcct1] {
+			if a == randApp {
+				appIdx = key
+				break
+			}
+			a++
+		}
+	}
+
+	if appIdx == 0 {
+		appIdx = createAppForAcct(bc, randAcct1)
+	}
+
+	// opt in to the asset
+	if _, have := bc.acctToApp[randAcct2][appIdx]; !have {
+		optInApp(bc, randAcct2, appIdx)
+	}
+	callApp(bc, randAcct2, appIdx)
+}
+
 func payEvent(bc *benchConfig, newAccount bool) {
 	// pick a random account
 	randAcct1 := bc.accts[mrand.Intn(len(bc.accts))]
 	randAcct2 := bc.accts[mrand.Intn(len(bc.accts))]
 	if newAccount {
-		randAcct2 = fundNewAccount(bc)
+		randAcct2 = addNewAccount(bc)
+		payTo(bc, bc.creator, randAcct2, 100000000)
+	} else {
+		payTo(bc, randAcct1, randAcct2, 10)
 	}
-	payTo(bc, randAcct1, randAcct2, 10)
 }
 
 func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIndex, amt uint64) {
@@ -199,16 +236,47 @@ func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.Asset
 		bc.acctToAst[acct] = make(map[basics.AssetIndex]uint64)
 	}
 	bc.acctToAst[acct][aIdx] = 3000000
+	bc.numAst++
 	return aIdx
 }
 
-func fundNewAccount(bc *benchConfig) (acct basics.Address) {
+func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIndex) {
+	tx, err := makeAppTransaction(bc.i, bc.round, acct)
+	require.NoError(bc.b, err)
+	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	appIdx = basics.AppIndex(addTransaction(bc, stxn))
+	if len(bc.acctToApp[acct]) == 0 {
+		bc.acctToApp[acct] = make(map[basics.AppIndex]struct{})
+	}
+	bc.acctToApp[acct][appIdx] = struct{}{}
+	bc.numApp++
+	return appIdx
+}
+
+func optInApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
+	tx := makeOptInAppTransaction(bc.i, appIdx, bc.round, acct)
+	var stxn transactions.SignedTxn
+	stxn.Txn = tx
+	stxn.Sig = crypto.Signature{1}
+	addTransaction(bc, stxn)
+	bc.numApp++
+}
+
+func callApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
+	tx := callAppTransaction(bc.i, appIdx, bc.round, acct)
+	var stxn transactions.SignedTxn
+	stxn.Txn = tx
+	stxn.Sig = crypto.Signature{1}
+	addTransaction(bc, stxn)
+	bc.numApp++
+}
+
+func addNewAccount(bc *benchConfig) (acct basics.Address) {
 
 	acct = basics.Address{}
 	_, err := rand.Read(acct[:])
 	require.NoError(bc.b, err)
 	bc.accts = append(bc.accts, acct)
-	payTo(bc, bc.creator, acct, 100000000)
 	return acct
 }
 
@@ -242,26 +310,56 @@ func addBlock(bc *benchConfig) {
 	require.NoError(bc.b, err)
 }
 
-func BenchmarkBlockValidationMix(b *testing.B) {
+func BenchmarkBlockValidationJustPayNoNew(b *testing.B) {
 	numAccts := 50000
-	newAcctProb := 0 //5
+	newAcctProb := 0.0
 
-	payProb := 3
-	astProb := 5
-	// appsProb := 2
+	// Set the probability in %
+	payProb := 1.0
+	astProb := 0.0
+	//appsProb := 0
 	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
-func BenchmarkBlockValidationPayments(b *testing.B) {
-	//	benchmarkBlockValidationMix(b, 0)
+func BenchmarkBlockValidationJustPay(b *testing.B) {
+	numAccts := 50000
+	newAcctProb := 0.5
+
+	// Set the probability in %
+	payProb := 1.0
+	astProb := 0.0
+	//appsProb := 0
+	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
-func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb, numAccts int) {
+func BenchmarkBlockValidationNoNew(b *testing.B) {
+	numAccts := 50000
+	newAcctProb := 0.0
+
+	// Set the probability in %
+	payProb := 0.3
+	astProb := 0.5
+	//appsProb := 0.2
+	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
+}
+
+func BenchmarkBlockValidationMix(b *testing.B) {
+	numAccts := 50000
+	newAcctProb := 0.5
+
+	// Set the probability in %
+	payProb := 0.3
+	astProb := 0.5
+	//appsProb := 0.2
+	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
+}
+
+func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb float64, numAccts int) {
 	bc := setupEnv(b, numAccts)
 
 	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
-	fmt.Printf("Preparing transactions and adding the blocks (/%d): ", numBlocks)
+	fmt.Printf("\nPreparing transactions and adding the blocks (/%d): ", numBlocks)
 	evalTime := float64(0)
 	addBlockTime := float64(0)
 	s2 := time.Now()
@@ -270,16 +368,16 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb, nu
 	for bc.round-1 < numBlocks {
 		currentRound := bc.round
 		for bc.round == currentRound {
-			randNum := mrand.Intn(10)
+			randNum := mrand.Float64()
 			if randNum < payProb {
 				// add pay transaction
-				payEvent(bc, mrand.Intn(10) < newAcctProb)
+				payEvent(bc, mrand.Float64() < newAcctProb)
 			} else if randNum < payProb+astProb {
 				// add asset transactions
-				sendAssetEvent(bc, mrand.Intn(10) < newAcctProb)
+				sendAssetEvent(bc, mrand.Float64() < newAcctProb)
 			} else {
 				// add app transaction
-
+				appCallEvent(bc, mrand.Float64() < newAcctProb)
 			}
 		}
 		if (currentRound+1)*10%numBlocks == 0 {
@@ -488,9 +586,13 @@ func makeOptInAppTransaction(
 
 // prepare app call transaction
 func callAppTransaction(
+	counter uint64,
 	appIdx basics.AppIndex,
 	round uint64,
 	sender basics.Address) (appTx transactions.Transaction) {
+
+	note := make([]byte, 8)
+	binary.LittleEndian.PutUint64(note, counter)
 
 	appTx = transactions.Transaction{}
 	appTx.ApplicationID = basics.AppIndex(appIdx)
@@ -502,6 +604,7 @@ func callAppTransaction(
 		FirstValid:  basics.Round(round),
 		LastValid:   basics.Round(round + 1000),
 		GenesisHash: crypto.Digest{1},
+		Note:        note,
 	}
 	appTx.Type = protocol.ApplicationCallTx
 	return
