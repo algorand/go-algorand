@@ -339,6 +339,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					},
 					AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 						XferAsset:     1001,
+						AssetAmount:   1,
 						AssetSender:   makeAddress(2),
 						AssetReceiver: makeAddress(3),
 						AssetCloseTo:  makeAddress(4),
@@ -368,6 +369,51 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 				{
 					Address:        makeAddressPtr(3),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        makeAddressPtr(4),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+			},
+		},
+		{
+			name: "asset transfer transaction zero amount",
+			signedTxn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.AssetTransferTx,
+					Header: transactions.Header{
+						Sender: makeAddress(1),
+					},
+					AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+						XferAsset:     1001,
+						AssetSender:   makeAddress(2),
+						AssetReceiver: makeAddress(3),
+						AssetCloseTo:  makeAddress(4),
+					},
+				},
+			},
+			accounts: []prefetcher.LoadedAccountDataEntry{
+				{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					},
+				},
+				{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+					},
+				},
+			},
+			resources: []prefetcher.LoadedResourcesEntry{
+				{
+					Address:        makeAddressPtr(2),
 					CreatableIndex: 1001,
 					CreatableType:  basics.AssetCreatable,
 					Resource:       &ledgercore.AccountResource{},
@@ -482,7 +528,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				*/
 			},
 			resources: []prefetcher.LoadedResourcesEntry{
-				/* - if we'll decide that we want to perfetch the foreign apps/assets, then this should be enabled
+				/* - if we'll decide that we want to prefetch the foreign apps/assets, then this should be enabled
 				{
 					Address:        makeAddressPtr(2),
 					CreatableIndex: 1001,
@@ -502,7 +548,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					Resource:       nil,
 				},
 				*/
-				/* - if we'll decide that we want to perfetch the account local state, then this should be enabled.
+				/* - if we'll decide that we want to prefetch the account local state, then this should be enabled.
 				{
 					address:        acctAddrPtr(1),
 					creatableIndex: 10,

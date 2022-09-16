@@ -310,7 +310,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 					}
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
-					if stxn.Txn.AssetAmount != 0 { // zero transfer is noop
+					if stxn.Txn.AssetAmount != 0 || (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
+						// if not zero transfer and not not opt in
 						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					}
 				}
