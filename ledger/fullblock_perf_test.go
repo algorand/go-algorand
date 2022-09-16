@@ -97,7 +97,6 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
 	inMem := true
 	cfg := config.GetDefaultLocal()
-	cfg.MaxAcctLookback = 100
 	cfg.Archival = true
 	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
