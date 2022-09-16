@@ -147,7 +147,7 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	dcc.latestStateProofDeletionDataIndex = spt.roundToLatestDeletionIndex(dcc.newBase)
 	dcc.latestStateProofRoundToDelete = 0
 	if dcc.latestStateProofDeletionDataIndex >= 0 {
-		dcc.latestStateProofRoundToDelete = spt.trackedDeletionData[dcc.latestStateProofRoundToDelete].stateProofLastAttestedRound
+		dcc.latestStateProofRoundToDelete = spt.trackedDeletionData[dcc.latestStateProofDeletionDataIndex].stateProofLastAttestedRound
 	}
 
 	return nil
