@@ -120,6 +120,27 @@ func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker,
 	}
 }
 
+func TestStateProofVerificationTracker_StateProofsDisabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	roundsAmount := basics.Round(1000)
+	for round := basics.Round(1); round <= roundsAmount; round++ {
+		block := randomBlock(round)
+		// Last protocol version without state proofs.
+		block.block.CurrentProtocol = protocol.ConsensusV33
+		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
+	}
+
+	a.Equal(0, len(spt.trackedData))
+	ml.trackers.committedUpTo(roundsAmount)
+	ml.trackers.waitAccountsWriting()
+}
+
 func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -182,7 +203,6 @@ func TestStateProofVerificationTracker_Removal(t *testing.T) {
 
 // TODO: Test addition and removal after exceeding initial capacity
 // TODO: Test interval size change
-// TODO: Test state proofs disabled
 // TODO: Test commit not all state proofs
 // TODO: Test disk initialization
 // TODO: Test stress
