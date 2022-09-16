@@ -149,6 +149,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		require.NoError(b, err)
 	}
 	bc.blocks = bc.blocks[len(bc.blocks):]
+	bc.txnCount = 0
 	bc.round = 0
 	bc.numPay = 0
 	return bc
@@ -415,7 +416,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
-	fmt.Printf("%.1f sec / %d blks ", time.Since(tt).Seconds(), numBlocks)
+	fmt.Printf("%.1f sec / %d blks\n", time.Since(tt).Seconds(), numBlocks)
 }
 
 func createPaymentTransaction(
