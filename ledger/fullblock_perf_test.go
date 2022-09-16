@@ -91,8 +91,9 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	}
 
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
-	inMem := false
+	inMem := true
 	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 100
 	cfg.Archival = true
 	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
@@ -359,10 +360,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 
 	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
-	fmt.Printf("\nPreparing transactions and adding the blocks (/%d): ", numBlocks)
-	evalTime := float64(0)
-	addBlockTime := float64(0)
-	s2 := time.Now()
+	fmt.Printf("\nPreparing... /%d: ", numBlocks)
 	s3 := time.Now()
 
 	for bc.round-1 < numBlocks {
@@ -381,14 +379,13 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 			}
 		}
 		if (currentRound+1)*10%numBlocks == 0 {
-			fmt.Printf("%d%% (%.1fsec) ", (currentRound)*100/numBlocks, time.Since(s3).Seconds())
+			fmt.Printf("%d%% %.1fs ", (currentRound)*100/numBlocks, time.Since(s3).Seconds())
 			s3 = time.Now()
 		}
 
 	}
-	fmt.Printf("\n%s sec total (eval: %.1fsec  addBlock: %.1fsec)\n", time.Since(s2).String(), evalTime, addBlockTime)
-	fmt.Printf("building %d blocks, each on overage with txns: (pay %d) (assets %d) (apps %d)\n",
-		numBlocks, bc.numPay/numBlocks, bc.numAst/numBlocks, bc.numApp/numBlocks)
+	fmt.Printf("\nSummary %d blocks and %d txns: pay %d/blk (%d%%) assets %d/blk (%d%%) apps %d/blk (%d%%)\n",
+		bc.i, numBlocks, bc.numPay/numBlocks, bc.numPay*100/bc.i, bc.numAst/numBlocks, bc.numAst*100/bc.i, bc.numApp/numBlocks, bc.numApp*100/bc.i)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
@@ -400,8 +397,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
-	fmt.Printf("%s sec for %d block(s)\n", time.Since(tt).String(), numBlocks)
-
+	fmt.Printf("%s sec / %d blks ", time.Since(tt).String(), numBlocks)
 }
 
 func createPaymentTransaction(
