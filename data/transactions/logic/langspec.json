@@ -1578,7 +1578,7 @@
     },
     {
       "Opcode": 138,
-      "Name": "switchi",
+      "Name": "switch",
       "Args": "U",
       "Size": 0,
       "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",

@@ -397,7 +397,7 @@ replace3
 const switchNonsense = `
 switch_label0:
 pushint 1
-switchi switch_label0 switch_label1
+switch switch_label0 switch_label1
 switch_label1:
 pushint 1
 `
@@ -2774,7 +2774,7 @@ func TestAssembleSwitch(t *testing.T) {
 	// fail when target doesn't correspond to existing label
 	source := `
 	pushint 1
-	switchi label1 label2
+	switch label1 label2
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
@@ -2782,21 +2782,21 @@ func TestAssembleSwitch(t *testing.T) {
 	// fail when target index != uint64
 	testProg(t, `
 	byte "fail"
-    switchi label1
+    switch label1
     labe11:
-	`, AssemblerMaxVersion, Expect{3, "switchi label1 arg 0 wanted type uint64..."})
+	`, AssemblerMaxVersion, Expect{3, "switch label1 arg 0 wanted type uint64..."})
 
 	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
 	testProg(t, `
 int 0
-switchi
+switch
 int 1
 `, AssemblerMaxVersion)
 
 	// confirm arg limit
 	source = `
 	pushint 1
-	switchi label1 label2
+	switch label1 label2
 	label1:
 	label2:
 	`
@@ -2811,7 +2811,7 @@ int 1
 	// test that 255 labels is ok
 	source = fmt.Sprintf(`
 	pushint 1
-	switchi %s
+	switch %s
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
 	ops = testProg(t, source, AssemblerMaxVersion)
@@ -2820,15 +2820,15 @@ int 1
 	// 256 is too many
 	source = fmt.Sprintf(`
 	pushint 1
-	switchi %s extra
+	switch %s extra
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
-	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switchi cannot take more than 255 labels"})
+	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
 
 	// allow duplicate label reference
 	source = `
 	pushint 1
-	switchi label1 label1
+	switch label1 label1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
