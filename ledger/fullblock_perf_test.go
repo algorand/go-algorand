@@ -150,6 +150,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	}
 	bc.blocks = bc.blocks[len(bc.blocks):]
 	bc.round = 0
+	bc.numPay = 0
 	return bc
 }
 
