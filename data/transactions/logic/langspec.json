@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 7,
+  "EvalMaxVersion": 8,
   "LogicSigVersion": 7,
   "Ops": [
     {
@@ -1572,6 +1572,17 @@
       "Size": 1,
       "Doc": "pop the top instruction from the call stack and branch to it",
       "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 138,
+      "Name": "switch",
+      "Args": "U",
+      "Size": 0,
+      "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
       "Groups": [
         "Flow Control"
       ]
