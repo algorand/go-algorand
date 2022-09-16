@@ -32,19 +32,6 @@ import (
 
 var defaultInterval = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
 
-func getGenesisBlock() *blockEntry {
-	initialRound := basics.Round(1)
-	block := randomBlock(initialRound)
-
-	var stateTracking bookkeeping.StateProofTrackingData
-	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
-
-	stateTracking.StateProofNextRound = defaultInterval * 2
-	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-
-	return &block
-}
-
 func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
 	a := require.New(t)
 	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
@@ -62,6 +49,19 @@ func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerifi
 	err = ml.trackers.loadFromDisk(ml)
 
 	return ml, &spt
+}
+
+func genesisBlock() *blockEntry {
+	initialRound := basics.Round(1)
+	block := randomBlock(initialRound)
+
+	var stateTracking bookkeeping.StateProofTrackingData
+	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+
+	stateTracking.StateProofNextRound = defaultInterval * 2
+	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
+
+	return &block
 }
 
 func blockStateProofsEnabled(prevBlock *blockEntry, stuckStateProofs bool) blockEntry {
@@ -104,6 +104,21 @@ func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEn
 	return prevBlock
 }
 
+func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker, startProofIndex uint64, endProofIndex uint64, dataPresenceExpected bool) {
+	a := require.New(t)
+
+	for proofIndex := startProofIndex; proofIndex < endProofIndex; proofIndex++ {
+		targetStateProofRound := basics.Round(proofIndex+2) * defaultInterval
+		_, err := spt.LookupVerificationData(targetStateProofRound)
+
+		if dataPresenceExpected {
+			a.NoError(err)
+		} else {
+			a.ErrorIs(err, sql.ErrNoRows)
+		}
+	}
+}
+
 func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -114,7 +129,7 @@ func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 
 	expectedNumberOfVerificationData := uint64(1)
 
-	lastBlock := feedBlocks(ml, expectedNumberOfVerificationData*uint64(defaultInterval), getGenesisBlock(), true)
+	lastBlock := feedBlocks(ml, expectedNumberOfVerificationData*uint64(defaultInterval), genesisBlock(), true)
 	a.Equal(expectedNumberOfVerificationData, uint64(len(spt.trackedData)))
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
@@ -122,16 +137,11 @@ func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 
 	a.Equal(uint64(0), uint64(len(spt.trackedData)))
 
-	for stateProofVerificationDataIndex := uint64(0); stateProofVerificationDataIndex < expectedNumberOfVerificationData; stateProofVerificationDataIndex++ {
-		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
-		_, err := spt.LookupVerificationData(targetStateProofRound)
-		a.NoError(err)
-	}
+	verifyTrackerDB(t, spt, 0, expectedNumberOfVerificationData, true)
 }
 
 func TestStateproofVerificationTracker_Removal(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
 
 	ml, spt := initializeLedgerSpt(t)
 	defer ml.Close()
@@ -140,24 +150,19 @@ func TestStateproofVerificationTracker_Removal(t *testing.T) {
 	intervalsToAdd := uint64(6)
 	intervalsToRemove := uint64(3)
 
-	lastStuckBlock := feedBlocks(ml, intervalsToAdd*uint64(defaultInterval), getGenesisBlock(), true)
+	lastStuckBlock := feedBlocks(ml, intervalsToAdd*uint64(defaultInterval), genesisBlock(), true)
 	lastBlock := feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	for stateProofVerificationDataIndex := uint64(0); stateProofVerificationDataIndex < intervalsToRemove; stateProofVerificationDataIndex++ {
-		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
-		_, err := spt.LookupVerificationData(targetStateProofRound)
-		a.ErrorIs(err, sql.ErrNoRows)
-	}
-
-	for stateProofVerificationDataIndex := intervalsToRemove; stateProofVerificationDataIndex < intervalsToAdd; stateProofVerificationDataIndex++ {
-		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
-		_, err := spt.LookupVerificationData(targetStateProofRound)
-		a.NoError(err)
-	}
+	verifyTrackerDB(t, spt, 0, intervalsToRemove, false)
+	verifyTrackerDB(t, spt, intervalsToRemove, intervalsToAdd, true)
 }
 
 // TODO: Test addition and removal after exceeding initial capacity
 // TODO: Test interval size change
+// TODO: Test state proofs disabled
+// TODO: Test state proofs happy flow
+// TODO: Test stress
+// TODO: Test locking?
