@@ -80,6 +80,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	// creator is the special rich account
 	creator := basics.Address{}
 	_, err := rand.Read(creator[:])
+	require.NoError(b, err)
 	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
 	// start the ledger with a pool of accounts
 	for i := 0; i < numAccts; i++ {
@@ -90,26 +91,31 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		accts = append(accts, acct)
 	}
 
+	logger := logging.TestingLog(b)
+	logger.SetLevel(logging.Warn)
+
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
 	inMem := true
 	cfg := config.GetDefaultLocal()
 	cfg.MaxAcctLookback = 100
 	cfg.Archival = true
-	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
 	inMem = false
+	cfg.Archival = false
+	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	dbName = fmt.Sprintf("%s.%d.2", name, crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l1, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// init the first block
 	blk := genesisInitState.Block
 	blk.BlockHeader.Round++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-	blk.BlockHeader.GenesisID = "x"
+	blk.BlockHeader.GenesisID = fmt.Sprintf("%s-genesis", b.Name())
 	cert := agreement.Certificate{}
 
 	err = l0.AddBlock(blk, cert)
