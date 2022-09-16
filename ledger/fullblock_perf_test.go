@@ -43,7 +43,7 @@ import (
 )
 
 type benchConfig struct {
-	i         uint64
+	txnCount  uint64
 	round     uint64
 	b         *testing.B
 	creator   basics.Address
@@ -92,6 +92,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	cfg.Archival = true
+	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
@@ -121,7 +122,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	require.NoError(b, err)
 
 	bc = &benchConfig{
-		i:         0,
+		txnCount:  0,
 		round:     1,
 		b:         b,
 		creator:   creator,
@@ -228,7 +229,7 @@ func payEvent(bc *benchConfig, newAccount bool) {
 }
 
 func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIndex, amt uint64) {
-	tx := sendAssetTransaction(bc.i, bc.round, from, to, assIdx, amt)
+	tx := sendAssetTransaction(bc.txnCount, bc.round, from, to, assIdx, amt)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
 	stxn.Sig = crypto.Signature{1}
@@ -237,7 +238,7 @@ func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIn
 }
 
 func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
-	tx := createPaymentTransaction(uint64(bc.i), bc.round, from, to, amt)
+	tx := createPaymentTransaction(uint64(bc.txnCount), bc.round, from, to, amt)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
 	stxn.Sig = crypto.Signature{1}
@@ -246,7 +247,7 @@ func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
 }
 
 func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.AssetIndex) {
-	tx := createAssetTransaction(bc.i, bc.round, acct)
+	tx := createAssetTransaction(bc.txnCount, bc.round, acct)
 	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
 	aIdx := basics.AssetIndex(addTransaction(bc, stxn))
 	if len(bc.acctToAst[acct]) == 0 {
@@ -258,7 +259,7 @@ func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.Asset
 }
 
 func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIndex) {
-	tx, err := makeAppTransaction(bc.i, bc.round, acct)
+	tx, err := makeAppTransaction(bc.txnCount, bc.round, acct)
 	require.NoError(bc.b, err)
 	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
 	appIdx = basics.AppIndex(addTransaction(bc, stxn))
@@ -271,7 +272,7 @@ func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIn
 }
 
 func optInApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
-	tx := makeOptInAppTransaction(bc.i, appIdx, bc.round, acct)
+	tx := makeOptInAppTransaction(bc.txnCount, appIdx, bc.round, acct)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
 	stxn.Sig = crypto.Signature{1}
@@ -280,7 +281,7 @@ func optInApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
 }
 
 func callApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
-	tx := callAppTransaction(bc.i, appIdx, bc.round, acct)
+	tx := callAppTransaction(bc.txnCount, appIdx, bc.round, acct)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
 	stxn.Sig = crypto.Signature{1}
@@ -304,7 +305,7 @@ func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
 		addTransaction(bc, stxn)
 	} else {
 		require.NoError(bc.b, err)
-		bc.i++
+		bc.txnCount++
 	}
 	return bc.eval.TestingTxnCounter()
 }
@@ -401,7 +402,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 
 	}
 	fmt.Printf("\nSummary %d blocks and %d txns: pay %d/blk (%d%%) assets %d/blk (%d%%) apps %d/blk (%d%%)\n",
-		bc.i, numBlocks, bc.numPay/numBlocks, bc.numPay*100/bc.i, bc.numAst/numBlocks, bc.numAst*100/bc.i, bc.numApp/numBlocks, bc.numApp*100/bc.i)
+		numBlocks, bc.txnCount, bc.numPay/numBlocks, bc.numPay*100/bc.txnCount, bc.numAst/numBlocks, bc.numAst*100/bc.txnCount, bc.numApp/numBlocks, bc.numApp*100/bc.txnCount)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
