@@ -269,7 +269,8 @@ type deferredCommitContext struct {
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
 
-	lastPruneStateProof                 basics.Round
+	latestStateProofDeletionDataIndex   int
+	latestStateProofRoundToDelete       basics.Round
 	committedStateProofVerificationData []ledgercore.StateProofVerificationData
 }
 

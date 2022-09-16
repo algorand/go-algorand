@@ -32,9 +32,8 @@ var (
 
 // TODO: Handle state proofs not being enabled
 // TODO: Add locks where needed
-// TODO: renaming
 
-type stateProofFlushData struct {
+type verificationDeletionData struct {
 	stateProofLastAttestedRound basics.Round
 	stateProofTransactionRound  basics.Round
 }
@@ -44,23 +43,24 @@ type stateProofVerificationTracker struct {
 
 	trackedData []ledgercore.StateProofVerificationData
 
-	stateProofsToFlush []stateProofFlushData
+	trackedDeletionData []verificationDeletionData
 }
 
 // TODO: Should use binary search
-func (spt *stateProofVerificationTracker) roundToPrunedStateProof(round basics.Round) basics.Round {
-	latestStateProofRound := basics.Round(0)
-	for _, flushData := range spt.stateProofsToFlush {
-		if flushData.stateProofTransactionRound <= round {
-			latestStateProofRound = flushData.stateProofLastAttestedRound
+func (spt *stateProofVerificationTracker) roundToLatestDeletionIndex(round basics.Round) int {
+	latestDeletionIndex := -1
+
+	for index, deletionData := range spt.trackedDeletionData {
+		if deletionData.stateProofTransactionRound <= round {
+			latestDeletionIndex = index
 		}
 	}
 
-	return latestStateProofRound
+	return latestDeletionIndex
 }
 
 // TODO: Should use binary search
-func (spt *stateProofVerificationTracker) roundToTrackedIndex(round basics.Round) uint64 {
+func (spt *stateProofVerificationTracker) roundToLatestDataIndex(round basics.Round) uint64 {
 	for index, verificationData := range spt.trackedData {
 		if verificationData.GeneratedRound > round {
 			return uint64(index)
@@ -79,7 +79,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, round
 	spt.dbQueries = *preparedDbQueries
 	// TODO: Decide on slice size
 	spt.trackedData = make([]ledgercore.StateProofVerificationData, 0, 1000)
-	spt.stateProofsToFlush = make([]stateProofFlushData, 0, 1000)
+	spt.trackedDeletionData = make([]verificationDeletionData, 0, 1000)
 
 	return nil
 }
@@ -89,23 +89,23 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 		return
 	}
 
-	currentStateProofInterval := blk.ConsensusProtocol().StateProofInterval
-	if uint64(blk.Round())%currentStateProofInterval == 0 {
+	currentStateProofInterval := basics.Round(blk.ConsensusProtocol().StateProofInterval)
+	if blk.Round()%currentStateProofInterval == 0 {
 		verificationData := ledgercore.StateProofVerificationData{
 			VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 			ProvenWeight:          blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-			TargetStateProofRound: blk.Round() + basics.Round(currentStateProofInterval),
+			TargetStateProofRound: blk.Round() + currentStateProofInterval,
 			GeneratedRound:        blk.Round(),
 		}
 		spt.trackedData = append(spt.trackedData, verificationData)
 	}
 
 	if delta.StateProofNext != 0 {
-		flushData := stateProofFlushData{
-			stateProofLastAttestedRound: delta.StateProofNext.SubSaturate(basics.Round(currentStateProofInterval)),
+		flushData := verificationDeletionData{
+			stateProofLastAttestedRound: delta.StateProofNext.SubSaturate(currentStateProofInterval),
 			stateProofTransactionRound:  blk.Round(),
 		}
-		spt.stateProofsToFlush = append(spt.stateProofsToFlush, flushData)
+		spt.trackedDeletionData = append(spt.trackedDeletionData, flushData)
 	}
 }
 
@@ -113,6 +113,7 @@ func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (min
 	return round, 0
 }
 
+// TODO: Rewrite this function after understanding tracker interaction better
 func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	var offset uint64
 
@@ -139,11 +140,16 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound b
 }
 
 func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitContext) error {
-	lastDataToCommitIndex := spt.roundToTrackedIndex(basics.Round(dcc.offset))
+	lastDataToCommitIndex := spt.roundToLatestDataIndex(dcc.newBase)
 	dcc.committedStateProofVerificationData = make([]ledgercore.StateProofVerificationData, lastDataToCommitIndex)
 	copy(dcc.committedStateProofVerificationData, spt.trackedData[:lastDataToCommitIndex])
 
-	dcc.lastPruneStateProof = spt.roundToPrunedStateProof(dcc.newBase)
+	dcc.latestStateProofDeletionDataIndex = spt.roundToLatestDeletionIndex(dcc.newBase)
+	dcc.latestStateProofRoundToDelete = 0
+	if dcc.latestStateProofDeletionDataIndex >= 0 {
+		dcc.latestStateProofRoundToDelete = spt.trackedDeletionData[dcc.latestStateProofRoundToDelete].stateProofLastAttestedRound
+	}
+
 	return nil
 }
 
@@ -153,8 +159,8 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 		return err
 	}
 
-	// TODO: can this in postCommitUnlocked?
-	err = pruneOldStateProofVerificationData(ctx, tx, dcc.lastPruneStateProof)
+	// TODO: can this be in postCommitUnlocked?
+	err = deleteOldStateProofVerificationData(ctx, tx, dcc.latestStateProofRoundToDelete)
 
 	// TODO: caching mechanism for oldest data?
 	return err
@@ -164,7 +170,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
 	// TODO: can this be in postCommitUnlocked?
 	spt.trackedData = spt.trackedData[len(dcc.committedStateProofVerificationData):]
-	// TODO: empty flushed data
+	spt.trackedDeletionData = spt.trackedDeletionData[dcc.latestStateProofDeletionDataIndex+1:]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
@@ -190,5 +196,5 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 		return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
 	}
 
-	return &spt.trackedData[spt.roundToTrackedIndex(stateProofLastAttestedRound)], nil
+	return &spt.trackedData[spt.roundToLatestDataIndex(stateProofLastAttestedRound)], nil
 }

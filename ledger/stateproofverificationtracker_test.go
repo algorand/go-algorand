@@ -183,7 +183,6 @@ func TestStateProofVerificationTracker_Removal(t *testing.T) {
 // TODO: Test addition and removal after exceeding initial capacity
 // TODO: Test interval size change
 // TODO: Test state proofs disabled
-// TODO: Test state proofs happy flow
 // TODO: Test commit not all state proofs
 // TODO: Test disk initialization
 // TODO: Test stress
