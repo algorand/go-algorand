@@ -378,7 +378,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 
 	numBlocks := uint64(b.N)
 	cert := agreement.Certificate{}
-	fmt.Printf("\nPreparing... /%d: ", numBlocks)
+	fmt.Printf("Preparing... /%d: ", numBlocks)
 	s3 := time.Now()
 
 	for bc.round < numBlocks {
@@ -415,7 +415,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
 	}
-	fmt.Printf("%s sec / %d blks ", time.Since(tt).String(), numBlocks)
+	fmt.Printf("%.1f sec / %d blks ", time.Since(tt).Seconds(), numBlocks)
 }
 
 func createPaymentTransaction(
