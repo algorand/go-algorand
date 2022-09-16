@@ -51,7 +51,7 @@ type stateProofVerificationTracker struct {
 func (spt *stateProofVerificationTracker) roundToPrunedStateProof(round basics.Round) basics.Round {
 	latestStateProofRound := basics.Round(0)
 	for _, flushData := range spt.stateProofsToFlush {
-		if flushData.stateProofTransactionRound < round {
+		if flushData.stateProofTransactionRound <= round {
 			latestStateProofRound = flushData.stateProofLastAttestedRound
 		}
 	}
@@ -138,13 +138,12 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound b
 	return dcr
 }
 
-// TODO: maybe be clever and remove from memory before flushing to DB?
 func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitContext) error {
 	lastDataToCommitIndex := spt.roundToTrackedIndex(basics.Round(dcc.offset))
 	dcc.committedStateProofVerificationData = make([]ledgercore.StateProofVerificationData, lastDataToCommitIndex)
 	copy(dcc.committedStateProofVerificationData, spt.trackedData[:lastDataToCommitIndex])
 
-	dcc.staleStateProofRound = spt.roundToPrunedStateProof(dcc.newBase)
+	dcc.lastPruneStateProof = spt.roundToPrunedStateProof(dcc.newBase)
 	return nil
 }
 
@@ -155,7 +154,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 	}
 
 	// TODO: can this in postCommitUnlocked?
-	err = pruneOldStateProofVerificationData(ctx, tx, dcc.staleStateProofRound)
+	err = pruneOldStateProofVerificationData(ctx, tx, dcc.lastPruneStateProof)
 
 	// TODO: caching mechanism for oldest data?
 	return err

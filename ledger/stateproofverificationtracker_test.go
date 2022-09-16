@@ -17,8 +17,9 @@
 package ledger
 
 import (
+	"database/sql"
 	"testing"
-	
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -28,6 +29,21 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+var defaultInterval = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+
+func getGenesisBlock() *blockEntry {
+	initialRound := basics.Round(1)
+	block := randomBlock(initialRound)
+
+	var stateTracking bookkeeping.StateProofTrackingData
+	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+
+	stateTracking.StateProofNextRound = defaultInterval * 2
+	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
+
+	return &block
+}
 
 func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
 	a := require.New(t)
@@ -49,23 +65,18 @@ func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerifi
 }
 
 func blockStateProofsEnabled(prevBlock *blockEntry, stuckStateProofs bool) blockEntry {
-	round := basics.Round(1)
-	prevBlockLastAttestedRound := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
-
-	if prevBlock != nil {
-		round = prevBlock.block.Round() + 1
-		prevBlockLastAttestedRound = prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	}
+	round := prevBlock.block.Round() + 1
+	prevBlockLastAttestedRound := prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 	block := randomBlock(round)
 	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	statProofInterval := basics.Round(block.block.ConsensusProtocol().StateProofInterval)
+	blockStateProofInterval := basics.Round(block.block.ConsensusProtocol().StateProofInterval)
 
 	var stateTracking bookkeeping.StateProofTrackingData
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 
 	if !stuckStateProofs && round > prevBlockLastAttestedRound {
-		stateTracking.StateProofNextRound = prevBlockLastAttestedRound + statProofInterval
+		stateTracking.StateProofNextRound = prevBlockLastAttestedRound + blockStateProofInterval
 	} else {
 		stateTracking.StateProofNextRound = prevBlockLastAttestedRound
 	}
@@ -77,7 +88,16 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stuckStateProofs bool) block
 func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEntry, stuckStateProofs bool) *blockEntry {
 	for i := uint64(1); i <= numOfBlocks; i++ {
 		block := blockStateProofsEnabled(prevBlock, stuckStateProofs)
-		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
+		stateProofDelta := basics.Round(0)
+
+		prevStateProofNextRound := prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+		currentStateProofNextRound := block.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+		if currentStateProofNextRound != prevStateProofNextRound {
+			stateProofDelta = currentStateProofNextRound
+		}
+
+		ml.trackers.newBlock(block.block, ledgercore.StateDelta{StateProofNext: stateProofDelta})
 		prevBlock = &block
 	}
 
@@ -93,17 +113,17 @@ func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 	defer spt.close()
 
 	expectedNumberOfVerificationData := uint64(1)
-	numOfBlocks := expectedNumberOfVerificationData * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
-	feedBlocks(ml, numOfBlocks, nil, true)
-	a.Equal(uint64(len(spt.trackedData)), expectedNumberOfVerificationData)
 
-	ml.trackers.committedUpTo(basics.Round(numOfBlocks))
+	lastBlock := feedBlocks(ml, expectedNumberOfVerificationData*uint64(defaultInterval), getGenesisBlock(), true)
+	a.Equal(expectedNumberOfVerificationData, uint64(len(spt.trackedData)))
+
+	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	a.Equal(uint64(len(spt.trackedData)), uint64(0))
+	a.Equal(uint64(0), uint64(len(spt.trackedData)))
 
 	for stateProofVerificationDataIndex := uint64(0); stateProofVerificationDataIndex < expectedNumberOfVerificationData; stateProofVerificationDataIndex++ {
-		targetStateProofRound := basics.Round((stateProofVerificationDataIndex + 2) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
 		_, err := spt.LookupVerificationData(targetStateProofRound)
 		a.NoError(err)
 	}
@@ -119,12 +139,24 @@ func TestStateproofVerificationTracker_Removal(t *testing.T) {
 
 	intervalsToAdd := uint64(6)
 	intervalsToRemove := uint64(3)
-	roundsInInterval := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 
-	lastStuckBlock := feedBlocks(ml, intervalsToAdd*roundsInInterval, nil, true)
-	feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
+	lastStuckBlock := feedBlocks(ml, intervalsToAdd*uint64(defaultInterval), getGenesisBlock(), true)
+	lastBlock := feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
 
-	a.Equal(uint64(len(spt.trackedData)), intervalsToAdd-intervalsToRemove)
+	ml.trackers.committedUpTo(lastBlock.block.Round())
+	ml.trackers.waitAccountsWriting()
+
+	for stateProofVerificationDataIndex := uint64(0); stateProofVerificationDataIndex < intervalsToRemove; stateProofVerificationDataIndex++ {
+		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
+		_, err := spt.LookupVerificationData(targetStateProofRound)
+		a.ErrorIs(err, sql.ErrNoRows)
+	}
+
+	for stateProofVerificationDataIndex := intervalsToRemove; stateProofVerificationDataIndex < intervalsToAdd; stateProofVerificationDataIndex++ {
+		targetStateProofRound := basics.Round(stateProofVerificationDataIndex+2) * defaultInterval
+		_, err := spt.LookupVerificationData(targetStateProofRound)
+		a.NoError(err)
+	}
 }
 
 // TODO: Test addition and removal after exceeding initial capacity

@@ -269,7 +269,7 @@ type deferredCommitContext struct {
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
 
-	staleStateProofRound                basics.Round
+	lastPruneStateProof                 basics.Round
 	committedStateProofVerificationData []ledgercore.StateProofVerificationData
 }
 
