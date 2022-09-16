@@ -82,21 +82,15 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
 	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
-	// start the ledger with a pool of accounts
-	for i := 0; i < numAccts; i++ {
-		acct := basics.Address{}
-		_, err = rand.Read(acct[:])
-		require.NoError(b, err)
-		genesisInitState.Accounts[acct] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000})
-		accts = append(accts, acct)
-	}
 
 	logger := logging.TestingLog(b)
 	logger.SetLevel(logging.Warn)
 
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
-	inMem := true
+	inMem := false
 	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	cfg.Archival = true
 	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
@@ -138,6 +132,23 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		l1:        l1,
 		eval:      eval,
 	}
+
+	// start the ledger with a pool of accounts
+	for i := 0; i < numAccts; i++ {
+		acct := addNewAccount(bc)
+		payTo(bc, bc.creator, acct, 1234567890000)
+	}
+
+	addBlock(bc)
+	vc := verify.GetMockedCache(true)
+	for _, blk := range bc.blocks {
+		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		require.NoError(b, err)
+		err = bc.l1.AddBlock(blk, cert)
+		require.NoError(b, err)
+	}
+	bc.blocks = bc.blocks[len(bc.blocks):]
+	bc.round = 0
 	return bc
 }
 
@@ -368,7 +379,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 	fmt.Printf("\nPreparing... /%d: ", numBlocks)
 	s3 := time.Now()
 
-	for bc.round-1 < numBlocks {
+	for bc.round < numBlocks {
 		currentRound := bc.round
 		for bc.round == currentRound {
 			randNum := mrand.Float64()
@@ -383,7 +394,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 				appCallEvent(bc, mrand.Float64() < newAcctProb)
 			}
 		}
-		if (currentRound+1)*10%numBlocks == 0 {
+		if (currentRound+1)*20%numBlocks == 0 {
 			fmt.Printf("%d%% %.1fs ", (currentRound)*100/numBlocks, time.Since(s3).Seconds())
 			s3 = time.Now()
 		}
