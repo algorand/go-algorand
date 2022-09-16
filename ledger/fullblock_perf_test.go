@@ -330,6 +330,8 @@ func addBlock(bc *benchConfig) {
 	require.NoError(bc.b, err)
 }
 
+// BenchmarkBlockValidationJustPayNoNew sends payment transactions between existing accounts,
+// by choosing pair of random accounts.
 func BenchmarkBlockValidationJustPayNoNew(b *testing.B) {
 	numAccts := 50000
 	newAcctProb := 0.0
@@ -341,6 +343,8 @@ func BenchmarkBlockValidationJustPayNoNew(b *testing.B) {
 	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
+// BenchmarkBlockValidationJustPay sends payments between two random accounts, with
+// 50% probability of creating a new account.
 func BenchmarkBlockValidationJustPay(b *testing.B) {
 	numAccts := 50000
 	newAcctProb := 0.5
@@ -352,6 +356,10 @@ func BenchmarkBlockValidationJustPay(b *testing.B) {
 	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
+// BenchmarkBlockValidationNoNew executes payment, asset or application events with
+// 30%, 50%, and 20% probability respectively among existing accounts.
+// Note that each event may involve multiple transactions (e.g. opt in to asset,
+// create app, opt in to app).
 func BenchmarkBlockValidationNoNew(b *testing.B) {
 	numAccts := 50000
 	newAcctProb := 0.0
@@ -363,6 +371,10 @@ func BenchmarkBlockValidationNoNew(b *testing.B) {
 	benchmarkBlockValidationMix(b, newAcctProb, payProb, astProb, numAccts)
 }
 
+// BenchmarkBlockValidationMix executes payment, asset or application events with
+// 30%, 50%, and 20% probability respectively among existing or new accounts.
+// Note that each event may involve multiple transactions (e.g. funding new account,
+// opt in to asset, create app, opt in to app).
 func BenchmarkBlockValidationMix(b *testing.B) {
 	numAccts := 50000
 	newAcctProb := 0.5
