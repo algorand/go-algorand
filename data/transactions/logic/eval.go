@@ -1990,31 +1990,30 @@ func branchTarget(cx *EvalContext) (int, error) {
 	return target, nil
 }
 
-func switchTarget(cx *EvalContext, branchIdx uint64) (int, uint64, error) {
-	numOffsets, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:])
-	if numOffsets <= 0 {
-		return 0, 0, fmt.Errorf("could not decode switch label count at pc=%d", cx.pc+1)
-	}
-	if branchIdx >= numOffsets {
-		return 0, 0, fmt.Errorf("provided branch index %d exceeds max offset index %d", branchIdx, numOffsets-1)
+func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	numOffsets := int(cx.program[cx.pc+1])
+
+	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
+	eoi := end + 2*numOffsets // end of instruction
+
+	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
+		return 0, fmt.Errorf("switch claims to extend beyond program")
 	}
 
-	end := cx.pc + 1 + bytesUsed  // end of opcode + number of offsets, beginning of offset list
-	pos := end + int(2*branchIdx) // position of referenced offset: each offset is 2 bytes
-	if pos >= len(cx.program)-1 {
-		return 0, 0, fmt.Errorf("invalid byte code: expected offset value but reached end of program")
+	offset := 0
+	if branchIdx < uint64(numOffsets) {
+		pos := end + int(2*branchIdx) // position of referenced offset: each offset is 2 bytes
+		offset = decodeBranchOffset(cx.program, pos)
 	}
 
-	offset := decodeBranchOffset(cx.program, pos)
-	target := end + 2*int(numOffsets) + int(offset) // offset is applied to the end of this opcode
+	target := eoi + offset
 
 	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,
 	// is okay and ends normally
 	if target > len(cx.program) || target < 0 {
-		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+		return 0, fmt.Errorf("branch target %d outside of program", target)
 	}
-
-	return target, numOffsets, nil
+	return target, nil
 }
 
 // checks any branch that is {op} {int16 be offset}
@@ -2033,23 +2032,18 @@ func checkBranch(cx *EvalContext) error {
 	return nil
 }
 
-// checks any switch that is {op} {varuint offset index} [{int16 offset}...]
+// checks switch is encoded properly (and calculates nextpc)
 func checkSwitch(cx *EvalContext) error {
-	// first call to get the number of offsets, 0 is a safe choice because there must exist at least one label
-	_, numOffsets, err := switchTarget(cx, 0)
-	if err != nil {
-		return err
-	}
+	numOffsets := int(cx.program[cx.pc+1])
+	eoi := cx.pc + 2 + 2*numOffsets
 
-	_, bytesUsed := binary.Uvarint(cx.program[cx.pc+1:]) // decoding the value will work because switchTarget() above already checked
-	opSize := 1 + bytesUsed + 2*int(numOffsets)
-	for branchIdx := uint64(0); branchIdx < numOffsets; branchIdx++ {
-		target, _, err := switchTarget(cx, branchIdx)
+	for branchIdx := 0; branchIdx < numOffsets; branchIdx++ {
+		target, err := switchTarget(cx, uint64(branchIdx))
 		if err != nil {
 			return err
 		}
 
-		if target < cx.pc+opSize {
+		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
 			if _, ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
@@ -2059,7 +2053,7 @@ func checkSwitch(cx *EvalContext) error {
 	}
 
 	// this opcode's size is dynamic so nextpc must be set here
-	cx.nextpc = cx.pc + opSize
+	cx.nextpc = eoi
 	return nil
 }
 
@@ -2105,8 +2099,9 @@ func opB(cx *EvalContext) error {
 func opSwitchInt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	branchIdx := cx.stack[last].Uint
+
 	cx.stack = cx.stack[:last]
-	target, _, err := switchTarget(cx, branchIdx)
+	target, err := switchTarget(cx, branchIdx)
 	if err != nil {
 		return err
 	}
