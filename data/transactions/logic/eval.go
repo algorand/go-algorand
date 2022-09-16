@@ -2096,7 +2096,7 @@ func opB(cx *EvalContext) error {
 	return nil
 }
 
-func opSwitchInt(cx *EvalContext) error {
+func opSwitch(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	branchIdx := cx.stack[last].Uint
 

@@ -544,7 +544,7 @@ var OpSpecs = []OpSpec{
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
 	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault()},
-	{0x8a, "switchi", opSwitchInt, proto("i:"), 8, detSwitch()},
+	{0x8a, "switch", opSwitch, proto("i:"), 8, detSwitch()},
 	// 0x8b will likely be a switch on pairs of values/targets
 
 	// More math
