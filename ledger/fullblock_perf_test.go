@@ -91,11 +91,14 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		accts = append(accts, acct)
 	}
 
+	logger := logging.TestingLog(b)
+	logger.SetLevel(logging.Warn)
+
 	// open 2 ledgers: 1st for preparing the blocks, 2nd for measuring the time
 	inMem := false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
@@ -104,7 +107,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	dbName = fmt.Sprintf("%s.%d.2", name, crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l1, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// init the first block
