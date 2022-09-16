@@ -2855,7 +2855,8 @@ echo:
 	extract 2 0
 	stores
 
-	load 1
+	int 1
+	loads
 	dup
 	len
 	itob
@@ -2867,7 +2868,8 @@ echo:
 	swap
 	concat
 	log
-retsub
+	int 1
+	return
 
 method "add(uint32,uint32)uint32"
 txn ApplicationArgs 0
@@ -2890,7 +2892,10 @@ add:
 	stores
 
 	load 1; load 2; + 
+	store 255
 
+	int 255
+	loads
 	itob
 	extract 4 0
 	pushbytes 0x151f7c75
@@ -2898,8 +2903,10 @@ add:
 	concat
 
 	log
-retsub
+	int 1
+	return
 	`, `
+// Library Methods
 
 // codecs
 #define abi-encode-uint16 ;itob; extract 6 0;
@@ -2913,41 +2920,46 @@ retsub
 
 // abi method handling 
 #define abi-route 	;txna ApplicationArgs 0; ==; bnz 
-#define abi-return  ;pushbytes 0x151f7c75; swap; concat; log; retsub;
+#define abi-return  ;pushbytes 0x151f7c75; swap; concat; log; int 1; return;
 
-
+// stanza: "set $var from-{type}"
+#define parse ; int
 #define read_arg ;dup; txnas ApplicationArgs;
 #define from-string	;read_arg; abi-decode-bytes;  stores;
 #define from-uint16	;read_arg; abi-decode-uint16;  stores;
 #define from-uint32 ;read_arg; abi-decode-uint32;  stores;
 
+// stanza: "reply $var as-{type}
+#define returns ; int
+#define as-uint32; loads; abi-encode-uint32; abi-return;
+#define as-string; loads; abi-encode-bytes; abi-return;
+
+// Contract
 
 // echo handler
 method "echo(string)string"; abi-route echo
 echo:
 	#define msg 1
-	int msg from-string
+	parse msg from-string
 
 	// cool things happen ...
 
-	load msg
-	abi-encode-bytes  	// put length prefix back
-	abi-return 			// return the re-encoded string
+	returns msg as-string
 
 
 // add handler
 method "add(uint32,uint32)uint32"; abi-route add 
 add:
 	#define x 1
-	int x from-uint32 
+	parse x from-uint32 
 
 	#define y 2
-	int y from-uint32
+	parse y from-uint32
 
-	load x; load y; + 
+	#define sum 255 
+	load x; load y; +; store sum
 
-	abi-encode-uint32  
-	abi-return 
+	returns sum as-uint32
 	`)
 
 	testProg(t, `
