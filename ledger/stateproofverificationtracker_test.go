@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-var defaultInterval = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+var defaultRoundsInterval = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
 
 func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
 	a := require.New(t)
@@ -58,7 +58,7 @@ func genesisBlock() *blockEntry {
 	var stateTracking bookkeeping.StateProofTrackingData
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 
-	stateTracking.StateProofNextRound = defaultInterval * 2
+	stateTracking.StateProofNextRound = defaultRoundsInterval * 2
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 
 	return &block
@@ -104,11 +104,12 @@ func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEn
 	return prevBlock
 }
 
-func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker, startProofIndex uint64, endProofIndex uint64, dataPresenceExpected bool) {
+func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker,
+	startDataIndex uint64, endDataIndex uint64, dataPresenceExpected bool) {
 	a := require.New(t)
 
-	for proofIndex := startProofIndex; proofIndex < endProofIndex; proofIndex++ {
-		targetStateProofRound := basics.Round(proofIndex+2) * defaultInterval
+	for dataIndex := startDataIndex; dataIndex < endDataIndex; dataIndex++ {
+		targetStateProofRound := basics.Round(dataIndex+2) * defaultRoundsInterval
 		_, err := spt.LookupVerificationData(targetStateProofRound)
 
 		if dataPresenceExpected {
@@ -119,7 +120,26 @@ func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker, startProo
 	}
 }
 
-func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
+func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	expectedDataNum := uint64(12)
+	lastBlock := feedBlocks(ml, expectedDataNum*uint64(defaultRoundsInterval), genesisBlock(), false)
+
+	ml.trackers.committedUpTo(lastBlock.block.Round())
+	ml.trackers.waitAccountsWriting()
+
+	// The last verification data should still be in the DB since the state proof it is used to verify has not
+	// yet been committed.
+	expectedRemainingDataNum := expectedDataNum - 1
+	verifyTrackerDB(t, spt, 0, expectedRemainingDataNum, false)
+}
+
+func TestStateProofVerificationTracker_CommitAddition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -127,42 +147,44 @@ func TestStateproofVerificationTracker_CommitAddition(t *testing.T) {
 	defer ml.Close()
 	defer spt.close()
 
-	expectedNumberOfVerificationData := uint64(1)
+	expectedDataNum := uint64(1)
 
-	lastBlock := feedBlocks(ml, expectedNumberOfVerificationData*uint64(defaultInterval), genesisBlock(), true)
-	a.Equal(expectedNumberOfVerificationData, uint64(len(spt.trackedData)))
+	lastBlock := feedBlocks(ml, expectedDataNum*uint64(defaultRoundsInterval), genesisBlock(), true)
+	a.Equal(expectedDataNum, uint64(len(spt.trackedData)))
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
 	a.Equal(uint64(0), uint64(len(spt.trackedData)))
 
-	verifyTrackerDB(t, spt, 0, expectedNumberOfVerificationData, true)
+	verifyTrackerDB(t, spt, 0, expectedDataNum, true)
 }
 
-func TestStateproofVerificationTracker_Removal(t *testing.T) {
+func TestStateProofVerificationTracker_Removal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ml, spt := initializeLedgerSpt(t)
 	defer ml.Close()
 	defer spt.close()
 
-	intervalsToAdd := uint64(6)
-	intervalsToRemove := uint64(3)
+	dataToAdd := uint64(6)
+	dataToRemove := uint64(3)
 
-	lastStuckBlock := feedBlocks(ml, intervalsToAdd*uint64(defaultInterval), genesisBlock(), true)
-	lastBlock := feedBlocks(ml, intervalsToRemove, lastStuckBlock, false)
+	lastStuckBlock := feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
+	lastBlock := feedBlocks(ml, dataToRemove, lastStuckBlock, false)
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	verifyTrackerDB(t, spt, 0, intervalsToRemove, false)
-	verifyTrackerDB(t, spt, intervalsToRemove, intervalsToAdd, true)
+	verifyTrackerDB(t, spt, 0, dataToRemove, false)
+	verifyTrackerDB(t, spt, dataToRemove, dataToAdd, true)
 }
 
 // TODO: Test addition and removal after exceeding initial capacity
 // TODO: Test interval size change
 // TODO: Test state proofs disabled
 // TODO: Test state proofs happy flow
+// TODO: Test commit not all state proofs
+// TODO: Test disk initialization
 // TODO: Test stress
 // TODO: Test locking?
