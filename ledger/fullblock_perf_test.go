@@ -395,8 +395,8 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 				appCallEvent(bc, mrand.Float64() < newAcctProb)
 			}
 		}
-		if (currentRound+1)*20%numBlocks == 0 {
-			fmt.Printf("%d%% %.1fs ", (currentRound)*100/numBlocks, time.Since(s3).Seconds())
+		if (currentRound+1)*10%(2*numBlocks) == 0 {
+			fmt.Printf("%d%% %.1fs ", (currentRound+1)*100/numBlocks, time.Since(s3).Seconds())
 			s3 = time.Now()
 		}
 
