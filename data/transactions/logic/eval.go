@@ -1965,12 +1965,17 @@ func opArgs(cx *EvalContext) error {
 	return opArgN(cx, n)
 }
 
+func decodeBranchOffset(program []byte, pos int) int {
+	// tricky casting to preserve signed value
+	return int(int16(program[pos])<<8 | int16(program[pos+1]))
+}
+
 func branchTarget(cx *EvalContext) (int, error) {
-	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
+	offset := decodeBranchOffset(cx.program, cx.pc+1)
 	if offset < 0 && cx.version < backBranchEnabledVersion {
 		return 0, fmt.Errorf("negative branch offset %x", offset)
 	}
-	target := cx.pc + 3 + int(offset)
+	target := cx.pc + 3 + offset
 	var branchTooFar bool
 	if cx.version >= 2 {
 		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
@@ -1982,6 +1987,32 @@ func branchTarget(cx *EvalContext) (int, error) {
 		return 0, fmt.Errorf("branch target %d outside of program", target)
 	}
 
+	return target, nil
+}
+
+func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	numOffsets := int(cx.program[cx.pc+1])
+
+	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
+	eoi := end + 2*numOffsets // end of instruction
+
+	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
+		return 0, fmt.Errorf("switch claims to extend beyond program")
+	}
+
+	offset := 0
+	if branchIdx < uint64(numOffsets) {
+		pos := end + int(2*branchIdx) // position of referenced offset: each offset is 2 bytes
+		offset = decodeBranchOffset(cx.program, pos)
+	}
+
+	target := eoi + offset
+
+	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,
+	// is okay and ends normally
+	if target > len(cx.program) || target < 0 {
+		return 0, fmt.Errorf("branch target %d outside of program", target)
+	}
 	return target, nil
 }
 
@@ -2000,6 +2031,32 @@ func checkBranch(cx *EvalContext) error {
 	cx.branchTargets[target] = true
 	return nil
 }
+
+// checks switch is encoded properly (and calculates nextpc)
+func checkSwitch(cx *EvalContext) error {
+	numOffsets := int(cx.program[cx.pc+1])
+	eoi := cx.pc + 2 + 2*numOffsets
+
+	for branchIdx := 0; branchIdx < numOffsets; branchIdx++ {
+		target, err := switchTarget(cx, uint64(branchIdx))
+		if err != nil {
+			return err
+		}
+
+		if target < eoi {
+			// If a branch goes backwards, we should have already noted that an instruction began at that location.
+			if _, ok := cx.instructionStarts[target]; !ok {
+				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+			}
+		}
+		cx.branchTargets[target] = true
+	}
+
+	// this opcode's size is dynamic so nextpc must be set here
+	cx.nextpc = eoi
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3
@@ -2032,6 +2089,19 @@ func opBz(cx *EvalContext) error {
 
 func opB(cx *EvalContext) error {
 	target, err := branchTarget(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opSwitch(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	branchIdx := cx.stack[last].Uint
+
+	cx.stack = cx.stack[:last]
+	target, err := switchTarget(cx, branchIdx)
 	if err != nil {
 		return err
 	}

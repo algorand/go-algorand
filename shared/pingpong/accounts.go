@@ -409,6 +409,9 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 			}
 			for assetID, holding := range ai.Assets {
 				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+				if acct.holdings == nil {
+					acct.holdings = make(map[uint64]uint64)
+				}
 				acct.holdings[assetID] = holding.Amount
 			}
 		}
