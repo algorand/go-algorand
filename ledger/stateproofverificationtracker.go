@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is too far in the future")
+	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is in a future block")
 )
 
 // TODO: Add locks where needed
@@ -187,14 +187,14 @@ func (spt *stateProofVerificationTracker) close() {
 // TODO: must lock here
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+
 	if len(spt.trackedData) == 0 || stateProofLastAttestedRound < spt.trackedData[0].TargetStateProofRound {
-		// TODO: bound check here too, for descriptive errors
 		return spt.dbQueries.lookupData(stateProofLastAttestedRound)
 	}
 
-	if stateProofLastAttestedRound > spt.trackedData[len(spt.trackedData)-1].TargetStateProofRound {
-		return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+	if stateProofLastAttestedRound <= spt.trackedData[len(spt.trackedData)-1].TargetStateProofRound {
+		return &spt.trackedData[spt.roundToLatestDataIndex(stateProofLastAttestedRound)], nil
 	}
 
-	return &spt.trackedData[spt.roundToLatestDataIndex(stateProofLastAttestedRound)], nil
+	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
 }
