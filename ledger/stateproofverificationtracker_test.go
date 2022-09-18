@@ -154,8 +154,8 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	// The last verification data should still be in the DB since the state proof it is used to verify has not
-	// yet been committed.
+	// The last verification data should still be in the DB since the round with the state proof transaction it is used
+	// to verify has not yet been committed.
 	expectedRemainingDataNum := expectedDataNum - 1
 	verifyTrackerDB(t, spt, 0, expectedRemainingDataNum, false)
 }

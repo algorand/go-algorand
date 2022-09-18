@@ -30,7 +30,6 @@ var (
 	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is too far in the future")
 )
 
-// TODO: Handle state proofs not being enabled
 // TODO: Add locks where needed
 
 type verificationDeletionData struct {
@@ -144,10 +143,9 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	dcc.committedStateProofVerificationData = make([]ledgercore.StateProofVerificationData, lastDataToCommitIndex)
 	copy(dcc.committedStateProofVerificationData, spt.trackedData[:lastDataToCommitIndex])
 
-	dcc.latestStateProofDeletionDataIndex = spt.roundToLatestDeletionIndex(dcc.newBase)
-	dcc.latestStateProofRoundToDelete = 0
-	if dcc.latestStateProofDeletionDataIndex >= 0 {
-		dcc.latestStateProofRoundToDelete = spt.trackedDeletionData[dcc.latestStateProofDeletionDataIndex].stateProofLastAttestedRound
+	dcc.latestStateProofVerificationDeletionDataIndex = spt.roundToLatestDeletionIndex(dcc.newBase)
+	if dcc.latestStateProofVerificationDeletionDataIndex > 0 {
+		dcc.latestStateProofVerificationDeletionData = spt.trackedDeletionData[dcc.latestStateProofVerificationDeletionDataIndex]
 	}
 
 	return nil
@@ -160,7 +158,9 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 	}
 
 	// TODO: can this be in postCommitUnlocked?
-	err = deleteOldStateProofVerificationData(ctx, tx, dcc.latestStateProofRoundToDelete)
+	if dcc.latestStateProofVerificationDeletionDataIndex > 0 {
+		err = deleteOldStateProofVerificationData(ctx, tx, dcc.latestStateProofVerificationDeletionData.stateProofLastAttestedRound)
+	}
 
 	// TODO: caching mechanism for oldest data?
 	return err
@@ -170,7 +170,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
 	// TODO: can this be in postCommitUnlocked?
 	spt.trackedData = spt.trackedData[len(dcc.committedStateProofVerificationData):]
-	spt.trackedDeletionData = spt.trackedDeletionData[dcc.latestStateProofDeletionDataIndex+1:]
+	spt.trackedDeletionData = spt.trackedDeletionData[dcc.latestStateProofVerificationDeletionDataIndex+1:]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
