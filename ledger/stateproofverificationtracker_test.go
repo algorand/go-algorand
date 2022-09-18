@@ -239,7 +239,7 @@ func TestStateProofVerificationTracker_CommitPartialDbFlush(t *testing.T) {
 	verifyTracking(t, spt, expectedDataInDbNum, expectedDataInMemoryNum, true, trackerMemory)
 }
 
-func TestStateProofVerificationTracker_Removal(t *testing.T) {
+func TestStateProofVerificationTracker_CommitStateProofDbPruning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ml, spt := initializeLedgerSpt(t)
@@ -247,22 +247,71 @@ func TestStateProofVerificationTracker_Removal(t *testing.T) {
 	defer spt.close()
 
 	dataToAdd := uint64(6)
-	dataToRemove := uint64(3)
+	maxStateProofsToGenerate := dataToAdd - 1
 
 	lastStuckBlock := feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
-	lastBlock := feedBlocks(ml, dataToRemove, lastStuckBlock, false)
+	lastBlock := feedBlocks(ml, maxStateProofsToGenerate, lastStuckBlock, false)
+
+	verifyTracking(t, spt, 0, dataToAdd, true, trackerMemory)
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
+	ml.trackers.waitAccountsWriting()
+
+	verifyTracking(t, spt, 0, maxStateProofsToGenerate, false, any)
+
+	verifyTracking(t, spt, dataToAdd, dataToAdd, true, trackerDB)
+}
+
+func TestStateProofVerificationTracker_CommitStateProofPartialDbPruning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(6)
+	maxStateProofsToGenerate := dataToAdd - 1
+	dataToRemove := maxStateProofsToGenerate - 1
+
+	lastStuckBlock := feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
+	_ = feedBlocks(ml, maxStateProofsToGenerate, lastStuckBlock, false)
+
+	verifyTracking(t, spt, 0, dataToAdd, true, trackerMemory)
+
+	ml.trackers.committedUpTo(lastStuckBlock.block.Round() + basics.Round(dataToRemove))
 	ml.trackers.waitAccountsWriting()
 
 	verifyTracking(t, spt, 0, dataToRemove, false, any)
 	verifyTracking(t, spt, dataToRemove, dataToAdd, true, trackerDB)
 }
 
-// TODO: Test addition and removal after exceeding initial capacity
+func TestStateProofVerificationTracker_CommitStateProofNoDbPruning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(6)
+	maxStateProofsToGenerate := dataToAdd - 1
+	dataToRemove := maxStateProofsToGenerate - 1
+
+	lastStuckBlock := feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
+	_ = feedBlocks(ml, maxStateProofsToGenerate, lastStuckBlock, false)
+
+	verifyTracking(t, spt, 0, dataToAdd, true, trackerMemory)
+
+	ml.trackers.committedUpTo(lastStuckBlock.block.Round() + basics.Round(dataToRemove))
+	ml.trackers.waitAccountsWriting()
+
+	verifyTracking(t, spt, 0, dataToRemove, false, any)
+	verifyTracking(t, spt, dataToRemove, dataToAdd, true, trackerDB)
+}
+
 // TODO: Test interval size change
 // TODO: Test lookup for not yet generated
 // TODO: Test all removals
 // TODO: Test disk initialization
 // TODO: Test stress
+// TODO: Test errors
 // TODO: Test locking?
