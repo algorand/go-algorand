@@ -35,8 +35,8 @@ var (
 // TODO: Add locks where needed
 
 type verificationDeletionData struct {
-	stateProofLastAttestedRound basics.Round
 	stateProofTransactionRound  basics.Round
+	stateProofLastAttestedRound basics.Round
 }
 
 type stateProofVerificationTracker struct {
@@ -83,7 +83,7 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFound
 }
 
-func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, round basics.Round) error {
+func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	preparedDbQueries, err := stateProofVerificationInitDbQueries(l.trackerDB().Rdb.Handle)
 	if err != nil {
 		return err
@@ -126,10 +126,7 @@ func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (min
 	return round, 0
 }
 
-// TODO: Rewrite this function after understanding tracker interaction better
 func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	var offset uint64
-
 	if committedRound < dcr.lookback {
 		return nil
 	}
@@ -140,12 +137,9 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound b
 		return nil
 	}
 
-	// TODO: Our own panic and offset calculation
-	//if newBase > dbRound+basics.Round(len(au.deltas)) {
-	//	au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
-	//}
+	// TODO: Should I add a check here for out of bounds?
 
-	offset = uint64(newBase - dbRound)
+	offset := uint64(newBase - dbRound)
 
 	dcr.oldBase = dbRound
 	dcr.offset = offset
