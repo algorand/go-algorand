@@ -20,11 +20,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
 )
 
 var (
@@ -90,9 +93,20 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	}
 
 	spt.dbQueries = *preparedDbQueries
-	// TODO: Decide on slice size
-	spt.trackedData = make([]ledgercore.StateProofVerificationData, 0, 1000)
-	spt.trackedDeletionData = make([]verificationDeletionData, 0, 1000)
+
+	latestRoundInLedger := l.Latest()
+	latestBlockHeader, err := l.BlockHdr(latestRoundInLedger)
+
+	if err != nil {
+		return err
+	}
+
+	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
+
+	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for state proof chain delay,
+	// and is thus a good size to start from.
+	spt.trackedData = make([]ledgercore.StateProofVerificationData, 0, proto.StateProofMaxRecoveryIntervals)
+	spt.trackedDeletionData = make([]verificationDeletionData, 0, proto.StateProofMaxRecoveryIntervals)
 
 	return nil
 }
@@ -136,8 +150,6 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound b
 		// Already forgotten
 		return nil
 	}
-
-	// TODO: Should I add a check here for out of bounds?
 
 	offset := uint64(newBase - dbRound)
 
