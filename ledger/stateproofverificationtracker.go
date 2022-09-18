@@ -24,9 +24,11 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 var (
+	errStateProofVerificationDataNotFound        = errors.New("requested state proof verification data not found in memory")
 	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is in a future block")
 )
 
@@ -43,6 +45,8 @@ type stateProofVerificationTracker struct {
 	trackedData []ledgercore.StateProofVerificationData
 
 	trackedDeletionData []verificationDeletionData
+
+	stateProofVerificationMu deadlock.RWMutex
 }
 
 // TODO: Should use binary search
@@ -67,6 +71,16 @@ func (spt *stateProofVerificationTracker) roundToLatestDataIndex(round basics.Ro
 	}
 
 	return uint64(len(spt.trackedData))
+}
+
+func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (ledgercore.StateProofVerificationData, error) {
+	for _, verificationData := range spt.trackedData {
+		if verificationData.TargetStateProofRound == stateProofLastAttestedRound {
+			return verificationData, nil
+		}
+	}
+
+	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFound
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, round basics.Round) error {
@@ -100,11 +114,11 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 	}
 
 	if delta.StateProofNext != 0 {
-		flushData := verificationDeletionData{
+		deletionData := verificationDeletionData{
 			stateProofLastAttestedRound: delta.StateProofNext.SubSaturate(currentStateProofInterval),
 			stateProofTransactionRound:  blk.Round(),
 		}
-		spt.trackedDeletionData = append(spt.trackedDeletionData, flushData)
+		spt.trackedDeletionData = append(spt.trackedDeletionData, deletionData)
 	}
 }
 
@@ -185,15 +199,16 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 // TODO: must lock here
+// TODO: additional data in error messages
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-
 	if len(spt.trackedData) == 0 || stateProofLastAttestedRound < spt.trackedData[0].TargetStateProofRound {
 		return spt.dbQueries.lookupData(stateProofLastAttestedRound)
 	}
 
 	if stateProofLastAttestedRound <= spt.trackedData[len(spt.trackedData)-1].TargetStateProofRound {
-		return &spt.trackedData[spt.roundToLatestDataIndex(stateProofLastAttestedRound)], nil
+		verificationData, err := spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+		return &verificationData, err
 	}
 
 	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated

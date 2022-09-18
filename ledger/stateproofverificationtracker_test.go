@@ -32,6 +32,14 @@ import (
 
 var defaultRoundsInterval = basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
 
+type TrackingLocation uint64
+
+const (
+	any TrackingLocation = iota
+	trackerDB
+	trackerMemory
+)
+
 func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
 	a := require.New(t)
 	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
@@ -104,25 +112,37 @@ func feedBlocks(ml *mockLedgerForTracker, numOfBlocks uint64, prevBlock *blockEn
 	return prevBlock
 }
 
-func verifyTrackerDB(t *testing.T, spt *stateProofVerificationTracker,
-	startDataIndex uint64, endDataIndex uint64, dataPresenceExpected bool) {
+func verifyTracking(t *testing.T, spt *stateProofVerificationTracker,
+	startDataIndex uint64, endDataIndex uint64, dataPresenceExpected bool, trackingLocation TrackingLocation) {
 	a := require.New(t)
 
 	for dataIndex := startDataIndex; dataIndex < endDataIndex; dataIndex++ {
 		targetStateProofRound := basics.Round(dataIndex+2) * defaultRoundsInterval
-		_, err := spt.LookupVerificationData(targetStateProofRound)
+
+		var err error
+		var expectedNotFoundErr error
+		switch trackingLocation {
+		case any:
+			_, err = spt.LookupVerificationData(targetStateProofRound)
+			expectedNotFoundErr = sql.ErrNoRows
+		case trackerDB:
+			_, err = spt.dbQueries.lookupData(targetStateProofRound)
+			expectedNotFoundErr = sql.ErrNoRows
+		case trackerMemory:
+			_, err = spt.lookupDataInTrackedMemory(targetStateProofRound)
+			expectedNotFoundErr = errStateProofVerificationDataNotFound
+		}
 
 		if dataPresenceExpected {
 			a.NoError(err)
 		} else {
-			a.ErrorIs(err, sql.ErrNoRows)
+			a.ErrorIs(err, expectedNotFoundErr)
 		}
 	}
 }
 
 func TestStateProofVerificationTracker_StateProofsDisabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
 
 	ml, spt := initializeLedgerSpt(t)
 	defer ml.Close()
@@ -136,9 +156,9 @@ func TestStateProofVerificationTracker_StateProofsDisabled(t *testing.T) {
 		ml.trackers.newBlock(block.block, ledgercore.StateDelta{})
 	}
 
-	a.Equal(0, len(spt.trackedData))
 	ml.trackers.committedUpTo(roundsAmount)
 	ml.trackers.waitAccountsWriting()
+	verifyTracking(t, spt, 0, uint64(roundsAmount/defaultRoundsInterval), false, any)
 }
 
 func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
@@ -154,15 +174,16 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	// The last verification data should still be in the DB since the round with the state proof transaction it is used
-	// to verify has not yet been committed.
 	expectedRemainingDataNum := expectedDataNum - 1
-	verifyTrackerDB(t, spt, 0, expectedRemainingDataNum, false)
+	verifyTracking(t, spt, 0, expectedRemainingDataNum, false, any)
+
+	// The last verification data should still be tracked since the round with the state proof transaction it is used
+	// to verify has not yet been committed.
+	verifyTracking(t, spt, expectedDataNum, expectedDataNum, true, any)
 }
 
-func TestStateProofVerificationTracker_CommitAddition(t *testing.T) {
+func TestStateProofVerificationTracker_CommitDbFlush(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
 
 	ml, spt := initializeLedgerSpt(t)
 	defer ml.Close()
@@ -171,14 +192,51 @@ func TestStateProofVerificationTracker_CommitAddition(t *testing.T) {
 	expectedDataNum := uint64(1)
 
 	lastBlock := feedBlocks(ml, expectedDataNum*uint64(defaultRoundsInterval), genesisBlock(), true)
-	a.Equal(expectedDataNum, uint64(len(spt.trackedData)))
 
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	a.Equal(uint64(0), uint64(len(spt.trackedData)))
+	verifyTracking(t, spt, 0, expectedDataNum, false, trackerMemory)
+	verifyTracking(t, spt, 0, expectedDataNum, true, trackerDB)
+}
 
-	verifyTrackerDB(t, spt, 0, expectedDataNum, true)
+func TestStateProofVerificationTracker_CommitWithoutDbFlush(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(10)
+	_ = feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
+
+	ml.trackers.committedUpTo(defaultRoundsInterval - 1)
+	ml.trackers.waitAccountsWriting()
+
+	verifyTracking(t, spt, 0, dataToAdd, true, trackerMemory)
+	verifyTracking(t, spt, 0, dataToAdd, false, trackerDB)
+}
+
+func TestStateProofVerificationTracker_CommitPartialDbFlush(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(10)
+	_ = feedBlocks(ml, dataToAdd*uint64(defaultRoundsInterval), genesisBlock(), true)
+
+	expectedDataInDbNum := uint64(2)
+	expectedDataInMemoryNum := dataToAdd - expectedDataInDbNum
+	ml.trackers.committedUpTo(defaultRoundsInterval * basics.Round(expectedDataInDbNum))
+	ml.trackers.waitAccountsWriting()
+
+	verifyTracking(t, spt, 0, expectedDataInDbNum, true, trackerDB)
+	verifyTracking(t, spt, 0, expectedDataInDbNum, false, trackerMemory)
+
+	verifyTracking(t, spt, expectedDataInDbNum, expectedDataInMemoryNum, false, trackerDB)
+	verifyTracking(t, spt, expectedDataInDbNum, expectedDataInMemoryNum, true, trackerMemory)
 }
 
 func TestStateProofVerificationTracker_Removal(t *testing.T) {
@@ -197,13 +255,14 @@ func TestStateProofVerificationTracker_Removal(t *testing.T) {
 	ml.trackers.committedUpTo(lastBlock.block.Round())
 	ml.trackers.waitAccountsWriting()
 
-	verifyTrackerDB(t, spt, 0, dataToRemove, false)
-	verifyTrackerDB(t, spt, dataToRemove, dataToAdd, true)
+	verifyTracking(t, spt, 0, dataToRemove, false, any)
+	verifyTracking(t, spt, dataToRemove, dataToAdd, true, trackerDB)
 }
 
 // TODO: Test addition and removal after exceeding initial capacity
 // TODO: Test interval size change
-// TODO: Test commit not all state proofs
+// TODO: Test lookup for not yet generated
+// TODO: Test all removals
 // TODO: Test disk initialization
 // TODO: Test stress
 // TODO: Test locking?
