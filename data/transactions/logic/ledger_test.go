@@ -469,7 +469,7 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error 
 	return nil
 }
 
-// DelBox deletes a value through moxMods mechanism
+// DelBox deletes a value through boxMods mechanism
 func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))

@@ -1924,8 +1924,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Key")
 							return
 						}
-						if zb0011 > 128 {
-							err = msgp.ErrOverflow(uint64(zb0011), uint64(128))
+						if zb0011 > encodedKVRecordV6MaxKeyLength {
+							err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedKVRecordV6MaxKeyLength))
 							return
 						}
 						(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
@@ -1942,8 +1942,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Value")
 							return
 						}
-						if zb0012 > 32768 {
-							err = msgp.ErrOverflow(uint64(zb0012), uint64(32768))
+						if zb0012 > encodedKVRecordV6MaxValueLength {
+							err = msgp.ErrOverflow(uint64(zb0012), uint64(encodedKVRecordV6MaxValueLength))
 							return
 						}
 						(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
@@ -1982,8 +1982,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Key")
 								return
 							}
-							if zb0013 > 128 {
-								err = msgp.ErrOverflow(uint64(zb0013), uint64(128))
+							if zb0013 > encodedKVRecordV6MaxKeyLength {
+								err = msgp.ErrOverflow(uint64(zb0013), uint64(encodedKVRecordV6MaxKeyLength))
 								return
 							}
 							(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
@@ -1998,8 +1998,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Value")
 								return
 							}
-							if zb0014 > 32768 {
-								err = msgp.ErrOverflow(uint64(zb0014), uint64(32768))
+							if zb0014 > encodedKVRecordV6MaxValueLength {
+								err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedKVRecordV6MaxValueLength))
 								return
 							}
 							(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
@@ -2106,8 +2106,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Key")
 								return
 							}
-							if zb0021 > 128 {
-								err = msgp.ErrOverflow(uint64(zb0021), uint64(128))
+							if zb0021 > encodedKVRecordV6MaxKeyLength {
+								err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedKVRecordV6MaxKeyLength))
 								return
 							}
 							(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
@@ -2124,8 +2124,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Value")
 								return
 							}
-							if zb0022 > 32768 {
-								err = msgp.ErrOverflow(uint64(zb0022), uint64(32768))
+							if zb0022 > encodedKVRecordV6MaxValueLength {
+								err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedKVRecordV6MaxValueLength))
 								return
 							}
 							(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
@@ -2164,8 +2164,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 									err = msgp.WrapError(err, "KVs", zb0002, "Key")
 									return
 								}
-								if zb0023 > 128 {
-									err = msgp.ErrOverflow(uint64(zb0023), uint64(128))
+								if zb0023 > encodedKVRecordV6MaxKeyLength {
+									err = msgp.ErrOverflow(uint64(zb0023), uint64(encodedKVRecordV6MaxKeyLength))
 									return
 								}
 								(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
@@ -2180,8 +2180,8 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 									err = msgp.WrapError(err, "KVs", zb0002, "Value")
 									return
 								}
-								if zb0024 > 32768 {
-									err = msgp.ErrOverflow(uint64(zb0024), uint64(32768))
+								if zb0024 > encodedKVRecordV6MaxValueLength {
+									err = msgp.ErrOverflow(uint64(zb0024), uint64(encodedKVRecordV6MaxValueLength))
 									return
 								}
 								(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
@@ -2919,8 +2919,8 @@ func (z *encodedKVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Key")
 				return
 			}
-			if zb0003 > 128 {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(128))
+			if zb0003 > encodedKVRecordV6MaxKeyLength {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(encodedKVRecordV6MaxKeyLength))
 				return
 			}
 			(*z).Key, bts, err = msgp.ReadBytesBytes(bts, (*z).Key)
@@ -2937,8 +2937,8 @@ func (z *encodedKVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Value")
 				return
 			}
-			if zb0004 > 32768 {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(32768))
+			if zb0004 > encodedKVRecordV6MaxValueLength {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(encodedKVRecordV6MaxValueLength))
 				return
 			}
 			(*z).Value, bts, err = msgp.ReadBytesBytes(bts, (*z).Value)
@@ -2977,8 +2977,8 @@ func (z *encodedKVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Key")
 					return
 				}
-				if zb0005 > 128 {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(128))
+				if zb0005 > encodedKVRecordV6MaxKeyLength {
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(encodedKVRecordV6MaxKeyLength))
 					return
 				}
 				(*z).Key, bts, err = msgp.ReadBytesBytes(bts, (*z).Key)
@@ -2993,8 +2993,8 @@ func (z *encodedKVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Value")
 					return
 				}
-				if zb0006 > 32768 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(32768))
+				if zb0006 > encodedKVRecordV6MaxValueLength {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(encodedKVRecordV6MaxValueLength))
 					return
 				}
 				(*z).Value, bts, err = msgp.ReadBytesBytes(bts, (*z).Value)

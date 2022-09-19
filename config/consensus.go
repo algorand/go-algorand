@@ -271,7 +271,7 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app)
+	// maximum number of "foreign references" (accounts, asa, app, boxes)
 	// that can be attached to a single app call.
 	MaxAppTotalTxnReferences int
 

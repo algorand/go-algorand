@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -37,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -809,4 +811,16 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 
+}
+
+func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for version, params := range config.Consensus {
+		require.GreaterOrEqualf(t, uint64(encodedKVRecordV6MaxValueLength), params.MaxBoxSize, "Allocbound constant no longer valid as of consensus version %s", version)
+		longestPossibleBoxName := string(make([]byte, params.MaxAppKeyLen))
+		longestPossibleKey := logic.MakeBoxKey(basics.AppIndex(math.MaxUint64), longestPossibleBoxName)
+		require.GreaterOrEqualf(t, encodedKVRecordV6MaxValueLength, len(longestPossibleKey), "Allocbound constant no longer valid as of consensus version %s", version)
+	}
 }

@@ -91,12 +91,20 @@ type encodedBalanceRecordV6 struct {
 	ExpectingMoreEntries bool `codec:"e"`
 }
 
+// Adjust these to be big enough for boxes, but not directly tied to box values.
+const (
+	// For boxes: "bx:<8 bytes><64 byte name>"
+	encodedKVRecordV6MaxKeyLength = 128
+
+	// For boxes: MaxBoxSize
+	encodedKVRecordV6MaxValueLength = 32768
+)
+
 type encodedKVRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Adjust these to be big enough for boxes, but not directly tied to box values.
-	Key   []byte `codec:"k,allocbound=128"`   // For boxes: "bx:<10 bytes><64 byte name>"
-	Value []byte `codec:"v,allocbound=32768"` // For boxes: MaxBoxSize
+	Key   []byte `codec:"k,allocbound=encodedKVRecordV6MaxKeyLength"`
+	Value []byte `codec:"v,allocbound=encodedKVRecordV6MaxValueLength"`
 }
 
 type catchpointFileChunkV6 struct {

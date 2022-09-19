@@ -383,7 +383,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 				}
 			}
 		} else {
-			// we know that the key in not in kvDeltas - so there is no point in scanning it.
+			// we know that the key is not in kvDeltas - so there is no point in scanning it.
 			// we've going to fall back to search in the database, but before doing so, we should
 			// update the rnd so that it would point to the end of the known delta range.
 			// ( that would give us the best validity range )
