@@ -215,7 +215,8 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(rnd basics.Round, a basics.Ad
 	}
 
 	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
-	return v.l.LookupWithoutRewards(rnd, a)
+	acctData, _, err := v.l.LookupWithoutRewards(rnd, a)
+	return acctData, rnd, err
 }
 
 // VerifiedTransactionCache implements the ledgerForEvaluator interface.
