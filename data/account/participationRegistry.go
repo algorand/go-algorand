@@ -220,8 +220,8 @@ var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
 
-// ErrStateProofVerifierIsNil states that no state proof field was found.
-var ErrStateProofVerifierIsNil = errors.New("record contains no StateProofVerifier")
+// ErrStateProofVerifierNotFound states that no state proof field was found.
+var ErrStateProofVerifierNotFound = errors.New("record contains no StateProofVerifier")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
@@ -771,7 +771,7 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 		return StateProofSecretsForRound{}, err
 	}
 	if partRecord.StateProof == nil {
-		return StateProofSecretsForRound{}, ErrStateProofVerifierIsNil
+		return StateProofSecretsForRound{}, ErrStateProofVerifierNotFound
 	}
 
 	var result StateProofSecretsForRound

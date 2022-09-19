@@ -984,7 +984,7 @@ func TestGetRoundSecretsWithNilStateProofVerifier(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
-	a.ErrorIs(err, ErrStateProofVerifierIsNil)
+	a.ErrorIs(err, ErrStateProofVerifierNotFound)
 }
 
 func TestSecretNotFound(t *testing.T) {
