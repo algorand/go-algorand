@@ -35,6 +35,10 @@ var boxAppSource = main(`
 		txn ApplicationArgs 0
         byte "create"			// create box named arg[1]
         ==
+		txn ApplicationArgs 0
+		byte "recreate"
+		==
+		||
         bz del
 		txn ApplicationArgs 1
 		int 24
@@ -46,7 +50,16 @@ var boxAppSource = main(`
         txn ApplicationArgs 2
         btoi
      default:
+		txn ApplicationArgs 0
+		byte "recreate"
+		==
+		bz first
 		box_create
+		!
+		assert
+		b end
+	 first:
+	    box_create
         assert
         b end
      del:						// delete box arg[1]
@@ -144,6 +157,57 @@ func TestBoxCreate(t *testing.T) {
 		// and, of course, that's true even if there's a box ref with the empty name
 		empty.Boxes = []transactions.BoxRef{{}}
 		dl.txn(empty, "box names may not be zero")
+	})
+}
+
+// TestBoxRecreate tests behavior when box_create is called for a box that already exists
+func TestBoxRecreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		// increment for a size 4 box with 4 letter name
+		const mbr = 2500 + 8*400
+
+		appIndex := dl.fundedApp(addrs[0], 100_000+mbr, boxAppSource)
+
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("adam")}},
+		}
+
+		create := call.Args("create", "adam", "\x04") // box value size is 4 bytes
+		recreate := call.Args("recreate", "adam", "\x04")
+
+		dl.txn(recreate, "box_create\n!\nassert")
+		dl.txn(create)
+		dl.txn(recreate)
+		dl.txn(call.Args("set", "adam", "\x01\x02\x03\x04"))
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04"))
+		dl.txn(recreate.Noted("again"))
+		// a recreate does not change the value
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after recreate"))
+		// recreating with a smaller size fails
+		dl.txn(call.Args("recreate", "adam", "\x03"), "new box size mismatch 4 3")
+		// recreating with a larger size fails
+		dl.txn(call.Args("recreate", "adam", "\x05"), "new box size mismatch 4 5")
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after failed recreates"))
+
+		// delete and actually create again
+		dl.txn(call.Args("delete", "adam"))
+		dl.txn(call.Args("create", "adam", "\x03"))
+
+		dl.txn(call.Args("set", "adam", "\x03\x02\x01"))
+		dl.txn(call.Args("check", "adam", "\x03\x02\x01"))
+		dl.txn(recreate.Noted("after delete"), "new box size mismatch 3 4")
+		dl.txn(call.Args("recreate", "adam", "\x03"))
+		dl.txn(call.Args("check", "adam", "\x03\x02\x01").Noted("after delete and recreate"))
 	})
 }
 

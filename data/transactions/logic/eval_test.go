@@ -180,6 +180,8 @@ func (ep *EvalParams) reset() {
 	if ep.Trace != nil {
 		ep.Trace = &strings.Builder{}
 	}
+	ep.txidCache = nil
+	ep.innerTxidCache = nil
 }
 
 func TestTooManyArgs(t *testing.T) {

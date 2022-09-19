@@ -130,7 +130,7 @@ goal app call --from $ACCOUNT --app-id ${APPID} --box "str:greatBox" --app-arg "
 goal app call --from ${ACCOUNT} --app-id ${APPID} --box "str:an_ABI_box" --app-arg "str:create" --app-arg "str:an_ABI_box"
 
 # set the contents to ABI type `(uint8,uint8,uint8)` with value `[2,3,5]`
-goal app call --from ${ACCOUNT} --app-id ${APPID} --box "$str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
+goal app call --from ${ACCOUNT} --app-id ${APPID} --box "str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
 ```
 
 ### Q: How do I search for boxes in goal?

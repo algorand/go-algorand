@@ -76,12 +76,12 @@ var appBoxInfoCmd = &cobra.Command{
 		// This reduces confusion of potentially receiving a different box name representation
 		boxNameBytes, err := newAppCallBytes(boxName).Raw()
 		if err != nil {
-			reportErrorf(errorInvalidBoxName, boxName)
+			reportErrorf(errorInvalidBoxName, boxName, err)
 		}
 		if !bytes.Equal(box.Name, boxNameBytes) {
 			reportErrorf(errorBoxNameMismatch, box.Name, boxNameBytes)
 		}
-		reportInfof("Name:  %s", boxName)
+		reportInfof("Name:  %s", encodeBytesAsAppCallBytes(box.Name))
 
 		// Print box value
 		reportInfof("Value: %s", encodeBytesAsAppCallBytes(box.Value))

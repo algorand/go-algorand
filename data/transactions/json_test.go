@@ -33,12 +33,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func decode(data string, v interface{}) error {
+func mustDecode(data string, v interface{}) {
 	err := protocol.DecodeJSON([]byte(data), v)
 	if err != nil {
 		panic(err)
 	}
-	return err
 }
 
 func compact(data []byte) string {
@@ -64,19 +63,19 @@ func TestJsonMarshal(t *testing.T) {
 func TestJsonUnmarshal(t *testing.T) {
 	var br transactions.BoxRef
 
-	decode(`{"i":4,"n":"am9l"}`, &br)
+	mustDecode(`{"i":4,"n":"am9l"}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 4, Name: []byte("joe")}, br)
 
 	br = transactions.BoxRef{}
-	decode(`{"n":"am9l"}`, &br)
+	mustDecode(`{"n":"am9l"}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 0, Name: []byte("joe")}, br)
 
 	br = transactions.BoxRef{}
-	decode(`{"i":4}`, &br)
+	mustDecode(`{"i":4}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 4, Name: nil}, br)
 
 	br = transactions.BoxRef{}
-	decode(`{}`, &br)
+	mustDecode(`{}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 0, Name: nil}, br)
 }
 
@@ -95,6 +94,4 @@ func TestTxnJson(t *testing.T) {
 	}
 	marshal = protocol.EncodeJSON(txn.Txn())
 	require.Contains(t, compact(marshal), `"apbx":[{"i":3,"n":"am9obg=="}]`)
-
-	marshal = protocol.EncodeJSON(txn.Txn())
 }
