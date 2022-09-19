@@ -771,7 +771,8 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 		return StateProofSecretsForRound{}, err
 	}
 	if partRecord.StateProof == nil {
-		return StateProofSecretsForRound{}, ErrStateProofVerifierNotFound
+		return StateProofSecretsForRound{},
+			fmt.Errorf("%w: for participation ID %v", ErrStateProofVerifierNotFound, id)
 	}
 
 	var result StateProofSecretsForRound
