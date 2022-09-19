@@ -53,7 +53,10 @@ var appBoxCmd = &cobra.Command{
 var appBoxInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Retrieve information about an application box.",
-	Args:  validateNoPosArgsFn,
+	Long: "Retrieve information about an application box.\n" +
+		"For printable strings, the box name and value are formatted as 'str:hello'\n" +
+		"For everything else, the box name and value are formatted as 'b64:A=='. ",
+	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
 
