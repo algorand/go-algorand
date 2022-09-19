@@ -289,6 +289,6 @@ func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	logbuffer.Reset()
 	acctManager.StateProofKeys(1)
 	lg := logbuffer.String()
-	a.False(strings.Contains(lg, account.ErrStateProofVerifierIsNil.Error()))
+	a.False(strings.Contains(lg, account.ErrStateProofVerifierNotFound.Error()))
 	a.False(strings.Contains(lg, "level=error"), "expected no error in log:", lg)
 }
