@@ -1185,8 +1185,12 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 	}
 
 	top := len(pgm.stack) - 1
-	idx := top - n
+	typ, ok := pgm.top()
+	if !ok {
+		return nil, nil, nil // Will error because bury demands a stack arg
+	}
 
+	idx := top - n
 	if idx < 0 {
 		if pgm.bottom == StackNone {
 			// By demanding n+1 elements, we'll trigger an error
@@ -1196,9 +1200,10 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 		// nothing to update.
 		return nil, nil, nil
 	}
+
 	returns := make(StackTypes, n)
-	copy(returns, pgm.stack[idx:])
-	returns[0] = pgm.stack[top]
+	copy(returns, pgm.stack[idx:]) // Won't have room to copy the top type
+	returns[0] = typ               // Replace the bottom with the top type
 	return pgm.stack[idx:], returns, nil
 }
 
@@ -1257,6 +1262,7 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 		return nil, nil, fmt.Errorf("frame_bury above stack")
 	}
 	depth := top - idx
+
 	returns := make(StackTypes, depth)
 	copy(returns, pgm.stack[idx:]) // Won't have room to copy the top type
 	returns[0] = typ               // Replace the bottom with the top type
