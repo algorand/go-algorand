@@ -33,11 +33,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mustDecode(data string, v interface{}) {
+func decode(t *testing.T, data string, v interface{}) {
+	t.Helper()
 	err := protocol.DecodeJSON([]byte(data), v)
-	if err != nil {
-		panic(err)
-	}
+	require.NoErrorf(t, err, "Cannot decode %s", data)
 }
 
 func compact(data []byte) string {
@@ -63,19 +62,19 @@ func TestJsonMarshal(t *testing.T) {
 func TestJsonUnmarshal(t *testing.T) {
 	var br transactions.BoxRef
 
-	mustDecode(`{"i":4,"n":"am9l"}`, &br)
+	decode(t, `{"i":4,"n":"am9l"}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 4, Name: []byte("joe")}, br)
 
 	br = transactions.BoxRef{}
-	mustDecode(`{"n":"am9l"}`, &br)
+	decode(t, `{"n":"am9l"}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 0, Name: []byte("joe")}, br)
 
 	br = transactions.BoxRef{}
-	mustDecode(`{"i":4}`, &br)
+	decode(t, `{"i":4}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 4, Name: nil}, br)
 
 	br = transactions.BoxRef{}
-	mustDecode(`{}`, &br)
+	decode(t, `{}`, &br)
 	require.Equal(t, transactions.BoxRef{Index: 0, Name: nil}, br)
 }
 

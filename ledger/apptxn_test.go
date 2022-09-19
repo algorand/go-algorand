@@ -3629,9 +3629,6 @@ func TestUnfundedSenders(t *testing.T) {
 			dl.fullBlock()
 		}
 
-		t.Logf("addrs[0] = %+v\n", addrs[0])
-		t.Logf("addrs[1] = %+v\n", addrs[1])
-
 		benefactor := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
