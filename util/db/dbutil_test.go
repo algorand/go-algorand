@@ -239,7 +239,8 @@ func cleanupSqliteDb(t *testing.T, path string) {
 func TestDBConcurrencyRW(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	if testing.Short() {
-		t.Skip()
+		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
+		t.Skip("skipped as part of short test suite")
 	}
 
 	dbFolder := "/dev/shm"
@@ -496,7 +497,8 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	a := require.New(t)
 
 	if testing.Short() {
-		t.Skip()
+		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
+		t.Skip("skipped as part of short test suite")
 	}
 
 	dbParams := []string{"_secure_delete=on"} // not required but used in ErasableAccessor, so I'd like it to be tested here as well
