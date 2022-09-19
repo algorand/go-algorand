@@ -97,6 +97,11 @@ func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
 }
 
+// AfterTealOp does nothing
+func (adaptor *legacyDebuggerAdaptor) AfterTealOp(cx *EvalContext, evalError error) error {
+	return nil
+}
+
 // AfterLogicEval invokes the legacy debugger's Complete hook
 func (adaptor *legacyDebuggerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {

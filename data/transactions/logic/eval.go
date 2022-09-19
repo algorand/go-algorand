@@ -710,10 +710,12 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}()
 
 	defer func() {
-		// Ensure we update the debugger before exiting
-		derr := callAfterLogicHookIfItExists(cx.Debugger, cx, err)
-		if err == nil && derr != nil {
-			err = derr
+		if cx.Debugger != nil {
+			// Ensure we update the debugger before exiting
+			derr := cx.Debugger.AfterLogicEval(cx, err)
+			if err == nil && derr != nil {
+				err = fmt.Errorf("error while running debugger AfterLogicEval hook: %w", derr)
+			}
 		}
 	}()
 
@@ -740,22 +742,28 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	err = callBeforeLogicHookIfItExists(cx.Debugger, cx)
-	if err != nil {
-		return false, err
+	if cx.Debugger != nil {
+		err = cx.Debugger.BeforeLogicEval(cx)
+		if err != nil {
+			return false, fmt.Errorf("error while running debugger BeforeLogicEval hook: %w", err)
+		}
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		err = callBeforeTealOpHookIfItExists(cx.Debugger, cx)
-		if err != nil {
-			return false, err
+		if cx.Debugger != nil {
+			err = cx.Debugger.BeforeTealOp(cx)
+			if err != nil {
+				return false, fmt.Errorf("error while running debugger BeforeTealOp hook: %w", err)
+			}
 		}
 
 		err = cx.step()
 
-		derr := callAfterTealOpHookIfItExists(cx.Debugger, cx, err)
-		if err == nil && derr != nil {
-			return false, derr
+		if cx.Debugger != nil {
+			derr := cx.Debugger.AfterTealOp(cx, err)
+			if err == nil && derr != nil {
+				return false, fmt.Errorf("error while running debugger AfterTealOp hook: %w", derr)
+			}
 		}
 	}
 	if err != nil {
