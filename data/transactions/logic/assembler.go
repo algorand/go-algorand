@@ -1130,7 +1130,7 @@ func getImm(args []string, argIndex int) (int, bool) {
 		return 0, false
 	}
 	// We want to parse anything from -128 up to 255. So allow 9 bits.
-	// Normal assembly checkign willl catch signed as byte, vice versa
+	// Normal assembly checking will catch signed as byte, vice versa
 	n, err := strconv.ParseInt(args[argIndex], 0, 9)
 	if err != nil {
 		return 0, false
