@@ -2252,6 +2252,9 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
 			return err0
 		}
+		if err0 := accountsCreateStateProofVerificationTable(ctx, tx); err0 != nil {
+			return err0
+		}
 
 		return nil
 	})
