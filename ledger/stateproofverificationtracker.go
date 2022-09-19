@@ -103,7 +103,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
 
-	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for state proof chain delay,
+	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for expected state proof chain delay,
 	// and is thus a good size to start from.
 	spt.trackedData = make([]ledgercore.StateProofVerificationData, 0, proto.StateProofMaxRecoveryIntervals)
 	spt.trackedDeletionData = make([]verificationDeletionData, 0, proto.StateProofMaxRecoveryIntervals)
@@ -151,6 +151,7 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound b
 		return nil
 	}
 
+	// TODO: warn on what basically amounts to interval change?
 	offset := uint64(newBase - dbRound)
 
 	dcr.oldBase = dbRound
