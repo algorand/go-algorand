@@ -232,7 +232,7 @@ func TestForgetReturn(t *testing.T) {
         retsub
   main: callsub a
         !
-`, fpVersion)
+`, fpVersion, "retsub executed with no return values on stack")
 
 	testPanics(t, `
         b main
@@ -241,7 +241,7 @@ func TestForgetReturn(t *testing.T) {
         retsub
   main: callsub a
         !
-`, fpVersion)
+`, fpVersion, "retsub executed with 2 return values on stack")
 
 	// Extra is fine. They are "locals", and they are cleared
 	testAccepts(t, `
@@ -394,10 +394,6 @@ func TestFrameDigAtStart(t *testing.T) {
 	testPanics(t, `
         frame_dig 1
 `, fpVersion, "frame_dig with empty callstack")
-
-	testPanics(t, `
-        frame_dig -1
-`, fpVersion, "frame_dig with empty callstack")
 }
 
 func TestFrameAccessAboveStack(t *testing.T) {
@@ -504,5 +500,5 @@ double_both:
      retsub
 `
 	testProg(t, source, fpVersion)
-	testAccepts(t, notrack(source), fpVersion)
+	testAccepts(t, source, fpVersion)
 }

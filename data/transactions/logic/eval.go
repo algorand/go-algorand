@@ -2157,7 +2157,7 @@ func opRetSub(cx *EvalContext) error {
 				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
 			default:
 				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
-					expect-len(cx.stack), frame.returns)
+					len(cx.stack)-frame.height, frame.returns)
 			}
 		}
 		argstart := frame.height - frame.args

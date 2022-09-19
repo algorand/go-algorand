@@ -4411,7 +4411,7 @@ func TestBury(t *testing.T) {
 	// bury 0 panics
 	source := "int 3; int 2; int 7; bury 0; int 1; return"
 	testProg(t, source, 8, Expect{1, "bury 0 always fails"})
-	testPanics(t, notrack("int 3; int 2; int 7; bury 0; int 1; return"), 8)
+	testPanics(t, notrack("int 3; int 2; int 7; bury 0; int 1; return"), 8, "bury outside stack")
 
 	// bury 1 pops the ToS and replaces the thing "1 down", which becomes the new ToS
 	testAccepts(t, "int 3; int 2; int 7; bury 1; int 7; ==; assert; int 3; ==", 8)
@@ -4424,7 +4424,7 @@ func TestBury(t *testing.T) {
 `, 8)
 
 	// bury too deep
-	testPanics(t, notrack("int 3; int 2; int 7;	bury 3; int 1; return"), 8)
+	testPanics(t, notrack("int 3; int 2; int 7;	bury 3; int 1; return"), 8, "bury outside stack")
 }
 
 func TestCover(t *testing.T) {
