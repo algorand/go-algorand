@@ -53,7 +53,6 @@ var appBoxCmd = &cobra.Command{
 var appBoxInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Retrieve information about an application box.",
-	Long:  "Retrieve information about an application box. The returned box name and value are base64 encoded.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
