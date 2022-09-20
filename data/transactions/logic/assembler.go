@@ -1664,6 +1664,13 @@ func nextStatement(ops *OpStream, tokens []string) (current, rest []string) {
 	return tokens, nil
 }
 
+type directiveFunc func(*OpStream, []string) error
+
+var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
+
+// Unfortunately we do have to write the names twice so we avoid a cycle when we check macro names in define
+var directiveNames = map[string]bool{"pragma": true, "define": true}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	fin := strings.NewReader(text)
@@ -1678,14 +1685,10 @@ func (ops *OpStream) assemble(text string) error {
 		if len(tokens) > 0 {
 			if first := tokens[0]; first[0] == '#' {
 				directive := first[1:]
-				switch directive {
-				case "pragma":
-					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
-					ops.trace("%3d: #pragma line\n", ops.sourceLine)
-				case "define":
-					_ = ops.define(tokens)
-					ops.trace("%3d: #define line\n", ops.sourceLine)
-				default:
+				if dFunc, ok := directives[directive]; ok {
+					_ = dFunc(ops, tokens)
+					ops.trace("%3d: %s line\n", ops.sourceLine, first)
+				} else {
 					ops.errorf("Unknown directive: %s", directive)
 				}
 				continue
@@ -1847,6 +1850,11 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
 		}
 	}
+	if len(macroName) > 0 {
+		if ok := directiveNames[macroName[1:]]; ok {
+			return fmt.Errorf("Macro names cannot be directives: %s", macroName)
+		}
+	}
 	// Note parentheses are not allowed characters, so we don't have to check for b64(AAA) syntax
 	if macroName == "b64" || macroName == "base64" {
 		return fmt.Errorf("Cannot use base64 notation in macro name: %s", macroName)
@@ -1876,7 +1884,7 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 	return nil
 }
 
-func (ops *OpStream) define(tokens []string) error {
+func define(ops *OpStream, tokens []string) error {
 	if tokens[0] != "#define" {
 		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
@@ -1900,7 +1908,7 @@ func (ops *OpStream) define(tokens []string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(tokens []string) error {
+func pragma(ops *OpStream, tokens []string) error {
 	if tokens[0] != "#pragma" {
 		return ops.errorf("invalid syntax: %s", tokens[0])
 	}

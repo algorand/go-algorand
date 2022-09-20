@@ -2826,7 +2826,7 @@ int 1
 	switch %s extra
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
-	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
 
 	// allow duplicate label reference
 	source = `
@@ -3121,6 +3121,17 @@ add:
 		Expect{4, "Sender is defined as a macro but is a field name..."},
 		Expect{5, "Macro names cannot be field names: Sender"},
 	)
+	require.Equal(t, len(directives), len(directiveNames))
+	// Ensure both directive maps are synced
+	for directive := range directives {
+		require.True(t, directiveNames[directive])
+	}
+	// define needs name and body
+	testLine(t, "#define", AssemblerMaxVersion, "define directive requires a name and body")
+	testLine(t, "#define hello", AssemblerMaxVersion, "define directive requires a name and body")
+	// macro names cannot be directives
+	testLine(t, "#define #define 1", AssemblerMaxVersion, "Macro names cannot be directives: #define")
+	testLine(t, "#define #pragma 1", AssemblerMaxVersion, "Macro names cannot be directives: #pragma")
 	// macro names cannot begin with digits (including negative ones)
 	testLine(t, "#define 1hello one", AssemblerMaxVersion, "Cannot begin macro name with number: 1hello")
 	testLine(t, "#define -1hello negativeOne", AssemblerMaxVersion, "Cannot begin macro name with number: -1hello")
@@ -3129,6 +3140,8 @@ add:
 	testLine(t, "#define base64 AA", AssemblerMaxVersion, "Cannot use base64 notation in macro name: base64")
 	testLine(t, "#define b32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: b32")
 	testLine(t, "#define base32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: base32")
+	// macro names can't use non-alphanumeric characters that aren't specifically allowed
+	testLine(t, "#define wh@t 1", AssemblerMaxVersion, "@ character not allowed in macro name")
 	// check both kinds of pseudo-ops to make sure they can't be used as macro names
 	testLine(t, "#define int 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: int")
 	testLine(t, "#define extract 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: extract")
@@ -3147,4 +3160,10 @@ add:
 		AssemblerMaxVersion,
 		Expect{3, "Cannot create label with same name as macro: coolLabel"},
 	)
+	// Admittedly these two tests are just for coverage
+	ops := newOpStream(AssemblerMaxVersion)
+	err := define(&ops, []string{"not#define"})
+	require.EqualError(t, err, "0: invalid syntax: not#define")
+	err = pragma(&ops, []string{"not#pragma"})
+	require.EqualError(t, err, "0: invalid syntax: not#pragma")
 }
