@@ -2436,6 +2436,8 @@ func TestReturnTypes(t *testing.T) {
 							cmd += " 0x12 0x34 0x56"
 						case immLabel:
 							cmd += " done; done: ;"
+						case immLabels:
+							cmd += " done1 done2; done1: ; done2: ;"
 						default:
 							require.Fail(t, "bad immediate", "%s", imm)
 						}

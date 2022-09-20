@@ -1053,6 +1053,13 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
 
+## switch target ...
+
+- Opcode: 0x8a {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- Availability: v8
+
 ## shl
 
 - Opcode: 0x90
