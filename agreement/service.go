@@ -229,8 +229,10 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.Panicf("cannot read latest concensus version, round %d: %v", status.Round, err)
 		}
 
+		specClock := SpeculativeBlockAsmTime(status.Period, status.ConcensusVersion, status.SpeculativeAsmTimeDuration)
+
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: status.SpeculativeAssemblyDeadline, CurrentRound: status.Round}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break
