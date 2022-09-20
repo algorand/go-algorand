@@ -327,13 +327,17 @@ func run() int {
 		}
 
 		currentVersion := config.GetCurrentVersion()
+		var overrides []telemetryspec.NameValue
+		for name, val := range config.GetNonDefaultConfigValues(cfg, startupConfigCheckFields) {
+			overrides = append(overrides, telemetryspec.NameValue{Name: name, Value: val})
+		}
 		startupDetails := telemetryspec.StartupEventDetails{
 			Version:      currentVersion.String(),
 			CommitHash:   currentVersion.CommitHash,
 			Branch:       currentVersion.Branch,
 			Channel:      currentVersion.Channel,
 			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
-			Overrides:    config.GetNonDefaultConfigValues(cfg, startupConfigCheckFields),
+			Overrides:    overrides,
 		}
 
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
