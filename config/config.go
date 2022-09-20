@@ -34,6 +34,9 @@ const Devnet protocol.NetworkID = "devnet"
 // Betanet identifies the 'beta network' use for early releases of feature to the public prior to releasing these to mainnet/testnet
 const Betanet protocol.NetworkID = "betanet"
 
+// Alphanet identifies the 'alpha network' use for performance releases of feature/alphanet to the public prior to releasing these to mainnet/testnet
+const Alphanet protocol.NetworkID = "alphanet"
+
 // Devtestnet identifies the 'development network for tests' use for running tests against development and not generally accessible publicly
 const Devtestnet protocol.NetworkID = "devtestnet"
 

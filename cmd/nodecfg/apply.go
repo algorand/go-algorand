@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -101,7 +100,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 	// If config doesn't already exist, download it to specified root dir
 	if missing {
 		fmt.Fprintf(os.Stdout, "Configuration rootdir not specified - downloading latest version...\n")
-		rootDir, err = ioutil.TempDir("", channel)
+		rootDir, err = os.MkdirTemp("", channel)
 		if err != nil {
 			return fmt.Errorf("error creating temp dir for extracting config package: %v", err)
 		}

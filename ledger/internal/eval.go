@@ -1476,7 +1476,7 @@ func (validator *evalTxValidator) run() {
 		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 	}
 
-	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
+	unverifiedTxnGroups = validator.txcache.GetUnverifiedTransactionGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
 
 	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache, validator.ledger)
 	if err != nil {

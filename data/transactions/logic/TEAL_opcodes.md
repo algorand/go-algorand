@@ -1053,6 +1053,13 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
 
+## switch target ...
+
+- Opcode: 0x8a {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- Availability: v8
+
 ## shl
 
 - Opcode: 0x90
@@ -1401,7 +1408,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Opcode: 0xd1 {uint8 block field}
 - Stack: ..., A: uint64 &rarr; ..., any
-- field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)
+- field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
 
 `block` Fields:

@@ -18,6 +18,7 @@ package merklesignature
 
 import (
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -40,7 +41,7 @@ const (
 var NoKeysCommitment = Commitment{}
 
 func init() {
-	// no keys generated, inner tree of merkle siganture scheme is empty.
+	// no keys generated, inner tree of merkle signature scheme is empty.
 	o, err := New(KeyLifetimeDefault+1, KeyLifetimeDefault+2, KeyLifetimeDefault)
 	if err != nil {
 		panic(fmt.Errorf("initializing empty merkle signature scheme failed, err: %w", err))

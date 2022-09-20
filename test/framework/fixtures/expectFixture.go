@@ -18,7 +18,6 @@ package fixtures
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -148,7 +147,7 @@ func (ef *ExpectFixture) Run() {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
 				if reason, ok := disabledTest[testName]; ok {
-					t.Skip(fmt.Sprintf("Skipping %s test: %s", testName, reason))
+					t.Skipf("Skipping %s test: %s", testName, reason)
 				}
 				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 

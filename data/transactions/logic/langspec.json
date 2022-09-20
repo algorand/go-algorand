@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 7,
+  "EvalMaxVersion": 8,
   "LogicSigVersion": 7,
   "Ops": [
     {
@@ -1577,6 +1577,17 @@
       ]
     },
     {
+      "Opcode": 138,
+      "Name": "switch",
+      "Args": "U",
+      "Size": 0,
+      "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
       "Opcode": 144,
       "Name": "shl",
       "Args": "UU",
@@ -2297,7 +2308,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)",
+      "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
       "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"
