@@ -36,6 +36,7 @@ type StartupEventDetails struct {
 	Branch       string
 	Channel      string
 	InstanceHash string
+	Overrides    map[string]interface{}
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running

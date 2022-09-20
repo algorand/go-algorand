@@ -333,6 +333,7 @@ func run() int {
 			Branch:       currentVersion.Branch,
 			Channel:      currentVersion.Channel,
 			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+			Overrides:    config.GetNonDefaultConfigValues(cfg, startupConfigCheckFields),
 		}
 
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
@@ -367,6 +368,30 @@ func run() int {
 
 	s.Start()
 	return 0
+}
+
+var startupConfigCheckFields = []string{
+	"AgreementIncomingBundlesQueueLength",
+	"AgreementIncomingProposalsQueueLength",
+	"AgreementIncomingVotesQueueLength",
+	"BroadcastConnectionsLimit",
+	"CatchupBlockValidateMode",
+	"ConnectionsRateLimitingCount",
+	"ConnectionsRateLimitingWindowSeconds",
+	"GossipFanout",
+	"IncomingConnectionsLimit",
+	"IncomingMessageFilterBucketCount",
+	"IncomingMessageFilterBucketSize",
+	"LedgerSynchronousMode",
+	"MaxAcctLookback",
+	"MaxConnectionsPerIP",
+	"OutgoingMessageFilterBucketCount",
+	"OutgoingMessageFilterBucketSize",
+	"ProposalAssemblyTime",
+	"ReservedFDs",
+	"TxPoolExponentialIncreaseFactor",
+	"TxPoolSize",
+	"VerifiedTranscationsCacheSize",
 }
 
 func resolveDataDir() string {
