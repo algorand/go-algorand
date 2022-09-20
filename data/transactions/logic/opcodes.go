@@ -747,9 +747,9 @@ var OpSpecs = []OpSpec{
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
-	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
-	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
+	{0x99, "bn256_add", opBN254G1Add, proto("bb:b"), pairingVersion, costly(70)},
+	{0x9a, "bn256_scalar_mul", opBN254G1ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
+	{0x9b, "bn256_pairing", opBN254Pairing, proto("bb:i"), pairingVersion, costly(8700)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},

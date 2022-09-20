@@ -21,8 +21,10 @@ github.com/algorand/websocket v1.4.6/go.mod h1:HJmdGzFtnlUQ4nTzZP6WrT29oGYf1t6Yb
 github.com/aws/aws-sdk-go v1.33.0 h1:Bq5Y6VTLbfnJp1IV8EL/qUU5qO1DYHda/zis/sqevkY=
 github.com/aws/aws-sdk-go v1.33.0/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
 github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e h1:CHPYEbz71w8DqJ7DRIq+MXyCQsdibK08vdcQTY4ufas=
-github.com/consensys/gnark-crypto v0.7.0 h1:rwdy8+ssmLYRqKp+ryRRgQJl/rCq2uv+n83cOydm5UE=
-github.com/consensys/gnark-crypto v0.7.0/go.mod h1:KPSuJzyxkJA8xZ/+CV47tyqkr9MmpZA3PXivK4VPrVg=
+github.com/consensys/bavard v0.1.13 h1:oLhMLOFGTLdlda/kma4VOJazblc7IM5y5QPd2A/YjhQ=
+github.com/consensys/bavard v0.1.13/go.mod h1:9ItSMtA/dXMAiL7BG6bqW2m3NdSEObYWoH223nGHukI=
+github.com/consensys/gnark-crypto v0.8.0 h1:HHmhTEzHq6k/fJroPGzq8Biafn2X2IFKlKDhaL5gMHU=
+github.com/consensys/gnark-crypto v0.8.0/go.mod h1:ZTnSzNlt98CpwYIJyk6q/KVcshYWr3fOXXFrrY8a0QQ=
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -133,4 +135,6 @@ gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009/go.mod h1:O0bY1e/
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-pgregory.net/rapid v0.6.2 h1:ErW5sL+UKtfBfUTsWHDCoeB+eZKLKMxrSd1VJY6W4bw=
+pgregory.net/rapid v1.0.0 h1:iQaM2w5PZ6xvt6x7hbd7tiDS+nk7YPp5uCaEba+T/F4=
+rsc.io/tmplfunc v0.0.3 h1:53XFQh69AfOa8Tw0Jm7t+GV7KZhOi6jzsCzTtKbMvzU=
+rsc.io/tmplfunc v0.0.3/go.mod h1:AG3sTPzElb1Io3Yg4voV9AGZJuleGAwaVRxL9M49PhA=

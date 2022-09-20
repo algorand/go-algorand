@@ -24,7 +24,8 @@ require (
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.33.0 // indirect
-	github.com/consensys/gnark-crypto v0.7.0 // indirect
+	github.com/consensys/bavard v0.1.13 // indirect
+	github.com/consensys/gnark-crypto v0.8.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
@@ -51,4 +52,5 @@ require (
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/tools v0.11.0 // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009 // indirect
+	rsc.io/tmplfunc v0.0.3 // indirect
 )

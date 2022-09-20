@@ -894,7 +894,7 @@ func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
 		var a bn254.G1Affine
 		a.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
 
-		data[i].a = bN254G1ToBytes(&a)
+		data[i].a = bn254G1ToBytes(&a)
 		data[i].k = new(big.Int).SetUint64(mrand.Uint64()).Bytes()
 
 		// Pair one g1 and one g2
@@ -934,8 +934,8 @@ func benchmarkBn256(b *testing.B, source string) {
 
 func BenchmarkBn256AddRaw(b *testing.B) {
 	data := benchmarkBn256DataGenData(b)
-	a1 := bytesToBN254G1(data[0].g1)
-	a2 := bytesToBN254G1(data[0].g1)
+	a1, _ := bytesToBN254G1(data[0].g1, false)
+	a2, _ := bytesToBN254G1(data[0].g1, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -950,8 +950,8 @@ func BenchmarkBn256AddWithMarshal(b *testing.B) {
 	g1, _ := hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32")
 
 	for i := 0; i < b.N; i++ {
-		a1 := bytesToBN254G1(g1)
-		a2 := bytesToBN254G1(g1)
+		a1, _ := bytesToBN254G1(g1, true)
+		a2, _ := bytesToBN254G1(g1, true)
 		r := new(bn254.G1Affine).Add(&a1, &a2)
 		v[i] = r.Marshal()
 	}
@@ -959,8 +959,8 @@ func BenchmarkBn256AddWithMarshal(b *testing.B) {
 
 func BenchmarkBn256PairingRaw(b *testing.B) {
 	data := benchmarkBn256DataGenData(b)
-	g1s := bytesToBN254G1s(data[0].g1)
-	g2s := bytesToBN254G2s(data[0].g2)
+	g1s, _ := bytesToBN254G1s(data[0].g1, false)
+	g2s, _ := bytesToBN254G2s(data[0].g2, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
