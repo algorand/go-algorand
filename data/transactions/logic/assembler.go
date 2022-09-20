@@ -1683,7 +1683,7 @@ func (ops *OpStream) assemble(text string) error {
 					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
 					ops.trace("%3d: #pragma line\n", ops.sourceLine)
 				case "define":
-					ops.define(tokens)
+					_ = ops.define(tokens)
 					ops.trace("%3d: #define line\n", ops.sourceLine)
 				default:
 					ops.errorf("Unknown directive: %s", directive)
@@ -1698,7 +1698,7 @@ func (ops *OpStream) assemble(text string) error {
 			// we're about to begin processing opcodes, so settle the Version
 			if ops.Version == assemblerNoVersion {
 				ops.Version = AssemblerDefaultVersion
-				ops.versionedCheckMacroNames()
+				_ = ops.versionedCheckMacroNames()
 			}
 			if ops.versionedPseudoOps == nil {
 				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
