@@ -29,6 +29,12 @@ type Event string
 // StartupEvent event
 const StartupEvent Event = "Startup"
 
+// NameValue defines a named value, for use in an array reported to telemetry.
+type NameValue struct {
+	Name  string
+	Value interface{}
+}
+
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
 	Version      string
@@ -36,6 +42,7 @@ type StartupEventDetails struct {
 	Branch       string
 	Channel      string
 	InstanceHash string
+	Overrides    []NameValue
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
