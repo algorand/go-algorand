@@ -59,6 +59,8 @@ var TagList = []Tag{
 	StateProofSigTag,
 	TopicMsgRespTag,
 	TxnTag,
+	TxnAdvertiseTag,
+	TxnRequestTag,
 	UniCatchupReqTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
