@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,10 +49,13 @@ type Writer interface {
 type labelReference struct {
 	sourceLine int
 
-	// position of the opcode start that refers to the label
+	// position of the label reference
 	position int
 
 	label string
+
+	// ending positions of the opcode containing the label reference.
+	offsetPosition int
 }
 
 type constReference interface {
@@ -346,8 +350,8 @@ func (ops *OpStream) recordSourceLine() {
 }
 
 // referToLabel records an opcode label reference to resolve later
-func (ops *OpStream) referToLabel(pc int, label string) {
-	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
+func (ops *OpStream) referToLabel(pc int, label string, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label, offsetPosition})
 }
 
 type refineFunc func(pgm *ProgramKnowledge, immediates []string) (StackTypes, StackTypes)
@@ -510,7 +514,7 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.IntLiteral(i)
 		return nil
 	}
-	// check OnCompetion constants
+	// check OnCompletion constants
 	oc, isOCStr := onCompletionMap[args[0]]
 	if isOCStr {
 		ops.IntLiteral(oc)
@@ -903,11 +907,28 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
-	ops.referToLabel(ops.pending.Len(), args[0])
+	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
+	return nil
+}
+
+func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
+	numOffsets := len(args)
+	if numOffsets > math.MaxUint8 {
+		return ops.errorf("%s cannot take more than 255 labels", spec.Name)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(byte(numOffsets))
+	opEndPos := ops.pending.Len() + 2*numOffsets
+	for _, arg := range args {
+		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
+		// zero bytes will get replaced with actual offset in resolveLabels()
+		ops.pending.WriteByte(0)
+		ops.pending.WriteByte(0)
+	}
 	return nil
 }
 
@@ -1815,19 +1836,20 @@ func (ops *OpStream) resolveLabels() {
 			reported[lr.label] = true
 			continue
 		}
-		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
-		naturalPc := lr.position + 3
-		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+
+		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
+		// instruction they appear in, which is available in lr.offsetPostion
+		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
-		jump := dest - naturalPc
+		jump := dest - lr.offsetPosition
 		if jump > 0x7fff {
 			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
-		raw[lr.position+1] = uint8(jump >> 8)
-		raw[lr.position+2] = uint8(jump & 0x0ff)
+		raw[lr.position] = uint8(jump >> 8)
+		raw[lr.position+1] = uint8(jump & 0x0ff)
 	}
 	ops.pending = *bytes.NewBuffer(raw)
 	ops.sourceLine = saved
@@ -2061,6 +2083,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		for i := range ops.labelReferences {
 			if ops.labelReferences[i].position > position {
 				ops.labelReferences[i].position += positionDelta
+				ops.labelReferences[i].offsetPosition += positionDelta
 			}
 		}
 
@@ -2297,11 +2320,8 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			offset := (uint(dis.program[pc]) << 8) | uint(dis.program[pc+1])
-			target := int(offset) + pc + 2
-			if target > 0xffff {
-				target -= 0x10000
-			}
+			offset := decodeBranchOffset(dis.program, pc)
+			target := offset + pc + 2
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2362,6 +2382,30 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 				out += fmt.Sprintf("0x%s", hex.EncodeToString(bv))
 			}
+			pc = nextpc
+		case immLabels:
+			targets, nextpc, err := parseSwitch(dis.program, pc)
+			if err != nil {
+				return "", err
+			}
+
+			var labels []string
+			for _, target := range targets {
+				var label string
+				if dis.numericTargets {
+					label = fmt.Sprintf("%d", target)
+				} else {
+					if known, ok := dis.pendingLabels[target]; ok {
+						label = known
+					} else {
+						dis.labelCount++
+						label = fmt.Sprintf("label%d", dis.labelCount)
+						dis.putLabel(label, target)
+					}
+				}
+				labels = append(labels, label)
+			}
+			out += strings.Join(labels, " ")
 			pc = nextpc
 		default:
 			return "", fmt.Errorf("unknown immKind %d", imm.kind)
@@ -2514,6 +2558,20 @@ func checkByteConstBlock(cx *EvalContext) error {
 	}
 	cx.nextpc = pos
 	return nil
+}
+
+func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
+	numOffsets := int(program[pos])
+	pos++
+	end := pos + 2*numOffsets // end of op: offset is applied to this position
+	for i := 0; i < numOffsets; i++ {
+		offset := decodeBranchOffset(program, pos)
+		target := end + offset
+		targets = append(targets, target)
+		pos += 2
+	}
+	nextpc = pos
+	return
 }
 
 func allPrintableASCII(bytes []byte) bool {
