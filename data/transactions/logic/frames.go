@@ -99,11 +99,6 @@ func opBury(cx *EvalContext) error {
 	return nil
 }
 
-func opPushN(cx *EvalContext) error {
-	n := cx.program[cx.pc+1]
-	cx.stack = append(cx.stack, make([]stackValue, n)...)
-	return nil
-}
 func opPopN(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
 	top := len(cx.stack) - int(n)
@@ -113,6 +108,7 @@ func opPopN(cx *EvalContext) error {
 	cx.stack = cx.stack[:top] // pop value
 	return nil
 }
+
 func opDupN(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // value
 

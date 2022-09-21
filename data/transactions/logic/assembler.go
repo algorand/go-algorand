@@ -1427,19 +1427,6 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 	return nil, StackTypes{scratchType}, nil
 }
 
-func typePushN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
-	if !ok {
-		return nil, nil, nil
-	}
-	ints := make(StackTypes, n)
-	for i := range ints {
-		ints[i] = StackUint64
-	}
-
-	return nil, ints, nil
-}
-
 func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	n, ok := getImm(args, 0)
 	if !ok {

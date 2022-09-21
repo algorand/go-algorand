@@ -585,7 +585,6 @@ Account fields used in the `acct_params_get` opcode.
 | `return` | use A as success value; end |
 | `pop` | discard A |
 | `popn n` | Remove N values from the top of the stack |
-| `pushn n` | Push N 0s onto the stack |
 | `dup` | duplicate A |
 | `dup2` | duplicate A and B |
 | `dupn n` | duplicate A, N times |

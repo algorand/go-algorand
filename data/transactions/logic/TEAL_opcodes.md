@@ -610,13 +610,6 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
-## pushn n
-
-- Opcode: 0x45 {uint8 stack depth}
-- Stack: ... &rarr; ..., [N zeros]
-- Push N 0s onto the stack
-- Availability: v8
-
 ## popn n
 
 - Opcode: 0x46 {uint8 stack depth}

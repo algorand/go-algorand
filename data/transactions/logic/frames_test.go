@@ -26,7 +26,6 @@ const frameNonsense = `
   return						// proto subs must appear in deadcode
  double:
   proto 1 2
-  pushn 1						// one return value
   frame_dig -1
   int 2
   *
@@ -38,23 +37,15 @@ const frameNonsense = `
   bury 9
 `
 
-const frameCompiled = "43f001024501f1ff240bf20089810246014704f309"
+const frameCompiled = "43f00102f1ff240bf20089810246014704f309"
 
-func TestPushPopN(t *testing.T) {
+func TestDupPopN(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	// These two are dumbs uses of pushn, and should perhaps be banned
-	testAccepts(t, "pushn 0; int 1", fpVersion)
-	testAccepts(t, "pushn 1; !", fpVersion)
 
 	// These two are equally dumbs uses of popn, and should perhaps be banned
 	testAccepts(t, "int 1; popn 0", fpVersion)
 	testAccepts(t, "int 1; dup; popn 1;", fpVersion)
-
-	testAccepts(t, "pushn 2; pop; !", fpVersion)
-	testAccepts(t, "pushn 3; !; assert; !; assert; !", fpVersion)
-	testPanics(t, "pushn 2", fpVersion)
 
 	testAccepts(t, "int 1; int 1; int 1; popn 2", fpVersion)
 	testAccepts(t, "int 1; int 0; popn 1", fpVersion)
@@ -62,22 +53,23 @@ func TestPushPopN(t *testing.T) {
 	testProg(t, "int 1; int 0; popn 3", LogicVersion, Expect{1, "popn 3 expects 3..."})
 	testPanics(t, notrack("int 1; int 0; popn 3"), fpVersion)
 
-	testAccepts(t, `pushn 250; pushn 250; pushn 250; pushn 250;
-	               popn 250;  popn 250;  popn 250;  popn 249; !`,
+	testAccepts(t, `int 7; dupn 250; dupn 250; dupn 250; dupn 249;
+	               popn 250;  popn 250;  popn 250;  popn 249; int 7; ==`,
 		fpVersion)
 	// We could detect this in assembler if we checked pgm.stack > maxStackDepth
-	// at each step.
-	testPanics(t, `pushn 250; pushn 250; pushn 250; pushn 251
+	// at each step. But it seems vanishly unlikely to have a detetectable
+	// instance of this bug in real code.
+	testPanics(t, `int 1; dupn 250; dupn 250; dupn 250; dupn 250
 	              popn 250;  popn 250;  popn 250;  popn 250; !`,
 		fpVersion, "stack overflow")
 }
 
-func TestPushPopNTyping(t *testing.T) {
+func TestDupPopNTyping(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testProg(t, "pushn 2; +", LogicVersion)
-	testProg(t, "pushn 2; concat", LogicVersion, Expect{1, "...wanted type []byte..."})
+	testProg(t, "int 8; dupn 2; +; pop", LogicVersion)
+	testProg(t, "int 8; dupn 2; concat; pop", LogicVersion, Expect{1, "...wanted type []byte..."})
 
 	testProg(t, "popn 1", LogicVersion, Expect{1, "...expects 1 stack argument..."})
 }
@@ -95,7 +87,7 @@ func TestSimpleFrame(t *testing.T) {
         return
       hyp:
         proto 2 1
-        pushn 1					// room for the return value
+        dupn 1					// room for the return value
         frame_dig -1
         frame_dig -1
         *
@@ -174,18 +166,19 @@ extra:
     retsub
 `, fpVersion)
 
-	// the assembler could potentially complain, since the sub is one basic block
-	testAccepts(t, notrack(`
+	// the assembler could potentially complain about the stack going below fp,
+	// since the sub is one basic block.
+	testAccepts(t, `
  int 10
  int 20
  callsub main
  int 1; return
 main:
  proto 2 1
- +           // This consumes the top arg. We normally complain in assembly.
+ +           // This consumes the top arg. We could complain in assembly if checked stack height against pgm.fp
  dup; dup	 // But the dup;dup restores it, so it _evals_ fine.
  retsub
-`), AssemblerMaxVersion)
+`, AssemblerMaxVersion)
 
 }
 
@@ -237,7 +230,7 @@ func TestForgetReturn(t *testing.T) {
 	testPanics(t, `
         b main
      a: proto 0 3
-        pushn 2	// only 2. need 3
+        int 1; int 2	// only 2. need 3
         retsub
   main: callsub a
         !
@@ -247,10 +240,10 @@ func TestForgetReturn(t *testing.T) {
 	testAccepts(t, `
         b main
      a: proto 0 3
-        pushn 4	// height grows by 4. only needed 3
+        int 7; dupn 3	// height grows by 4. only needed 3
         retsub
-  main: callsub a // returns 3 zeros
-        +; +; !
+  main: callsub a // returns 3 7s
+        +; +; int 21; ==
 `, fpVersion)
 }
 
@@ -276,7 +269,7 @@ func TestFrameAccess(t *testing.T) {
         b main
   ijsum:
         proto 2 1
-        pushn 2					// room for sum and one "local", a loop variable
+        int 0; int 0			// room for sum and one "local", a loop variable
 
         frame_dig -2			// first arg
         frame_bury 1			// initialize loop var
@@ -355,7 +348,7 @@ func TestFrameAccess(t *testing.T) {
 	source = `
         b main
    add: proto 2 1
-        pushn 3					// allocate return slot plus two locals
+        int 0; dupn 2			// allocate return slot plus two locals
         frame_dig 3				// but look beyond
         retsub
   main: int 8
@@ -373,7 +366,7 @@ func TestFrameAccess(t *testing.T) {
 	source = `
         b main
    add: proto 2 1
-        pushn 3					// allocate return slot plus two locals
+        int 0; dupn 2				// allocate return slot plus two locals
         int 4
         frame_bury 3				// but put "beyond"
         retsub

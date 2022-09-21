@@ -1029,16 +1029,6 @@
       ]
     },
     {
-      "Opcode": 69,
-      "Name": "pushn",
-      "Size": 2,
-      "Doc": "Push N 0s onto the stack",
-      "ImmediateNote": "{uint8 stack depth}",
-      "Groups": [
-        "Flow Control"
-      ]
-    },
-    {
       "Opcode": 70,
       "Name": "popn",
       "Size": 2,

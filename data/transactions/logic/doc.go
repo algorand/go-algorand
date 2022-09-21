@@ -201,7 +201,6 @@ var opDocByName = map[string]string{
 	"proto":      "Prepare top call frame for a retsub that will assume A args and R return values.",
 	"frame_dig":  "Nth (signed) value from the frame pointer.",
 	"frame_bury": "Replace the Nth (signed) value from the frame pointer in the stack",
-	"pushn":      "Push N 0s onto the stack",
 	"popn":       "Remove N values from the top of the stack",
 }
 
@@ -278,7 +277,6 @@ var opcodeImmediateNotes = map[string]string{
 	"proto":      "{uint8 arguments} {uint8 return values}",
 	"frame_dig":  "{int8 frame slot}",
 	"frame_bury": "{int8 frame slot}",
-	"pushn":      "{uint8 stack depth}",
 	"popn":       "{uint8 stack depth}",
 	"dupn":       "{uint8 copy count}",
 }
@@ -360,7 +358,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "pushn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "retsub", "switch", "proto"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "retsub", "switch", "proto"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
