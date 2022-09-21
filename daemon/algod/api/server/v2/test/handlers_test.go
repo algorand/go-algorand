@@ -208,6 +208,55 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
+func getBlockHashTest(t *testing.T, blockNum uint64, expectedCode int) {
+}
+
+func TestGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	err := handler.GetBlockHash(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+}
+
+func TestGetBlockGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
+	// Validate that the block returned from GetBlock has the same hash that is returned via GetBlockHash
+	format := "json"
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	blkResponse := struct {
+		Block bookkeeping.Block `codec:"block"`
+	}{}
+	// err = json.Unmarshal(rec.Body.Bytes(), &blkResponse)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &blkResponse)
+	require.NoError(t, err)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var blkHashResponse generatedV2.BlockHashResponse
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &blkHashResponse)
+	require.NoError(t, err)
+	require.Equal(t, crypto.HashObj(blkResponse.Block.BlockHeader).String(), blkHashResponse.BlockHash)
+}
+
 func TestGetBlockJsonEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
