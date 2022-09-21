@@ -22,6 +22,7 @@
 # pip install py-algorand-sdk
 
 import argparse
+import atexit
 import base64
 import logging
 import os
@@ -218,6 +219,9 @@ def main():
     ap.add_argument('--all', default=False, action='store_true', help='fetch all blocks from 0')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('-o', '--out', default=None, help='file to append json lines to')
+    ap.add_argument('--outdir')
+    ap.add_argument('--pid')
+    ap.add_argument('--all-rounds', default=False, action='store_true', help='fetch all blocks from 0')
     args = ap.parse_args()
 
     if args.verbose:
@@ -225,20 +229,28 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
+    if args.pid:
+        with open(args.pid, 'w') as fout:
+            fout.write('{}'.format(os.getpid()))
+        atexit.register(os.remove, args.pid)
+
     algorand_data = args.algod or os.getenv('ALGORAND_DATA')
     if not algorand_data and not (args.token and args.addr):
         sys.stderr.write('must specify algod data dir by $ALGORAND_DATA or -d/--algod; OR --a/--addr and -t/--token\n')
         sys.exit(1)
 
     prev_round = None
-    if args.all:
+    if args.all or args.all_rounds:
         prev_round = -1
+    outpath = args.out
+    if (not outpath) and args.outdir:
+        outpath = os.path.join(args.outdir, 'local.blockhistory')
     bot = Fetcher(
         algorand_data,
         token=args.token,
         addr=args.addr,
         headers=header_list_to_dict(args.headers),
-        outpath=args.out,
+        outpath=outpath,
         prev_round=prev_round,
     )
 

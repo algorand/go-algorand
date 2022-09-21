@@ -40,17 +40,25 @@ pingpong run -d "${TESTDIR}/node2" --tps 20 --refresh 9999 --quiet &
 echo "$!" > .pingpong2.pid
 
 mkdir -p "${TESTDIR}/heaps"
-#python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* --runtime 910 > "${TESTDIR}/heaps/watch.log" 2>&1
-python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* --runtime 9100 > "${TESTDIR}/heaps/watch.log" 2>&1
+python3 ${REPO_ROOT}/test/heapwatch/block_history.py --pid "${TESTDIR}/heaps/bh.pid" --outdir "${TESTDIR}/heaps" --all-rounds -d "${TESTDIR}/relay1" &
+
+python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 45 "${TESTDIR}"/{node,relay}* --runtime 310 > "${TESTDIR}/heaps/watch.log" 2>&1
+
+#python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* --runtime 9100 > "${TESTDIR}/heaps/watch.log" 2>&1
+
+kill $(cat "${TESTDIR}/heaps/bh.pid")
 
 for i in .pingpong*.pid; do
-    kill $(cat $i) || true
-    rm -f "${i}"
+  kill $(cat $i) || true
+  rm -f "${i}"
 done
 
 goal network stop -r "${TESTDIR}"
 
+#python3 "${REPO_ROOT}/test/heapwatch/metrics_delta.py" '--nick-lre=relay:relay\d+|Primary\d*' '--nick-lre=pn:[nN]ode\d+' -d "${TESTDIR}/heaps" --html-summary "${TESTDIR}/heaps/_report.html" > "${TESTDIR}/heaps/report"
 python3 "${REPO_ROOT}/test/heapwatch/metrics_delta.py" '--nick-lre=relay:relay\d+|Primary\d*' '--nick-lre=pn:[nN]ode\d+' -d "${TESTDIR}/heaps" > "${TESTDIR}/heaps/report"
 python3 "${REPO_ROOT}/test/heapwatch/client_ram_report.py" --csv "${TESTDIR}/heaps/crr.csv" -d "${TESTDIR}/heaps"
 python3 "${REPO_ROOT}/test/heapwatch/plot_crr_csv.py" "${TESTDIR}/heaps/crr.csv"
 cat "${TESTDIR}/heaps/report"
+
+python3 ${DATA}/go-algorand/test/heapwatch/block_history_plot.py ${TESTDIR}/heaps/*.blockhistory
