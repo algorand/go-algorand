@@ -43,6 +43,9 @@ type (
 		R       rawVote                             `codec:"r"`
 		Cred    committee.UnauthenticatedCredential `codec:"cred"`
 		Sig     crypto.OneTimeSignature             `codec:"sig,omitempty,omitemptycheckstruct"`
+
+		// the original encoding of this message
+		originalEncoding []byte
 	}
 
 	// A vote is an endorsement of a particular proposal in Algorand

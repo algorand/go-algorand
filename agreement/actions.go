@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -150,9 +151,22 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
+		// are we going to relay a proposal, and the original encoding is available?
+		if a.T == relay && msg.Proposal.originalTransmittedPayload != nil {
+			// is the original transmittedPayload's encoded PriorVote the same as
+			// the PriorVote that needs to be encoded here?
+			if bytes.Equal(
+				msg.Proposal.originalTransmittedPayloadPriorVote,
+				msg.Vote.originalEncoding) {
+				// then we can re-use the original encoding of the transmittedPayload.
+				data = msg.Proposal.originalTransmittedPayload
+				break
+			}
+		}
+		// otherwise, encode the proposal together with the PriorVote
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal,
-			PriorVote:               msg.Vote,
+			PriorVote:               protocol.Encode(&msg.Vote),
 		}
 		data = protocol.Encode(&payload)
 	}

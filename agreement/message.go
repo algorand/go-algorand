@@ -87,9 +87,23 @@ func decodeProposal(data []byte) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	// keep reference to encoding of original transmittedPayload message in the decoded proposal
+	proposal := p.unauthenticatedProposal
+	proposal.originalTransmittedPayload = data
+
+	// decode the PriorVote separately (was left undecoded as a msgp.Raw type)
+	var priorVote unauthenticatedVote
+	err = protocol.Decode([]byte(p.PriorVote), &priorVote)
+	if err != nil {
+		return nil, err
+	}
+	// keep reference to original encoded PriorVote in the decoded proposal
+	proposal.originalTransmittedPayloadPriorVote = []byte(p.PriorVote)
+	// also keep a reference to the encoded PriorVote in the decoded vote
+	priorVote.originalEncoding = []byte(p.PriorVote)
 
 	return compoundMessage{
-		Vote:     p.PriorVote,
-		Proposal: p.unauthenticatedProposal,
+		Vote:     priorVote,
+		Proposal: proposal,
 	}, nil
 }

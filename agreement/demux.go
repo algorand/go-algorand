@@ -357,7 +357,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
 func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	compound := m.CompoundMessage
-	if compound.Vote == (unauthenticatedVote{}) {
+	if compound.Vote.MsgIsZero() {
 		m.Tag = protocol.ProposalPayloadTag
 		m.UnauthenticatedProposal = compound.Proposal
 		res = messageEvent{T: payloadPresent, Input: m}

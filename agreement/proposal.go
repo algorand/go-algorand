@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/msgp/msgp"
 )
 
 var bottom proposalValue
@@ -47,7 +48,7 @@ type transmittedPayload struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	unauthenticatedProposal
-	PriorVote unauthenticatedVote `codec:"pv"`
+	PriorVote msgp.Raw `codec:"pv"`
 }
 
 // A unauthenticatedProposal is an Block along with everything needed to validate it.
@@ -59,6 +60,11 @@ type unauthenticatedProposal struct {
 
 	OriginalPeriod   period         `codec:"oper"`
 	OriginalProposer basics.Address `codec:"oprop"`
+
+	// the original encoded transmittedPayload message that contained this proposal
+	originalTransmittedPayload []byte
+	// the encoded PriorVote that was used in the original encoded transmittedPayload
+	originalTransmittedPayloadPriorVote []byte
 }
 
 // TransmittedPayload exported for dumping textual versions of messages
