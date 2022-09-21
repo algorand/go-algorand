@@ -38,8 +38,8 @@ var (
 // TODO: Add locks where needed
 
 type verificationDeletionData struct {
-	stateProofTransactionRound  basics.Round
-	stateProofLastAttestedRound basics.Round
+	stateProofTransactionRound basics.Round
+	stateProofNextRound        basics.Round
 }
 
 type stateProofVerificationTracker struct {
@@ -129,8 +129,8 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 
 	if delta.StateProofNext != 0 {
 		deletionData := verificationDeletionData{
-			stateProofLastAttestedRound: delta.StateProofNext.SubSaturate(currentStateProofInterval),
-			stateProofTransactionRound:  blk.Round(),
+			stateProofNextRound:        delta.StateProofNext,
+			stateProofTransactionRound: blk.Round(),
 		}
 		spt.trackedDeletionData = append(spt.trackedDeletionData, deletionData)
 	}
@@ -180,7 +180,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 
 	// TODO: can this be in postCommitUnlocked?
 	if dcc.latestStateProofVerificationDeletionDataIndex > 0 {
-		err = deleteOldStateProofVerificationData(ctx, tx, dcc.latestStateProofVerificationDeletionData.stateProofLastAttestedRound)
+		err = deleteOldStateProofVerificationData(ctx, tx, dcc.latestStateProofVerificationDeletionData.stateProofNextRound)
 	}
 
 	// TODO: caching mechanism for oldest data?

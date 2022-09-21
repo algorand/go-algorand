@@ -341,50 +341,51 @@ func TestStateProofVerificationTracker_CommitNoDbPruning(t *testing.T) {
 	a.Equal(maxStateProofsToGenerate, uint64(len(spt.trackedDeletionData)))
 }
 
-//func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//
-//	ml, spt := initializeLedgerSpt(t)
-//	defer ml.Close()
-//	defer spt.close()
-//
-//	newStateProofInterval := defaultStateProofInterval * 2
-//
-//	oldIntervalData := uint64(5)
-//	newIntervalData := uint64(6)
-//
-//	lastOldIntervalBlock := feedBlocksUpToRound(ml, genesisBlock(), basics.Round(oldIntervalData*defaultStateProofInterval),
-//		defaultStateProofInterval, true)
-//	lastStuckBlock := feedBlocksUpToRound(ml, lastOldIntervalBlock, lastOldIntervalBlock.block.Round()+basics.Round(newIntervalData*newStateProofInterval),
-//		newStateProofInterval, true)
-//
-//	verifyTracking(t, spt, firstStateProofRound, oldIntervalData, defaultStateProofInterval,
-//		true, any)
-//
-//	firstNewIntervalStateProofRound := lastOldIntervalBlock.block.Round() + basics.Round(defaultStateProofInterval)
-//	verifyTracking(t, spt, firstNewIntervalStateProofRound, newIntervalData,
-//		newStateProofInterval, true, any)
-//
-//	partialStateProofs := newIntervalData - (newIntervalData / 2)
-//	// State Proofs for old blocks should be generated using the old interval.
-//	// Changing the interval while state proofs are stuck might lead to strange behaviour.
-//	lastOldIntervalStateProofBlock := feedBlocksUpToRound(ml, lastStuckBlock,
-//		lastStuckBlock.block.Round()+basics.Round(oldIntervalData),
-//		defaultStateProofInterval, false)
-//	lastBlock := feedBlocksUpToRound(ml, lastOldIntervalStateProofBlock,
-//		lastOldIntervalStateProofBlock.block.Round()+basics.Round(partialStateProofs),
-//		newStateProofInterval, false)
-//
-//	ml.trackers.committedUpTo(lastBlock.block.Round())
-//	ml.trackers.waitAccountsWriting()
-//
-//	firstRemainingStateProofRound := firstNewIntervalStateProofRound +
-//		basics.Round((partialStateProofs-oldIntervalData)*newStateProofInterval)
-//	verifyTracking(t, spt, firstRemainingStateProofRound, newStateProofInterval,
-//		oldIntervalData+newIntervalData-partialStateProofs, true, any)
-//}
+func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-// TODO: Test interval size change
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	newStateProofInterval := defaultStateProofInterval * 2
+
+	oldIntervalData := uint64(5)
+	newIntervalData := uint64(6)
+
+	lastOldIntervalBlock := feedBlocksUpToRound(ml, genesisBlock(), basics.Round(oldIntervalData*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+	lastStuckBlock := feedBlocksUpToRound(ml, lastOldIntervalBlock, lastOldIntervalBlock.block.Round()+basics.Round(newIntervalData*newStateProofInterval),
+		newStateProofInterval, true)
+
+	verifyTracking(t, spt, firstStateProofRound, oldIntervalData, defaultStateProofInterval,
+		true, any)
+	firstNewIntervalStateProofRound := lastOldIntervalBlock.block.Round() + basics.Round(defaultStateProofInterval)
+	verifyTracking(t, spt, firstNewIntervalStateProofRound, newIntervalData,
+		newStateProofInterval, true, any)
+
+	newIntervalRemovedStateProofs := newIntervalData - (newIntervalData / 2)
+	// State Proofs for old blocks should be generated using the old interval.
+	lastOldIntervalStateProofBlock := feedBlocksUpToRound(ml, lastStuckBlock,
+		lastStuckBlock.block.Round()+basics.Round(oldIntervalData)-1,
+		defaultStateProofInterval, false)
+	lastBlock := feedBlocksUpToRound(ml, lastOldIntervalStateProofBlock,
+		lastOldIntervalStateProofBlock.block.Round()+basics.Round(newIntervalRemovedStateProofs),
+		newStateProofInterval, false)
+
+	ml.trackers.committedUpTo(lastBlock.block.Round())
+	ml.trackers.waitAccountsWriting()
+
+	firstRemainingStateProofRound := firstNewIntervalStateProofRound +
+		basics.Round(newIntervalRemovedStateProofs*newStateProofInterval)
+	verifyTracking(t, spt, firstStateProofRound, oldIntervalData, defaultStateProofInterval,
+		false, any)
+	verifyTracking(t, spt, firstNewIntervalStateProofRound,
+		newIntervalRemovedStateProofs, newStateProofInterval, false, any)
+	verifyTracking(t, spt, firstRemainingStateProofRound, newIntervalData-newIntervalRemovedStateProofs,
+		newStateProofInterval, true, any)
+}
+
 // TODO: Test lookup for not yet generated
 // TODO: Test lookup errors
 // TODO: Test locking?
