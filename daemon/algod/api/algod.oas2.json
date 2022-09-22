@@ -575,15 +575,7 @@
             "description": "Unknown Error"
           }
         }
-      },
-      "parameters": [
-        {
-          "type": "string",
-          "name": "round",
-          "in": "path",
-          "required": true
-        }
-      ]
+      }
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
