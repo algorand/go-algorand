@@ -1,0 +1,224 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "R2-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.4xl"
+    },
+    {
+      "Name": "R3-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "R4-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.4xl"
+    },
+    {
+      "Name": "R5-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.4xl"
+    },
+    {
+      "Name": "NPN1-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN2-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN3-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN4-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN5-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN6-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN7-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN8-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN9-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN10-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN11-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN12-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN13-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN14-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN15-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN16-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN17-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN18-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN19-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN20-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN21-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN22-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN23-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN24-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN25-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN26-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN27-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN28-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN29-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN30-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN31-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN32-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN33-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN34-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN35-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN36-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN37-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN38-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN39-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN40-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN41-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN42-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN43-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN44-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN45-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN46-betanet-model",
+      "Template": "AWS-US-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN47-betanet-model",
+      "Template": "AWS-US-WEST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN48-betanet-model",
+      "Template": "AWS-SA-EAST-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN49-betanet-model",
+      "Template": "AWS-EU-NORTH-1-c5d.2xl"
+    },
+    {
+      "Name": "NPN50-betanet-model",
+      "Template": "AWS-AP-SOUTHEAST-1-c5d.2xl"
+    }
+  ]
+}
