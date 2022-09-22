@@ -137,6 +137,7 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectClosing disconnectReason = "Closing"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -240,6 +241,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// inSendScheduler should only be read/written from sendScheduler code
+	inSendScheduler bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -336,6 +340,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		wp.net.makePeerSendable(wp)
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -369,9 +374,9 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 		wp.outgoingMsgFilter = makeMessageFilter(config.OutgoingMessageFilterBucketCount, config.OutgoingMessageFilterBucketSize)
 	}
 
-	wp.wg.Add(2)
+	wp.wg.Add(1)
 	go wp.readLoop()
-	go wp.writeLoop()
+	//go wp.writeLoop()
 }
 
 // returns the originating address of an incoming connection. For outgoing connection this function returns an empty string.
@@ -542,6 +547,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 	// the rationale here is that this message is rarely sent, and we would benefit from having it being lock-free.
 	select {
 	case wp.sendBufferHighPrio <- sm:
+		wp.net.makePeerSendable(wp)
 		return
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
@@ -551,7 +557,9 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 
 	select {
 	case wp.sendBufferHighPrio <- sm:
+		wp.net.makePeerSendable(wp)
 	case wp.sendBufferBulk <- sm:
+		wp.net.makePeerSendable(wp)
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		shutdown = true
@@ -596,6 +604,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 	return disconnectReasonNone
 }
 
+// writeLoopSendMsg sends one message.
+// Blocks until message is known to be sent through to the other side.
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	if len(msg.data) > maxMessageLength {
 		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
@@ -650,36 +660,41 @@ func (wp *wsPeer) writeLoop() {
 		wp.writeLoopCleanup(cleanupCloseError)
 	}()
 	for {
-		// send from high prio channel as long as we can
-		select {
-		case data := <-wp.sendBufferHighPrio:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
-				cleanupCloseError = writeErr
-				return
-			}
-			continue
-		default:
-		}
-		// if nothing high prio, send anything
-		select {
-		case <-wp.closing:
+		writeErr := wp.writeOnePending()
+		if writeErr != disconnectReasonNone {
+			cleanupCloseError = writeErr
 			return
-		case data := <-wp.sendBufferHighPrio:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
-				cleanupCloseError = writeErr
-				return
-			}
-		case data := <-wp.sendBufferBulk:
-			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
-				cleanupCloseError = writeErr
-				return
-			}
 		}
 	}
 }
 func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 	wp.internalClose(reason)
 	wp.wg.Done()
+}
+
+// writeOnePending sends one message
+// Handles message level priority.
+// Blocks until message is known to be sent through to the other side.
+func (wp *wsPeer) writeOnePending() disconnectReason {
+	// send from high prio channel as long as we can
+	select {
+	case data := <-wp.sendBufferHighPrio:
+		return wp.writeLoopSend(data)
+	default:
+	}
+	// if nothing high prio, send anything
+	select {
+	case <-wp.closing:
+		return disconnectClosing
+	case data := <-wp.sendBufferHighPrio:
+		return wp.writeLoopSend(data)
+	case data := <-wp.sendBufferBulk:
+		return wp.writeLoopSend(data)
+	}
+}
+
+func (wp *wsPeer) hasWritesPending() bool {
+	return len(wp.sendBufferHighPrio) != 0 || len(wp.sendBufferBulk) != 0
 }
 
 func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
@@ -723,6 +738,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	}
 	select {
 	case outchan <- sendMessages{msgs: msgs}:
+		wp.net.makePeerSendable(wp)
 		return true
 	default:
 	}
@@ -842,6 +858,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		wp.net.makePeerSendable(wp)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return

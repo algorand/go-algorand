@@ -451,6 +451,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 
 	for _, peer := range peers {
 		peer.sendBufferHighPrio <- sendMessages{msgs}
+		netA.makePeerSendable(peer)
 	}
 
 	select {

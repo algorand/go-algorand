@@ -53,6 +53,7 @@ import (
 )
 
 const incomingThreads = 20
+const outgoingThreads = 10
 const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
@@ -430,6 +431,10 @@ type WebsocketNetwork struct {
 
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
+
+	sendScheduler     sendScheduler
+	sendSchedulerMu   deadlock.Mutex
+	sendSchedulerCond sync.Cond
 }
 
 const (
@@ -826,6 +831,11 @@ func (wn *WebsocketNetwork) Start() {
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
 		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
 	}
+	wn.sendSchedulerCond.L = &wn.sendSchedulerMu
+	for i := 0; i < outgoingThreads; i++ {
+		wn.wg.Add(1)
+		go wn.sendSchedulerThread()
+	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
 	if wn.prioScheme != nil {
@@ -884,6 +894,9 @@ func (wn *WebsocketNetwork) Stop() {
 		listenAddr = wn.listener.Addr().String()
 	}
 	wn.ctxCancel()
+	wn.sendSchedulerMu.Lock()
+	wn.sendSchedulerCond.Broadcast()
+	wn.sendSchedulerMu.Unlock()
 	ctx, timeoutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer timeoutCancel()
 	err := wn.server.Shutdown(ctx)
@@ -2369,4 +2382,49 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
+}
+
+func (wn *WebsocketNetwork) makePeerSendable(wp *wsPeer) {
+	wn.sendSchedulerMu.Lock()
+	defer wn.sendSchedulerMu.Unlock()
+	didAdd := wn.sendScheduler.add(wp)
+	if didAdd {
+		wn.sendSchedulerCond.Broadcast()
+	}
+}
+
+func (wn *WebsocketNetwork) sendSchedulerThread() {
+	defer wn.wg.Done()
+	var wp *wsPeer
+	for {
+		wn.sendSchedulerMu.Lock()
+		if wp != nil {
+			wp.inSendScheduler = false
+			// previous round's peer
+			if wp.hasWritesPending() {
+				wn.sendScheduler.add(wp)
+			}
+			wp = nil
+		}
+		for wp == nil {
+			select {
+			case <-wn.ctx.Done():
+				wn.sendSchedulerMu.Unlock()
+				return
+			default:
+			}
+			wp = wn.sendScheduler.next()
+			if wp == nil {
+				wn.sendSchedulerCond.Wait()
+			}
+		}
+		wn.sendSchedulerMu.Unlock()
+		writeErr := wp.writeOnePending()
+		if writeErr != disconnectReasonNone {
+			// TODO: move this inside writeOnePending?
+			wp.internalClose(writeErr)
+			wp = nil
+			continue
+		}
+	}
 }
