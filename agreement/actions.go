@@ -151,6 +151,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
+
 		// are we going to relay a proposal, and the original encoding is available?
 		if a.T == relay && msg.Proposal.originalTransmittedPayload != nil {
 			// is the original transmittedPayload's encoded PriorVote the same as
