@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// StateProofVerificationData represents the data provided by the ledger to verify a state proof transaction.
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
