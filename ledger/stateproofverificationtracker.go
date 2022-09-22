@@ -140,22 +140,7 @@ func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (min
 	return round, 0
 }
 
-func (spt *stateProofVerificationTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	if committedRound < dcr.lookback {
-		return nil
-	}
-
-	newBase := committedRound - dcr.lookback
-	if newBase <= dbRound {
-		// Already forgotten
-		return nil
-	}
-
-	// TODO: warn on what basically amounts to interval change?
-	offset := uint64(newBase - dbRound)
-
-	dcr.oldBase = dbRound
-	dcr.offset = offset
+func (spt *stateProofVerificationTracker) produceCommittingTask(_ basics.Round, _ basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
 }
 
@@ -203,6 +188,7 @@ func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitC
 }
 
 func (spt *stateProofVerificationTracker) close() {
+	spt.dbQueries.lookupStateProofVerificationData.Close()
 }
 
 // TODO: must lock here
