@@ -55,9 +55,6 @@ type stateProofVerificationTracker struct {
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
-
 	preparedDbQueries, err := stateProofVerificationInitDbQueries(l.trackerDB().Rdb.Handle)
 	if err != nil {
 		return err
@@ -74,6 +71,9 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
 
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
 	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for expected state proof chain delay,
 	// and is thus a good size to start from.
 	spt.trackedCommitData = make([]verificationCommitData, 0, proto.StateProofMaxRecoveryIntervals)
@@ -83,14 +83,14 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 }
 
 func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
-
 	currentStateProofInterval := basics.Round(blk.ConsensusProtocol().StateProofInterval)
 
 	if currentStateProofInterval == 0 {
 		return
 	}
+
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
 
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
