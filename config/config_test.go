@@ -516,7 +516,7 @@ func TestLocalStructTags(t *testing.T) {
 				expectedTag = expectedTag + ver + ":\"" + val + "\" "
 			}
 		}
-		require.True(t, foundTag, "%s not found", ver)
+		require.True(t, foundTag)
 		expectedTag = expectedTag[:len(expectedTag)-1]
 		require.Equal(t, expectedTag, string(field.Tag))
 	}
