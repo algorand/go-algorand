@@ -21,13 +21,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// TODO: test?
-// TODO: GeneratedRound doesn't have to be saved in the DB
-
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	GeneratedRound        basics.Round         `codec:"genround"`
 	TargetStateProofRound basics.Round         `codec:"spround"`
 	VotersCommitment      crypto.GenericDigest `codec:"vc"`
 	ProvenWeight          basics.MicroAlgos    `codec:"pw"`

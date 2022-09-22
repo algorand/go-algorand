@@ -950,43 +950,34 @@ func (z *OnlineRoundParamsData) MsgIsZero() bool {
 func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
-	if (*z).GeneratedRound.MsgIsZero() {
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).ProvenWeight.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).ProvenWeight.MsgIsZero() {
+	if (*z).TargetStateProofRound.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).TargetStateProofRound.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
 	if (*z).VotersCommitment.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "genround"
-			o = append(o, 0xa8, 0x67, 0x65, 0x6e, 0x72, 0x6f, 0x75, 0x6e, 0x64)
-			o = (*z).GeneratedRound.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "pw"
 			o = append(o, 0xa2, 0x70, 0x77)
 			o = (*z).ProvenWeight.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "spround"
 			o = append(o, 0xa7, 0x73, 0x70, 0x72, 0x6f, 0x75, 0x6e, 0x64)
 			o = (*z).TargetStateProofRound.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "vc"
 			o = append(o, 0xa2, 0x76, 0x63)
 			o = (*z).VotersCommitment.MarshalMsg(o)
@@ -1012,14 +1003,6 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).GeneratedRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GeneratedRound")
-				return
-			}
 		}
 		if zb0001 > 0 {
 			zb0001--
@@ -1068,12 +1051,6 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 				return
 			}
 			switch string(field) {
-			case "genround":
-				bts, err = (*z).GeneratedRound.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GeneratedRound")
-					return
-				}
 			case "spround":
 				bts, err = (*z).TargetStateProofRound.UnmarshalMsg(bts)
 				if err != nil {
@@ -1112,11 +1089,11 @@ func (_ *StateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StateProofVerificationData) Msgsize() (s int) {
-	s = 1 + 9 + (*z).GeneratedRound.Msgsize() + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).ProvenWeight.Msgsize()
+	s = 1 + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).ProvenWeight.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *StateProofVerificationData) MsgIsZero() bool {
-	return ((*z).GeneratedRound.MsgIsZero()) && ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).ProvenWeight.MsgIsZero())
+	return ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).ProvenWeight.MsgIsZero())
 }
