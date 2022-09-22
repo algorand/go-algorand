@@ -45,12 +45,23 @@ type verificationCommitData struct {
 	verificationData ledgercore.StateProofVerificationData
 }
 
+// stateProofVerificationTracker is in charge of tracking data required to verify state proofs until such a time
+// as the data is no longer needed.
 type stateProofVerificationTracker struct {
+	// dbQueries are the pre-generated queries used to query the database, if needed,
+	// to lookup state proof verification data.
 	dbQueries stateProofVerificationDbQueries
 
+	// trackedCommitData represents the part of the tracked verification data currently in memory. Each element in this
+	// array contains both the data required to verify a single state proof and data to decide whether it's possible to
+	// commit the verification data to the database.
 	trackedCommitData []verificationCommitData
+
+	// trackedDeleteData represents the data required to delete committed state proof verification data from the
+	// database.
 	trackedDeleteData []verificationDeleteData
 
+	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
 	stateProofVerificationMu deadlock.RWMutex
 }
 
