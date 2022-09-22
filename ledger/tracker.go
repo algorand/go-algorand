@@ -269,7 +269,7 @@ type deferredCommitContext struct {
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
 
-	stateProofVerificationDeleteData            verificationDeletionData
+	stateProofVerificationDeleteData            verificationDeleteData
 	stateProofVerificationLatestDeleteDataIndex int
 	stateProofVerificationCommitData            []verificationCommitData
 }

@@ -362,7 +362,7 @@ func TestStateProofVerificationTracker_CommitNoDbPruning(t *testing.T) {
 	mockCommit(t, spt, ml, 0, lastStuckBlockRound)
 
 	verifyStateProofVerificationTracking(t, spt, firstStateProofRound, dataToAdd, defaultStateProofInterval, true, trackerDB)
-	a.Equal(maxStateProofsToGenerate, uint64(len(spt.trackedDeletionData)))
+	a.Equal(maxStateProofsToGenerate, uint64(len(spt.trackedDeleteData)))
 }
 
 func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
