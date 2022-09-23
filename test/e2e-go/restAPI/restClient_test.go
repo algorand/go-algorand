@@ -1252,7 +1252,9 @@ func TestBoxNamesByAppID(t *testing.T) {
 
 	prog := `#pragma version 8
     txn ApplicationID
-    bz end
+    bz end					// create the app
+	txn NumAppArgs
+	bz end					// approve when no app args
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists
     byte "create"           // [arg[0], "create"] // create box named arg[1]
     ==                      // [arg[0]=?="create"]
@@ -1473,19 +1475,23 @@ end:
 		`∑´´˙©˚¬∆ßåƒ√¬`,
 	}
 
-	// Happy paths:
+	// Happy Vanilla paths:
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
-	// Some Un-Happy paths:
+	// Some Un-Happy / Non-Vanilla paths:
 
+	// Even though the next box _does not exist_ as asserted by the error below,
+	// querying it for boxes _DOES NOT ERROR_. There is no easy way to tell
+	// the difference between non-existing boxes for an app that once existed
+	// vs. an app the NEVER existed.
 	nonexistantAppIndex := uint64(1337)
 	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
 	a.ErrorContains(err, "application does not exist")
-	_, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
-	// TODO: Issue #4575 asserts that this SHOULD be erroring
+	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
 	a.NoError(err)
+	a.Len(resp.Boxes, 0)
 
 	operateBoxAndSendTxn("create", []string{``}, []string{``}, "box names may not be zero length")
 
@@ -1546,4 +1552,30 @@ end:
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
 	}
+
+	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
+	// operateBoxAndSendTxn("create", []string{`hello`}, []string{``})
+	numberOfBoxesRemaining := 3
+
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	a.NoError(err)
+	a.Len(resp.Boxes, numberOfBoxesRemaining)
+
+	// delete the app
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil)
+	a.NoError(err)
+	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
+	a.NoError(err)
+	appDeleteTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appDeleteTxn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, appDeleteTxID, 30*time.Second)
+	a.NoError(err)
+
+	_, err = testClient.ApplicationInformation(uint64(createdAppID))
+	a.ErrorContains(err, "application does not exist")
+
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	a.NoError(err)
+	// upshot - we can still see the orphaned boxes:
+	a.Len(resp.Boxes, numberOfBoxesRemaining)
 }
