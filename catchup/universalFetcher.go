@@ -187,8 +187,8 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	return blockCertBytes, nil
 }
 
-// set max fetcher size to 5MB, this is enough to fit the block and certificate
-const fetcherMaxBlockBytes = 5 << 20
+// set max fetcher size to 10MB, this is enough to fit the block and certificate
+const fetcherMaxBlockBytes = 10 << 20
 
 var errNoBlockForRound = errors.New("No block available for given round")
 
