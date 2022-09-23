@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	_ "embed"
 	"encoding/binary"
 	"errors"
 	"path/filepath"
@@ -39,123 +40,10 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// func checkEqual2(expected []string, actual []string) bool {
-// 	if len(expected) != len(actual) {
-// 		return false
-// 	}
-// 	for i, e := range expected {
-// 		if e != actual[i] {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
-
-const genericBoxProgram string = `#pragma version 8
-txn ApplicationID
-bz end
-
-txn ApplicationArgs 0 		// box op instruction
-byte "create"
-==
-bnz create
-
-txn ApplicationArgs 0 		// box op instruction
-byte "extract"
-==
-bnz extract
-
-txn ApplicationArgs 0 		// box op instruction
-byte "replace"
-==
-bnz replace
-
-txn ApplicationArgs 0 		// box op instruction
-byte "del"
-==
-bnz del
-
-txn ApplicationArgs 0 		// box op instruction
-byte "len"
-==
-bnz len
-
-txn ApplicationArgs 0 		// box op instruction
-byte "get"
-==
-bnz get
-
-txn ApplicationArgs 0 		// box op instruction
-byte "put"
-==
-bnz put
-
-bad:
-	err
-
-// Box opcode handlers
-create:
-	txn ApplicationArgs 1
-	txn ApplicationArgs 2
-	btoi
-	box_create
-	itob	// 1 === actual_creation
-	log
-	b end
-
-extract:
-	b end
-	txn ApplicationArgs 1
-	txn ApplicationArgs 2
-	btoi
-	txn ApplicationArgs 3
-	btoi
-	box_extract
-	b end
-
-replace:
-	txn ApplicationArgs 1
-	txn ApplicationArgs 2
-	btoi
-	txn ApplicationArgs 3
-	box_replace
-	b end
-
-del:
-	txn ApplicationArgs 1
-	box_del
-	itob 	// 1 === actual_deletion
-	log
-	b end
-
-len:
-	txn ApplicationArgs 1
-	box_len
-	swap
-	itob 	// length
-	swap
-	itob	// existed
-	concat
-	log
-	b end
-
-get:
-	txn ApplicationArgs 1
-	box_get
-	itob	// existed
-	concat
-	log
-	b end
-
-put:
-	txn ApplicationArgs 1
-	txn ApplicationArgs 2
-	box_put
-	b end
-
-end:
-	int 1
-`
+// GenericBoxProgram is a TEAL program which allows for testing arbitrary box functionality
+//
+//go:embed generic_boxes.teal
+var GenericBoxProgram string
 
 const clearProgram string = `#pragma version 8
 int 1
@@ -322,7 +210,7 @@ func TestBoxesStress(t *testing.T) {
 	}
 	a.NoError(err)
 
-	ops, err := logic.AssembleString(genericBoxProgram)
+	ops, err := logic.AssembleString(GenericBoxProgram)
 	a.NoError(err)
 	approval := ops.Program
 
