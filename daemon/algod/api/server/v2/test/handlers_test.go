@@ -271,6 +271,9 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	// Validate that the block returned from GetBlock(2) has the same prev-hash that is returned via GetBlockHash(1)
 	hash := block2.Block.Branch.String()
 	a.Equal(fmt.Sprintf("blk-%s", block1Hash.BlockHash), hash)
+
+	// Sanity check that the hashes are not equal (i.e. they are not the default values)
+	a.NotEqual(block1.Block.Branch, block2.Block.Branch)
 }
 
 func TestGetBlockJsonEncoding(t *testing.T) {
