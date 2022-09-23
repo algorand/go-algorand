@@ -53,7 +53,7 @@ import (
 )
 
 const incomingThreads = 20
-const outgoingThreads = 10
+const outgoingThreads = 15
 const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
