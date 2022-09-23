@@ -231,30 +231,49 @@ func TestGetBlockHash(t *testing.T) {
 func TestGetBlockGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	a := require.New(t)
 
-	handler, c, rec, _, releasefunc := addBlockHelper(t)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
+	insertRounds(a, handler, 2)
 
-	// Validate that the block returned from GetBlock has the same hash that is returned via GetBlockHash
-	format := "json"
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
-	blkResponse := struct {
+	type blockResponse struct {
 		Block bookkeeping.Block `codec:"block"`
-	}{}
-	// err = json.Unmarshal(rec.Body.Bytes(), &blkResponse)
-	err = protocol.DecodeJSON(rec.Body.Bytes(), &blkResponse)
-	require.NoError(t, err)
+	}
 
+	var block1, block2 blockResponse
+	var block1Hash generatedV2.BlockHashResponse
+	format := "json"
+
+	// Get block 1
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1)
+	a.NoError(err)
+
+	// Get block 2
 	c, rec = newReq(t)
-	err = handler.GetBlockHash(c, 1)
-	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
-	var blkHashResponse generatedV2.BlockHashResponse
-	err = protocol.DecodeJSON(rec.Body.Bytes(), &blkHashResponse)
-	require.NoError(t, err)
-	require.Equal(t, crypto.HashObj(blkResponse.Block.BlockHeader).String(), blkHashResponse.BlockHash)
+	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: &format})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block2)
+	a.NoError(err)
+
+	// Get block 1 hash
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 0)
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1Hash)
+	a.NoError(err)
+
+	// Validate that the block returned from GetBlock(1) has the same hash that is returned via GetBlockHash(1)
+	a.Equal(crypto.HashObj(block1.Block.BlockHeader).String(), block1Hash.BlockHash)
+
+	// Validate that the block returned from GetBlock(2) has the same prev-hash that is returned via GetBlockHash(1)
+	hash := block2.Block.Branch.String()
+	a.Equal(fmt.Sprintf("blk-%s", block1Hash.BlockHash), hash)
 }
 
 func TestGetBlockJsonEncoding(t *testing.T) {
