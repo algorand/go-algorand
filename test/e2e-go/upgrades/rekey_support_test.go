@@ -128,8 +128,8 @@ func TestRekeyUpgrade(t *testing.T) {
 	_, err = client.BroadcastTransaction(rekeyed)
 	// non empty err means the upgrade have not happened yet (as expected), ensure the error
 	if err != nil {
-		// should be either "nonempty AuthAddr but rekeying not supported" or "txn dead"
-		if !strings.Contains(err.Error(), "nonempty AuthAddr but rekeying not supported") &&
+		// should be either "nonempty AuthAddr but rekeying is not supported" or "txn dead"
+		if !strings.Contains(err.Error(), "nonempty AuthAddr but rekeying is not supported") &&
 			!strings.Contains(err.Error(), "txn dead") {
 			a.NoErrorf(err, "error message should be one of :\n%s\n%s", "nonempty AuthAddr but rekeying not supported", "txn dead")
 		}
