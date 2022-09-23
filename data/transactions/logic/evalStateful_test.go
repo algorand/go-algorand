@@ -1867,11 +1867,8 @@ int 7
 `
 	txn := makeSampleAppl(100)
 	ep := defaultEvalParams(txn)
-	ledger := NewLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
+	ledger := NewLedger(nil)
+	ledger.NewAccount(txn.Txn.Sender, 1)
 	ep.Ledger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 

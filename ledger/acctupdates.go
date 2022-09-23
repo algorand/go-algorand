@@ -61,12 +61,12 @@ const baseAccountsPendingAccountsWarnThreshold = 85000
 
 // baseResourcesPendingAccountsBufferSize defines the size of the base resources pending accounts buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base resources map.
-const baseResourcesPendingAccountsBufferSize = 100000
+const baseResourcesPendingAccountsBufferSize = 10000
 
 // baseResourcesPendingAccountsWarnThreshold defines the threshold at which the lruResources would generate a warning
 // after we've surpassed a given pending account resources size. The warning is being generated when the pending accounts data
 // is being flushed into the main base resources cache.
-const baseResourcesPendingAccountsWarnThreshold = 85000
+const baseResourcesPendingAccountsWarnThreshold = 8500
 
 // baseKVPendingBufferSize defines the size of the base KVs pending buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base KVs map.
@@ -383,7 +383,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 				}
 			}
 		} else {
-			// we know that the key in not in kvDeltas - so there is no point in scanning it.
+			// we know that the key is not in kvDeltas - so there is no point in scanning it.
 			// we've going to fall back to search in the database, but before doing so, we should
 			// update the rnd so that it would point to the end of the known delta range.
 			// ( that would give us the best validity range )

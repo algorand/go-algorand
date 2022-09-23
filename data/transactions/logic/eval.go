@@ -3622,14 +3622,14 @@ func opSetByte(cx *EvalContext) error {
 
 func extractCarefully(x []byte, start, length uint64) ([]byte, error) {
 	if start > uint64(len(x)) {
-		return nil, fmt.Errorf("extraction start %d beyond length: %d", start, len(x))
+		return nil, fmt.Errorf("extraction start %d is beyond length: %d", start, len(x))
 	}
 	end := start + length
 	if end < start {
 		return nil, fmt.Errorf("extraction end exceeds uint64")
 	}
 	if end > uint64(len(x)) {
-		return nil, fmt.Errorf("extraction end %d beyond length: %d", end, len(x))
+		return nil, fmt.Errorf("extraction end %d is beyond length: %d", end, len(x))
 	}
 	return x[start:end], nil
 }

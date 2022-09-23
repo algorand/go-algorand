@@ -789,7 +789,8 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generate
 	return
 }
 
-// GetApplicationBoxByName takes an app's index and box name and returns its value
+// GetApplicationBoxByName takes an app's index and box name and returns its value.
+// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp generatedV2.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {

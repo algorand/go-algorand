@@ -142,7 +142,6 @@ func opBoxReplace(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack[prev].Bytes = bytes
 	cx.stack = cx.stack[:pprev]
 	return cx.Ledger.SetBox(cx.appID, name, string(bytes))
 }
@@ -224,8 +223,6 @@ func opBoxPut(cx *EvalContext) error {
 		if len(box) != len(value) {
 			return fmt.Errorf("attempt to box_put wrong size %d != %d", len(box), len(value))
 		}
-
-		cx.stack = cx.stack[:prev]
 		return cx.Ledger.SetBox(cx.appID, name, value)
 	}
 	/* The box did not exist, so create it. */

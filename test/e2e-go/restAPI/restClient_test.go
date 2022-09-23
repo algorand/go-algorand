@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1401,7 +1402,7 @@ end:
 				boxValues[i] = ""
 			}
 		} else {
-			a.True(false)
+			a.Failf("Unknown operation %s", operation)
 		}
 
 		operateBoxAndSendTxn(operation, boxNames, boxValues)
@@ -1421,10 +1422,22 @@ end:
 		var resp generated.BoxesResponse
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 		a.NoError(err)
-		a.Equal(createdBoxCount, uint64(len(resp.Boxes)))
-		for _, b := range resp.Boxes {
-			a.True(createdBoxName[string(b.Name)])
+
+		expectedCreatedBoxes := make([]string, 0, createdBoxCount)
+		for name, isCreate := range createdBoxName {
+			if isCreate {
+				expectedCreatedBoxes = append(expectedCreatedBoxes, name)
+			}
 		}
+		sort.Strings(expectedCreatedBoxes)
+
+		actualBoxes := make([]string, len(resp.Boxes))
+		for i, box := range resp.Boxes {
+			actualBoxes[i] = string(box.Name)
+		}
+		sort.Strings(actualBoxes)
+
+		a.Equal(expectedCreatedBoxes, actualBoxes)
 	}
 
 	testingBoxNames := []string{
@@ -1507,22 +1520,23 @@ end:
 		return ibytes
 	}
 
-	boxTests := [][]interface{}{
+	boxTests := []struct {
+		name        []byte
+		encodedName string
+		value       []byte
+	}{
 		{[]byte("foo"), "str:foo", []byte("bar12")},
 		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}},
 		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
 	}
 	for _, boxTest := range boxTests {
-		boxName := boxTest[0].([]byte)
-		encodedName := boxTest[1].(string)
 		// Box values are 5 bytes, as defined by the test TEAL program.
-		boxValue := boxTest[2].([]byte)
-		operateBoxAndSendTxn("create", []string{string(boxName)}, []string{""})
-		operateBoxAndSendTxn("set", []string{string(boxName)}, []string{string(boxValue)})
+		operateBoxAndSendTxn("create", []string{string(boxTest.name)}, []string{""})
+		operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
 
-		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), encodedName)
+		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
 		a.NoError(err)
-		a.Equal(boxName, boxResponse.Name)
-		a.Equal(boxValue, boxResponse.Value)
+		a.Equal(boxTest.name, boxResponse.Name)
+		a.Equal(boxTest.value, boxResponse.Value)
 	}
 }

@@ -79,7 +79,7 @@ BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
 # shellcheck disable=SC2143
 [ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
 
-# Create and set a box in an atommic txn group:
+# Create and set a box in an atomic txn group:
 
 BOX_NAME="str:great box"
 echo "Create $BOX_NAME"
