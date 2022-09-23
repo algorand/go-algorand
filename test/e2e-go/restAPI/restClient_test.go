@@ -1554,7 +1554,6 @@ end:
 	}
 
 	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
-	// operateBoxAndSendTxn("create", []string{`hello`}, []string{``})
 	numberOfBoxesRemaining := 3
 
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
