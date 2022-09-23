@@ -259,7 +259,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 
 	// Get block 1 hash
 	c, rec = newReq(t)
-	err = handler.GetBlockHash(c, 0)
+	err = handler.GetBlockHash(c, 1)
 	a.NoError(err)
 	a.Equal(200, rec.Code)
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1Hash)
