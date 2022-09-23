@@ -30,7 +30,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
@@ -102,16 +101,6 @@ func mutateStringAtIndex(in string, i int) (out string) {
 		out = replaceAtIndex(in, rune(randomUpperAlphaAsByte()), i)
 	}
 	return out
-}
-
-// checks whether a string is all letters-or-spaces
-func isLetterOrSpace(s string) bool {
-	for _, r := range s {
-		if !unicode.IsLetter(r) && !unicode.IsSpace(r) {
-			return false
-		}
-	}
-	return true
 }
 
 func getMaxBalAddr(t *testing.T, testClient libgoal.Client, addresses []string) (someBal uint64, someAddress string) {
@@ -549,6 +538,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	}
 	a.NoError(err)
 	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+	a.NoError(err)
 
 	params, err := testClient.SuggestedParams()
 	a.NoError(err)
@@ -627,7 +617,7 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 	goRoutines, err := testClient.GetGoRoutines(ctx)
 	a.NoError(err)
 	a.NotEmpty(goRoutines)
-	a.True(strings.Index(goRoutines, "goroutine profile:") >= 0)
+	a.True(strings.Contains(goRoutines, "goroutine profile:"))
 }
 
 func TestSendingTooMuchFails(t *testing.T) {
@@ -994,9 +984,11 @@ int 1
 return
 `
 	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
 	approv := ops.Program
 	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
 	clst := ops.Program
+	a.NoError(err)
 
 	gl := basics.StateSchema{}
 	lc := basics.StateSchema{}
@@ -1157,6 +1149,7 @@ func TestStateProofParticipationKeysAPI(t *testing.T) {
 	a.NoError(err)
 
 	partkey, err := account.RestoreParticipation(partdb)
+	a.NoError(err)
 
 	pRoot, err := testClient.GetParticipationKeys()
 	a.NoError(err)
@@ -1337,7 +1330,7 @@ end:
 	var createdBoxCount uint64 = 0
 
 	// define operate box helper
-	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string) {
+	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string, errPrefix ...string) {
 		txns := make([]transactions.Transaction, len(boxNames))
 		txIDs := make(map[string]string, len(boxNames))
 
@@ -1377,11 +1370,13 @@ end:
 		}
 
 		err = testClient.BroadcastTransactionGroup(stxns)
-		a.NoError(err)
-
-		_, err = waitForTransaction(t, testClient, someAddress, txns[0].ID().String(), 30*time.Second)
-		a.NoError(err)
-		return
+		if len(errPrefix) == 0 {
+			a.NoError(err)
+			_, err = waitForTransaction(t, testClient, someAddress, txns[0].ID().String(), 30*time.Second)
+			a.NoError(err)
+		} else {
+			a.ErrorContains(err, errPrefix[0])
+		}
 	}
 
 	// helper function, take operation and a slice of box names
@@ -1478,9 +1473,21 @@ end:
 		`∑´´˙©˚¬∆ßåƒ√¬`,
 	}
 
+	// Happy paths:
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
+
+	// Some Un-Happy paths:
+
+	nonexistantAppIndex := uint64(1337)
+	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
+	a.ErrorContains(err, "application does not exist")
+	_, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
+	// TODO: Issue #4575 asserts that this SHOULD be erroring
+	a.NoError(err)
+
+	operateBoxAndSendTxn("create", []string{``}, []string{``}, "box names may not be zero length")
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
