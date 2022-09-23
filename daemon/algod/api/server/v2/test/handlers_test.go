@@ -208,9 +208,6 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
-func getBlockHashTest(t *testing.T, blockNum uint64, expectedCode int) {
-}
-
 func TestGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
