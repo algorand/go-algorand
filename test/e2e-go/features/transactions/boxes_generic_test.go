@@ -185,7 +185,7 @@ func operateAndMatchRes(a *require.Assertions, t *testing.T, testClient libgoal.
 	}
 }
 
-func TestBoxesStress(t *testing.T) {
+func TestBoxesGeneric(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
