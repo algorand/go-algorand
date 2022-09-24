@@ -3500,7 +3500,7 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
 	tx *sql.Tx,
-	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	hasAccounts := updates.len() > 0
@@ -3538,7 +3538,7 @@ func onlineAccountsNewRound(
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRoundImpl(
 	writer accountsWriter,
-	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	updatedAccounts = make([]persistedAccountData, updates.len())

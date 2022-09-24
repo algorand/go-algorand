@@ -134,10 +134,10 @@ type modifiedResource struct {
 	ndeltas int
 }
 
-// A modifiedValue represents a kv store change since the persistent state
+// A modifiedKvValue represents a kv store change since the persistent state
 // stored in the DB (i.e., in the range of rounds covered by the accountUpdates
 // tracker).
-type modifiedValue struct {
+type modifiedKvValue struct {
 	// data stores the most recent value (nil == deleted)
 	data *string
 
@@ -178,7 +178,7 @@ type accountUpdates struct {
 
 	// kvStore has the most recent kv pairs for every write/del that appears in
 	// deltas.
-	kvStore map[string]modifiedValue
+	kvStore map[string]modifiedKvValue
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -951,7 +951,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.resources = make(resourcesUpdates)
-	au.kvStore = make(map[string]modifiedValue)
+	au.kvStore = make(map[string]modifiedKvValue)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -1840,11 +1840,11 @@ func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredC
 // changes per round by specifying it in the ndeltas field of the
 // modifiedKv. The modifiedValues in the returned map have the earliest
 // mv.oldData, and the newest mv.data.
-func compactKvDeltas(kvDeltas []map[string]ledgercore.ValueDelta) map[string]modifiedValue {
+func compactKvDeltas(kvDeltas []map[string]ledgercore.ValueDelta) map[string]modifiedKvValue {
 	if len(kvDeltas) == 0 {
 		return nil
 	}
-	outKvDeltas := make(map[string]modifiedValue)
+	outKvDeltas := make(map[string]modifiedKvValue)
 	for _, roundKv := range kvDeltas {
 		for key, current := range roundKv {
 			prev, ok := outKvDeltas[key]

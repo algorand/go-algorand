@@ -425,7 +425,8 @@ func printKeyValueStore(databaseName string, outFile *os.File) error {
 			return err
 		}
 
-		rows, err := tx.Query("SELECT key, value FROM catchpointkvstore")
+		// ordered to make dumps more "diffable"
+		rows, err := tx.Query("SELECT key, value FROM catchpointkvstore order by key")
 		if err != nil {
 			return err
 		}
