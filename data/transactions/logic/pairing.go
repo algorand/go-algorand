@@ -22,52 +22,266 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	BLS12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
-	BN254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
-	BN254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
+	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
-	BLS12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
+	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
+	bls12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 )
 
-/*Remaining questions
-->What conditions should cause pairing to error vs put false on stack vs ignore point?
-->Empty inputs (currently pairing and multiexp panic on empty inputs)
-->Is subgroup check necessary for multiexp? Precompile does not seem to think so, but should ask Fabris
-->Confirm with gnark whether or not IsInSubgroup() also checks if point on curve. If not, they have a problem
-->For now our code is written as if IsInSubgroup() does not check if point is on curve but is set up to be easily changed
-*/
+type sError string
 
-// Note: comments are generally only listed once even if they apply to multiple different lines to avoid congestion from bls/bn/g1/g2 quadruplication
-// Effectively this means input/output explanations are only given for bls12-381 g1 versions of funcs
-// The input/output comments start around line 178
+func (s sError) Error() string { return string(s) }
+
+const (
+	errNotOnCurve    = sError("point not on curve")
+	errWrongSubgroup = sError("wrong subgroup")
+	errEmptyInput    = sError("empty input")
+)
+
+// Input: Two byte slices at top of stack, each an uncompressed point
+// Output: Single byte slice on top of stack which is the uncompressed sum of inputs
+func opEcAdd(cx *EvalContext) error {
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_add group %s", group)
+	}
+
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	a := cx.Stack[prev].Bytes
+	b := cx.Stack[last].Bytes
+
+	var res []byte
+	var err error
+	switch fs.field {
+	case BN254g1:
+		res, err = bn254G1Add(a, b)
+	case BN254g2:
+		res, err = bn254G2Add(a, b)
+	case BLS12_381g1:
+		res, err = bls12381G1Add(a, b)
+	case BLS12_381g2:
+		res, err = bls12381G2Add(a, b)
+	default:
+		err = fmt.Errorf("invalid ec_add group %s", group)
+	}
+	cx.Stack[prev].Bytes = res
+	cx.Stack = cx.Stack[:last]
+	return err
+}
+
+// Input: ToS is a scalar, encoded as an unsigned big-endian, second to top is
+// uncompressed bytes for g1 point
+// Output: Single byte slice on top of stack which contains uncompressed bytes
+// for product of scalar and point
+func opEcScalarMul(cx *EvalContext) error {
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_scalar_mul group %s", group)
+	}
+
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	aBytes := cx.Stack[prev].Bytes
+	kBytes := cx.Stack[last].Bytes
+	if len(kBytes) > 32 {
+		return fmt.Errorf("ec_scalar_mul scalar len is %d, exceeds 32", len(kBytes))
+	}
+	k := new(big.Int).SetBytes(kBytes)
+
+	var res []byte
+	var err error
+	switch fs.field {
+	case BN254g1:
+		res, err = bn254G1ScalarMul(aBytes, k)
+	case BN254g2:
+		res, err = bn254G2ScalarMul(aBytes, k)
+	case BLS12_381g1:
+		res, err = bls12381G1ScalarMul(aBytes, k)
+	case BLS12_381g2:
+		res, err = bls12381G2ScalarMul(aBytes, k)
+	default:
+		err = fmt.Errorf("invalid ec_scalar_mul group %s", group)
+	}
+
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev].Bytes = res
+	return err
+}
+
+// Input: Two byte slices, top is concatenated uncompressed bytes for k g2 points, and second to top is same for g1
+// Output: Single uint at top representing bool for whether pairing of inputs was identity
+func opEcPairingCheck(cx *EvalContext) error {
+	/*
+	   Q: Should pairing fail is the supplied points are not canonical?
+	   Q: Should pairing fail if there are no inputs?
+	*/
+
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	g1Bytes := cx.Stack[prev].Bytes
+	g2Bytes := cx.Stack[last].Bytes
+
+	var err error
+	ok = false
+	switch fs.field {
+	case BN254g2:
+		g1Bytes, g2Bytes = g2Bytes, g1Bytes
+		fallthrough
+	case BN254g1:
+		ok, err = bn254PairingCheck(g1Bytes, g2Bytes)
+	case BLS12_381g2:
+		g1Bytes, g2Bytes = g2Bytes, g1Bytes
+		fallthrough
+	case BLS12_381g1:
+		ok, err = bls12381PairingCheck(g1Bytes, g2Bytes)
+	default:
+		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev] = boolToSV(ok)
+	return err
+}
+
+// Input: Top of stack is slice of k scalars, second to top is slice of k group points as uncompressed bytes
+// Output: Single byte slice that contains uncompressed bytes for point equivalent to p_1^e_1 * p_2^e_2 * ... * p_k^e_k, where p_i is i'th point from input and e_i is i'th scalar
+func opEcMultiExp(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	pointBytes := cx.Stack[prev].Bytes
+	scalarBytes := cx.Stack[last].Bytes
+
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_multiexp group %s", group)
+	}
+
+	var res []byte
+	var err error
+	switch fs.field {
+	case BN254g1:
+		res, err = bn254G1MultiExp(pointBytes, scalarBytes)
+	case BN254g2:
+		res, err = bn254G2MultiExp(pointBytes, scalarBytes)
+	case BLS12_381g1:
+		res, err = bls12381G1MultiExp(pointBytes, scalarBytes)
+	case BLS12_381g2:
+		res, err = bls12381G2MultiExp(pointBytes, scalarBytes)
+	default:
+		err = fmt.Errorf("invalid ec_multiexp group %s", group)
+	}
+
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev].Bytes = res
+	return err
+}
+
+// Input: Single byte slice on top of stack containing uncompressed bytes for g1 point
+// Output: Single uint on stack top representing bool for whether the input was in the correct subgroup or not
+func opEcSubgroupCheck(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	pointBytes := cx.Stack[last].Bytes
+
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+
+	var err error
+	ok = false
+	switch fs.field {
+	case BN254g1:
+		ok, err = bn254G1SubgroupCheck(pointBytes)
+	case BN254g2:
+		ok, err = bn254G2SubgroupCheck(pointBytes)
+	case BLS12_381g1:
+		ok, err = bls12381G1SubgroupCheck(pointBytes)
+	case BLS12_381g2:
+		ok, err = bls12381G2SubgroupCheck(pointBytes)
+	default:
+		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+
+	cx.Stack[last] = boolToSV(ok)
+	return err
+}
+
+// Input: Single byte slice on top of stack representing single field element
+// Output: Single byte slice on top of stack which contains uncompressed bytes
+// for corresponding point (mapped to by input)
+func opEcMapTo(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	fpBytes := cx.Stack[last].Bytes
+
+	group := EcGroup(cx.program[cx.pc+1])
+	fs, ok := ecGroupSpecByField(group)
+	if !ok { // no version check yet, both appeared at once
+		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+
+	var res []byte
+	var err error
+	switch fs.field {
+	case BN254g1:
+		res, err = bn254MapToG1(fpBytes)
+	case BN254g2:
+		res, err = bn254MapToG2(fpBytes)
+	case BLS12_381g1:
+		res, err = bls12381MapToG1(fpBytes)
+	case BLS12_381g2:
+		res, err = bls12381MapToG2(fpBytes)
+	default:
+		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+	}
+	cx.Stack[last].Bytes = res
+	return err
+}
+
 const (
 	bls12381fpSize  = 48
 	bls12381g1Size  = 2 * bls12381fpSize
 	bls12381fp2Size = 2 * bls12381fpSize
 	bls12381g2Size  = 2 * bls12381fp2Size
-	bn254fpSize     = 32
-	bn254g1Size     = 2 * bn254fpSize
-	bn254fp2Size    = 2 * bn254fpSize
-	bn254g2Size     = 2 * bn254fp2Size
-	scalarSize      = 32
+
+	bn254fpSize  = 32
+	bn254g1Size  = 2 * bn254fpSize
+	bn254fp2Size = 2 * bn254fpSize
+	bn254g2Size  = 2 * bn254fp2Size
+
+	scalarSize = 32
 )
 
-func bytesToBLS12381Field(b []byte) (BLS12381fp.Element, error) {
-	intRepresentation := new(big.Int).SetBytes(b)
-	if intRepresentation.Cmp(BLS12381fp.Modulus()) >= 0 {
-		return BLS12381fp.Element{}, errors.New("Field element larger than modulus")
+var bls12381Modulus = bls12381fp.Modulus()
+
+func bytesToBLS12381Field(b []byte) (bls12381fp.Element, error) {
+	var big big.Int
+	big.SetBytes(b)
+	if big.Cmp(bls12381Modulus) >= 0 {
+		return bls12381fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", &big, bls12381Modulus)
 	}
-	return *new(BLS12381fp.Element).SetBigInt(intRepresentation), nil
+	return *new(bls12381fp.Element).SetBigInt(&big), nil
 }
 
-func bytesToBLS12381G1(b []byte, checkCurve bool) (bls12381.G1Affine, error) {
+func bytesToBLS12381G1(b []byte) (bls12381.G1Affine, error) {
+	if len(b) != bls12381g1Size {
+		return bls12381.G1Affine{}, fmt.Errorf("bad length %d. Expected %d", len(b), bls12381g1Size)
+	}
 	var point bls12381.G1Affine
 	var err error
-	if len(b) != bls12381g1Size {
-		return point, errors.New("Improper encoding")
-	}
 	point.X, err = bytesToBLS12381Field(b[:bls12381fpSize])
 	if err != nil {
 		return bls12381.G1Affine{}, err
@@ -76,39 +290,36 @@ func bytesToBLS12381G1(b []byte, checkCurve bool) (bls12381.G1Affine, error) {
 	if err != nil {
 		return bls12381.G1Affine{}, err
 	}
-	if checkCurve && !point.IsOnCurve() {
-		return bls12381.G1Affine{}, errors.New("Point not on curve")
+	if !point.IsOnCurve() {
+		return bls12381.G1Affine{}, errNotOnCurve
 	}
 	return point, nil
 }
 
 func bytesToBLS12381G1s(b []byte, checkSubgroup bool) ([]bls12381.G1Affine, error) {
-	if len(b)%(bls12381g1Size) != 0 {
-		return nil, errors.New("Improper encoding")
+	if len(b)%bls12381g1Size != 0 {
+		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bls12381g1Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("Empty input")
+		return nil, errors.New("empty input")
 	}
-	points := make([]bls12381.G1Affine, len(b)/(bls12381g1Size))
-	for i := 0; i < len(b)/(bls12381g1Size); i++ {
-		// If IsInSubgroup() checks if point is on curve as well, the following line should replace the line after it
-		// point, err := bytesToBLS12381G1(b[i*bls12381g1Size:(i+1)*bls12381g1Size], !checkSubgroup)
-		point, err := bytesToBLS12381G1(b[i*bls12381g1Size:(i+1)*bls12381g1Size], true)
+	points := make([]bls12381.G1Affine, len(b)/bls12381g1Size)
+	for i := range points {
+		var err error
+		points[i], err = bytesToBLS12381G1(b[i*bls12381g1Size : (i+1)*bls12381g1Size])
 		if err != nil {
-			// revisit later to see if way to check in one step if any errored instead of having to check each one
 			return nil, err
 		}
-		if checkSubgroup && !point.IsInSubGroup() {
-			return nil, errors.New("Wrong subgroup")
+		if checkSubgroup && !points[i].IsInSubGroup() {
+			return nil, errWrongSubgroup
 		}
-		points[i] = point
 	}
 	return points, nil
 }
 
-func bytesToBLS12381G2(b []byte, checkCurve bool) (bls12381.G2Affine, error) {
+func bytesToBLS12381G2(b []byte) (bls12381.G2Affine, error) {
 	if len(b) != bls12381g2Size {
-		return bls12381.G2Affine{}, errors.New("Improper encoding")
+		return bls12381.G2Affine{}, fmt.Errorf("bad length %d. Expected %d", len(b), bls12381g2Size)
 	}
 	var err error
 	var point bls12381.G2Affine
@@ -128,30 +339,29 @@ func bytesToBLS12381G2(b []byte, checkCurve bool) (bls12381.G2Affine, error) {
 	if err != nil {
 		return bls12381.G2Affine{}, err
 	}
-	if checkCurve && !point.IsOnCurve() {
-		return bls12381.G2Affine{}, errors.New("Point not on curve")
+	if !point.IsOnCurve() {
+		return bls12381.G2Affine{}, errNotOnCurve
 	}
 	return point, nil
 }
 
 func bytesToBLS12381G2s(b []byte, checkSubgroup bool) ([]bls12381.G2Affine, error) {
-	if len(b)%(bls12381g2Size) != 0 {
-		return nil, errors.New("Improper encoding")
+	if len(b)%bls12381g2Size != 0 {
+		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bls12381g2Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("Empty input")
+		return nil, errors.New("empty input")
 	}
 	points := make([]bls12381.G2Affine, len(b)/bls12381g2Size)
-	for i := 0; i < len(b)/bls12381g2Size; i++ {
-		// point, err := bytesToBLS12381G2(b[i*bls12381g2Size : (i+1)*bls12381g2Size], !checkSubgroup)
-		point, err := bytesToBLS12381G2(b[i*bls12381g2Size:(i+1)*bls12381g2Size], true)
+	for i := range points {
+		var err error
+		points[i], err = bytesToBLS12381G2(b[i*bls12381g2Size : (i+1)*bls12381g2Size])
 		if err != nil {
 			return nil, err
 		}
-		if checkSubgroup && !point.IsInSubGroup() {
-			return nil, errors.New("Wrong subgroup")
+		if checkSubgroup && !points[i].IsInSubGroup() {
+			return nil, errWrongSubgroup
 		}
-		points[i] = point
 	}
 	return points, nil
 }
@@ -175,244 +385,162 @@ func bls12381G2ToBytes(g2 *bls12381.G2Affine) []byte {
 	return pointBytes
 }
 
-// Input: Two byte slices at top of stack, each an uncompressed point
-// Output: Single byte slice on top of stack which is the uncompressed sum of inputs
-func opBLS12381G1Add(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	bBytes := cx.Stack[last].Bytes
-	a, err := bytesToBLS12381G1(aBytes, true)
+func bls12381G1Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToBLS12381G1(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	b, err := bytesToBLS12381G1(bBytes, true)
+	b, err := bytesToBLS12381G1(bBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	// Would be slightly more efficient to use global variable instead of constantly creating new points
-	// But would mess with parallelization
-	res := new(bls12381.G1Affine).Add(&a, &b)
-	// It's possible it's more efficient to only check if the sum is on the curve as opposed to the summands,
-	// but I doubt that's safe
-	resBytes := bls12381G1ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bls12381G1ToBytes(a.Add(&a, &b)), nil
 }
 
-func opBLS12381G2Add(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	bBytes := cx.Stack[last].Bytes
-	a, err := bytesToBLS12381G2(aBytes, true)
+func bls12381G2Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToBLS12381G2(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	b, err := bytesToBLS12381G2(bBytes, true)
+	b, err := bytesToBLS12381G2(bBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res := new(bls12381.G2Affine).Add(&a, &b)
-	resBytes := bls12381G2ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bls12381G2ToBytes(a.Add(&a, &b)), nil
 }
 
-// Input: Two byte slices, top is bytes for scalar, second to top is uncompressed bytes for g1 point
-// Output: Single byte slice on top of stack which contains uncompressed bytes for product of scalar and point
-func opBLS12381G1ScalarMul(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	a, err := bytesToBLS12381G1(aBytes, true)
+func bls12381G1ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToBLS12381G1(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	kBytes := cx.Stack[last].Bytes
-	if len(kBytes) != scalarSize {
-		return fmt.Errorf("Scalars must be %d bytes long", scalarSize)
-	}
-	// Would probably be more efficient to use uint32
-	k := new(big.Int).SetBytes(kBytes[:]) // what is purpose of slicing to self? Keeping it just b/c it was in original implementation
-	res := new(bls12381.G1Affine).ScalarMultiplication(&a, k)
-	resBytes := bls12381G1ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bls12381G1ToBytes(a.ScalarMultiplication(&a, k)), nil
 }
 
-func opBLS12381G2ScalarMul(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	a, err := bytesToBLS12381G2(aBytes, true)
+func bls12381G2ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToBLS12381G2(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	kBytes := cx.Stack[last].Bytes
-	if len(kBytes) != scalarSize {
-		return fmt.Errorf("Scalars must be %d bytes long", scalarSize)
-	}
-	k := new(big.Int).SetBytes(kBytes[:])
-	res := new(bls12381.G2Affine).ScalarMultiplication(&a, k)
-	resBytes := bls12381G2ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bls12381G2ToBytes(a.ScalarMultiplication(&a, k)), nil
 }
 
-// Input: Two byte slices, top is concatenated uncompressed bytes for k g2 points, and second to top is same for g1
-// Output: Single uint at top representing bool for whether pairing of inputs was identity
-func opBLS12381Pairing(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g1Bytes := cx.Stack[prev].Bytes
-	g2Bytes := cx.Stack[last].Bytes
+func bls12381PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 	g1, err := bytesToBLS12381G1s(g1Bytes, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	g2, err := bytesToBLS12381G2s(g2Bytes, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ok, err := bls12381.PairingCheck(g1, g2)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Uint = boolToUint(ok)
-	cx.Stack[prev].Bytes = nil
-	// I'm assuming it's significantly more likely that err is nil than not
-	return err
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
 }
 
-// Input: Top of stack is slice of k scalars, second to top is slice of k G1 points as uncompressed bytes
-// Output: Single byte slice that contains uncompressed bytes for g1 point equivalent to p_1^e_1 * p_2^e_2 * ... * p_k^e_k, where p_i is i'th point from input and e_i is i'th scalar
-func opBLS12381G1MultiExponentiation(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g1Bytes := cx.Stack[prev].Bytes
-	scalarBytes := cx.Stack[last].Bytes
-	// Precompile does not list subgroup check as mandatory for multiexponentiation, but should ask Fabris about this
+var eccMontgomery = ecc.MultiExpConfig{ScalarsMont: true}
+
+func bls12381G1MultiExp(g1Bytes, scalarBytes []byte) ([]byte, error) {
 	g1Points, err := bytesToBLS12381G1s(g1Bytes, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(scalarBytes)%scalarSize != 0 || len(scalarBytes)/scalarSize != len(g1Points) {
-		return errors.New("Bad input")
+	if len(scalarBytes) != scalarSize*len(g1Points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g1Points))
 	}
-	scalars := make([]BLS12381fr.Element, len(g1Points))
-	for i := 0; i < len(g1Points); i++ {
+	scalars := make([]bls12381fr.Element, len(g1Points))
+	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, _ := new(bls12381.G1Affine).MultiExp(g1Points, scalars, ecc.MultiExpConfig{})
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = bls12381G1ToBytes(res)
-	return nil
+	res, err := new(bls12381.G1Affine).MultiExp(g1Points, scalars, eccMontgomery)
+	if err != nil {
+		return nil, err
+	}
+	return bls12381G1ToBytes(res), nil
 }
 
-func opBLS12381G2MultiExponentiation(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g2Bytes := cx.Stack[prev].Bytes
-	scalarBytes := cx.Stack[last].Bytes
+func bls12381G2MultiExp(g2Bytes, scalarBytes []byte) ([]byte, error) {
 	g2Points, err := bytesToBLS12381G2s(g2Bytes, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(scalarBytes)%scalarSize != 0 || len(scalarBytes)/scalarSize != len(g2Points) {
-		return errors.New("Bad input")
+	if len(scalarBytes) != scalarSize*len(g2Points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g2Points))
 	}
-	scalars := make([]BLS12381fr.Element, len(g2Points))
-	for i := 0; i < len(g2Points); i++ {
+	scalars := make([]bls12381fr.Element, len(g2Points))
+	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, _ := new(bls12381.G2Affine).MultiExp(g2Points, scalars, ecc.MultiExpConfig{})
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = bls12381G2ToBytes(res)
-	return nil
+	res, err := new(bls12381.G2Affine).MultiExp(g2Points, scalars, eccMontgomery)
+	if err != nil {
+		return nil, err
+	}
+	return bls12381G2ToBytes(res), nil
 }
 
-// Input: Single byte slice on top of stack representing single g1 field element
-// Output: Single byte slice on top of stack which contains uncompressed bytes for g1 point (mapped to by input)
-func opBLS12381MapFpToG1(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	fpBytes := cx.Stack[last].Bytes
-	if len(fpBytes) != bls12381fpSize {
-		return errors.New("Bad input")
-	}
+func bls12381MapToG1(fpBytes []byte) ([]byte, error) {
 	fp, err := bytesToBLS12381Field(fpBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	point := bls12381.MapToG1(fp)
-	cx.Stack[last].Bytes = bls12381G1ToBytes(&point)
-	return nil
+	return bls12381G1ToBytes(&point), nil
 }
 
-func opBLS12381MapFp2ToG2(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	fpBytes := cx.Stack[last].Bytes
+func bls12381MapToG2(fpBytes []byte) ([]byte, error) {
 	if len(fpBytes) != bls12381fp2Size {
-		return errors.New("Bad input")
+		return nil, fmt.Errorf("bad encoded element length: %d", len(fpBytes))
 	}
-	fp2 := new(bls12381.G2Affine).X
+	g2 := bls12381.G2Affine{}
 	var err error
-	fp2.A0, err = bytesToBLS12381Field(fpBytes[0:bls12381fpSize])
+	g2.X.A0, err = bytesToBLS12381Field(fpBytes[0:bls12381fpSize])
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fp2.A1, err = bytesToBLS12381Field(fpBytes[bls12381fpSize:])
+	g2.X.A1, err = bytesToBLS12381Field(fpBytes[bls12381fpSize:])
 	if err != nil {
-		return err
+		return nil, err
 	}
-	point := bls12381.MapToG2(fp2)
-	cx.Stack[last].Bytes = bls12381G2ToBytes(&point)
-	return nil
+	point := bls12381.MapToG2(g2.X)
+	return bls12381G2ToBytes(&point), nil
 }
 
-// Input: Single byte slice on top of stack containing uncompressed bytes for g1 point
-// Output: Single uint on stack top representing bool for whether the input was in the correct subgroup or not
-func opBLS12381G1SubgroupCheck(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	pointBytes := cx.Stack[last].Bytes
-	// checkCurve should be false if turns out that IsInSubgroup checks if point is on curve
-	point, err := bytesToBLS12381G1(pointBytes, true)
+func bls12381G1SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToBLS12381G1(pointBytes)
 	if err != nil {
-		return err
+		return false, err
 	}
-	cx.Stack[last].Uint = boolToUint(point.IsInSubGroup())
-	cx.Stack[last].Bytes = nil
-	return err
+	return point.IsInSubGroup(), nil
 }
 
-func opBLS12381G2SubgroupCheck(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	pointBytes := cx.Stack[last].Bytes
-	point, err := bytesToBLS12381G2(pointBytes, true)
+func bls12381G2SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToBLS12381G2(pointBytes)
 	if err != nil {
-		return err
+		return false, err
 	}
-	cx.Stack[last].Uint = boolToUint(point.IsInSubGroup())
-	cx.Stack[last].Bytes = nil
-	return err
+	return point.IsInSubGroup(), nil
 }
 
-func bytesToBN254Field(b []byte) (BN254fp.Element, error) {
-	intRepresentation := new(big.Int).SetBytes(b)
-	if intRepresentation.Cmp(BN254fp.Modulus()) >= 0 {
-		return BN254fp.Element{}, errors.New("Field element larger than modulus")
+var bn254Modulus = bn254fp.Modulus()
+
+func bytesToBN254Field(b []byte) (bn254fp.Element, error) {
+	var big big.Int
+	big.SetBytes(b)
+	if big.Cmp(bn254Modulus) >= 0 {
+		return bn254fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", &big, bn254Modulus)
 	}
-	return *new(BN254fp.Element).SetBigInt(intRepresentation), nil
+	return *new(bn254fp.Element).SetBigInt(&big), nil
 }
 
-func bytesToBN254G1(b []byte, checkCurve bool) (bn254.G1Affine, error) {
+func bytesToBN254G1(b []byte) (bn254.G1Affine, error) {
+	if len(b) != bn254g1Size {
+		return bn254.G1Affine{}, fmt.Errorf("bad length %d. Expected %d", len(b), bn254g1Size)
+	}
 	var point bn254.G1Affine
 	var err error
-	if len(b) != bn254g1Size {
-		return point, errors.New("Improper encoding")
-	}
 	point.X, err = bytesToBN254Field(b[:bn254fpSize])
 	if err != nil {
 		return bn254.G1Affine{}, err
@@ -421,37 +549,36 @@ func bytesToBN254G1(b []byte, checkCurve bool) (bn254.G1Affine, error) {
 	if err != nil {
 		return bn254.G1Affine{}, err
 	}
-	if checkCurve && !point.IsOnCurve() {
-		return bn254.G1Affine{}, errors.New("Point not on curve")
+	if !point.IsOnCurve() {
+		return bn254.G1Affine{}, errNotOnCurve
 	}
 	return point, nil
 }
 
 func bytesToBN254G1s(b []byte, checkSubgroup bool) ([]bn254.G1Affine, error) {
-	if len(b)%(bn254g1Size) != 0 {
-		return nil, errors.New("Improper encoding")
+	if len(b)%bn254g1Size != 0 {
+		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bn254g1Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("Empty input")
+		return nil, errors.New("empty input")
 	}
-	points := make([]bn254.G1Affine, len(b)/(bn254g1Size))
-	for i := 0; i < len(b)/(bn254g1Size); i++ {
-		// point, err := bytesToBN254G1(b[i*bn254g1Size : (i+1)*bn254g1Size], !checkSubgroup)
-		point, err := bytesToBN254G1(b[i*bn254g1Size:(i+1)*bn254g1Size], true)
+	points := make([]bn254.G1Affine, len(b)/bn254g1Size)
+	for i := range points {
+		var err error
+		points[i], err = bytesToBN254G1(b[i*bn254g1Size : (i+1)*bn254g1Size])
 		if err != nil {
 			return nil, err
 		}
-		if checkSubgroup && !point.IsInSubGroup() {
-			return nil, errors.New("Wrong subgroup")
+		if checkSubgroup && !points[i].IsInSubGroup() {
+			return nil, errWrongSubgroup
 		}
-		points[i] = point
 	}
 	return points, nil
 }
 
-func bytesToBN254G2(b []byte, checkCurve bool) (bn254.G2Affine, error) {
+func bytesToBN254G2(b []byte) (bn254.G2Affine, error) {
 	if len(b) != bn254g2Size {
-		return bn254.G2Affine{}, errors.New("Improper encoding")
+		return bn254.G2Affine{}, fmt.Errorf("bad length %d. Expected %d", len(b), bn254g2Size)
 	}
 	var err error
 	var point bn254.G2Affine
@@ -471,30 +598,29 @@ func bytesToBN254G2(b []byte, checkCurve bool) (bn254.G2Affine, error) {
 	if err != nil {
 		return bn254.G2Affine{}, err
 	}
-	if checkCurve && !point.IsOnCurve() {
-		return bn254.G2Affine{}, errors.New("Point not on curve")
+	if !point.IsOnCurve() {
+		return bn254.G2Affine{}, errNotOnCurve
 	}
 	return point, nil
 }
 
 func bytesToBN254G2s(b []byte, checkSubgroup bool) ([]bn254.G2Affine, error) {
-	if len(b)%(bn254g2Size) != 0 {
-		return nil, errors.New("Improper encoding")
+	if len(b)%bn254g2Size != 0 {
+		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bn254g2Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("Empty input")
+		return nil, errEmptyInput
 	}
 	points := make([]bn254.G2Affine, len(b)/bn254g2Size)
-	for i := 0; i < len(b)/bn254g2Size; i++ {
-		// point, err := bytesToBN254G2(b[i*bn254g2Size : (i+1)*bn254g2Size], !checkSubgroup)
-		point, err := bytesToBN254G2(b[i*bn254g2Size:(i+1)*bn254g2Size], true)
+	for i := range points {
+		var err error
+		points[i], err = bytesToBN254G2(b[i*bn254g2Size : (i+1)*bn254g2Size])
 		if err != nil {
 			return nil, err
 		}
-		if checkSubgroup && !point.IsInSubGroup() {
-			return nil, errors.New("Wrong subgroup")
+		if checkSubgroup && !points[i].IsInSubGroup() {
+			return nil, errWrongSubgroup
 		}
-		points[i] = point
 	}
 	return points, nil
 }
@@ -518,206 +644,139 @@ func bn254G2ToBytes(g2 *bn254.G2Affine) []byte {
 	return pointBytes
 }
 
-func opBN254G1Add(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	bBytes := cx.Stack[last].Bytes
-	a, err := bytesToBN254G1(aBytes, true)
+func bn254G1Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToBN254G1(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	b, err := bytesToBN254G1(bBytes, true)
+	b, err := bytesToBN254G1(bBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res := new(bn254.G1Affine).Add(&a, &b)
-	resBytes := bn254G1ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bn254G1ToBytes(a.Add(&a, &b)), nil
 }
 
-func opBN254G2Add(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	bBytes := cx.Stack[last].Bytes
-	a, err := bytesToBN254G2(aBytes, true)
+func bn254G2Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToBN254G2(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	b, err := bytesToBN254G2(bBytes, true)
+	b, err := bytesToBN254G2(bBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res := new(bn254.G2Affine).Add(&a, &b)
-	resBytes := bn254G2ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bn254G2ToBytes(a.Add(&a, &b)), nil
 }
 
-func opBN254G1ScalarMul(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	a, err := bytesToBN254G1(aBytes, true)
+func bn254G1ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToBN254G1(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	kBytes := cx.Stack[last].Bytes
-	if len(kBytes) != scalarSize {
-		return fmt.Errorf("Scalars must be %d bytes long", scalarSize)
-	}
-	k := new(big.Int).SetBytes(kBytes[:])
-	res := new(bn254.G1Affine).ScalarMultiplication(&a, k)
-	resBytes := bn254G1ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bn254G1ToBytes(a.ScalarMultiplication(&a, k)), nil
 }
 
-func opBN254G2ScalarMul(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	aBytes := cx.Stack[prev].Bytes
-	a, err := bytesToBN254G2(aBytes, true)
+func bn254G2ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToBN254G2(aBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	kBytes := cx.Stack[last].Bytes
-	if len(kBytes) != scalarSize {
-		return fmt.Errorf("Scalars must be %d bytes long", scalarSize)
-	}
-	k := new(big.Int).SetBytes(kBytes[:])
-	res := new(bn254.G2Affine).ScalarMultiplication(&a, k)
-	resBytes := bn254G2ToBytes(res)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = resBytes
-	return nil
+	return bn254G2ToBytes(a.ScalarMultiplication(&a, k)), nil
 }
 
-func opBN254Pairing(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g1Bytes := cx.Stack[prev].Bytes
-	g2Bytes := cx.Stack[last].Bytes
+func bn254PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 	g1, err := bytesToBN254G1s(g1Bytes, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	g2, err := bytesToBN254G2s(g2Bytes, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ok, err := bn254.PairingCheck(g1, g2)
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev] = boolToSV(ok)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
 }
 
-func opBN254G1MultiExponentiation(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g1Bytes := cx.Stack[prev].Bytes
-	scalarBytes := cx.Stack[last].Bytes
+func bn254G1MultiExp(g1Bytes, scalarBytes []byte) ([]byte, error) {
 	g1Points, err := bytesToBN254G1s(g1Bytes, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(scalarBytes)%scalarSize != 0 || len(scalarBytes)/scalarSize != len(g1Points) {
-		return errors.New("Bad input")
+	if len(scalarBytes) != scalarSize*len(g1Points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g1Points))
 	}
-	scalars := make([]BN254fr.Element, len(g1Points))
-	for i := 0; i < len(g1Points); i++ {
+	scalars := make([]bn254fr.Element, len(g1Points))
+	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, _ := new(bn254.G1Affine).MultiExp(g1Points, scalars, ecc.MultiExpConfig{})
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = bn254G1ToBytes(res)
-	return nil
+	res, err := new(bn254.G1Affine).MultiExp(g1Points, scalars, eccMontgomery)
+	if err != nil {
+		return nil, err
+	}
+	return bn254G1ToBytes(res), nil
 }
 
-func opBN254G2MultiExponentiation(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	g2Bytes := cx.Stack[prev].Bytes
-	scalarBytes := cx.Stack[last].Bytes
+func bn254G2MultiExp(g2Bytes, scalarBytes []byte) ([]byte, error) {
 	g2Points, err := bytesToBN254G2s(g2Bytes, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(scalarBytes)%scalarSize != 0 || len(scalarBytes)/scalarSize != len(g2Points) {
-		return errors.New("Bad input")
+	if len(scalarBytes) != scalarSize*len(g2Points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g2Points))
 	}
-	scalars := make([]BN254fr.Element, len(g2Points))
-	for i := 0; i < len(g2Points); i++ {
+	scalars := make([]bn254fr.Element, len(g2Points))
+	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, _ := new(bn254.G2Affine).MultiExp(g2Points, scalars, ecc.MultiExpConfig{})
-	cx.Stack = cx.Stack[:last]
-	cx.Stack[prev].Bytes = bn254G2ToBytes(res)
-	return nil
+	res, err := new(bn254.G2Affine).MultiExp(g2Points, scalars, eccMontgomery)
+	if err != nil {
+		return nil, err
+	}
+	return bn254G2ToBytes(res), nil
 }
 
-func opBN254MapFpToG1(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	fpBytes := cx.Stack[last].Bytes
-	if len(fpBytes) != bn254fpSize {
-		return errors.New("Bad input")
-	}
-	// should be MapToG1 in most recent version
+func bn254MapToG1(fpBytes []byte) ([]byte, error) {
 	fp, err := bytesToBN254Field(fpBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	point := bn254.MapToG1(fp)
-	cx.Stack[last].Bytes = bn254G1ToBytes(&point)
-	return nil
+	return bn254G1ToBytes(&point), nil
 }
 
-func opBN254MapFp2ToG2(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	fpBytes := cx.Stack[last].Bytes
+func bn254MapToG2(fpBytes []byte) ([]byte, error) {
 	if len(fpBytes) != bn254fp2Size {
-		return errors.New("Bad input")
+		return nil, fmt.Errorf("bad encoded element length: %d", len(fpBytes))
 	}
-	fp2 := new(bn254.G2Affine).X
+	fp2 := bn254.G2Affine{}.X // no way to declare an fptower.E2
 	var err error
 	fp2.A0, err = bytesToBN254Field(fpBytes[0:bn254fpSize])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fp2.A1, err = bytesToBN254Field(fpBytes[bn254fpSize:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	point := bn254.MapToG2(fp2)
-	cx.Stack[last].Bytes = bn254G2ToBytes(&point)
-	return nil
+	return bn254G2ToBytes(&point), nil
 }
 
-func opBN254G1SubgroupCheck(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	pointBytes := cx.Stack[last].Bytes
-	point, err := bytesToBN254G1(pointBytes, true)
+func bn254G1SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToBN254G1(pointBytes)
 	if err != nil {
-		return err
+		return false, err
 	}
-	cx.Stack[last].Uint = boolToUint(point.IsInSubGroup())
-	cx.Stack[last].Bytes = nil
-	return err
+	return point.IsInSubGroup(), nil
 }
 
-func opBN254G2SubgroupCheck(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	pointBytes := cx.Stack[last].Bytes
-	point, err := bytesToBN254G2(pointBytes, true)
+func bn254G2SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToBN254G2(pointBytes)
 	if err != nil {
-		return err
+		return false, err
 	}
-	cx.Stack[last].Uint = boolToUint(point.IsInSubGroup())
-	cx.Stack[last].Bytes = nil
-	return err
+	return point.IsInSubGroup(), nil
 }

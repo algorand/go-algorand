@@ -747,10 +747,6 @@ var OpSpecs = []OpSpec{
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
-	{0x99, "bn256_add", opBN254G1Add, proto("bb:b"), pairingVersion, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBN254G1ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
-	{0x9b, "bn256_pairing", opBN254Pairing, proto("bb:i"), pairingVersion, costly(8700)},
-
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
@@ -801,6 +797,45 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 310, BN254g2: 430,
+			BLS12_381g1: 540, BLS12_381g2: 750})}, // eip: 500, 800
+	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 2200, BN254g2: 4460,
+			BLS12_381g1: 3640, BLS12_381g2: 8530})}, // eip: 12000, 45000
+
+	// BN cost is 18k per elt, BLS is 45k + 40k per elt.  Not putting those
+	// costs in yet because 1) that is bigger than allowed in logicsigs, so
+	// tests would fail. 2) We don't yet have support for field specific costs
+	// that _also_ depend on input sizes.
+	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:i"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 18_000, BN254g2: 18_000,
+			BLS12_381g1: 15_000, BLS12_381g2: 15_000})}, // eip: 43000*k + 65000
+
+	// This cost must be based on number of points. EIP proposes a complicated
+	// "discount" scheme.  At any rate, as noted above, we don't yet have
+	// support for input variable costs that vary based on fields.
+	// bnG1 seems to be 8000 + 300 /elt
+	// bnG2 seems to be 18000 + 900 /elt (VERY ERRATIC TIMINGS)
+	// blsG1 seems to be 14000 + 400 /elt
+	// blsG2 seems to be  35000 +  1800 /elt
+	{0xe3, "ec_multi_exp", opEcMultiExp, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 800, BN254g2: 1800, // LIES
+			BLS12_381g1: 1400, BLS12_381g2: 3500})}, // LIES
+
+	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:i"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 50, BN254g2: 11500, // How is the g1 subgroup check so much faster?
+			BLS12_381g1: 5600, BLS12_381g2: 7100})},
+	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 1700, BN254g2: 11000,
+			BLS12_381g1: 5600, BLS12_381g2: 43000})}, // eip: 5500, 75000
 }
 
 type sortByOpcode []OpSpec

@@ -884,7 +884,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -1095,7 +1095,7 @@ Fields
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes
 
