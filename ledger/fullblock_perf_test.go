@@ -636,3 +636,35 @@ func callAppTransaction(
 	appTx.Type = protocol.ApplicationCallTx
 	return
 }
+
+// BenchmarkBlockEncoding builds a full block of pay transactions and benchmarks the time it takes to encode b.N of them.
+func BenchmarkBlockEncoding(b *testing.B) {
+	numAccts := 100
+	newAcctProb := 0.0
+	bc := setupEnv(b, numAccts)
+
+	numBlocks := uint64(b.N)
+	fmt.Printf("Preparing... /%d: ", numBlocks)
+	s3 := time.Now()
+
+	for bc.round < numBlocks {
+		currentRound := bc.round
+		for bc.round == currentRound {
+			// add pay transaction
+			payEvent(bc, mrand.Float64() < newAcctProb)
+		}
+		if (currentRound+1)*10%(2*numBlocks) == 0 {
+			fmt.Printf("%d%% %.1fs ", (currentRound+1)*100/numBlocks, time.Since(s3).Seconds())
+			s3 = time.Now()
+		}
+
+	}
+	fmt.Printf("\nSummary %d blocks and %d txns: pay %d/blk (%d%%) assets %d/blk (%d%%) apps %d/blk (%d%%)\n",
+		numBlocks, bc.txnCount, bc.numPay/numBlocks, bc.numPay*100/bc.txnCount, bc.numAst/numBlocks, bc.numAst*100/bc.txnCount, bc.numApp/numBlocks, bc.numApp*100/bc.txnCount)
+
+	b.ResetTimer()
+	encs := make([][]byte, len(bc.blocks))
+	for i, blk := range bc.blocks {
+		encs[i] = protocol.Encode(&blk)
+	}
+}
