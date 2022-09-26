@@ -220,7 +220,7 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return logicSigBatchVerify(s, txnIdx, groupCtx)
+		return logicSigVerify(s, txnIdx, groupCtx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -314,9 +314,7 @@ func logicSigSanityCheckBatchVerifyPrep(txn *transactions.SignedTxn, groupIndex 
 	return nil
 }
 
-// logicSigBatchVerify checks that the signature is valid, executing the program.
-// it is the caller responsibility to call batchVerifier.verify()
-func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err

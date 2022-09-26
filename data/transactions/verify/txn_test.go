@@ -58,7 +58,6 @@ func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) er
 		return err
 	}
 
-	// this case is used for comapact certificate where no signature is supplied
 	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil
 	}
