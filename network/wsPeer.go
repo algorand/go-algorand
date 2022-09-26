@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -24,10 +25,13 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
@@ -148,6 +152,35 @@ type sendMessages struct {
 	msgs []sendMessage
 }
 
+type versionFeatureFlag int
+
+const vfCompressedProposal versionFeatureFlag = 1
+
+var versionCompressedProposal = [2]int64{2, 2}
+
+var zstdCompressionMagic = [4]byte{0x28, 0xb5, 0x2f, 0xfd}
+
+func versionToFeatures(version string) versionFeatureFlag {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0
+	}
+	major, err := strconv.ParseInt(parts[0], 10, 8)
+	if err != nil {
+		return 0
+	}
+	minor, err := strconv.ParseInt(parts[1], 10, 8)
+	if err != nil {
+		return 0
+	}
+	if major >= versionCompressedProposal[0] {
+		if minor >= versionCompressedProposal[1] {
+			return vfCompressedProposal
+		}
+	}
+	return 0
+}
+
 type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
@@ -213,6 +246,9 @@ type wsPeer struct {
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
 
+	// peer features derived from the peer version
+	features versionFeatureFlag
+
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
 
@@ -220,10 +256,10 @@ type wsPeer struct {
 	responseChannelsMutex deadlock.RWMutex
 
 	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
-	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
+	// only guarantee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
-	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seent to this peer.
+	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seen to this peer.
 	messagesOfInterestGeneration uint32
 
 	// connMonitor used to measure the relative performance of the connection
@@ -231,10 +267,10 @@ type wsPeer struct {
 	// field set to nil.
 	connMonitor *connectionPerformanceMonitor
 
-	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	// peerMessageDelay is calculated by the connection monitor; it's the relative average per-message delay.
 	peerMessageDelay int64
 
-	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled based on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
@@ -444,6 +480,15 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
+		if msg.Tag == protocol.ProposalPayloadTag &&
+			wp.features&vfCompressedProposal != 0 &&
+			bytes.Equal(msg.Data[:4], zstdCompressionMagic[:]) {
+			msg.Data, err = zstd.Decompress(nil, msg.Data)
+			if err != nil {
+				wp.reportReadErr(err)
+				return
+			}
+		}
 		msg.Net = wp.net
 		atomic.StoreInt64(&wp.lastPacketTime, msg.Received)
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)

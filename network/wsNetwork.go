@@ -36,6 +36,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
@@ -1146,6 +1147,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
+		features:          versionToFeatures(matchingVersion),
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1424,17 +1426,43 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		defer close(request.done)
 	}
 
-	broadcastQueueDuration := time.Now().Sub(request.enqueueTime)
+	broadcastQueueDuration := time.Since(request.enqueueTime)
 	networkBroadcastQueueMicros.AddUint64(uint64(broadcastQueueDuration.Nanoseconds()/1000), nil)
 	if broadcastQueueDuration > maxMessageQueueDuration {
 		networkBroadcastsDropped.Inc(nil)
 		return
 	}
 
-	start := time.Now()
+	// check if there is an proposal payload message and peers supporting compression
+	needCompressedData := false
+	if prio {
+		hasPP := false
+		for _, tag := range request.tags {
+			if tag == protocol.ProposalPayloadTag {
+				hasPP = true
+				break
+			}
+		}
+		// if have proposal payload check if there are any peers supporting compression
+		if hasPP {
+			for _, peer := range peers {
+				if peer.features&vfCompressedProposal != 0 {
+					needCompressedData = true
+					break
+				}
+			}
+		}
+	}
 
-	digests := make([]crypto.Digest, len(request.data), len(request.data))
-	data := make([][]byte, len(request.data), len(request.data))
+	start := time.Now()
+	digests := make([]crypto.Digest, len(request.data))
+	data := make([][]byte, len(request.data))
+	var dataCompressed [][]byte
+	var digestsCompressed []crypto.Digest
+	if needCompressedData {
+		dataCompressed = make([][]byte, len(request.data))
+		digestsCompressed = make([]crypto.Digest, len(request.data))
+	}
 	for i, d := range request.data {
 		tbytes := []byte(request.tags[i])
 		mbytes := make([]byte, len(tbytes)+len(d))
@@ -1443,6 +1471,27 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		data[i] = mbytes
 		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
 			digests[i] = crypto.Hash(mbytes)
+		}
+
+		if needCompressedData {
+			if request.tags[i] == protocol.ProposalPayloadTag {
+				mbytesComp := make([]byte, len(tbytes)+len(d))
+				copy(mbytesComp, tbytes)
+				_, err := zstd.Compress(mbytesComp[len(tbytes):], d)
+				if err != nil {
+					wn.log.Errorf("Failed to compress into buffer of len %d", len(d))
+					// fallback and reuse non-compressed
+					copy(mbytesComp[len(tbytes):], d)
+				}
+				dataCompressed[i] = mbytesComp
+				if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
+					digestsCompressed[i] = crypto.Hash(mbytesComp)
+				}
+			} else {
+				// otherwise reuse non-compressed from above
+				dataCompressed[i] = mbytes
+				digestsCompressed[i] = crypto.Hash(mbytes)
+			}
 		}
 	}
 
@@ -1455,7 +1504,12 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
+		var ok bool
+		if peer.features&vfCompressedProposal != 0 && needCompressedData {
+			ok = peer.writeNonBlockMsgs(request.ctx, dataCompressed, prio, digestsCompressed, request.enqueueTime)
+		} else {
+			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
+		}
 		if ok {
 			sentMessageCount++
 			continue
@@ -1463,7 +1517,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		networkPeerBroadcastDropped.Inc(nil)
 	}
 
-	dt := time.Now().Sub(start)
+	dt := time.Since(start)
 	networkBroadcasts.Inc(nil)
 	networkBroadcastSendMicros.AddUint64(uint64(dt.Nanoseconds()/1000), nil)
 }
@@ -1838,14 +1892,15 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1"}
+var SupportedProtocolVersions = []string{"2.1", "2.2"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
+ *  2.2 Compressed proposal payload
  */
-const ProtocolVersion = "2.1"
+const ProtocolVersion = "2.2"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"

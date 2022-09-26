@@ -39,6 +39,7 @@ require (
 )
 
 require (
+	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e // indirect
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
