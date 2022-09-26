@@ -1133,10 +1133,12 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 		nextDBSize *= increment
 
 		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
-			results := make(map[string]bool)
-			_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
-			require.NoError(b, err)
-			require.True(b, len(results) >= 1)
+			for i := 0; i < b.N; i++ {
+				results := make(map[string]bool)
+				_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+				require.NoError(b, err)
+				require.True(b, len(results) >= 1)
+			}
 		})
 	}
 }
