@@ -194,7 +194,7 @@ var opDocByName = map[string]string{
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
-	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,384. Returns 0 if A already existed, else 1",
+	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
 	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
 	"box_replace": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
 	"box_del":     "delete box named A if it exists. Return 1 if A existed, 0 otherwise",

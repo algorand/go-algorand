@@ -330,62 +330,8 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		datapath, filepath)
 	require.NoError(t, err)
 
-	// create a ledger.
-	var initState ledgercore.InitState
-	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	conf.Archival = true
-	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"ToCatchpoint", true, initState, conf)
-	require.NoError(t, err)
+	l := testNewLedgerFromCatchpoint(t, filepath)
 	defer l.Close()
-	accessor := MakeCatchpointCatchupAccessor(l, l.log)
-
-	err = accessor.ResetStagingBalances(context.Background(), true)
-	require.NoError(t, err)
-
-	// load the file from disk.
-	fileContent, err := os.ReadFile(filepath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
-	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProcessStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
-		require.NoError(t, err)
-	}
-
-	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
-		return err
-	})
-	require.NoError(t, err)
 
 	return catchpointFileHeader
 }
