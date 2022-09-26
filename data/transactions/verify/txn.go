@@ -459,3 +459,48 @@ func (w *worksetBuilder) next() (txnGroups [][]transactions.SignedTxn) {
 func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
+
+type VerificationElement struct {
+	txnGroup   []transactions.SignedTxn
+	contextHdr bookkeeping.BlockHeader
+}
+
+type VerificationResult struct {
+	txnGroup []transactions.SignedTxn
+	verified bool
+}
+
+func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
+	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult) {
+
+	// wait time for another txn should satisfy the following inequality:
+	// [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
+	// since these are difficult to estimate, the simplified version could be to assume:
+	// [validation time added to the group by one more txn] = [validation time of a single txn] / 2
+	// This gives us:
+	// [wait time] <= [validation time of a single txn] / 2
+	singelTxnValidationTime := 100 * time.Millisecond
+
+	batchVerifier := crypto.MakeBatchVerifier()
+	timer := time.NewTicker(singelTxnValidationTime)
+
+	go func() {
+		select {
+		case stx := <-stxnChan:
+			groupCtxs[i], grpErr = txnGroupBatchVerifyPrep(stx.txnGroup, stx.contextHdr, cache,
+				ledger, batchVerifier)
+		case <-timer.C:
+			numSigs := batchVerifier.GetNumberOfEnqueuedSignatures()
+			if numSigs != 0 {
+				results := make([]bool, numSigs, numSigs)
+				verifyError := batchVerifier.VerifyWithFeedback(results)
+			}
+			timer = time.NewTicker(singelTxnValidationTime)
+			batchVerifier = crypto.MakeBatchVerifier()
+		case <-ctx.Done():
+			return ctx.Err()
+
+		}
+	}()
+
+}
