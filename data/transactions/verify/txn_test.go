@@ -58,7 +58,6 @@ func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) er
 		return err
 	}
 
-	// this case is used for comapact certificate where no signature is supplied
 	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil
 	}
@@ -444,4 +443,79 @@ func BenchmarkTxn(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+}
+
+// TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
+// cache. Then makes sure that only the valid txns are verified and added to
+// the cache.
+func TestTxnGroupCacheUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
+
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	cache := MakeVerifiedTransactionCache(1000)
+
+	// break the signature and see if it fails.
+	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
+
+	_, err := TxnGroup(txnGroups[0], blkHdr, cache, nil)
+	require.Error(t, err)
+
+	// The txns should not be in the cache
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, protocol.ConsensusCurrentVersion)
+	require.Equal(t, 1, len(unverifiedGroups))
+
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Equal(t, 2, len(unverifiedGroups))
+
+	_, err = TxnGroup(txnGroups[1], blkHdr, cache, nil)
+	require.NoError(t, err)
+
+	// Only the second txn should be in the cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Equal(t, 1, len(unverifiedGroups))
+
+	// Fix the signature
+	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] - 1
+
+	_, err = TxnGroup(txnGroups[0], blkHdr, cache, nil)
+	require.NoError(t, err)
+
+	// Both transactions should be in the cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Equal(t, 0, len(unverifiedGroups))
+
+	// Break a random signature
+	txgIdx := rand.Intn(len(txnGroups))
+	txIdx := rand.Intn(len(txnGroups[txgIdx]))
+	txnGroups[txgIdx][txIdx].Sig[0] = txnGroups[0][0].Sig[0] + 1
+
+	numFailed := 0
+
+	// Add them to the cache by verifying them
+	for _, txng := range txnGroups {
+		_, err = TxnGroup(txng, blkHdr, cache, nil)
+		if err != nil {
+			numFailed++
+		}
+	}
+	require.Equal(t, 1, numFailed)
+
+	// Onle one transaction should not be in cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	require.Equal(t, 1, len(unverifiedGroups))
+
+	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])
 }
