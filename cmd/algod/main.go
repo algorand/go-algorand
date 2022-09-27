@@ -327,12 +327,17 @@ func run() int {
 		}
 
 		currentVersion := config.GetCurrentVersion()
+		var overrides []telemetryspec.NameValue
+		for name, val := range config.GetNonDefaultConfigValues(cfg, startupConfigCheckFields) {
+			overrides = append(overrides, telemetryspec.NameValue{Name: name, Value: val})
+		}
 		startupDetails := telemetryspec.StartupEventDetails{
 			Version:      currentVersion.String(),
 			CommitHash:   currentVersion.CommitHash,
 			Branch:       currentVersion.Branch,
 			Channel:      currentVersion.Channel,
 			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+			Overrides:    overrides,
 		}
 
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
@@ -367,6 +372,30 @@ func run() int {
 
 	s.Start()
 	return 0
+}
+
+var startupConfigCheckFields = []string{
+	"AgreementIncomingBundlesQueueLength",
+	"AgreementIncomingProposalsQueueLength",
+	"AgreementIncomingVotesQueueLength",
+	"BroadcastConnectionsLimit",
+	"CatchupBlockValidateMode",
+	"ConnectionsRateLimitingCount",
+	"ConnectionsRateLimitingWindowSeconds",
+	"GossipFanout",
+	"IncomingConnectionsLimit",
+	"IncomingMessageFilterBucketCount",
+	"IncomingMessageFilterBucketSize",
+	"LedgerSynchronousMode",
+	"MaxAcctLookback",
+	"MaxConnectionsPerIP",
+	"OutgoingMessageFilterBucketCount",
+	"OutgoingMessageFilterBucketSize",
+	"ProposalAssemblyTime",
+	"ReservedFDs",
+	"TxPoolExponentialIncreaseFactor",
+	"TxPoolSize",
+	"VerifiedTranscationsCacheSize",
 }
 
 func resolveDataDir() string {

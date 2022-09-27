@@ -198,8 +198,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		proto, err := d.ledger.ConsensusVersion(ParamsRound(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
 
-		if e.t() == payloadVerified {
+		switch e.t() {
+		case payloadVerified:
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+		case payloadPresent:
+			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
 		}
 	}()
 
