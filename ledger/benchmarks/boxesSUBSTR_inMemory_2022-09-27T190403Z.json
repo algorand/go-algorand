@@ -1,0 +1,74 @@
+[
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 1,
+    "numOps": 2933800,
+    "opDuration": 17870129810,
+    "nsPerOp": 6091,
+    "realDuration": 20024684666
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 10,
+    "numOps": 2258345,
+    "opDuration": 18140311256,
+    "nsPerOp": 8032,
+    "realDuration": 20035754423
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 100,
+    "numOps": 1254403,
+    "opDuration": 18927090461,
+    "nsPerOp": 15088,
+    "realDuration": 20026360456
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 1000,
+    "numOps": 213609,
+    "opDuration": 19732549335,
+    "nsPerOp": 92376,
+    "realDuration": 20042504970
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 10000,
+    "numOps": 23903,
+    "opDuration": 19933337339,
+    "nsPerOp": 833926,
+    "realDuration": 20085278768
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 100000,
+    "numOps": 1925,
+    "opDuration": 19981572142,
+    "nsPerOp": 10380037,
+    "realDuration": 20518528063
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 1000000,
+    "numOps": 202,
+    "opDuration": 20069233812,
+    "nsPerOp": 99352642,
+    "realDuration": 26922042629
+  },
+  {
+    "name": "boxesSUBSTR_inmemory",
+    "sqliteInMemory": true,
+    "n": 10000000,
+    "numOps": 22,
+    "opDuration": 20452266398,
+    "nsPerOp": 929648472,
+    "realDuration": 81468178760
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1,
+    "numOps": 2203757,
+    "opDuration": 18374300259,
+    "nsPerOp": 8337,
+    "realDuration": 20237497915
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 10,
+    "numOps": 1968489,
+    "opDuration": 18487688340,
+    "nsPerOp": 9391,
+    "realDuration": 20102915497
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 100,
+    "numOps": 1089278,
+    "opDuration": 19046332143,
+    "nsPerOp": 17485,
+    "realDuration": 20182820483
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1000,
+    "numOps": 221089,
+    "opDuration": 19769595946,
+    "nsPerOp": 89419,
+    "realDuration": 20116056220
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 10000,
+    "numOps": 26035,
+    "opDuration": 19946553356,
+    "nsPerOp": 766143,
+    "realDuration": 20142087027
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 100000,
+    "numOps": 1809,
+    "opDuration": 19980997396,
+    "nsPerOp": 11045327,
+    "realDuration": 21043292067
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1000000,
+    "numOps": 175,
+    "opDuration": 20028397255,
+    "nsPerOp": 114447984,
+    "realDuration": 37586195500
+  },
+  {
+    "name": "boxesSUBSTR_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 10000000,
+    "numOps": 16,
+    "opDuration": 20587956185,
+    "nsPerOp": 1286747261,
+    "realDuration": 289002874815
+  }
+]

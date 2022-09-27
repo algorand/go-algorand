@@ -1115,7 +1115,7 @@ func writeBenchmarkResults(t *testing.T, results []manualBenchmarkResult, filena
 	require.NoError(t, err)
 }
 
-func manualBoxDbBenchmarkFactory(inMemory bool, N int, dur time.Duration) func(*testing.T) manualBenchmarkResult {
+func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory bool, N int, dur time.Duration) func(*testing.T) manualBenchmarkResult {
 	return func(t *testing.T) manualBenchmarkResult {
 		realStart := time.Now()
 		dbs, fn := dbOpenTest(t, inMemory)
@@ -1150,6 +1150,12 @@ func manualBoxDbBenchmarkFactory(inMemory bool, N int, dur time.Duration) func(*
 		err = tx.Commit()
 		require.NoError(t, err)
 
+		var lookupStmt *sql.Stmt
+		if customLookup != nil {
+			lookupStmt, err = dbs.Wdb.Handle.Prepare(*customLookup)
+			require.NoError(t, err)
+		}
+
 		start := time.Now()
 		var elapsed time.Duration
 		i := 0
@@ -1159,17 +1165,32 @@ func manualBoxDbBenchmarkFactory(inMemory bool, N int, dur time.Duration) func(*
 			appID := basics.AppIndex(rand.Uint64())
 			key := logic.MakeBoxKey(appID, string(bytes))
 			results := make(map[string]bool)
-			localStart := time.Now()
-			qs.lookupKeysByPrefix(key, 0, results, 0)
-			elapsed += time.Since(localStart)
+			if lookupStmt == nil {
+				localStart := time.Now()
+				qs.lookupKeysByPrefix(key, 0, results, 0)
+				elapsed += time.Since(localStart)
+			} else {
+				var v sql.NullString
+				var pv persistedKVData
+
+				localStart := time.Now()
+				err = lookupStmt.QueryRow([]byte(key)).Scan(&pv.round, &v)
+				elapsed += time.Since(localStart)
+
+				require.NoError(t, err)
+			}
 		}
-		return manualBenchmarkResult{"boxDb", inMemory, N, i, elapsed, int(elapsed) / i, time.Since(realStart)}
+		return manualBenchmarkResult{testName, inMemory, N, i, elapsed, int(elapsed) / i, time.Since(realStart)}
 	}
 }
 
 func TestManualBoxBenchmark(t *testing.T) {
+	testName := "boxLOOKUP_inMemory"
+	lookup := "SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';"
+	var customLookup *string = &lookup
 	inMemory := true
 	duration := 20 * time.Second
+
 	sleepInBetween := 10 * time.Second
 	tests := 8
 	results := make([]manualBenchmarkResult, tests)
@@ -1177,14 +1198,14 @@ func TestManualBoxBenchmark(t *testing.T) {
 	base := 10
 	N := 1
 	for exp := 0; exp < tests; exp++ {
-		results[exp] = manualBoxDbBenchmarkFactory(inMemory, N, duration)(t)
+		results[exp] = manualBoxDbBenchmarkFactory(testName, customLookup, inMemory, N, duration)(t)
 		fmt.Printf("%+v\n", results[exp]) // run with -v flag to see during test
 		if exp < tests-1 {
 			time.Sleep(sleepInBetween)
 		}
 		N *= base
 	}
-	writeBenchmarkResults(t, results, "boxDBreads")
+	writeBenchmarkResults(t, results, testName)
 }
 
 func BenchmarkLookupKeyByPrefix(b *testing.B) {

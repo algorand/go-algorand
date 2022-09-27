@@ -1,0 +1,74 @@
+[
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 1,
+    "numOps": 3049012,
+    "opDuration": 16455649066,
+    "nsPerOp": 5397,
+    "realDuration": 20026240657
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 10,
+    "numOps": 3141559,
+    "opDuration": 16534935768,
+    "nsPerOp": 5263,
+    "realDuration": 20040554216
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 100,
+    "numOps": 2993516,
+    "opDuration": 16361693289,
+    "nsPerOp": 5465,
+    "realDuration": 20044279489
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 1000,
+    "numOps": 2974551,
+    "opDuration": 16208716194,
+    "nsPerOp": 5449,
+    "realDuration": 20045028774
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 10000,
+    "numOps": 2876848,
+    "opDuration": 16571798076,
+    "nsPerOp": 5760,
+    "realDuration": 20150723851
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 100000,
+    "numOps": 2799299,
+    "opDuration": 16835709168,
+    "nsPerOp": 6014,
+    "realDuration": 20462377027
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 1000000,
+    "numOps": 2529701,
+    "opDuration": 17278494776,
+    "nsPerOp": 6830,
+    "realDuration": 25045465003
+  },
+  {
+    "name": "boxLOOKUP_inMemory",
+    "sqliteInMemory": true,
+    "n": 10000000,
+    "numOps": 2344093,
+    "opDuration": 17451063841,
+    "nsPerOp": 7444,
+    "realDuration": 80319949500
+  }
+]
