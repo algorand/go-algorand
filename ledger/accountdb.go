@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -2592,7 +2593,7 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2685,7 +2686,9 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		rows, err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
+		prefixIncrBigInt := new(big.Int).Add(new(big.Int).SetBytes([]byte(prefix)), big.NewInt(1))
+		prefixIncrBytes := prefixIncrBigInt.Bytes()
+		rows, err := qs.lookupKeysByPrefixStmt.Query([]byte(prefix), prefixIncrBytes)
 		if err != nil {
 			return err
 		}
@@ -4105,6 +4108,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+//
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -4294,6 +4298,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
+//
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 
