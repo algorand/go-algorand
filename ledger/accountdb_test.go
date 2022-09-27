@@ -533,9 +533,10 @@ func checkCreatables(t *testing.T,
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
 // loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
+//   - random sample of elements from the first 10: created changed from true -> false
+//
 // loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
+//   - random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -1078,6 +1079,60 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	}
 }
 
+func TestLookupKeysByPrefix(t *testing.T) {
+	dbs, fn := dbOpenTest(t, false)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(t, err)
+	defer qs.close()
+
+	kvPairTestCases := []struct {
+		key   []byte
+		value []byte
+	}{
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}, value: []byte("value0")},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}, value: []byte("value1")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}, value: []byte("value2")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}, value: []byte("value3")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, value: []byte("value4")},
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+
+	// writer is only for kvstore
+	writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < len(kvPairTestCases); i++ {
+		err := writer.upsertKvPair(string(kvPairTestCases[i].key), string(kvPairTestCases[i].value))
+		require.NoError(t, err)
+	}
+
+	tx.Commit()
+	writer.close()
+
+	for length := 1; length <= len(kvPairTestCases); length++ {
+		t.Run("lookupKVByPrefix-prefix-with-"+strconv.Itoa(length)+"-0xFF", func(t *testing.T) {
+			results := make(map[string]bool)
+			prefix := make([]byte, length)
+			for i := 0; i < length; i++ {
+				prefix[i] = 0xFF
+			}
+			_, err := qs.lookupKeysByPrefix(string(prefix), uint64(len(kvPairTestCases)), results, 0)
+			require.NoError(t, err)
+			require.True(t, len(results) == len(kvPairTestCases)+1-length)
+		})
+	}
+}
+
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
@@ -1099,8 +1154,8 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	nameBuffer := make([]byte, 5)
 	valueBuffer := make([]byte, 5)
 
-	// from 2^2 -> 2^4 -> ... -> 2^22 sized DB
-	for bIndex := 0; bIndex < 11; bIndex++ {
+	// from 2^2 -> 2^4 -> ... -> 2^24 sized DB
+	for bIndex := 0; bIndex < 12; bIndex++ {
 		// make writer to DB
 		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
@@ -3163,11 +3218,12 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//    A |   1 |      1
-//    B |   1 |      1
-//    A |   2 |      0
-//    B |   3 |      0
-//    C |   3 |      1
+//
+//	A |   1 |      1
+//	B |   1 |      1
+//	A |   2 |      0
+//	B |   3 |      0
+//	C |   3 |      1
 //
 // Ensure
 // - for round 1 A and B returned

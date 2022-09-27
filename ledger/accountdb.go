@@ -23,7 +23,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -47,13 +46,14 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt     *sql.Stmt
-	lookupStmt             *sql.Stmt
-	lookupResourcesStmt    *sql.Stmt
-	lookupAllResourcesStmt *sql.Stmt
-	lookupKvPairStmt       *sql.Stmt
-	lookupKeysByPrefixStmt *sql.Stmt
-	lookupCreatorStmt      *sql.Stmt
+	listCreatablesStmt         *sql.Stmt
+	lookupStmt                 *sql.Stmt
+	lookupResourcesStmt        *sql.Stmt
+	lookupAllResourcesStmt     *sql.Stmt
+	lookupKvPairStmt           *sql.Stmt
+	lookupKeysByPrefixStmt     *sql.Stmt
+	lookupKeysByPrefixAllFStmt *sql.Stmt
+	lookupCreatorStmt          *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -2598,6 +2598,11 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
+	qs.lookupKeysByPrefixAllFStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2683,12 +2688,37 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err
 	return
 }
 
+// keyPrefixIntervalPreprocessing is implemented to generate an interval for DB query: lookupKeysByPrefixStmt
+// Such DB query was designed this way, to trigger the binary search optimization in SQLITE3.
+// The DB comparison for blob typed primary key is lexicographic, i.e., byte by byte.
+// In this way, we can introduce an interval that a primary key should be >= some prefix, < some prefix increment.
+// A corner case to consider is that, the prefix has last byte 0xFF, or the prefix is full of 0xFF.
+// The first case can be solved by carrying, e.g., prefix = 0x1EFF -> 0x1F00
+// The second case can be solved by disregarding the upper limit, i.e., prefix = 0xFFFF -> interval being >= 0xFF
+func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
+	prefixIncr := make([]byte, len(prefix))
+	copy(prefixIncr, prefix)
+	for i := len(prefix) - 1; i >= 0; i-- {
+		currentByteIncr := int(prefix[i]) + 1
+		if currentByteIncr >= 0xFF {
+			prefixIncr[i] = 0
+			continue
+		}
+		prefixIncr[i] = byte(currentByteIncr)
+		return prefix, prefixIncr
+	}
+	return prefix, nil
+}
+
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() error {
-		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		prefixIncrBigInt := new(big.Int).Add(new(big.Int).SetBytes([]byte(prefix)), big.NewInt(1))
-		prefixIncrBytes := prefixIncrBigInt.Bytes()
-		rows, err := qs.lookupKeysByPrefixStmt.Query([]byte(prefix), prefixIncrBytes)
+		prefixBytes, prefixIncrBytes := keyPrefixIntervalPreprocessing([]byte(prefix))
+		var rows *sql.Rows
+		if prefixIncrBytes != nil {
+			rows, err = qs.lookupKeysByPrefixStmt.Query(prefixBytes, prefixIncrBytes)
+		} else {
+			rows, err = qs.lookupKeysByPrefixAllFStmt.Query(prefixBytes)
+		}
 		if err != nil {
 			return err
 		}
@@ -3050,6 +3080,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
 		&qs.lookupKeysByPrefixStmt,
+		&qs.lookupKeysByPrefixAllFStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
