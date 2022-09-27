@@ -37,7 +37,7 @@ const frameNonsense = `
   bury 9
 `
 
-const frameCompiled = "43f00102f1ff240bf20089810246014704f309"
+const frameCompiled = "438a01028bff240b8c00898102460147044509"
 
 func TestDupPopN(t *testing.T) {
 	partitiontest.PartitionTest(t)

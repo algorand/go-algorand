@@ -610,6 +610,13 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
+## bury n
+
+- Opcode: 0x45 {uint8 depth}
+- Stack: ..., A &rarr; ...
+- Replace the Nth value from the top of the stack. bury 0 fails.
+- Availability: v8
+
 ## popn n
 
 - Opcode: 0x46 {uint8 stack depth}
@@ -1067,9 +1074,32 @@ The call stack is separate from the data stack. Only `callsub`, `retsub`, and `p
 
 If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
 
+## proto a r
+
+- Opcode: 0x8a {uint8 arguments} {uint8 return values}
+- Stack: ... &rarr; ...
+- Prepare top call frame for a retsub that will assume A args and R return values.
+- Availability: v8
+
+Fails unless the last instruction executed was a `callsub`.
+
+## frame_dig i
+
+- Opcode: 0x8b {int8 frame slot}
+- Stack: ... &rarr; ..., any
+- Nth (signed) value from the frame pointer.
+- Availability: v8
+
+## frame_bury i
+
+- Opcode: 0x8c {int8 frame slot}
+- Stack: ..., A &rarr; ...
+- Replace the Nth (signed) value from the frame pointer in the stack
+- Availability: v8
+
 ## switch target ...
 
-- Opcode: 0x8a {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Opcode: 0x8d {uint8 branch count} [{int16 branch offset, big-endian}, ...]
 - Stack: ..., A: uint64 &rarr; ...
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
 - Availability: v8
@@ -1432,33 +1462,3 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 | 0 | BlkSeed | []byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 
-
-## proto a r
-
-- Opcode: 0xf0 {uint8 arguments} {uint8 return values}
-- Stack: ... &rarr; ...
-- Prepare top call frame for a retsub that will assume A args and R return values.
-- Availability: v8
-
-Fails unless the last instruction executed was a `callsub`.
-
-## frame_dig i
-
-- Opcode: 0xf1 {int8 frame slot}
-- Stack: ... &rarr; ..., any
-- Nth (signed) value from the frame pointer.
-- Availability: v8
-
-## frame_bury i
-
-- Opcode: 0xf2 {int8 frame slot}
-- Stack: ..., A &rarr; ...
-- Replace the Nth (signed) value from the frame pointer in the stack
-- Availability: v8
-
-## bury n
-
-- Opcode: 0xf3 {uint8 depth}
-- Stack: ..., A &rarr; ...
-- Replace the Nth value from the top of the stack. bury 0 fails.
-- Availability: v8

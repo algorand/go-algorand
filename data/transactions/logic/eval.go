@@ -2119,7 +2119,7 @@ func opSwitch(cx *EvalContext) error {
 	return nil
 }
 
-const protoByte = 0xf0
+const protoByte = 0x8a
 
 func opCallSub(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{

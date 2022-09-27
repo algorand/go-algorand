@@ -64,12 +64,12 @@ const appAddressAvailableVersion = 7
 
 const fidoVersion = 7       // base64, json, secp256r1
 const randomnessVersion = 7 // vrf_verify, block
+const fpVersion = 8         // changes for frame pointers and simpler function discipline
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
-const fpVersion = 8      // changes for frame pointers and simpler function discipline
 
 type linearCost struct {
 	baseCost  int
@@ -499,6 +499,7 @@ var OpSpecs = []OpSpec{
 	{0x42, "b", opB, proto(":"), 2, detBranch()},
 	{0x43, "return", opReturn, proto("i:x"), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
+	{0x45, "bury", opBury, proto("a:"), fpVersion, immediates("n").typed(typeBury)},
 	{0x46, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, immediates("n").typed(typePopN).trust()},
 	{0x47, "dupn", opDupN, proto("a:", "", "A, b[N copies of A]"), fpVersion, immediates("n").typed(typeDupN).trust()},
 	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
@@ -525,7 +526,6 @@ var OpSpecs = []OpSpec{
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, detDefault()},
 	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
 	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, detDefault()},
-
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
@@ -564,8 +564,12 @@ var OpSpecs = []OpSpec{
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
 	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault().trust()},
-	{0x8a, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	// 0x8b will likely be a switch on pairs of values/targets, called `match`
+	// protoByte is a named constant because opCallSub needs to know it.
+	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
+	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0x8c, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
+	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
+	// 0x8e will likely be a switch on pairs of values/targets, called `match`
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
@@ -626,12 +630,6 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
-
-	// protoByte is a named constant because opCallsub needs to know it.
-	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
-	{0xf1, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
-	{0xf2, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
-	{0xf3, "bury", opBury, proto("a:"), fpVersion, immediates("n").typed(typeBury)},
 }
 
 type sortByOpcode []OpSpec

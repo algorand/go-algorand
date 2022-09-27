@@ -1029,6 +1029,17 @@
       ]
     },
     {
+      "Opcode": 69,
+      "Name": "bury",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
+      "ImmediateNote": "{uint8 depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
       "Opcode": 70,
       "Name": "popn",
       "Size": 2,
@@ -1599,6 +1610,39 @@
     },
     {
       "Opcode": 138,
+      "Name": "proto",
+      "Size": 3,
+      "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
+      "DocExtra": "Fails unless the last instruction executed was a `callsub`.",
+      "ImmediateNote": "{uint8 arguments} {uint8 return values}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 139,
+      "Name": "frame_dig",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "Nth (signed) value from the frame pointer.",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 140,
+      "Name": "frame_bury",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 141,
       "Name": "switch",
       "Args": "U",
       "Size": 0,
@@ -2333,50 +2377,6 @@
       "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"
-      ]
-    },
-    {
-      "Opcode": 240,
-      "Name": "proto",
-      "Size": 3,
-      "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
-      "DocExtra": "Fails unless the last instruction executed was a `callsub`.",
-      "ImmediateNote": "{uint8 arguments} {uint8 return values}",
-      "Groups": [
-        "Flow Control"
-      ]
-    },
-    {
-      "Opcode": 241,
-      "Name": "frame_dig",
-      "Returns": ".",
-      "Size": 2,
-      "Doc": "Nth (signed) value from the frame pointer.",
-      "ImmediateNote": "{int8 frame slot}",
-      "Groups": [
-        "Flow Control"
-      ]
-    },
-    {
-      "Opcode": 242,
-      "Name": "frame_bury",
-      "Args": ".",
-      "Size": 2,
-      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
-      "ImmediateNote": "{int8 frame slot}",
-      "Groups": [
-        "Flow Control"
-      ]
-    },
-    {
-      "Opcode": 243,
-      "Name": "bury",
-      "Args": ".",
-      "Size": 2,
-      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
-      "ImmediateNote": "{uint8 depth}",
-      "Groups": [
-        "Flow Control"
       ]
     }
   ]

@@ -418,7 +418,7 @@ const randomnessCompiled = "81ffff03d101d000"
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
 	randomnessCompiled + "800243218001775c0280018881015d"
 
-const switchCompiled = "81018a02fff800008101"
+const switchCompiled = "81018d02fff800008101"
 
 const v8Compiled = v7Compiled + switchCompiled + frameCompiled
 
@@ -496,7 +496,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{pairingVersion, fpVersion}
+var experiments = []uint64{pairingVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had
