@@ -1056,7 +1056,7 @@ pushint args are not added to the intcblock during assembly processes
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.
 
 ## retsub
 
@@ -1065,7 +1065,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - pop the top instruction from the call stack and branch to it
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
 
 ## switch target ...
 

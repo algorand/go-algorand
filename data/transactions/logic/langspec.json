@@ -1581,7 +1581,7 @@
       "Name": "callsub",
       "Size": 3,
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
-      "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
@@ -1592,7 +1592,7 @@
       "Name": "retsub",
       "Size": 1,
       "Doc": "pop the top instruction from the call stack and branch to it",
-      "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "DocExtra": "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
       "Groups": [
         "Flow Control"
       ]
