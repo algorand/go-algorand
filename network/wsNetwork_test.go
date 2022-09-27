@@ -262,6 +262,42 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	}
 }
 
+// Set up two nodes, send proposal
+func TestWebsocketProposalPayloadCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer netStop(t, netA, "A")
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer netStop(t, netB, "B")
+	counter := newMessageCounter(t, 2)
+	counterDone := counter.done
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte("bar"), false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
 // Repeat basic, but test a unicast
 func TestWebsocketNetworkUnicast(t *testing.T) {
 	partitiontest.PartitionTest(t)

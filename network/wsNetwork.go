@@ -2142,6 +2142,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
+		features:                    versionToFeatures(matchingVersion),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
