@@ -735,15 +735,15 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath)
 	require.EqualValues(t, cph.TotalChunks, 2) // Still only 2 chunks, as last was in a recent block
 
-	/*
+	// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
+	{
 		l = testNewLedgerFromCatchpoint(t, catchpointFilePath)
 		defer l.Close()
 		_, _, algos, err := l.LookupLatest(last)
-		// This doesn't work.  replay() probably isn't happening here. Figure out
-		// how to test
-		require.Equal(t, algos, 1_000_000)
+		require.NoError(t, err)
+		require.Equal(t, basics.MicroAlgos{0}, algos)
+	}
 
-	*/
 	for i := 0; i < 40; i++ { // Advance so catchpoint sees the txns
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
@@ -757,6 +757,14 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 
+	// Confirm `last` balance is now available in the catchpoint.
+	{
+		// Since fast catchup consists of multiple steps and the test only performs catchpoint reads, the resulting ledger is incomplete.
+		// That's why the assertion ignores rewards and does _not_ use `LookupLatest`.
+		ad, _, err := l.LookupWithoutRewards(0, last)
+		require.NoError(t, err)
+		require.Equal(t, basics.MicroAlgos{100_000}, ad.MicroAlgos)
+	}
 }
 
 func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
