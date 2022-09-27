@@ -1062,6 +1062,13 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 
 The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
 
+## switch target ...
+
+- Opcode: 0x8a {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- Availability: v8
+
 ## shl
 
 - Opcode: 0x90
@@ -1335,6 +1342,68 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Ith value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
+
+## box_create
+
+- Opcode: 0xb9
+- Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
+- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- Availability: v8
+- Mode: Application
+
+Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.
+
+## box_extract
+
+- Opcode: 0xba
+- Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
+- read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
+- Availability: v8
+- Mode: Application
+
+## box_replace
+
+- Opcode: 0xbb
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ...
+- write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
+- Availability: v8
+- Mode: Application
+
+## box_del
+
+- Opcode: 0xbc
+- Stack: ..., A: []byte &rarr; ..., uint64
+- delete box named A if it exists. Return 1 if A existed, 0 otherwise
+- Availability: v8
+- Mode: Application
+
+## box_len
+
+- Opcode: 0xbd
+- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
+- X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
+- Availability: v8
+- Mode: Application
+
+## box_get
+
+- Opcode: 0xbe
+- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
+- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
+- Availability: v8
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
+
+## box_put
+
+- Opcode: 0xbf
+- Stack: ..., A: []byte, B: []byte &rarr; ...
+- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
+- Availability: v8
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
 ## txnas f
 

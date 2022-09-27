@@ -27,10 +27,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync/atomic"
-
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -956,6 +955,36 @@ func TestAddStateProofKeys(t *testing.T) {
 			a.Equal(keys[j].Round, keyFirstValidRound)
 		}
 	}
+}
+
+func TestGetRoundSecretsWithNilStateProofVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	// ensuring that GetStateProof will receive from cache a participationRecord without StateProof field.
+	prt := registry.cache[id]
+	prt.StateProof = nil
+	registry.cache[id] = prt
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
+	a.ErrorIs(err, ErrStateProofVerifierNotFound)
 }
 
 func TestSecretNotFound(t *testing.T) {

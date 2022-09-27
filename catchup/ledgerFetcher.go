@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-var errNoLedgerForRound = errors.New("No ledger available for given round")
+var errNoLedgerForRound = errors.New("no ledger available for given round")
 
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
@@ -114,7 +114,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
 	}
 
-	// at this point, we've already receieved the response headers. ensure that the
+	// at this point, we've already received the response headers. ensure that the
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {

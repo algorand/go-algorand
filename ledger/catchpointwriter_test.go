@@ -353,6 +353,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 
 	accts := ledgertesting.RandomAccounts(1, false)
 	// force acct to have overflowing number of resources
+	assetIndex := 1000
 	for addr, acct := range accts {
 		if acct.AssetParams == nil {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
@@ -360,7 +361,8 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		}
 		for i := uint64(0); i < 20; i++ {
 			ap := ledgertesting.RandomAssetParams()
-			acct.AssetParams[basics.AssetIndex(i+100)] = ap
+			acct.AssetParams[basics.AssetIndex(assetIndex)] = ap
+			assetIndex++
 		}
 	}
 
