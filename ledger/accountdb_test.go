@@ -533,10 +533,9 @@ func checkCreatables(t *testing.T,
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
 // loop 1: returns: * the second 10 elements
-//   - random sample of elements from the first 10: created changed from true -> false
-//
+//                  * random sample of elements from the first 10: created changed from true -> false
 // loop 2: returns: * the elements 20->30
-//   - random sample of elements from 10->20: created changed from true -> false
+//                  * random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -1128,7 +1127,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 			}
 			_, err := qs.lookupKeysByPrefix(string(prefix), uint64(len(kvPairTestCases)), results, 0)
 			require.NoError(t, err)
-			require.True(t, len(results) == len(kvPairTestCases)+1-length)
+			require.Len(t, results, len(kvPairTestCases)+1-length)
 		})
 	}
 }
@@ -3218,12 +3217,11 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//
-//	A |   1 |      1
-//	B |   1 |      1
-//	A |   2 |      0
-//	B |   3 |      0
-//	C |   3 |      1
+//    A |   1 |      1
+//    B |   1 |      1
+//    A |   2 |      0
+//    B |   3 |      0
+//    C |   3 |      1
 //
 // Ensure
 // - for round 1 A and B returned
