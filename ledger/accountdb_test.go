@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -532,10 +533,13 @@ func checkCreatables(t *testing.T,
 // randomCreatableSampling sets elements to delete from previous iteration
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
-// loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
-// loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
+// loop 1: returns:
+//   - the second 10 elements
+//   - random sample of elements from the first 10: created changed from true -> false
+//
+// loop 2: returns:
+//   - the elements 20->30
+//   - random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -1076,6 +1080,111 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 			benchmarkWriteCatchpointStagingBalancesSub(b, true)
 		})
 	}
+}
+
+type manualBenchmarkResult struct {
+	Name         string        `json:"name"`
+	InMemory     bool          `json:"sqliteInMemory"`
+	N            int           `json:"n"`
+	NumOps       int           `json:"numOps"`
+	OpDuration   time.Duration `json:"opDuration"`
+	NSperOp      int           `json:"nsPerOp"`
+	RealDuration time.Duration `json:"realDuration"`
+}
+
+const benchmarksDirectory = "benchmarks"
+
+func writeBenchmarkResults(t *testing.T, results []manualBenchmarkResult, filename string) {
+	marshal := func(t *testing.T, r interface{}) []byte {
+		writeBytes, err := json.MarshalIndent(r, "", "  ")
+		require.NoError(t, err)
+		return writeBytes
+	}
+	timestamp := func() string {
+		ts := time.Now().UTC().Format(time.RFC3339)
+		return strings.Replace(ts, ":", "", -1) // get rid of offensive colons
+	}
+
+	writeBytes := marshal(t, results)
+	tstamp := timestamp()
+	err := os.WriteFile(
+		filepath.Join(benchmarksDirectory, fmt.Sprintf("%s_%s.json", filename, tstamp)),
+		writeBytes,
+		0644,
+	)
+	require.NoError(t, err)
+}
+
+func manualBoxDbBenchmarkFactory(inMemory bool, N int, dur time.Duration) func(*testing.T) manualBenchmarkResult {
+	return func(t *testing.T) manualBenchmarkResult {
+		realStart := time.Now()
+		dbs, fn := dbOpenTest(t, inMemory)
+		setDbLogging(t, dbs)
+		defer cleanupTestDb(dbs, fn, inMemory)
+
+		// return account data, initialize DB tables from accountsInitTest
+		_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
+
+		qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+		require.NoError(t, err)
+		defer qs.close()
+
+		// make writer to DB
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+
+		// writer is only for kvstore
+		writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+		defer writer.close()
+		require.NoError(t, err)
+
+		bytes := make([]byte, 32)
+		for i := 0; i < N; i++ {
+			_, err := rand.Read(bytes)
+			require.NoError(t, err)
+			appID := basics.AppIndex(rand.Uint64())
+			key := logic.MakeBoxKey(appID, string(bytes))
+			err = writer.upsertKvPair(key, key)
+			require.NoError(t, err)
+		}
+		err = tx.Commit()
+		require.NoError(t, err)
+
+		start := time.Now()
+		var elapsed time.Duration
+		i := 0
+		for ; time.Since(start) < dur; i++ {
+			_, err := rand.Read(bytes)
+			require.NoError(t, err)
+			appID := basics.AppIndex(rand.Uint64())
+			key := logic.MakeBoxKey(appID, string(bytes))
+			results := make(map[string]bool)
+			localStart := time.Now()
+			qs.lookupKeysByPrefix(key, 0, results, 0)
+			elapsed += time.Since(localStart)
+		}
+		return manualBenchmarkResult{"boxDb", inMemory, N, i, elapsed, int(elapsed) / i, time.Since(realStart)}
+	}
+}
+
+func TestManualBoxBenchmark(t *testing.T) {
+	inMemory := true
+	duration := 20 * time.Second
+	sleepInBetween := 10 * time.Second
+	tests := 8
+	results := make([]manualBenchmarkResult, tests)
+
+	base := 10
+	N := 1
+	for exp := 0; exp < tests; exp++ {
+		results[exp] = manualBoxDbBenchmarkFactory(inMemory, N, duration)(t)
+		fmt.Printf("%+v\n", results[exp]) // run with -v flag to see during test
+		if exp < tests-1 {
+			time.Sleep(sleepInBetween)
+		}
+		N *= base
+	}
+	writeBenchmarkResults(t, results, "boxDBreads")
 }
 
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
@@ -3161,11 +3270,12 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//    A |   1 |      1
-//    B |   1 |      1
-//    A |   2 |      0
-//    B |   3 |      0
-//    C |   3 |      1
+//
+//	A |   1 |      1
+//	B |   1 |      1
+//	A |   2 |      0
+//	B |   3 |      0
+//	C |   3 |      1
 //
 // Ensure
 // - for round 1 A and B returned
