@@ -132,22 +132,21 @@ var opDocByName = map[string]string{
 	"swap":    "swaps A and B on stack",
 	"select":  "selects one of two values based on top-of-stack: B if C != 0, else A",
 
-	"concat":         "join A and B",
-	"substring":      "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
-	"substring3":     "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
-	"getbit":         "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
-	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
-	"getbyte":        "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
-	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
-	"extract":        "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
-	"extract3":       "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
-	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
-	"extract_uint32": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
-	"extract_uint64": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
-	"replace2":       "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
-	"replace3":       "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
-	"base64_decode":  "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
-
+	"concat":            "join A and B",
+	"substring":         "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
+	"substring3":        "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
+	"getbit":            "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"setbit":            "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"getbyte":           "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
+	"setbyte":           "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
+	"extract":           "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
+	"extract3":          "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
+	"extract_uint16":    "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
+	"extract_uint32":    "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
+	"extract_uint64":    "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
+	"replace2":          "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+	"replace3":          "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+	"base64_decode":     "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
 	"app_opted_in":      "1 if account A is opted in to application B, else 0",
@@ -193,6 +192,8 @@ var opDocByName = map[string]string{
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
+
+	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
 
 	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
 	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
@@ -269,6 +270,8 @@ var opcodeImmediateNotes = map[string]string{
 
 	"vrf_verify": "{uint8 parameters index}",
 	"block":      "{uint8 block field}",
+
+	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -352,7 +355,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub", "switch"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block", "box_create", "box_extract", "box_replace", "box_del", "box_len", "box_get", "box_put"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }

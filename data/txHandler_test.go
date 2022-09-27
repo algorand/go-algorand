@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -39,9 +40,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
-	b.StopTimer()
-	b.ResetTimer()
+func BenchmarkTxHandlerProcessing(b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
@@ -76,17 +75,20 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 
 	l := ledger
 
-	cfg.TxPoolSize = 20000
+	cfg.TxPoolSize = 75000
 	cfg.EnableProcessBlockStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
-	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
-	for i := 0; i < b.N/numUsers; i++ {
-		for u := 0; u < numUsers; u++ {
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+
+	makeTxns := func(N int) [][]transactions.SignedTxn {
+		ret := make([][]transactions.SignedTxn, 0, N)
+		for u := 0; u < N; u++ {
 			// generate transactions
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender:     addresses[u],
+					Sender:     addresses[u%numUsers],
 					Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
 					FirstValid: 0,
 					LastValid:  basics.Round(proto.MaxTxnLife),
@@ -97,17 +99,50 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 					Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
 				},
 			}
-			signedTx := tx.Sign(secrets[u])
-			signedTransactions = append(signedTransactions, signedTx)
+			signedTx := tx.Sign(secrets[u%numUsers])
+			ret = append(ret, []transactions.SignedTxn{signedTx})
 		}
+		return ret
 	}
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-	b.StartTimer()
-	for _, signedTxn := range signedTransactions {
-		txHandler.processDecoded([]transactions.SignedTxn{signedTxn})
-	}
+
+	b.Run("processDecoded", func(b *testing.B) {
+		signedTransactionGroups := makeTxns(b.N)
+		b.ResetTimer()
+		for i := range signedTransactionGroups {
+			txHandler.processDecoded(signedTransactionGroups[i])
+		}
+	})
+	b.Run("verify.TxnGroup", func(b *testing.B) {
+		signedTransactionGroups := makeTxns(b.N)
+		b.ResetTimer()
+		// make a header including only the fields needed by PrepareGroupContext
+		hdr := bookkeeping.BlockHeader{}
+		hdr.FeeSink = basics.Address{}
+		hdr.RewardsPool = basics.Address{}
+		hdr.CurrentProtocol = protocol.ConsensusCurrentVersion
+		vtc := vtCache{}
+		b.Logf("verifying %d signedTransactionGroups", len(signedTransactionGroups))
+		b.ResetTimer()
+		for i := range signedTransactionGroups {
+			verify.TxnGroup(signedTransactionGroups[i], hdr, vtc, l)
+		}
+	})
 }
+
+// vtCache is a noop VerifiedTransactionCache
+type vtCache struct{}
+
+func (vtCache) Add(txgroup []transactions.SignedTxn, groupCtx *verify.GroupContext) {}
+func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) error {
+	return nil
+}
+func (vtCache) GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
+	return nil
+}
+func (vtCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
+	return nil
+}
+func (vtCache) Pin(txgroup []transactions.SignedTxn) error { return nil }
 
 func BenchmarkTimeAfter(b *testing.B) {
 	b.StopTimer()

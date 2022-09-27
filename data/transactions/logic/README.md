@@ -603,6 +603,7 @@ Account fields used in the `acct_params_get` opcode.
 | `assert` | immediately fail unless A is a non-zero number |
 | `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
 | `retsub` | pop the top instruction from the call stack and branch to it |
+| `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
 
 ### State Access
 
@@ -625,6 +626,13 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
+| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
+| `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
+| `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
+| `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. |
+| `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist |
 
 ### Inner Transactions
 

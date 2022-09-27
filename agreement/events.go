@@ -938,3 +938,8 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 	e.Input.Proposal.validatedAt = d
 	return e
 }
+
+func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
+	e.Input.Proposal.receivedAt = d
+	return e
+}

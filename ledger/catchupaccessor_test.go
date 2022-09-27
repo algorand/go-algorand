@@ -166,7 +166,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLedgerDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
-	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLastestBlockDownload)
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLatestBlockDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateBlocksDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
