@@ -475,17 +475,17 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 
 	// The txns should not be in the cache
 	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, protocol.ConsensusCurrentVersion)
-	require.Equal(t, 1, len(unverifiedGroups))
+	require.Len(t, unverifiedGroups, 1)
 
 	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
-	require.Equal(t, 2, len(unverifiedGroups))
+	require.Len(t, unverifiedGroups, 2)
 
 	_, err = TxnGroup(txnGroups[1], blkHdr, cache, nil)
 	require.NoError(t, err)
 
 	// Only the second txn should be in the cache
 	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
-	require.Equal(t, 1, len(unverifiedGroups))
+	require.Len(t, unverifiedGroups, 1)
 
 	// Fix the signature
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] - 1
@@ -495,7 +495,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 
 	// Both transactions should be in the cache
 	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
-	require.Equal(t, 0, len(unverifiedGroups))
+	require.Len(t, unverifiedGroups, 0)
 
 	// Break a random signature
 	txgIdx := rand.Intn(len(txnGroups))
@@ -515,7 +515,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 
 	// Onle one transaction should not be in cache
 	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
-	require.Equal(t, 1, len(unverifiedGroups))
+	require.Len(t, unverifiedGroups, 1)
 
 	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])
 }

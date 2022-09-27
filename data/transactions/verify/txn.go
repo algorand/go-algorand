@@ -315,6 +315,7 @@ func logicSigSanityCheckBatchVerifyPrep(txn *transactions.SignedTxn, groupIndex 
 	return nil
 }
 
+// logicSigVerify checks that the signature is valid, executing the program.
 func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
