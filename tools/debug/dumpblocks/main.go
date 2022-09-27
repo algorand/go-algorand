@@ -29,8 +29,8 @@ import (
 
 var blockDBfile = flag.String("blockdb", "", "Block DB filename")
 var numBlocks = flag.Int("numblocks", 10000, "Randomly sample this many blocks for training")
-var startRound = flag.Int("start", 0, "Sample blocks starting at this round")
-var endRound = flag.Int("end", 0, "Sample blocks ending at this round")
+var startRound = flag.Int("start", 0, "Sample blocks starting at this round (inclusive)")
+var endRound = flag.Int("end", 0, "Sample blocks ending at this round (inclusive)")
 var outDir = flag.String("outdir", ".", "Write blocks to this directory")
 var randSeed = flag.Int("seed", 0, "Random seed, otherwise will use time")
 
@@ -43,11 +43,16 @@ func getBlockToFile(db *sql.DB, rnd int64) error {
 	return os.WriteFile(fmt.Sprintf("%s/%d.block", *outDir, rnd), buf, 0644)
 }
 
+func usage() {
+	flag.Usage()
+	os.Exit(1)
+}
+
 func main() {
 	flag.Parse()
 	if *blockDBfile == "" {
 		fmt.Println("-blockdb=file required")
-		os.Exit(1)
+		usage()
 	}
 	uri := fmt.Sprintf("file:%s?mode=ro", *blockDBfile)
 	fmt.Println("Opening", uri)
@@ -94,9 +99,9 @@ func main() {
 	}
 
 	if N <= int64(*numBlocks) {
-		// just get all blocks minRound and maxRound
+		// just get all blocks from minRound to maxRound
 		fmt.Printf("Saving all blocks between round %d and %d\n", minRound, maxRound)
-		for i := minRound; i < maxRound; i++ {
+		for i := minRound; i <= maxRound; i++ {
 			err = getBlockToFile(db, i)
 			if err != nil {
 				panic(err)
@@ -108,7 +113,7 @@ func main() {
 
 	fmt.Printf("Loading %d random blocks between round %d and %d\n", *numBlocks, minRound, maxRound)
 	for i := 0; i < *numBlocks; i++ {
-		round := minRound + rand.Int63n(N)
+		round := minRound + rand.Int63n(N) + 1
 		err = getBlockToFile(db, round)
 		if err != nil {
 			panic(err)
