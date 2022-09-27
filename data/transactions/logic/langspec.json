@@ -2193,7 +2193,7 @@
       "Returns": "U",
       "Size": 1,
       "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
-      "DocExtra": "Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
       "Groups": [
         "State Access"
       ]

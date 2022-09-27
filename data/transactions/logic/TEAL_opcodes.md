@@ -1351,7 +1351,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v8
 - Mode: Application
 
-Newly created boxes are filled with 0 bytes. Boxes are unchanged by `box_create` if they already exist.
+Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
 
 ## box_extract
 
