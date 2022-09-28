@@ -256,12 +256,14 @@ func (s *testWorkerStubs) advanceLatestAndStateProofs(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
-		interval := config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval
-		if r%interval == 0 {
-			s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound + basics.Round(interval))
-			continue
-		}
+		interval := basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+		tmp := s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic]
+		blk := s.blocks[s.latest]
+		if blk.Round%interval == 0 && tmp.StateProofNextRound-interval < blk.Round {
+			tmp.StateProofNextRound += interval
+			s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic] = tmp
+		}
 	}
 }
 
@@ -585,17 +587,34 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestAndStateProofs(1 * proto.StateProofInterval) // going to rnd 256
+	s.advanceLatestAndStateProofs(proto.StateProofInterval) // going to rnd 256 // the stproof is in 512
 	require.Zero(t, s.GetNumDeletedKeys())
 
-	s.advanceLatestAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768
+	s.advanceLatestAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768.
 
-	// chose 513 because that is the next round, and the signer must've passed through the deletion function by now.
+	ctx, cncl := context.WithTimeout(context.Background(), time.Second*5)
+	defer cncl()
+
+	// this busy wait shouldn't take long, the signer starts from round 512...
 	for w.lastSignedBlock() < 513 {
-		time.Sleep(time.Millisecond * 100)
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "test ran out of time.")
+			t.Fail()
+			return
+		default:
+			time.Sleep(time.Second)
+		}
 	}
-
 	require.Equal(t, nParticipants, s.GetNumDeletedKeys())
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	require.NotZero(t, len(s.deletedStateProofKeys))
+	for _, round := range s.deletedStateProofKeys {
+		require.LessOrEqual(t, int(round), 512)
+	}
 }
 
 func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
