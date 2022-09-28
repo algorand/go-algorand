@@ -1235,7 +1235,7 @@ func TestListCreatables(t *testing.T) {
 	// sync with the database. This has deletes synced to the database.
 	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
-	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
+	// get new creatables in the cache. There will be deleted in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
