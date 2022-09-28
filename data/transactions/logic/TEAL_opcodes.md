@@ -627,7 +627,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 ## dupn n
 
 - Opcode: 0x47 {uint8 copy count}
-- Stack: ..., A &rarr; ..., A, b[N copies of A]
+- Stack: ..., A &rarr; ..., A, [N copies of A]
 - duplicate A, N times
 - Availability: v8
 

@@ -501,7 +501,7 @@ var OpSpecs = []OpSpec{
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
 	{0x45, "bury", opBury, proto("a:"), fpVersion, immediates("n").typed(typeBury)},
 	{0x46, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, immediates("n").typed(typePopN).trust()},
-	{0x47, "dupn", opDupN, proto("a:", "", "A, b[N copies of A]"), fpVersion, immediates("n").typed(typeDupN).trust()},
+	{0x47, "dupn", opDupN, proto("a:", "", "A, [N copies of A]"), fpVersion, immediates("n").typed(typeDupN).trust()},
 	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
 	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, typed(typeDup)},
 	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, typed(typeDupTwo)},
