@@ -1163,8 +1163,8 @@ func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory
 
 		start := time.Now()
 		var elapsed time.Duration
-		i := 0
-		for ; time.Since(start) < dur && time.Since(realStart) < maxManualDuration; i++ {
+
+		for i := 0; time.Since(start) < dur && time.Since(realStart) < maxManualDuration; i++ {
 			_, err := rand.Read(bytes)
 			require.NoError(t, err)
 			appID := basics.AppIndex(rand.Uint64())
