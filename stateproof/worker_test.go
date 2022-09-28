@@ -241,7 +241,6 @@ func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.Signe
 func (s *testWorkerStubs) RegisterHandlers([]network.TaggedMessageHandler) {
 }
 
-// TODO: understand why using the other function fails multiple tests.
 func (s *testWorkerStubs) advanceLatestWithoutStateProof(delta uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,6 +250,7 @@ func (s *testWorkerStubs) advanceLatestWithoutStateProof(delta uint64) {
 	}
 }
 
+// used to simulate to workers that rounds have advanced, and stateproofs were created.
 func (s *testWorkerStubs) advanceLatestAndStateProofs(delta uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -586,10 +586,8 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatestAndStateProofs(1 * proto.StateProofInterval) // going to rnd 256
-	// Expect all signatures to be broadcast.
-
 	require.Zero(t, s.GetNumDeletedKeys())
-	w.signStateProof(s.blocks[basics.Round(proto.StateProofInterval)])
+
 	s.advanceLatestAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768
 
 	// chose 513 because that is the next round, and the signer must've passed through the deletion function by now.
