@@ -1015,8 +1015,8 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-			return fmt.Errorf("account %v balance %d below min %d. Details: %+v",
-				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.AccountBaseData)
+			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
+				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.TotalAssets)
 		}
 
 		// Check if we have exceeded the maximum minimum balance
