@@ -5050,10 +5050,14 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data *[]v
 
 	defer insertStmt.Close()
 
-	// TODO: wrap with db retry?
 	for _, commitData := range *data {
 		verificationData := commitData.verificationData
-		_, err := insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+		f := func() error {
+			_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+			return err
+		}
+
+		err = db.Retry(f)
 		if err != nil {
 			return err
 		}
