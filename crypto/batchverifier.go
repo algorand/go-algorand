@@ -53,6 +53,7 @@ const minBatchVerifierAlloc = 16
 // Batch verifications errors
 var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
+	errInvalidFailedSlice      = errors.New("failed slice size is not equal to the number of enqueued signatures")
 )
 
 //export ed25519_randombytes_unsafe
@@ -119,7 +120,31 @@ func (b *BatchVerifier) Verify() error {
 	for i, m := range b.messages {
 		messages[i] = HashRep(m)
 	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
+	if batchVerificationImpl(messages, b.publicKeys, b.signatures, nil) {
+		return nil
+	}
+	return ErrBatchVerificationFailed
+
+}
+
+// VerifyWithFeedback verifies that all the signatures are valid.
+// failed slice should have len equal to GetNumberOfEnqueuedSignatures
+// if all sigs are valid, nil will be returned
+// if some txns are invalid, true will be set at the appropriate index in failed
+func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
+	if b.GetNumberOfEnqueuedSignatures() == 0 {
+		return nil
+	}
+
+	if len(failed) != b.GetNumberOfEnqueuedSignatures() {
+		return errInvalidFailedSlice
+	}
+
+	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+	for i, m := range b.messages {
+		messages[i] = HashRep(m)
+	}
+	if batchVerificationImpl(messages, b.publicKeys, b.signatures, failed) {
 		return nil
 	}
 	return ErrBatchVerificationFailed
@@ -128,7 +153,8 @@ func (b *BatchVerifier) Verify() error {
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) bool {
+// otherwise, returns an error, and sets the indexes of the failed sigs in failed
+func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature, failed []bool) bool {
 
 	numberOfSignatures := len(messages)
 
@@ -163,6 +189,11 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
-
+	if allValid != 0 && failed != nil {
+		for i := 0; i < numberOfSignatures; i++ {
+			cint := *(*C.int)(unsafe.Pointer(uintptr(valid) + uintptr(i*C.sizeof_int)))
+			failed[i] = (cint == 0)
+		}
+	}
 	return allValid == 0
 }
