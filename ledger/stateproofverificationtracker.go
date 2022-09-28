@@ -166,7 +166,9 @@ func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitC
 }
 
 func (spt *stateProofVerificationTracker) close() {
-	spt.dbQueries.lookupStateProofVerificationData.Close()
+	if spt.dbQueries.lookupStateProofVerificationData != nil {
+		spt.dbQueries.lookupStateProofVerificationData.Close()
+	}
 }
 
 // TODO: additional data in error messages
