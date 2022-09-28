@@ -69,14 +69,11 @@ func (spw *Worker) signer(latest basics.Round) {
 	}
 }
 
+// attempts to delete any key that its first valid is <= (prevStateproofRound - lifetime)
 func (spw *Worker) attemptKeyDeletionPriorToRound(prevStateproofRound basics.Round) {
 	for _, key := range spw.accts.StateProofKeys(prevStateproofRound) {
-		keyContext := key.StateProofSecrets.SignerContext
-		if basics.Round(keyContext.FirstValid+keyContext.KeyLifetime) > prevStateproofRound {
-			continue
-		}
-
-		if err := spw.accts.DeleteStateProofKey(key.ParticipationID, prevStateproofRound); err != nil {
+		latestRndToDelete := prevStateproofRound - basics.Round(key.StateProofSecrets.SignerContext.KeyLifetime)
+		if err := spw.accts.DeleteStateProofKey(key.ParticipationID, latestRndToDelete); err != nil {
 			spw.log.Warnf("spw.signBlock(%d): Couldn't delete StateProof keys: %v", prevStateproofRound, err)
 		}
 	}
