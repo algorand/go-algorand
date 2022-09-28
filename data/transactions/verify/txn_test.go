@@ -57,10 +57,6 @@ func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) er
 	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
 		return err
 	}
-
-	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
 	return batchVerifier.Verify()
 }
 

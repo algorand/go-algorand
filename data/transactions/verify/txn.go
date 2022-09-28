@@ -208,13 +208,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return nil
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigBatchPrep(s.Txn,
-			crypto.Digest(s.Authorizer()),
-			s.Msig,
-			batchVerifier); ok {
-			return nil
+		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
+			return fmt.Errorf("multisig validation failed: %w", err)
 		}
-		return errors.New("multisig validation failed")
+		return nil
 	}
 	if hasLogicSig {
 		return logicSigVerify(s, txnIdx, groupCtx)
@@ -304,8 +301,8 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		batchVerifier.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
 		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
-			return errors.New("logic multisig validation failed")
+		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
+			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
 	}
 	return nil
