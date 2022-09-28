@@ -3598,6 +3598,51 @@ func BenchmarkUintCmp(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkDupnProto(b *testing.B) {
+	benches := [][]string{
+		{"dupn1", `
+ b main
+f:
+ proto 1 1
+ byte "repeat"
+ dupn 0						// return 1 string
+ retsub
+main:
+ int 777; dupn 0;			// start with 1 int on stack
+`, "callsub f", "len"},
+		{"dupn10", `
+ b main
+f:
+ proto 10 10
+ byte "repeat"
+ dupn 9						// return 10 strings
+ retsub
+main:
+ int 777; dupn 9; 			// start with 10 ints on stack
+`, "callsub f", strings.Repeat("pop;", 9) + "len"},
+		{"dupn100", `
+ b main
+f:
+ proto 100 100
+ byte "repeat"
+ dupn 99						// return 100 strings
+ retsub
+main:
+ int 777; dupn 99; 			// start with 100 ints on stack
+`, "callsub f", strings.Repeat("pop;", 99) + "len"},
+		{"dp1", "int 777", "dupn 1; popn 1", ""},
+		{"dp10", "int 777", "dupn 10; popn 10", ""},
+		{"dp100", "int 777", "dupn 100; popn 100", ""},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
 func BenchmarkByteLogic(b *testing.B) {
 	benches := [][]string{
 		{"b&", "", "byte 0x012345678901feab; byte 0x01ffffffffffffff; b&; pop", "int 1"},
