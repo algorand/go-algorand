@@ -1115,7 +1115,7 @@ func writeBenchmarkResults(t *testing.T, results []manualBenchmarkResult, filena
 	require.NoError(t, err)
 }
 
-var maxManualDuration = time.Second * 3600
+var maxManualDuration = 5400 * time.Second
 
 func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory bool, N int, dur time.Duration) func(*testing.T) manualBenchmarkResult {
 	return func(t *testing.T) manualBenchmarkResult {
@@ -1150,7 +1150,7 @@ func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory
 			err = writer.upsertKvPair(key, key)
 			require.NoError(t, err)
 		}
-		N = i + 1 // in case of early breakout above
+		N = i // in case of early breakout above
 
 		err = tx.Commit()
 		require.NoError(t, err)
@@ -1164,7 +1164,8 @@ func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory
 		start := time.Now()
 		var elapsed time.Duration
 
-		for i := 0; time.Since(start) < dur && time.Since(realStart) < maxManualDuration; i++ {
+		i = 0
+		for ; time.Since(start) < dur && time.Since(realStart) < maxManualDuration; i++ {
 			_, err := rand.Read(bytes)
 			require.NoError(t, err)
 			appID := basics.AppIndex(rand.Uint64())

@@ -1,0 +1,155 @@
+[
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1000,
+    "numOps": 2745784,
+    "opDuration": 17260491976,
+    "nsPerOp": 6286,
+    "realDuration": 20101036732
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 2000,
+    "numOps": 2804435,
+    "opDuration": 17259833055,
+    "nsPerOp": 6154,
+    "realDuration": 20127364556
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 4000,
+    "numOps": 2769622,
+    "opDuration": 17278552980,
+    "nsPerOp": 6238,
+    "realDuration": 20137650553
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 8000,
+    "numOps": 2710042,
+    "opDuration": 17316298755,
+    "nsPerOp": 6389,
+    "realDuration": 20153726218
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 16000,
+    "numOps": 2586858,
+    "opDuration": 17355708484,
+    "nsPerOp": 6709,
+    "realDuration": 20178926751
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 32000,
+    "numOps": 2491982,
+    "opDuration": 17420482689,
+    "nsPerOp": 6990,
+    "realDuration": 20307697038
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 64000,
+    "numOps": 2265874,
+    "opDuration": 17646042896,
+    "nsPerOp": 7787,
+    "realDuration": 20522042147
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 128000,
+    "numOps": 2222204,
+    "opDuration": 17745397910,
+    "nsPerOp": 7985,
+    "realDuration": 21054057017
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 256000,
+    "numOps": 2124847,
+    "opDuration": 17789339205,
+    "nsPerOp": 8372,
+    "realDuration": 22251521281
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 512000,
+    "numOps": 2071310,
+    "opDuration": 17885549806,
+    "nsPerOp": 8634,
+    "realDuration": 24776642143
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1024000,
+    "numOps": 1971626,
+    "opDuration": 17978058444,
+    "nsPerOp": 9118,
+    "realDuration": 31642886647
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 2048000,
+    "numOps": 1862746,
+    "opDuration": 18064430747,
+    "nsPerOp": 9697,
+    "realDuration": 41497983009
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 4096000,
+    "numOps": 1808003,
+    "opDuration": 18126865232,
+    "nsPerOp": 10025,
+    "realDuration": 71690072994
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 8192000,
+    "numOps": 1748801,
+    "opDuration": 18153235184,
+    "nsPerOp": 10380,
+    "realDuration": 139062471967
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 16384000,
+    "numOps": 1754659,
+    "opDuration": 18204431507,
+    "nsPerOp": 10374,
+    "realDuration": 301887734559
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 32768000,
+    "numOps": 94422,
+    "opDuration": 19823406752,
+    "nsPerOp": 209944,
+    "realDuration": 922515954211
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 65536000,
+    "numOps": 65826,
+    "opDuration": 19826177883,
+    "nsPerOp": 301190,
+    "realDuration": 5123423081712
+  }
+]
