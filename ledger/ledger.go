@@ -454,11 +454,12 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
-// StateProofVerificationData returns the data required to verify state proofs
-func (l *Ledger) StateProofVerificationData(rnd basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	// TODO: input check
-	// TODO: locks
-	return l.stateProofVerification.LookupVerificationData(rnd)
+// StateProofVerificationData returns the data required to verify the state proof whose last attested round is
+// stateProofLastAttestedRound.
+func (l *Ledger) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.stateProofVerification.LookupVerificationData(stateProofLastAttestedRound)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
