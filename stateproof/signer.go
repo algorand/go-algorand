@@ -41,7 +41,7 @@ type sigFromAddr struct {
 func (spw *Worker) signer(latest basics.Round) {
 	nextRnd := spw.nextStateProofRound(latest)
 	// at this point there isn't any known stateproof by the signer, set as 0 to ensure no keys will be deleted.
-	prevStateProof := basics.Round(0)
+	prevStateProof := nextRnd
 	for { // Start signing StateProofs from nextRnd onwards
 		select {
 		case <-spw.ledger.Wait(nextRnd):
