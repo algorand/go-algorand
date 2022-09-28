@@ -1185,18 +1185,18 @@ func manualBoxDbBenchmarkFactory(testName string, customLookup *string, inMemory
 }
 
 func TestManualBoxBenchmark(t *testing.T) {
-	testName := "boxLOOKUP_inMemory"
+	testName := "boxLOOKUP_onFileSystem"
 	lookup := "SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';"
 	var customLookup *string = &lookup
-	inMemory := true
+	inMemory := false
 	duration := 20 * time.Second
 
 	sleepInBetween := 10 * time.Second
-	tests := 8
+	tests := 6
 	results := make([]manualBenchmarkResult, tests)
 
 	base := 10
-	N := 1
+	N := 1000
 	for exp := 0; exp < tests; exp++ {
 		results[exp] = manualBoxDbBenchmarkFactory(testName, customLookup, inMemory, N, duration)(t)
 		fmt.Printf("%+v\n", results[exp]) // run with -v flag to see during test
