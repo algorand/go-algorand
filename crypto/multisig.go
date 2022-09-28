@@ -234,7 +234,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 	return true, nil
 }
 
-// MultisigBatchVerify verifies an assembled MultisigSig.
+// MultisigBatchVerifyPrep verifies an assembled MultisigSig.
 // it is the caller responsibility to call batchVerifier.verify()
 func MultisigBatchVerifyPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
 	verified = false
