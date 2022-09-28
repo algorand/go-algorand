@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -129,7 +128,7 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	copy(dcc.stateProofVerificationCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
 
 	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
-	if dcc.stateProofVerificationLatestDeleteDataIndex > 0 {
+	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
 		dcc.stateProofVerificationDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex]
 	}
 
@@ -142,7 +141,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 		return err
 	}
 
-	if dcc.stateProofVerificationLatestDeleteDataIndex > 0 {
+	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
 		err = deleteOldStateProofVerificationData(ctx, tx, dcc.stateProofVerificationDeleteData.stateProofNextRound)
 	}
 
