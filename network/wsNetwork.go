@@ -53,7 +53,7 @@ import (
 )
 
 const incomingThreads = 20
-const outgoingThreads = 15
+const outgoingThreads = 35
 const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
@@ -432,9 +432,17 @@ type WebsocketNetwork struct {
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
 
-	sendScheduler     sendScheduler
-	sendSchedulerMu   deadlock.Mutex
-	sendSchedulerCond sync.Cond
+	/*
+		sendScheduler     sendScheduler
+		sendSchedulerMu   deadlock.Mutex
+		sendSchedulerCond sync.Cond
+	*/
+	// sent gets peers returned after they send
+	schedulerSent chan *wsPeer
+	// available gets peers making themselves available with pending sends
+	schedulerAvailable chan *wsPeer
+	// next is the queue of peers outgoing from here next to send on
+	schedulerNext chan *wsPeer
 }
 
 const (
@@ -831,11 +839,17 @@ func (wn *WebsocketNetwork) Start() {
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
 		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
 	}
-	wn.sendSchedulerCond.L = &wn.sendSchedulerMu
+	//wn.sendSchedulerCond.L = &wn.sendSchedulerMu
+	wn.schedulerSent = make(chan *wsPeer, 50)
+	wn.schedulerAvailable = make(chan *wsPeer, 50)
+	wn.schedulerNext = make(chan *wsPeer, 50)
 	for i := 0; i < outgoingThreads; i++ {
 		wn.wg.Add(1)
-		go wn.sendSchedulerThread()
+		go wn.sendSchedulerThread(wn.schedulerNext, wn.schedulerSent)
 	}
+	wn.wg.Add(1)
+	go wn.sendSchedulerPrioQueueThread()
+
 	wn.wg.Add(1)
 	go wn.broadcastThread()
 	if wn.prioScheme != nil {
@@ -894,9 +908,11 @@ func (wn *WebsocketNetwork) Stop() {
 		listenAddr = wn.listener.Addr().String()
 	}
 	wn.ctxCancel()
-	wn.sendSchedulerMu.Lock()
-	wn.sendSchedulerCond.Broadcast()
-	wn.sendSchedulerMu.Unlock()
+	/*
+		wn.sendSchedulerMu.Lock()
+		wn.sendSchedulerCond.Broadcast()
+		wn.sendSchedulerMu.Unlock()
+	*/
 	ctx, timeoutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer timeoutCancel()
 	err := wn.server.Shutdown(ctx)
@@ -2385,46 +2401,147 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 }
 
 func (wn *WebsocketNetwork) makePeerSendable(wp *wsPeer) {
-	wn.sendSchedulerMu.Lock()
-	defer wn.sendSchedulerMu.Unlock()
-	didAdd := wn.sendScheduler.add(wp)
-	if didAdd {
-		wn.sendSchedulerCond.Broadcast()
+	//wn.log.Infof("wn %p wp enq %p", wn, wp)
+	wn.schedulerAvailable <- wp
+	/*
+		wn.sendSchedulerMu.Lock()
+		defer wn.sendSchedulerMu.Unlock()
+		didAdd := wn.sendScheduler.add(wp)
+		if didAdd {
+			wn.sendSchedulerCond.Broadcast()
+		}
+	*/
+}
+
+// sendSchedulerPrioQueueThread contains the sendScheduler prio heap
+//
+func (wn *WebsocketNetwork) sendSchedulerPrioQueueThread() {
+	defer wn.wg.Done()
+	// sent gets peers returned after they send
+	var sent <-chan *wsPeer = wn.schedulerSent
+	// available gets peers making themselves available with pending sends
+	var available <-chan *wsPeer = wn.schedulerAvailable
+	// next is the queue of peers outgoing from here next to send on
+	var next chan<- *wsPeer = wn.schedulerNext
+	defer close(next)
+
+	var sendScheduler sendScheduler
+	//var inScheduler map[*wsPeer]bool = make(map[*wsPeer]bool)
+	for {
+		var wp *wsPeer
+		var toSend *wsPeer
+		wp = nil
+		// read as much input as we can without blocking
+		select {
+		case wp = <-sent:
+			if wp.hasWritesPending() {
+				//wn.log.Infof("wn %p wp sent %p more", wn, wp)
+				sendScheduler.add(wp)
+			} else {
+				//wn.log.Infof("wn %p wp sent %p done", wn, wp)
+				//delete(inScheduler, wp)
+				wp.inSendScheduler = false
+			}
+			continue
+		case wp = <-available:
+			if !wp.inSendScheduler {
+				//wn.log.Infof("wn %p wp avail %p", wn, wp)
+				sendScheduler.add(wp)
+				//inScheduler[wp] = true
+				wp.inSendScheduler = true
+			} else {
+				//wn.log.Infof("wn %p wp avail %p DUP", wn, wp)
+			}
+			continue
+		case <-wn.ctx.Done():
+			return
+		default:
+		}
+		toSend = sendScheduler.next()
+		if toSend != nil {
+			//wn.log.Infof("wn %p wp sched %p", wn, toSend)
+			next <- toSend
+			continue
+		}
+		//wn.log.Infof("wn %p no sched", wn)
+
+		// reads consumed and nothing to send, block on input
+		// blocking check for input
+		select {
+		case wp = <-sent:
+			if wp.hasWritesPending() {
+				//wn.log.Infof("wn %p wp sent %p more 2", wn, wp)
+				sendScheduler.add(wp)
+			} else {
+				//wn.log.Infof("wn %p wp sent %p done 2", wn, wp)
+				//delete(inScheduler, wp)
+				wp.inSendScheduler = false
+			}
+		case wp = <-available:
+			if !wp.inSendScheduler {
+				//wn.log.Infof("wn %p wp avail %p 2", wn, wp)
+				sendScheduler.add(wp)
+				//inScheduler[wp] = true
+				wp.inSendScheduler = true
+			} else {
+				//wn.log.Infof("wn %p wp avail %p DUP 2", wn, wp)
+			}
+		case <-wn.ctx.Done():
+			return
+		}
 	}
 }
 
-func (wn *WebsocketNetwork) sendSchedulerThread() {
+// sendSchedulerThread absorbs the time of making a blocking write to a network socket
+// next is the queue of peers to send to
+// sent gets the peer return once it is done
+func (wn *WebsocketNetwork) sendSchedulerThread(next <-chan *wsPeer, sent chan<- *wsPeer) {
 	defer wn.wg.Done()
-	var wp *wsPeer
+	//var wp *wsPeer
 	for {
-		wn.sendSchedulerMu.Lock()
-		if wp != nil {
-			wp.inSendScheduler = false
-			// previous round's peer
-			if wp.hasWritesPending() {
-				wn.sendScheduler.add(wp)
+		/*
+			wn.sendSchedulerMu.Lock()
+			if wp != nil {
+				wp.inSendScheduler = false
+				// previous round's peer
+				if wp.hasWritesPending() {
+					wn.sendScheduler.add(wp)
+				}
+				wp = nil
 			}
-			wp = nil
-		}
-		for wp == nil {
-			select {
-			case <-wn.ctx.Done():
-				wn.sendSchedulerMu.Unlock()
+			for wp == nil {
+				select {
+				case <-wn.ctx.Done():
+					wn.sendSchedulerMu.Unlock()
+					return
+				default:
+				}
+				wp = wn.sendScheduler.next()
+				if wp == nil {
+					wn.sendSchedulerCond.Wait()
+				}
+			}
+			wn.sendSchedulerMu.Unlock()
+		*/
+		select {
+		case <-wn.ctx.Done():
+			//wn.log.Infof("wn %p sendScheduler Done", wn)
+			return
+		case wp, ok := <-next:
+			if !ok {
+				//wn.log.Infof("wn %p next close", wn)
 				return
-			default:
 			}
-			wp = wn.sendScheduler.next()
-			if wp == nil {
-				wn.sendSchedulerCond.Wait()
+			writeErr := wp.writeOnePending()
+			if writeErr != disconnectReasonNone {
+				//wn.log.Infof("wn %p wp send %p close", wn, wp)
+				// TODO: move this inside writeOnePending?
+				wp.internalClose(writeErr)
+				wp = nil
+			} else {
+				//wn.log.Infof("wn %p wp send %p sent", wn, wp)
+				sent <- wp
 			}
-		}
-		wn.sendSchedulerMu.Unlock()
-		writeErr := wp.writeOnePending()
-		if writeErr != disconnectReasonNone {
-			// TODO: move this inside writeOnePending?
-			wp.internalClose(writeErr)
-			wp = nil
-			continue
 		}
 	}
 }

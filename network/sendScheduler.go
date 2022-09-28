@@ -20,16 +20,18 @@ import (
 	"container/heap"
 )
 
+// sendScheduler is a priority heap of wsPeer
+// sendScheduler is sorted with relays first, high stake nodes next, then other peers
 type sendScheduler struct {
 	peers []*wsPeer
 }
 
 func (sched *sendScheduler) add(wp *wsPeer) bool {
-	if wp.inSendScheduler {
-		return false
-	}
+	// if wp.inSendScheduler {
+	// 	return false
+	// }
 	heap.Push(sched, wp)
-	wp.inSendScheduler = true
+	//wp.inSendScheduler = true
 	return true
 }
 func (sched *sendScheduler) next() *wsPeer {
