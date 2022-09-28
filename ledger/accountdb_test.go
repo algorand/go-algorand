@@ -1081,6 +1081,9 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 }
 
 func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testCases := []struct {
 		input            []byte
 		outputPrefix     []byte
@@ -1102,6 +1105,9 @@ func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
 }
 
 func TestLookupKeysByPrefix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	dbs, fn := dbOpenTest(t, false)
 	setDbLogging(t, dbs)
 	defer cleanupTestDb(dbs, fn, false)
@@ -1149,7 +1155,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	tx.Commit()
+	err = tx.Commit()
+	require.NoError(t, err)
 	writer.close()
 
 	testCases := []struct {
