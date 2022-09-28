@@ -380,13 +380,12 @@ func TestFrameAccess(t *testing.T) {
 	testPanics(t, notrack(source), fpVersion, "frame_bury above stack")
 }
 
-func TestFrameDigAtStart(t *testing.T) {
+func TestFrameAccesAtStart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testPanics(t, `
-        frame_dig 1
-`, fpVersion, "frame_dig with empty callstack")
+	testPanics(t, "frame_dig 1", fpVersion, "frame_dig with empty callstack")
+	testPanics(t, "int 7; frame_bury 1", fpVersion, "frame_bury with empty callstack")
 }
 
 func TestFrameAccessAboveStack(t *testing.T) {
