@@ -1088,7 +1088,7 @@ func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
 	}{
 		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
 		{input: []byte{0xFF}, outputPrefix: []byte{0xFF}, outputPrefixIncr: nil},
-		{input: []byte{0xFE, 0xFF}, outputPrefix: []byte{0xFE, 0xFF}, outputPrefixIncr: []byte{0xFF, 0x00}},
+		{input: []byte{0xFE, 0xFF}, outputPrefix: []byte{0xFE, 0xFF}, outputPrefixIncr: []byte{0xFF}},
 		{input: []byte{0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFF}, outputPrefixIncr: nil},
 		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
 		{input: []byte{}, outputPrefix: []byte{}, outputPrefixIncr: nil},
@@ -1170,14 +1170,14 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	defer qs.close()
 
 	currentDBSize := 0
-	nextDBSize := 4
-	increment := 4
+	nextDBSize := 2
+	increment := 2
 
 	nameBuffer := make([]byte, 5)
 	valueBuffer := make([]byte, 5)
 
-	// from 2^2 -> 2^4 -> ... -> 2^24 sized DB
-	for bIndex := 0; bIndex < 12; bIndex++ {
+	// from 2^1 -> 2^2 -> ... -> 2^22 sized DB
+	for bIndex := 0; bIndex < 22; bIndex++ {
 		// make writer to DB
 		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
