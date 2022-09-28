@@ -46,14 +46,14 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt         *sql.Stmt
-	lookupStmt                 *sql.Stmt
-	lookupResourcesStmt        *sql.Stmt
-	lookupAllResourcesStmt     *sql.Stmt
-	lookupKvPairStmt           *sql.Stmt
-	lookupKeysByPrefixStmt     *sql.Stmt
-	lookupKeysByPrefixAllFStmt *sql.Stmt
-	lookupCreatorStmt          *sql.Stmt
+	listCreatablesStmt                *sql.Stmt
+	lookupStmt                        *sql.Stmt
+	lookupResourcesStmt               *sql.Stmt
+	lookupAllResourcesStmt            *sql.Stmt
+	lookupKvPairStmt                  *sql.Stmt
+	lookupKeysByPrefixTypicalStmt     *sql.Stmt
+	lookupKeysByPrefixEmptyOrAllFStmt *sql.Stmt
+	lookupCreatorStmt                 *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -2593,12 +2593,12 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixTypicalStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixAllFStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixEmptyOrAllFStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2688,19 +2688,24 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err
 	return
 }
 
-// keyPrefixIntervalPreprocessing is implemented to generate an interval for DB query: lookupKeysByPrefixStmt
+// keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
 // Such DB query was designed this way, to trigger the binary search optimization in SQLITE3.
 // The DB comparison for blob typed primary key is lexicographic, i.e., byte by byte.
 // In this way, we can introduce an interval that a primary key should be >= some prefix, < some prefix increment.
 // A corner case to consider is that, the prefix has last byte 0xFF, or the prefix is full of 0xFF.
 // The first case can be solved by carrying, e.g., prefix = 0x1EFF -> 0x1F00
 // The second case can be solved by disregarding the upper limit, i.e., prefix = 0xFFFF -> interval being >= 0xFF
+// Another corner case to consider is empty byte, []byte{} or nil.
+// In both cases, the results are interval >= "", i.e., returns []byte{} for prefix, and nil for prefixIncr.
 func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
+	if prefix == nil {
+		prefix = []byte{}
+	}
 	prefixIncr := make([]byte, len(prefix))
 	copy(prefixIncr, prefix)
 	for i := len(prefix) - 1; i >= 0; i-- {
 		currentByteIncr := int(prefix[i]) + 1
-		if currentByteIncr >= 0xFF {
+		if currentByteIncr > 0xFF {
 			prefixIncr[i] = 0
 			continue
 		}
@@ -2715,9 +2720,9 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		prefixBytes, prefixIncrBytes := keyPrefixIntervalPreprocessing([]byte(prefix))
 		var rows *sql.Rows
 		if prefixIncrBytes != nil {
-			rows, err = qs.lookupKeysByPrefixStmt.Query(prefixBytes, prefixIncrBytes)
+			rows, err = qs.lookupKeysByPrefixTypicalStmt.Query(prefixBytes, prefixIncrBytes)
 		} else {
-			rows, err = qs.lookupKeysByPrefixAllFStmt.Query(prefixBytes)
+			rows, err = qs.lookupKeysByPrefixEmptyOrAllFStmt.Query(prefixBytes)
 		}
 		if err != nil {
 			return err
@@ -3079,8 +3084,8 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
-		&qs.lookupKeysByPrefixStmt,
-		&qs.lookupKeysByPrefixAllFStmt,
+		&qs.lookupKeysByPrefixTypicalStmt,
+		&qs.lookupKeysByPrefixEmptyOrAllFStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
@@ -4139,6 +4144,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+//
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -4328,6 +4334,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
+//
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 

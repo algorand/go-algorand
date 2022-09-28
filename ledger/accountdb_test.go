@@ -533,9 +533,10 @@ func checkCreatables(t *testing.T,
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
 // loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
+//   - random sample of elements from the first 10: created changed from true -> false
+//
 // loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
+//   - random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -1075,6 +1076,27 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 			b.N = size
 			benchmarkWriteCatchpointStagingBalancesSub(b, true)
 		})
+	}
+}
+
+func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
+	testCases := []struct {
+		input            []byte
+		outputPrefix     []byte
+		outputPrefixIncr []byte
+	}{
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{0xFF}, outputPrefix: []byte{0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xFE, 0xFF}, outputPrefix: []byte{0xFE, 0xFF}, outputPrefixIncr: []byte{0xFF, 0x00}},
+		{input: []byte{0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{}, outputPrefix: []byte{}, outputPrefixIncr: nil},
+		{input: nil, outputPrefix: []byte{}, outputPrefixIncr: nil},
+	}
+	for _, tc := range testCases {
+		actualOutputPrefix, actualOutputPrefixIncr := keyPrefixIntervalPreprocessing(tc.input)
+		require.Equal(t, tc.outputPrefix, actualOutputPrefix)
+		require.Equal(t, tc.outputPrefixIncr, actualOutputPrefixIncr)
 	}
 }
 
@@ -3217,11 +3239,12 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//    A |   1 |      1
-//    B |   1 |      1
-//    A |   2 |      0
-//    B |   3 |      0
-//    C |   3 |      1
+//
+//	A |   1 |      1
+//	B |   1 |      1
+//	A |   2 |      0
+//	B |   3 |      0
+//	C |   3 |      1
 //
 // Ensure
 // - for round 1 A and B returned
