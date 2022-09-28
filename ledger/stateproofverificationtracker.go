@@ -170,7 +170,6 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 // TODO: additional data in error messages
-// TODO: caching mechanism for oldest data?
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	spt.stateProofVerificationMu.RLock()
