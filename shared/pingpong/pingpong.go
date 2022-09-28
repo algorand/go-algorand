@@ -182,7 +182,7 @@ func (pps *WorkerState) PrepareAccounts(ac *libgoal.Client) (err error) {
 	if pps.cfg.NumApp > 0 {
 		err = pps.prepareApps(ac)
 		if err != nil {
-			return
+			panic(err.Error())
 		}
 	}
 	return
