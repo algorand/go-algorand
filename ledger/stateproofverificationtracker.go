@@ -36,12 +36,12 @@ var (
 )
 
 type verificationDeleteData struct {
-	generatedRound      basics.Round
+	confirmedRound      basics.Round
 	stateProofNextRound basics.Round
 }
 
 type verificationCommitData struct {
-	generatedRound   basics.Round
+	confirmedRound   basics.Round
 	verificationData ledgercore.StateProofVerificationData
 }
 
@@ -189,12 +189,11 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
 }
 
-// TODO: How to combine these two functions using interfaces?
 func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
 	latestCommittedDataIndex := -1
 
 	for index, data := range spt.trackedCommitData {
-		if data.generatedRound <= committedRound {
+		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
 		}
 	}
@@ -206,7 +205,7 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	latestCommittedDataIndex := -1
 
 	for index, data := range spt.trackedDeleteData {
-		if data.generatedRound <= committedRound {
+		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
 		}
 	}
@@ -232,7 +231,7 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 	}
 
 	commitData := verificationCommitData{
-		generatedRound:   blk.Round(),
+		confirmedRound:   blk.Round(),
 		verificationData: verificationData,
 	}
 	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
@@ -240,7 +239,7 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 
 func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
 	deletionData := verificationDeleteData{
-		generatedRound:      blk.Round(),
+		confirmedRound:      blk.Round(),
 		stateProofNextRound: delta.StateProofNext,
 	}
 	spt.trackedDeleteData = append(spt.trackedDeleteData, deletionData)
