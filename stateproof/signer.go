@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
@@ -138,8 +137,6 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-	ids := make([]account.ParticipationID, 0, len(keys))
-	usedSigners := make([]*merklesignature.Signer, 0, len(keys))
 
 	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
 	if err != nil {
@@ -176,8 +173,6 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			Round:         hdr.Round,
 			Sig:           sig,
 		})
-		ids = append(ids, key.ParticipationID)
-		usedSigners = append(usedSigners, key.StateProofSecrets)
 	}
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
