@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -122,12 +121,14 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 	newLedgerTracker := &mockLedgerForTracker{
-		inMemory: false,
-		log:      dblogger,
-		blocks:   make([]blockEntry, len(ml.blocks)),
-		deltas:   make([]ledgercore.StateDelta, len(ml.deltas)),
-		accts:    make(map[basics.Address]basics.AccountData),
-		filename: fn,
+		inMemory:         false,
+		log:              dblogger,
+		blocks:           make([]blockEntry, len(ml.blocks)),
+		deltas:           make([]ledgercore.StateDelta, len(ml.deltas)),
+		accts:            make(map[basics.Address]basics.AccountData),
+		filename:         fn,
+		consensusParams:  ml.consensusParams,
+		consensusVersion: ml.consensusVersion,
 	}
 	for k, v := range ml.accts {
 		newLedgerTracker.accts[k] = v
@@ -139,9 +140,9 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	ml.dbs.Wdb.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
-		bytes, err := ioutil.ReadFile(ml.filename + ext)
+		bytes, err := os.ReadFile(ml.filename + ext)
 		require.NoError(t, err)
-		err = ioutil.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
+		err = os.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
 		require.NoError(t, err)
 	}
 	dbs, err := db.OpenPair(newLedgerTracker.filename, false)
@@ -291,7 +292,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Error(t, err)
 	require.Equal(t, basics.Round(0), validThrough)
 
-	if base > 0 {
+	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
@@ -1234,7 +1235,7 @@ func TestListCreatables(t *testing.T) {
 	// sync with the database. This has deletes synced to the database.
 	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
-	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
+	// get new creatables in the cache. There will be deleted in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
@@ -1320,7 +1321,10 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		appIDset[appID] = struct{}{}
 		boxNameToAppID[boxName] = appID
 
-		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): &boxName})
+		boxChange := ledgercore.ValueDelta{Data: &boxName}
+		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.ValueDelta{
+			logic.MakeBoxKey(appID, boxName): boxChange,
+		})
 		auCommitSync(t, currentRound, au, ml)
 
 		// ensure rounds
@@ -1347,7 +1351,9 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
-		auNewBlock(t, currentRound, au, accts, opts, map[string]*string{logic.MakeBoxKey(appID, boxName): nil})
+		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.ValueDelta{
+			logic.MakeBoxKey(appID, boxName): ledgercore.ValueDelta{},
+		})
 		auCommitSync(t, currentRound, au, ml)
 
 		// ensure recently removed key is not present, and it is not part of the result
@@ -1394,13 +1400,13 @@ func TestKVCache(t *testing.T) {
 	// are correct after every kv containing block has been committed.
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
-		kvMods := make(map[string]*string)
+		kvMods := make(map[string]ledgercore.ValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
 				curKV++
 				val := kvMap[name]
-				kvMods[name] = &val
+				kvMods[name] = ledgercore.ValueDelta{Data: &val, OldData: nil}
 			}
 		}
 
@@ -1439,12 +1445,12 @@ func TestKVCache(t *testing.T) {
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
-		kvMods := make(map[string]*string)
+		kvMods := make(map[string]ledgercore.ValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
 				val := fmt.Sprintf("modified value%d", curKV)
-				kvMods[name] = &val
+				kvMods[name] = ledgercore.ValueDelta{Data: &val}
 				curKV++
 			}
 		}
@@ -1489,11 +1495,11 @@ func TestKVCache(t *testing.T) {
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
-		kvMods := make(map[string]*string)
+		kvMods := make(map[string]ledgercore.ValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
-				kvMods[name] = nil
+				kvMods[name] = ledgercore.ValueDelta{Data: nil}
 				curKV++
 			}
 		}
@@ -2745,7 +2751,7 @@ type auNewBlockOpts struct {
 	knownCreatables map[basics.CreatableIndex]bool
 }
 
-func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]*string) {
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]ledgercore.ValueDelta) {
 	rewardLevel := uint64(0)
 	prevRound, prevTotals, err := au.LatestTotals()
 	require.Equal(t, rnd-1, prevRound)

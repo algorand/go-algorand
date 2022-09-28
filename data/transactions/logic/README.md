@@ -567,11 +567,20 @@ App fields used in the `app_params_get` opcode.
 
 Account fields used in the `acct_params_get` opcode.
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | AcctBalance | uint64 | Account balance in microalgos |
-| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | AcctBalance | uint64 |      | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
+| 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
+| 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
+| 6 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created by this account. |
+| 7 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
+| 8 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
+| 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
+| 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
+| 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
 
 
 ### Flow Control
@@ -594,6 +603,7 @@ Account fields used in the `acct_params_get` opcode.
 | `assert` | immediately fail unless A is a non-zero number |
 | `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
 | `retsub` | pop the top instruction from the call stack and branch to it |
+| `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
 
 ### State Access
 
@@ -616,6 +626,13 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
+| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
+| `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
+| `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
+| `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. |
+| `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist |
 
 ### Inner Transactions
 

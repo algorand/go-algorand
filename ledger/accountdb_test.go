@@ -532,10 +532,12 @@ func checkCreatables(t *testing.T,
 // randomCreatableSampling sets elements to delete from previous iteration
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
-// loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
-// loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
+// loop 1: returns:
+// - the second 10 elements
+// - random sample of elements from the first 10: created changed from true -> false
+// loop 2: returns:
+// - the elements 20->30
+// - random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -1024,8 +1026,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var balances catchpointFileBalancesChunkV6
-		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		var chunk catchpointFileChunkV6
+		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecordV6
 			accountData := baseAccountData{RewardsBase: accountsLoaded + i}
@@ -1035,13 +1037,13 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			if ascendingOrder {
 				binary.LittleEndian.PutUint64(randomAccount.Address[:], accountsLoaded+i)
 			}
-			balances.Balances[i] = randomAccount
+			chunk.Balances[i] = randomAccount
 		}
 		balanceLoopDuration := time.Since(balancesLoopStart)
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
 
-		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
+		normalizedAccountBalances, err := prepareNormalizedBalancesV6(chunk.Balances, proto)
 		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -1078,6 +1080,238 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	}
 }
 
+func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
+	testCases := []struct {
+		input            []byte
+		outputPrefix     []byte
+		outputPrefixIncr []byte
+	}{
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{0xFF}, outputPrefix: []byte{0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xFE, 0xFF}, outputPrefix: []byte{0xFE, 0xFF}, outputPrefixIncr: []byte{0xFF}},
+		{input: []byte{0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{}, outputPrefix: []byte{}, outputPrefixIncr: nil},
+		{input: nil, outputPrefix: []byte{}, outputPrefixIncr: nil},
+	}
+	for _, tc := range testCases {
+		actualOutputPrefix, actualOutputPrefixIncr := keyPrefixIntervalPreprocessing(tc.input)
+		require.Equal(t, tc.outputPrefix, actualOutputPrefix)
+		require.Equal(t, tc.outputPrefixIncr, actualOutputPrefixIncr)
+	}
+}
+
+func TestLookupKeysByPrefix(t *testing.T) {
+	dbs, fn := dbOpenTest(t, false)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(t, err)
+	defer qs.close()
+
+	kvPairDBPrepareSet := []struct {
+		key   []byte
+		value []byte
+	}{
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}, value: []byte("val0")},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}, value: []byte("val1")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}, value: []byte("val2")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}, value: []byte("val3")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, value: []byte("val4")},
+		{key: []byte{0xFF, 0xFE, 0xFF}, value: []byte("val5")},
+		{key: []byte{0xFF, 0xFF}, value: []byte("should not confuse with 0xFF-0xFE")},
+		{key: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF}, value: []byte("baddadffff")},
+		{key: []byte{0xBA, 0xDD, 0xAE, 0x00}, value: []byte("baddae00")},
+		{key: []byte{0xBA, 0xDD, 0xAE}, value: []byte("baddae")},
+		{key: []byte("TACOCAT"), value: []byte("val6")},
+		{key: []byte("TACOBELL"), value: []byte("2bucks50cents?")},
+		{key: []byte("DingHo-SmallPack"), value: []byte("3bucks75cents")},
+		{key: []byte("DingHo-StandardPack"), value: []byte("5bucks25cents")},
+		{key: []byte("BostonKitchen-CheeseSlice"), value: []byte("3bucks50cents")},
+		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+
+	// writer is only for kvstore
+	writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < len(kvPairDBPrepareSet); i++ {
+		err := writer.upsertKvPair(string(kvPairDBPrepareSet[i].key), string(kvPairDBPrepareSet[i].value))
+		require.NoError(t, err)
+	}
+
+	tx.Commit()
+	writer.close()
+
+	testCases := []struct {
+		prefix        []byte
+		expectedNames [][]byte
+	}{
+		{
+			prefix: []byte{0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0x12, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFE, 0xFF},
+				{0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFE},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFE, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAD, 0xFF},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAE},
+				{0xBA, 0xDD, 0xAE, 0x00},
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAE},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAE},
+				{0xBA, 0xDD, 0xAE, 0x00},
+			},
+		},
+		{
+			prefix: []byte("TACO"),
+			expectedNames: [][]byte{
+				[]byte("TACOCAT"),
+				[]byte("TACOBELL"),
+			},
+		},
+		{
+			prefix:        []byte("TACOC"),
+			expectedNames: [][]byte{[]byte("TACOCAT")},
+		},
+		{
+			prefix: []byte("DingHo"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix: []byte("DingHo-S"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix:        []byte("DingHo-Small"),
+			expectedNames: [][]byte{[]byte("DingHo-SmallPack")},
+		},
+		{
+			prefix:        []byte("BostonKitchen"),
+			expectedNames: [][]byte{[]byte("BostonKitchen-CheeseSlice")},
+		},
+		{
+			prefix:        []byte(`™£´´∂ƒ∂ƒßƒ©`),
+			expectedNames: [][]byte{[]byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
+		},
+		{
+			prefix: []byte{},
+			expectedNames: [][]byte{
+				{0xFF, 0x12, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFE, 0xFF},
+				{0xFF, 0xFF},
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+				{0xBA, 0xDD, 0xAE, 0x00},
+				{0xBA, 0xDD, 0xAE},
+				[]byte("TACOCAT"),
+				[]byte("TACOBELL"),
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+				[]byte("BostonKitchen-CheeseSlice"),
+				[]byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`),
+			},
+		},
+	}
+
+	for index, testCase := range testCases {
+		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
+			actual := make(map[string]bool)
+			_, err := qs.lookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
+			require.NoError(t, err)
+			expected := make(map[string]bool)
+			for _, name := range testCase.expectedNames {
+				expected[string(name)] = true
+			}
+			require.Equal(t, actual, expected)
+		})
+	}
+}
+
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
@@ -1093,14 +1327,14 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	defer qs.close()
 
 	currentDBSize := 0
-	nextDBSize := 4
-	increment := 4
+	nextDBSize := 2
+	increment := 2
 
 	nameBuffer := make([]byte, 5)
 	valueBuffer := make([]byte, 5)
 
-	// from 2^2 -> 2^4 -> ... -> 2^22 sized DB
-	for bIndex := 0; bIndex < 11; bIndex++ {
+	// from 2^1 -> 2^2 -> ... -> 2^22 sized DB
+	for bIndex := 0; bIndex < 22; bIndex++ {
 		// make writer to DB
 		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
@@ -1133,10 +1367,12 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 		nextDBSize *= increment
 
 		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
-			results := make(map[string]bool)
-			_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
-			require.NoError(b, err)
-			require.True(b, len(results) >= 1)
+			for i := 0; i < b.N; i++ {
+				results := make(map[string]bool)
+				_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+				require.NoError(b, err)
+				require.True(b, len(results) >= 1)
+			}
 		})
 	}
 }
@@ -3161,11 +3397,11 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//    A |   1 |      1
-//    B |   1 |      1
-//    A |   2 |      0
-//    B |   3 |      0
-//    C |   3 |      1
+// A    |  1  |    1
+// B    |  1  |    1
+// A    |  2  |    0
+// B    |  3  |    0
+// C    |  3  |    1
 //
 // Ensure
 // - for round 1 A and B returned

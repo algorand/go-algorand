@@ -53,7 +53,6 @@ var appBoxCmd = &cobra.Command{
 var appBoxInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Retrieve information about an application box.",
-	Long:  "Retrieve information about an application box. The returned box name and value are base64 encoded.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
@@ -76,9 +75,9 @@ var appBoxInfoCmd = &cobra.Command{
 		// This reduces confusion of potentially receiving a different box name representation
 		boxNameBytes, err := newAppCallBytes(boxName).Raw()
 		if err != nil {
-			reportErrorf(errorInvalidBoxName, boxName)
+			reportErrorf(errorInvalidBoxName, boxName, err)
 		}
-		if bytes.Compare(box.Name, boxNameBytes) != 0 {
+		if !bytes.Equal(box.Name, boxNameBytes) {
 			reportErrorf(errorBoxNameMismatch, box.Name, boxNameBytes)
 		}
 		reportInfof("Name:  %s", boxName)

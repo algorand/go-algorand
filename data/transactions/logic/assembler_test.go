@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -403,7 +404,17 @@ pushint 1
 replace3
 `
 
-const v8Nonsense = v7Nonsense + boxNonsense + pairingNonsense
+const switchNonsense = `
+switch_label0:
+pushint 1
+switch switch_label0 switch_label1
+switch_label1:
+pushint 1
+`
+
+const v8Nonsense = v7Nonsense + switchNonsense + boxNonsense
+
+const v9Nonsense = v8Nonsense + pairingNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -413,8 +424,11 @@ const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988
 	randomnessCompiled + "800243218001775c0280018881015d"
 
 const boxCompiled = "b9babbbcbdbfbe"
+const switchCompiled = "81018a02fff800008101"
 
-const v8Compiled = v7Compiled + boxCompiled + pairingCompiled
+const v8Compiled = v7Compiled + switchCompiled + boxCompiled
+
+const v9Compiled = v8Compiled + pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -425,6 +439,7 @@ var nonsense = map[uint64]string{
 	6: v6Nonsense,
 	7: v7Nonsense,
 	8: v8Nonsense,
+	9: v9Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -436,6 +451,7 @@ var compiled = map[uint64]string{
 	6: "06" + v6Compiled,
 	7: "07" + v7Compiled,
 	8: "08" + v8Compiled,
+	9: "09" + v9Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -523,16 +539,21 @@ type Expect struct {
 	s string
 }
 
-func testMatch(t testing.TB, actual, expected string) bool {
+func testMatch(t testing.TB, actual, expected string) (ok bool) {
+	defer func() {
+		if !ok {
+			t.Logf("'%s' does not match '%s'", actual, expected)
+		}
+	}()
 	t.Helper()
 	if strings.HasPrefix(expected, "...") && strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, actual, expected[3:len(expected)-3])
+		return strings.Contains(actual, expected[3:len(expected)-3])
 	} else if strings.HasPrefix(expected, "...") {
-		return assert.Contains(t, actual+"^", expected[3:]+"^")
+		return strings.Contains(actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
+		return strings.Contains("^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		return assert.Equal(t, expected, actual)
+		return expected == actual
 	}
 }
 
@@ -603,13 +624,13 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		errors := ops.Errors
 		for _, exp := range expected {
 			if exp.l == 0 {
-				// line 0 means: "must match all"
+				// line 0 means: "must match some line"
 				require.Len(t, expected, 1)
-				fail := false
+				fail := true
 				for _, err := range errors {
 					msg := err.Unwrap().Error()
-					if !testMatch(t, msg, exp.s) {
-						fail = true
+					if testMatch(t, msg, exp.s) {
+						fail = false
 					}
 				}
 				if fail {
@@ -746,7 +767,7 @@ func TestOpUint(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
-			ops.Uint(0xcafebabe)
+			ops.IntLiteral(0xcafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
@@ -762,9 +783,8 @@ func TestOpUint64(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			t.Parallel()
 			ops := newOpStream(v)
-			ops.Uint(0xcafebabecafebabe)
+			ops.IntLiteral(0xcafebabecafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
@@ -785,6 +805,7 @@ func TestOpBytes(t *testing.T) {
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
 			require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+			testProg(t, "byte 0x7; len", v, Expect{1, "...odd length hex string"})
 		})
 	}
 }
@@ -890,6 +911,125 @@ func TestAssembleBytesString(t *testing.T) {
 			testLine(t, `byte "foo bar // not a comment"`, v, "")
 		})
 	}
+}
+
+func TestManualCBlocks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Despite appearing twice, 500s are pushints because of manual intcblock
+	ops := testProg(t, "intcblock 1; int 500; int 500; ==", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["pushint"].Opcode)
+
+	ops = testProg(t, "intcblock 2 3; intcblock 4 10; int 5", AssemblerMaxVersion)
+	text, err := Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, text, "pushint 5")
+
+	ops = testProg(t, "intcblock 2 3; intcblock 4 10; intc_3", AssemblerMaxVersion)
+	text, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, text, "intc_3\n") // That is, no commented value for intc_3 is shown
+
+	// In old straight-line versions, allow mixing int and intc if the ints all
+	// reference manual block.  Since conditionals do make it possible that
+	// different cblocks could be in effect depending on earlier path choices,
+	// maybe we should not even allow this.
+	checkSame(t, 3,
+		"intcblock 4 5 1; intc_0; intc_2; +; intc_1; ==",
+		"intcblock 4 5 1; int 4; int 1; +; intc_1; ==",
+		"intcblock 4 5 1; intc_0; int 1; +; int 5; ==")
+	checkSame(t, 3,
+		"bytecblock 0x44 0x55 0x4455; bytec_0; bytec_1; concat; bytec_2; ==",
+		"bytecblock 0x44 0x55 0x4455; byte 0x44; bytec_1; concat; byte 0x4455; ==",
+		"bytecblock 0x44 0x55 0x4455; bytec_0; byte 0x55; concat; bytec_2; ==")
+
+	// But complain if they do not
+	testProg(t, "intcblock 4; int 3;", 3, Expect{1, "int 3 used without 3 in intcblock"})
+	testProg(t, "bytecblock 0x44; byte 0x33;", 3, Expect{1, "byte/addr/method used without value in bytecblock"})
+
+	// Or if the ref comes before the constant block, even if they match
+	testProg(t, "int 5; intcblock 4;", 3, Expect{1, "intcblock following int"})
+	testProg(t, "int 4; intcblock 4;", 3, Expect{1, "intcblock following int"})
+	testProg(t, "addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4; bytecblock 0x44", 3, Expect{1, "bytecblock following byte/addr/method"})
+
+	// But we can't complain precisely once backjumps are allowed, so we force
+	// compile to push*. (We don't analyze the CFG, so we don't know if we can
+	// use what is in the user defined block. Perhaps we could special case
+	// single cblocks at start of program.
+	checkSame(t, 4,
+		"intcblock 4 5 1; int 4; int 1; +; int 5; ==",
+		"intcblock 4 5 1; pushint 4; pushint 1; +; pushint 5; ==")
+	checkSame(t, 4,
+		"bytecblock 0x44 0x55 0x4455; byte 0x44; byte 0x55; concat; byte 0x4455; ==",
+		"bytecblock 0x44 0x55 0x4455; pushbytes 0x44; pushbytes 0x55; concat; pushbytes 0x4455; ==")
+	// Can't switch to push* after the fact.
+	testProg(t, "int 5; intcblock 4;", 4, Expect{1, "intcblock following int"})
+	testProg(t, "int 4; intcblock 4;", 4, Expect{1, "intcblock following int"})
+	testProg(t, "addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4; bytecblock 0x44", 4, Expect{1, "bytecblock following byte/addr/method"})
+
+	// Ignore manually added cblocks in deadcode, so they can be added easily to
+	// existing programs. There are proposals to put metadata there.
+	ops = testProg(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[3], 4) // <intcblock> 1 4 <intc_0>
+	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["intc_0"].Opcode)
+	ops = testProg(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[3], 4)
+
+	ops = testProg(t, "byte 0x44; byte 0x44; concat; len; return; bytecblock 0x11", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[4], 0x44) // <bytecblock> 1 1 0x44 <bytec_0>
+	require.Equal(t, ops.Program[5], OpsByName[ops.Version]["bytec_0"].Opcode)
+	ops = testProg(t, "b skip; bytecblock 0x11; skip: byte 0x44; byte 0x44; concat; len; int 4; ==", AssemblerMaxVersion)
+	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[4], 0x44)
+}
+
+func TestManualCBlocksPreBackBranch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Before backbranch enabled, the assembler is willing to assemble an `int`
+	// reference after an intcblock as an intc. It uses the most recent seen
+	// non-deadcode intcblock, so it *could* be wrong.
+	testProg(t, "intcblock 10 20; int 10;", backBranchEnabledVersion-1)
+	// By the same token, assembly complains if that intcblock doesn't have the
+	// constant. In v3, and v3 only, it *could* pushint.
+	testProg(t, "intcblock 10 20; int 30;", backBranchEnabledVersion-1, Expect{1, "int 30 used..."})
+
+	// Since the second intcblock is dead, the `int 10` "sees" the first block, not the second
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; b skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1,
+		Expect{1, "int 3 used..."})
+
+	// Here, the intcblock in effect is unknowable, better to force the user to
+	// use intc (unless pushint is available to save the day).
+
+	// backBranchEnabledVersion-1 contains pushint
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-1)
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-1)
+
+	// backBranchEnabledVersion-2 does not
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 10;", backBranchEnabledVersion-2,
+		Expect{1, "int 10 used with manual intcblocks. Use intc."})
+	testProg(t, "intcblock 10 20; txn NumAppArgs; bz skip; intcblock 3 4 5; skip: int 3;", backBranchEnabledVersion-2,
+		Expect{1, "int 3 used with manual intcblocks. Use intc."})
+
+	// REPEAT ABOVE, BUT FOR BYTE BLOCKS
+
+	testProg(t, "bytecblock 0x10 0x20; byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; byte 0x30;", backBranchEnabledVersion-1, Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; b skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1,
+		Expect{1, "byte/addr/method used..."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-1)
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x10;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x10 used with manual bytecblocks. Use bytec."})
+	testProg(t, "bytecblock 0x10 0x20; txn NumAppArgs; bz skip; bytecblock 0x03 0x04 0x05; skip: byte 0x03;", backBranchEnabledVersion-2,
+		Expect{1, "byte 0x03 used with manual bytecblocks. Use bytec."})
 }
 
 func TestAssembleOptimizedConstants(t *testing.T) {
@@ -1876,8 +2016,7 @@ intc_0 // 1
 bnz label1
 label1:
 `, v)
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
+			ops := testProg(t, source, v)
 			dis, err := Disassemble(ops.Program)
 			require.NoError(t, err)
 			require.Equal(t, source, dis)
@@ -1990,8 +2129,7 @@ func TestHasStatefulOps(t *testing.T) {
 	t.Parallel()
 
 	source := "int 1"
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	has, err := HasStatefulOps(ops.Program)
 	require.NoError(t, err)
 	require.False(t, has)
@@ -2001,8 +2139,7 @@ int 1
 app_opted_in
 err
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	has, err = HasStatefulOps(ops.Program)
 	require.NoError(t, err)
 	require.True(t, has)
@@ -2179,46 +2316,38 @@ func TestAssemblePragmaVersion(t *testing.T) {
 	text := `#pragma version 1
 int 1
 `
-	ops, err := AssembleStringWithVersion(text, 1)
-	require.NoError(t, err)
-	ops1, err := AssembleStringWithVersion("int 1", 1)
-	require.NoError(t, err)
+	ops := testProg(t, text, 1)
+	ops1 := testProg(t, "int 1", 1)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	testProg(t, text, 0, Expect{1, "version mismatch..."})
 	testProg(t, text, 2, Expect{1, "version mismatch..."})
 	testProg(t, text, assemblerNoVersion)
 
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
+	ops = testProg(t, text, assemblerNoVersion)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	text = `#pragma version 2
 int 1
 `
-	ops, err = AssembleStringWithVersion(text, 2)
-	require.NoError(t, err)
-	ops2, err := AssembleStringWithVersion("int 1", 2)
-	require.NoError(t, err)
+	ops = testProg(t, text, 2)
+	ops2 := testProg(t, "int 1", 2)
 	require.Equal(t, ops2.Program, ops.Program)
 
 	testProg(t, text, 0, Expect{1, "version mismatch..."})
 	testProg(t, text, 1, Expect{1, "version mismatch..."})
 
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
+	ops = testProg(t, text, assemblerNoVersion)
 	require.Equal(t, ops2.Program, ops.Program)
 
 	// check if no version it defaults to v1
 	text = `byte "test"
 len
 `
-	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
-	ops1, err = AssembleStringWithVersion(text, 1)
+	ops = testProg(t, text, assemblerNoVersion)
+	ops1 = testProg(t, text, 1)
 	require.Equal(t, ops1.Program, ops.Program)
-	require.NoError(t, err)
-	ops2, err = AssembleString(text)
+	ops2, err := AssembleString(text)
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
@@ -2246,9 +2375,8 @@ func TestErrShortBytecblock(t *testing.T) {
 	t.Parallel()
 
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
-	ops, err := AssembleStringWithVersion(text, 1)
-	require.NoError(t, err)
-	_, _, err = parseIntcblock(ops.Program, 1)
+	ops := testProg(t, text, 1)
+	_, _, err := parseIntcblock(ops.Program, 1)
 	require.Equal(t, err, errShortIntcblock)
 
 	var cx EvalContext
@@ -2290,8 +2418,7 @@ func TestMethodWarning(t *testing.T) {
 	for _, test := range tests {
 		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
-			ops, err := AssembleStringWithVersion(src, v)
-			require.NoError(t, err)
+			ops := testProg(t, src, v)
 
 			if test.pass {
 				require.Len(t, ops.Warnings, 0)
@@ -2594,7 +2721,7 @@ func TestMergeProtos(t *testing.T) {
 func TestGetSpec(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	ops, _ := AssembleStringWithVersion("int 1", AssemblerMaxVersion)
+	ops := testProg(t, "int 1", AssemblerMaxVersion)
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
 	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
@@ -2642,12 +2769,14 @@ func checkSame(t *testing.T, version uint64, first string, compares ...string) {
 	if version == 0 {
 		version = assemblerNoVersion
 	}
-	ops, err := AssembleStringWithVersion(first, version)
-	require.NoError(t, err, first)
+	ops := testProg(t, first, version)
 	for _, compare := range compares {
-		other, err := AssembleStringWithVersion(compare, version)
-		assert.NoError(t, err, compare)
-		assert.Equal(t, other.Program, ops.Program, "%s unlike %s", first, compare)
+		other := testProg(t, compare, version)
+		if bytes.Compare(other.Program, ops.Program) != 0 {
+			t.Log(Disassemble(ops.Program))
+			t.Log(Disassemble(other.Program))
+		}
+		assert.Equal(t, ops.Program, other.Program, "%s unlike %s", first, compare)
 	}
 }
 
@@ -2673,4 +2802,71 @@ func TestSemiColon(t *testing.T) {
 		`byte "test;this"; ; pop;`,
 		`byte "test;this";;;pop;`,
 	)
+}
+
+func TestAssembleSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// fail when target doesn't correspond to existing label
+	source := `
+	pushint 1
+	switch label1 label2
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
+
+	// fail when target index != uint64
+	testProg(t, `
+	byte "fail"
+    switch label1
+    labe11:
+	`, AssemblerMaxVersion, Expect{3, "switch label1 arg 0 wanted type uint64..."})
+
+	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
+	testProg(t, `
+int 0
+switch
+int 1
+`, AssemblerMaxVersion)
+
+	// confirm arg limit
+	source = `
+	pushint 1
+	switch label1 label2
+	label1:
+	label2:
+	`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 9) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*2)
+
+	var labels []string
+	for i := 0; i < 255; i++ {
+		labels = append(labels, fmt.Sprintf("label%d", i))
+	}
+
+	// test that 255 labels is ok
+	source = fmt.Sprintf(`
+	pushint 1
+	switch %s
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+
+	// 256 is too many
+	source = fmt.Sprintf(`
+	pushint 1
+	switch %s extra
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
+
+	// allow duplicate label reference
+	source = `
+	pushint 1
+	switch label1 label1
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion)
 }

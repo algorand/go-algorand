@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -71,16 +70,7 @@ func (l *mockLedger) LookupKv(round basics.Round, key string) (*string, error) {
 }
 
 func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
-	var results []string
-	for key := range l.kvstore {
-		if strings.HasPrefix(key, keyPrefix) {
-			results = append(results, key)
-			if maxKeyNum > 0 && int(maxKeyNum) == len(results) {
-				break
-			}
-		}
-	}
-	return results, nil
+	panic("not implemented")
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -121,8 +111,12 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
-func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	panic("not implemented")
+func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := l.Block(rnd)
+	if err != nil {
+		return bookkeeping.BlockHeader{}, err
+	}
+	return blk.BlockHeader, nil
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
 	panic("not implemented")
@@ -134,7 +128,11 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 	panic("not implemented")
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
-	panic("not implemented")
+	if len(l.blocks) == 0 {
+		err = fmt.Errorf("mockledger error: no block")
+		return
+	}
+	return l.blocks[0], nil
 }
 
 func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {

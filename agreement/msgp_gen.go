@@ -1357,7 +1357,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0004Len := uint32(29)
-	var zb0004Mask uint64 /* 37 bits */
+	var zb0004Mask uint64 /* 38 bits */
 	if (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x40
@@ -1420,59 +1420,59 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x200000
+		zb0004Mask |= 0x400000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x400000
+		zb0004Mask |= 0x800000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x800000
+		zb0004Mask |= 0x1000000
 	}
 	if (*z).unauthenticatedProposal.SeedProof.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x1000000
+		zb0004Mask |= 0x2000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x2000000
+		zb0004Mask |= 0x4000000
 	}
 	if len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0 {
 		zb0004Len--
-		zb0004Mask |= 0x4000000
+		zb0004Mask |= 0x8000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0 {
 		zb0004Len--
-		zb0004Mask |= 0x8000000
+		zb0004Mask |= 0x10000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0 {
 		zb0004Len--
-		zb0004Mask |= 0x10000000
+		zb0004Mask |= 0x20000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x20000000
+		zb0004Mask |= 0x40000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x40000000
+		zb0004Mask |= 0x80000000
 	}
 	if (*z).unauthenticatedProposal.Block.Payset.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x80000000
+		zb0004Mask |= 0x100000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x100000000
+		zb0004Mask |= 0x200000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero() {
 		zb0004Len--
-		zb0004Mask |= 0x200000000
+		zb0004Mask |= 0x400000000
 	}
 	if (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false {
 		zb0004Len--
-		zb0004Mask |= 0x400000000
+		zb0004Mask |= 0x800000000
 	}
 	// variable map header, size zb0004Len
 	o = msgp.AppendMapHeader(o, zb0004Len)
@@ -1559,32 +1559,32 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa4, 0x72, 0x61, 0x74, 0x65)
 			o = msgp.AppendUint64(o, (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate)
 		}
-		if (zb0004Mask & 0x200000) == 0 { // if not empty
+		if (zb0004Mask & 0x400000) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.Round.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x400000) == 0 { // if not empty
+		if (zb0004Mask & 0x800000) == 0 { // if not empty
 			// string "rwcalr"
 			o = append(o, 0xa6, 0x72, 0x77, 0x63, 0x61, 0x6c, 0x72)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x800000) == 0 { // if not empty
+		if (zb0004Mask & 0x1000000) == 0 { // if not empty
 			// string "rwd"
 			o = append(o, 0xa3, 0x72, 0x77, 0x64)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x1000000) == 0 { // if not empty
+		if (zb0004Mask & 0x2000000) == 0 { // if not empty
 			// string "sdpf"
 			o = append(o, 0xa4, 0x73, 0x64, 0x70, 0x66)
 			o = (*z).unauthenticatedProposal.SeedProof.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x2000000) == 0 { // if not empty
+		if (zb0004Mask & 0x4000000) == 0 { // if not empty
 			// string "seed"
 			o = append(o, 0xa4, 0x73, 0x65, 0x65, 0x64)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x4000000) == 0 { // if not empty
+		if (zb0004Mask & 0x8000000) == 0 { // if not empty
 			// string "spt"
 			o = append(o, 0xa3, 0x73, 0x70, 0x74)
 			if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
@@ -1604,42 +1604,42 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0004Mask & 0x8000000) == 0 { // if not empty
+		if (zb0004Mask & 0x10000000) == 0 { // if not empty
 			// string "tc"
 			o = append(o, 0xa2, 0x74, 0x63)
 			o = msgp.AppendUint64(o, (*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter)
 		}
-		if (zb0004Mask & 0x10000000) == 0 { // if not empty
+		if (zb0004Mask & 0x20000000) == 0 { // if not empty
 			// string "ts"
 			o = append(o, 0xa2, 0x74, 0x73)
 			o = msgp.AppendInt64(o, (*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp)
 		}
-		if (zb0004Mask & 0x20000000) == 0 { // if not empty
+		if (zb0004Mask & 0x40000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x40000000) == 0 { // if not empty
+		if (zb0004Mask & 0x80000000) == 0 { // if not empty
 			// string "txn256"
 			o = append(o, 0xa6, 0x74, 0x78, 0x6e, 0x32, 0x35, 0x36)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x80000000) == 0 { // if not empty
+		if (zb0004Mask & 0x100000000) == 0 { // if not empty
 			// string "txns"
 			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
 			o = (*z).unauthenticatedProposal.Block.Payset.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x100000000) == 0 { // if not empty
+		if (zb0004Mask & 0x200000000) == 0 { // if not empty
 			// string "upgradedelay"
 			o = append(o, 0xac, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x64, 0x65, 0x6c, 0x61, 0x79)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x200000000) == 0 { // if not empty
+		if (zb0004Mask & 0x400000000) == 0 { // if not empty
 			// string "upgradeprop"
 			o = append(o, 0xab, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x70, 0x72, 0x6f, 0x70)
 			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
 		}
-		if (zb0004Mask & 0x400000000) == 0 { // if not empty
+		if (zb0004Mask & 0x800000000) == 0 { // if not empty
 			// string "upgradeyes"
 			o = append(o, 0xaa, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x79, 0x65, 0x73)
 			o = msgp.AppendBool(o, (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove)

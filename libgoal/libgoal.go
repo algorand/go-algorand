@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -63,6 +62,10 @@ type Client struct {
 	consensus            config.ConsensusProtocols
 	algodVersionAffinity algodclient.APIVersion
 	kmdVersionAffinity   kmdclient.APIVersion
+
+	suggestedParamsCache  v1.TransactionParams
+	suggestedParamsExpire time.Time
+	suggestedParamsMaxAge time.Duration
 }
 
 // ClientConfig is data to configure a Client
@@ -514,7 +517,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // 		 M     |     M     | error
 //
 func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -577,7 +580,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -786,7 +789,8 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generate
 	return
 }
 
-// GetApplicationBoxByName takes an app's index and box name and returns its value
+// GetApplicationBoxByName takes an app's index and box name and returns its value.
+// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp generatedV2.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -939,6 +943,23 @@ func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
 	return
 }
 
+// SetSuggestedParamsCacheAge sets the maximum age for an internal cached version of SuggestedParams() used internally to many libgoal Client functions.
+func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
+	c.suggestedParamsMaxAge = maxAge
+}
+
+func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error) {
+	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
+		params, err = c.SuggestedParams()
+		if err == nil && c.suggestedParamsMaxAge != 0 {
+			c.suggestedParamsCache = params
+			c.suggestedParamsExpire = time.Now().Add(c.suggestedParamsMaxAge)
+		}
+		return
+	}
+	return c.suggestedParamsCache, nil
+}
+
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
@@ -986,7 +1007,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
-	data, err := ioutil.ReadFile(keyfile)
+	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return
 	}

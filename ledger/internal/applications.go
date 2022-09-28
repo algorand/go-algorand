@@ -201,11 +201,11 @@ func (cs *roundCowState) kvGet(key string) (string, bool, error) {
 	if !ok {
 		return cs.lookupParent.kvGet(key)
 	}
-	if value == nil {
+	// If value is nil, it's a marker for a local deletion
+	if value.Data == nil {
 		return "", false, nil
 	}
-	// If value is nil, it's a marker for a local deletion
-	return *value, true, nil
+	return *value.Data, true, nil
 }
 
 func (cb *roundCowBase) kvGet(key string) (string, bool, error) {
@@ -216,6 +216,7 @@ func (cb *roundCowBase) kvGet(key string) (string, bool, error) {
 			return "", false, err
 		}
 		value = v
+		cb.kvStore[key] = value
 	}
 	// If value is nil, it caches a lookup that returned nothing.
 	if value == nil {
@@ -225,12 +226,12 @@ func (cb *roundCowBase) kvGet(key string) (string, bool, error) {
 }
 
 func (cs *roundCowState) kvPut(key string, value string) error {
-	cs.mods.KvMods[key] = &value
+	cs.mods.KvMods[key] = ledgercore.ValueDelta{Data: &value}
 	return nil
 }
 
 func (cs *roundCowState) kvDel(key string) error {
-	cs.mods.KvMods[key] = nil
+	cs.mods.KvMods[key] = ledgercore.ValueDelta{Data: nil}
 	return nil
 }
 

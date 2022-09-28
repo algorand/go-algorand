@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -119,7 +118,7 @@ func run() int {
 	}
 
 	// Load genesis
-	genesisText, err := ioutil.ReadFile(genesisPath)
+	genesisText, err := os.ReadFile(genesisPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
 		return 1
@@ -328,12 +327,17 @@ func run() int {
 		}
 
 		currentVersion := config.GetCurrentVersion()
+		var overrides []telemetryspec.NameValue
+		for name, val := range config.GetNonDefaultConfigValues(cfg, startupConfigCheckFields) {
+			overrides = append(overrides, telemetryspec.NameValue{Name: name, Value: val})
+		}
 		startupDetails := telemetryspec.StartupEventDetails{
 			Version:      currentVersion.String(),
 			CommitHash:   currentVersion.CommitHash,
 			Branch:       currentVersion.Branch,
 			Channel:      currentVersion.Channel,
 			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+			Overrides:    overrides,
 		}
 
 		log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.StartupEvent, startupDetails)
@@ -368,6 +372,30 @@ func run() int {
 
 	s.Start()
 	return 0
+}
+
+var startupConfigCheckFields = []string{
+	"AgreementIncomingBundlesQueueLength",
+	"AgreementIncomingProposalsQueueLength",
+	"AgreementIncomingVotesQueueLength",
+	"BroadcastConnectionsLimit",
+	"CatchupBlockValidateMode",
+	"ConnectionsRateLimitingCount",
+	"ConnectionsRateLimitingWindowSeconds",
+	"GossipFanout",
+	"IncomingConnectionsLimit",
+	"IncomingMessageFilterBucketCount",
+	"IncomingMessageFilterBucketSize",
+	"LedgerSynchronousMode",
+	"MaxAcctLookback",
+	"MaxConnectionsPerIP",
+	"OutgoingMessageFilterBucketCount",
+	"OutgoingMessageFilterBucketSize",
+	"ProposalAssemblyTime",
+	"ReservedFDs",
+	"TxPoolExponentialIncreaseFactor",
+	"TxPoolSize",
+	"VerifiedTranscationsCacheSize",
 }
 
 func resolveDataDir() string {

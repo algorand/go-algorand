@@ -61,12 +61,12 @@ const baseAccountsPendingAccountsWarnThreshold = 85000
 
 // baseResourcesPendingAccountsBufferSize defines the size of the base resources pending accounts buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base resources map.
-const baseResourcesPendingAccountsBufferSize = 100000
+const baseResourcesPendingAccountsBufferSize = 10000
 
 // baseResourcesPendingAccountsWarnThreshold defines the threshold at which the lruResources would generate a warning
 // after we've surpassed a given pending account resources size. The warning is being generated when the pending accounts data
 // is being flushed into the main base resources cache.
-const baseResourcesPendingAccountsWarnThreshold = 85000
+const baseResourcesPendingAccountsWarnThreshold = 8500
 
 // baseKVPendingBufferSize defines the size of the base KVs pending buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base KVs map.
@@ -134,12 +134,15 @@ type modifiedResource struct {
 	ndeltas int
 }
 
-// A modifiedValue represents the value that has been modified since the
-// persistent state stored in the account DB (i.e., in the range of rounds
-// covered by the accountUpdates tracker).
-type modifiedValue struct {
+// A modifiedKvValue represents a kv store change since the persistent state
+// stored in the DB (i.e., in the range of rounds covered by the accountUpdates
+// tracker).
+type modifiedKvValue struct {
 	// data stores the most recent value (nil == deleted)
 	data *string
+
+	// oldData stores the previous vlaue (nil == didn't exist)
+	oldData *string
 
 	// ndelta keeps track of how many times the key for this value appears in
 	// accountUpdates.deltas.  This is used to evict modifiedValue entries when
@@ -171,11 +174,11 @@ type accountUpdates struct {
 	resources resourcesUpdates
 
 	// kvDeltas stores kvPair updates for every round after dbRound.
-	kvDeltas []map[string]*string
+	kvDeltas []map[string]ledgercore.ValueDelta
 
 	// kvStore has the most recent kv pairs for every write/del that appears in
 	// deltas.
-	kvStore map[string]modifiedValue
+	kvStore map[string]modifiedKvValue
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -376,11 +379,11 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			for i := offset - 1; i > 0; i-- {
 				mval, ok := au.kvDeltas[i][key]
 				if ok {
-					return mval, nil
+					return mval.Data, nil
 				}
 			}
 		} else {
-			// we know that the key in not in kvDeltas - so there is no point in scanning it.
+			// we know that the key is not in kvDeltas - so there is no point in scanning it.
 			// we've going to fall back to search in the database, but before doing so, we should
 			// update the rnd so that it would point to the end of the known delta range.
 			// ( that would give us the best validity range )
@@ -498,7 +501,7 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		resultCount = 0
 
 		for i := int(offset - 1); i >= 0; i-- {
-			for keyInRound, valOp := range au.kvDeltas[i] {
+			for keyInRound, mv := range au.kvDeltas[i] {
 				if !strings.HasPrefix(keyInRound, keyPrefix) {
 					continue
 				}
@@ -507,7 +510,7 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 				if _, ok := results[keyInRound]; ok {
 					continue
 				}
-				if valOp == nil {
+				if mv.Data == nil {
 					results[keyInRound] = false
 				} else {
 					// set such key to be valid with value
@@ -948,7 +951,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.resources = make(resourcesUpdates)
-	au.kvStore = make(map[string]modifiedValue)
+	au.kvStore = make(map[string]modifiedKvValue)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -1014,7 +1017,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	for k, v := range delta.KvMods {
 		mvalue := au.kvStore[k]
 		mvalue.ndeltas++
-		mvalue.data = v
+		mvalue.data = v.Data
+		// leave mvalue.oldData alone
 		au.kvStore[k] = mvalue
 	}
 
@@ -1334,14 +1338,17 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
+		if err != nil {
+			return ledgercore.AccountResource{}, basics.Round(0), err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.addrid != 0 {
 				// if we read actual data return it
 				au.baseResources.writePending(persistedData, addr)
-				return persistedData.AccountResource(), rnd, err
+				return persistedData.AccountResource(), rnd, nil
 			}
 			// otherwise return empty
-			return ledgercore.AccountResource{}, rnd, err
+			return ledgercore.AccountResource{}, rnd, nil
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
@@ -1433,19 +1440,22 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = au.accountsq.lookup(addr)
+		if err != nil {
+			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
+		}
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
-				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, err
+				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// otherwise return empty
-			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, err
+			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+				return ledgercore.AccountData{}, basics.Round(0), "", 0, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1455,7 +1465,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
-			return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.AccountData{}, basics.Round(0), "", 0, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1512,9 +1522,11 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 		}
 		// Check the database
 		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
-
+		if err != nil {
+			return basics.Address{}, false, err
+		}
 		if dbRound == currentDbRound {
-			return
+			return creator, ok, nil
 		}
 		if synchronized {
 			if dbRound < currentDbRound {
@@ -1825,19 +1837,23 @@ func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredC
 // compactKvDeltas takes an array of kv deltas (one array entry per round), and
 // compacts the array into a single map that contains all the
 // changes. Intermediate changes are eliminated.  It counts the number of
-// changes per round by specifying it in the ndeltas field of the modifiedKv.
-func compactKvDeltas(kvDeltas []map[string]*string) map[string]modifiedValue {
+// changes per round by specifying it in the ndeltas field of the
+// modifiedKv. The modifiedValues in the returned map have the earliest
+// mv.oldData, and the newest mv.data.
+func compactKvDeltas(kvDeltas []map[string]ledgercore.ValueDelta) map[string]modifiedKvValue {
 	if len(kvDeltas) == 0 {
 		return nil
 	}
-	outKvDeltas := make(map[string]modifiedValue)
+	outKvDeltas := make(map[string]modifiedKvValue)
 	for _, roundKv := range kvDeltas {
-		for key, value := range roundKv {
-			prev := outKvDeltas[key] // prev may be the zero value. that's correct.
-			outKvDeltas[key] = modifiedValue{
-				data:    value,
-				ndeltas: prev.ndeltas + 1,
+		for key, current := range roundKv {
+			prev, ok := outKvDeltas[key]
+			if !ok { // Record only the first OldData
+				prev.oldData = current.OldData
 			}
+			prev.data = current.Data // Replace with newest Data
+			prev.ndeltas++
+			outKvDeltas[key] = prev
 		}
 	}
 	return outKvDeltas

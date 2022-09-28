@@ -46,13 +46,14 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt     *sql.Stmt
-	lookupStmt             *sql.Stmt
-	lookupResourcesStmt    *sql.Stmt
-	lookupAllResourcesStmt *sql.Stmt
-	lookupKvPairStmt       *sql.Stmt
-	lookupKeysByPrefixStmt *sql.Stmt
-	lookupCreatorStmt      *sql.Stmt
+	listCreatablesStmt                *sql.Stmt
+	lookupStmt                        *sql.Stmt
+	lookupResourcesStmt               *sql.Stmt
+	lookupAllResourcesStmt            *sql.Stmt
+	lookupKvPairStmt                  *sql.Stmt
+	lookupKeysByPrefixTypicalStmt     *sql.Stmt
+	lookupKeysByPrefixEmptyOrAllFStmt *sql.Stmt
+	lookupCreatorStmt                 *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -320,7 +321,7 @@ type compactAccountDeltas struct {
 }
 
 // onlineAccountDelta track all changes of account state within a range,
-// used in conjunction wih compactOnlineAccountDeltas to group and represent per-account changes.
+// used in conjunction with compactOnlineAccountDeltas to group and represent per-account changes.
 // oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
 // to determine if the acct became online or went offline.
 type onlineAccountDelta struct {
@@ -985,13 +986,17 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old persistedOnlineAccou
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+	selectAcctStmt, err := tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
+	if err != nil {
+		return err
+	}
+
 	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
-	var insertRscStmt *sql.Stmt
-	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
+	insertRscStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -1000,27 +1005,41 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	var rowID int64
 	for _, balance := range bals {
 		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
-		if err != nil {
-			return err
-		}
-		aff, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if aff != 1 {
-			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-		}
-		rowID, err = result.LastInsertId()
-		if err != nil {
-			return err
-		}
-		// write resources
-		for aidx := range balance.resources {
-			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
+		if err == nil {
+			var aff int64
+			aff, err = result.RowsAffected()
 			if err != nil {
 				return err
 			}
-			aff, err := result.RowsAffected()
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
+			rowID, err = result.LastInsertId()
+			if err != nil {
+				return err
+			}
+		} else {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+				// address exists: overflowed account record: find addrid
+				err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+
+		// write resources
+		for aidx := range balance.resources {
+			var result sql.Result
+			result, err = insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
+			if err != nil {
+				return err
+			}
+			var aff int64
+			aff, err = result.RowsAffected()
 			if err != nil {
 				return err
 			}
@@ -1084,19 +1103,49 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 			if resData.IsOwning() {
 				// determine if it's an asset
 				if resData.IsAsset() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AssetCreatable)
 					if err != nil {
 						return err
 					}
 				}
 				// determine if it's an application
 				if resData.IsApp() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AppCreatable)
 					if err != nil {
 						return err
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// writeCatchpointStagingKVs inserts all the KVs in the provided array into the
+// catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
+func writeCatchpointStagingKVs(ctx context.Context, tx *sql.Tx, kvrs []encodedKVRecordV6) error {
+	insertKV, err := tx.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertKV.Close()
+
+	insertHash, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+	defer insertHash.Close()
+
+	for _, kvr := range kvrs {
+		_, err := insertKV.ExecContext(ctx, kvr.Key, kvr.Value)
+		if err != nil {
+			return err
+		}
+
+		hash := kvHashBuilderV6(string(kvr.Key), string(kvr.Value))
+		_, err = insertHash.ExecContext(ctx, hash)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1109,6 +1158,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointkvstore",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1129,6 +1179,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
@@ -1152,11 +1204,13 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"DROP TABLE IF EXISTS assetcreators",
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
+		"DROP TABLE IF EXISTS kvstore",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
 	}
 
 	for _, stmt := range stmts {
@@ -1631,7 +1685,7 @@ func (bo *baseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) 
 type resourceFlags uint8
 
 const (
-	resourceFlagsHolding    resourceFlags = 0 //nolint:deadcode,varcheck
+	resourceFlagsHolding    resourceFlags = 0
 	resourceFlagsNotHolding resourceFlags = 1
 	resourceFlagsOwnership  resourceFlags = 2
 	resourceFlagsEmptyAsset resourceFlags = 4
@@ -2174,7 +2228,8 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 
 		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
-		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife)
+		deeperBlockHistory := basics.Round(config.Consensus[latestHdr.CurrentProtocol].DeeperBlockHeaderHistory)
+		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
 			firstRound++
@@ -2538,7 +2593,12 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON SUBSTR (kvstore.key, 1, ?) = ? WHERE id='acctbase'")
+	qs.lookupKeysByPrefixTypicalStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupKeysByPrefixEmptyOrAllFStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2628,10 +2688,42 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err
 	return
 }
 
+// keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
+// Such DB query was designed this way, to trigger the binary search optimization in SQLITE3.
+// The DB comparison for blob typed primary key is lexicographic, i.e., byte by byte.
+// In this way, we can introduce an interval that a primary key should be >= some prefix, < some prefix increment.
+// A corner case to consider is that, the prefix has last byte 0xFF, or the prefix is full of 0xFF.
+// - The first case can be solved by carrying, e.g., prefix = 0x1EFF -> interval being >= 0x1EFF and < 0x1F
+// - The second case can be solved by disregarding the upper limit, i.e., prefix = 0xFFFF -> interval being >= 0xFFFF
+// Another corner case to consider is empty byte, []byte{} or nil.
+// - In both cases, the results are interval >= "", i.e., returns []byte{} for prefix, and nil for prefixIncr.
+func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
+	if prefix == nil {
+		prefix = []byte{}
+	}
+	prefixIncr := make([]byte, len(prefix))
+	copy(prefixIncr, prefix)
+	for i := len(prefix) - 1; i >= 0; i-- {
+		currentByteIncr := int(prefix[i]) + 1
+		if currentByteIncr > 0xFF {
+			prefixIncr = prefixIncr[:len(prefixIncr)-1]
+			continue
+		}
+		prefixIncr[i] = byte(currentByteIncr)
+		return prefix, prefixIncr
+	}
+	return prefix, nil
+}
+
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() error {
-		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		rows, err := qs.lookupKeysByPrefixStmt.Query(len(prefix), []byte(prefix))
+		prefixBytes, prefixIncrBytes := keyPrefixIntervalPreprocessing([]byte(prefix))
+		var rows *sql.Rows
+		if prefixIncrBytes != nil {
+			rows, err = qs.lookupKeysByPrefixTypicalStmt.Query(prefixBytes, prefixIncrBytes)
+		} else {
+			rows, err = qs.lookupKeysByPrefixEmptyOrAllFStmt.Query(prefixBytes)
+		}
 		if err != nil {
 			return err
 		}
@@ -2992,7 +3084,8 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
-		&qs.lookupKeysByPrefixStmt,
+		&qs.lookupKeysByPrefixTypicalStmt,
+		&qs.lookupKeysByPrefixEmptyOrAllFStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
@@ -3446,7 +3539,7 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
 	tx *sql.Tx,
-	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	hasAccounts := updates.len() > 0
@@ -3484,7 +3577,7 @@ func onlineAccountsNewRound(
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRoundImpl(
 	writer accountsWriter,
-	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	updatedAccounts = make([]persistedAccountData, updates.len())
@@ -4051,6 +4144,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+//
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -4105,16 +4199,26 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
+// catchpointAccountResourceCounter keeps track of the resources processed for the current account
+type catchpointAccountResourceCounter struct {
+	totalAppParams      uint64
+	totalAppLocalStates uint64
+	totalAssetParams    uint64
+	totalAssets         uint64
+}
+
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	accountsRows  *sql.Rows
-	resourcesRows *sql.Rows
-	nextRow       pendingRow
+	accountsRows    *sql.Rows
+	resourcesRows   *sql.Rows
+	nextBaseRow     pendingBaseRow
+	nextResourceRow pendingResourceRow
+	acctResCnt      catchpointAccountResourceCounter
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecordV6, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) (bals []encodedBalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
 		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
@@ -4140,9 +4244,11 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		return nil
 	}
 
-	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
+	var totalResources int
+
 	// emptyCount := 0
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
+
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {
 			if encodedRecord.Resources == nil {
@@ -4150,47 +4256,56 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 			}
 			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
 			if resData.IsApp() && resData.IsOwning() {
-				totalAppParams++
+				iterator.acctResCnt.totalAppParams++
 			}
 			if resData.IsApp() && resData.IsHolding() {
-				totalAppLocalStates++
+				iterator.acctResCnt.totalAppLocalStates++
 			}
 
 			if resData.IsAsset() && resData.IsOwning() {
-				totalAssetParams++
+				iterator.acctResCnt.totalAssetParams++
 			}
 			if resData.IsAsset() && resData.IsHolding() {
-				totalAssets++
+				iterator.acctResCnt.totalAssets++
 			}
-
+			totalResources++
 		}
 
-		if baseAcct.TotalAppParams == totalAppParams &&
-			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
-			baseAcct.TotalAssetParams == totalAssetParams &&
-			baseAcct.TotalAssets == totalAssets {
+		if baseAcct.TotalAppParams == iterator.acctResCnt.totalAppParams &&
+			baseAcct.TotalAppLocalStates == iterator.acctResCnt.totalAppLocalStates &&
+			baseAcct.TotalAssetParams == iterator.acctResCnt.totalAssetParams &&
+			baseAcct.TotalAssets == iterator.acctResCnt.totalAssets {
 
+			encodedRecord.ExpectingMoreEntries = false
 			bals = append(bals, encodedRecord)
-			totalAppParams = 0
-			totalAppLocalStates = 0
-			totalAssetParams = 0
-			totalAssets = 0
+			numAccountsProcessed++
+
+			iterator.acctResCnt = catchpointAccountResourceCounter{}
+
+			return nil
+		}
+
+		// max resources per chunk reached, stop iterating.
+		if lastResource {
+			encodedRecord.ExpectingMoreEntries = true
+			bals = append(bals, encodedRecord)
+			encodedRecord.Resources = nil
 		}
 
 		return nil
 	}
 
-	_, iterator.nextRow, err = processAllBaseAccountRecords(
+	_, iterator.nextBaseRow, iterator.nextResourceRow, err = processAllBaseAccountRecords(
 		iterator.accountsRows, iterator.resourcesRows,
 		baseCb, resCb,
-		iterator.nextRow, accountCount,
+		iterator.nextBaseRow, iterator.nextResourceRow, accountCount, resourceCount,
 	)
 	if err != nil {
 		iterator.Close()
 		return
 	}
 
-	if len(bals) == accountCount {
+	if len(bals) == accountCount || totalResources == resourceCount {
 		// we're done with this iteration.
 		return
 	}
@@ -4200,8 +4315,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		iterator.Close()
 		return
 	}
-	// we just finished reading the table.
-	iterator.Close()
+	// Do not Close() the iterator here.  It is the caller's responsibility to
+	// do so, signalled by the return of an empty chunk. If we Close() here, the
+	// next call to Next() will start all over!
 	return
 }
 
@@ -4218,6 +4334,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
+//
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 
@@ -4246,27 +4363,37 @@ const (
 
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
-	step            orderedAccountsIterStep
-	accountBaseRows *sql.Rows
-	hashesRows      *sql.Rows
-	resourcesRows   *sql.Rows
-	tx              *sql.Tx
-	pendingRow      pendingRow
-	accountCount    int
-	insertStmt      *sql.Stmt
+	step               orderedAccountsIterStep
+	accountBaseRows    *sql.Rows
+	hashesRows         *sql.Rows
+	resourcesRows      *sql.Rows
+	tx                 *sql.Tx
+	pendingBaseRow     pendingBaseRow
+	pendingResourceRow pendingResourceRow
+	accountCount       int
+	resourceCount      int
+	insertStmt         *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, resourceCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:           tx,
-		accountCount: accountCount,
-		step:         oaiStepStartup,
+		tx:            tx,
+		accountCount:  accountCount,
+		resourceCount: resourceCount,
+		step:          oaiStepStartup,
 	}
 }
 
-type pendingRow struct {
+type pendingBaseRow struct {
+	addr               basics.Address
+	rowid              int64
+	accountData        *baseAccountData
+	encodedAccountData []byte
+}
+
+type pendingResourceRow struct {
 	addrid int64
 	aidx   basics.CreatableIndex
 	buf    []byte
@@ -4274,10 +4401,11 @@ type pendingRow struct {
 
 func processAllResources(
 	resRows *sql.Rows,
-	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
-	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
-) (pendingRow, error) {
+	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingResourceRow, resourceCount int,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error,
+) (pendingResourceRow, int, error) {
 	var err error
+	count := 0
 
 	// Declare variabled outside of the loop to prevent allocations per iteration.
 	// At least resData is resolved as "escaped" because of passing it by a pointer to protocol.Decode()
@@ -4292,57 +4420,63 @@ func processAllResources(
 			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
 			// and we need to skip accounts without resources
 			if pr.addrid > acctRowid {
-				err = callback(addr, 0, nil, nil)
-				return pr, err
+				err = callback(addr, 0, nil, nil, false)
+				return pr, count, err
 			}
 			if pr.addrid < acctRowid {
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", pr.addrid, acctRowid)
-				return pendingRow{}, err
+				return pendingResourceRow{}, count, err
 			}
 			addrid = pr.addrid
 			buf = pr.buf
 			aidx = pr.aidx
-			pr = pendingRow{}
+			pr = pendingResourceRow{}
 		} else {
 			if !resRows.Next() {
-				err = callback(addr, 0, nil, nil)
+				err = callback(addr, 0, nil, nil, false)
 				if err != nil {
-					return pendingRow{}, err
+					return pendingResourceRow{}, count, err
 				}
 				break
 			}
 			err = resRows.Scan(&addrid, &aidx, &buf)
 			if err != nil {
-				return pendingRow{}, err
+				return pendingResourceRow{}, count, err
 			}
 			if addrid < acctRowid {
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
-				return pendingRow{}, err
+				return pendingResourceRow{}, count, err
 			} else if addrid > acctRowid {
-				err = callback(addr, 0, nil, nil)
-				return pendingRow{addrid, aidx, buf}, err
+				err = callback(addr, 0, nil, nil, false)
+				return pendingResourceRow{addrid, aidx, buf}, count, err
 			}
 		}
 		resData = resourcesData{}
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
-			return pendingRow{}, err
+			return pendingResourceRow{}, count, err
 		}
-		err = callback(addr, aidx, &resData, buf)
+		count++
+		if resourceCount > 0 && count == resourceCount {
+			// last resource to be included in chunk
+			err := callback(addr, aidx, &resData, buf, true)
+			return pendingResourceRow{}, count, err
+		}
+		err = callback(addr, aidx, &resData, buf, false)
 		if err != nil {
-			return pendingRow{}, err
+			return pendingResourceRow{}, count, err
 		}
 	}
-	return pendingRow{}, nil
+	return pendingResourceRow{}, count, nil
 }
 
 func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
 	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
-	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
-	pending pendingRow, accountCount int,
-) (int, pendingRow, error) {
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error,
+	pendingBase pendingBaseRow, pendingResource pendingResourceRow, accountCount int, resourceCount int,
+) (int, pendingBaseRow, pendingResourceRow, error) {
 	var addr basics.Address
 	var prevAddr basics.Address
 	var err error
@@ -4352,44 +4486,70 @@ func processAllBaseAccountRecords(
 	var addrbuf []byte
 	var buf []byte
 	var rowid int64
-	for baseRows.Next() {
-		err = baseRows.Scan(&rowid, &addrbuf, &buf)
-		if err != nil {
-			return 0, pendingRow{}, err
+	for {
+		if pendingBase.rowid != 0 {
+			addr = pendingBase.addr
+			rowid = pendingBase.rowid
+			accountData = *pendingBase.accountData
+			buf = pendingBase.encodedAccountData
+			pendingBase = pendingBaseRow{}
+		} else {
+			if !baseRows.Next() {
+				break
+			}
+
+			err = baseRows.Scan(&rowid, &addrbuf, &buf)
+			if err != nil {
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
+
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
+
+			copy(addr[:], addrbuf)
+
+			accountData = baseAccountData{}
+			err = protocol.Decode(buf, &accountData)
+			if err != nil {
+				return 0, pendingBaseRow{}, pendingResourceRow{}, err
+			}
 		}
 
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return 0, pendingRow{}, err
-		}
-
-		copy(addr[:], addrbuf)
-
-		accountData = baseAccountData{}
-		err = protocol.Decode(buf, &accountData)
-		if err != nil {
-			return 0, pendingRow{}, err
-		}
 		err = baseCb(addr, rowid, &accountData, buf)
 		if err != nil {
-			return 0, pendingRow{}, err
+			return 0, pendingBaseRow{}, pendingResourceRow{}, err
 		}
 
-		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
+		var resourcesProcessed int
+		pendingResource, resourcesProcessed, err = processAllResources(resRows, addr, &accountData, rowid, pendingResource, resourceCount, resCb)
 		if err != nil {
 			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
-			return 0, pendingRow{}, err
+			return 0, pendingBaseRow{}, pendingResourceRow{}, err
 		}
+
+		if resourcesProcessed == resourceCount {
+			// we're done with this iteration.
+			pendingBase := pendingBaseRow{
+				addr:               addr,
+				rowid:              rowid,
+				accountData:        &accountData,
+				encodedAccountData: buf,
+			}
+			return count, pendingBase, pendingResource, nil
+		}
+		resourceCount -= resourcesProcessed
 
 		count++
 		if accountCount > 0 && count == accountCount {
 			// we're done with this iteration.
-			return count, pending, nil
+			return count, pendingBaseRow{}, pendingResource, nil
 		}
 		prevAddr = addr
 	}
 
-	return count, pending, nil
+	return count, pendingBaseRow{}, pendingResource, nil
 }
 
 // loadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
@@ -4598,7 +4758,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return nil
 		}
 
-		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
+		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
 			var err error
 			if resData != nil {
 				var ctype basics.CreatableType
@@ -4617,10 +4777,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		count := 0
-		count, iterator.pendingRow, err = processAllBaseAccountRecords(
+		count, iterator.pendingBaseRow, iterator.pendingResourceRow, err = processAllBaseAccountRecords(
 			iterator.accountBaseRows, iterator.resourcesRows,
 			baseCb, resCb,
-			iterator.pendingRow, iterator.accountCount,
+			iterator.pendingBaseRow, iterator.pendingResourceRow, iterator.accountCount, iterator.resourceCount,
 		)
 		if err != nil {
 			iterator.Close(ctx)

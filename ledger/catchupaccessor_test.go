@@ -52,18 +52,21 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
-		var balances catchpointFileBalancesChunkV6
-		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		var chunk catchpointFileChunkV6
+		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecordV6
 			accountData := baseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
-			crypto.RandBytes(randomAccount.Address[:])
+			// have the first account be the zero address
+			if i > 0 {
+				crypto.RandBytes(randomAccount.Address[:])
+			}
 			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
-			balances.Balances[i] = randomAccount
+			chunk.Balances[i] = randomAccount
 		}
-		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&balances))
+		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&chunk))
 		accounts += chunkSize
 	}
 	return
@@ -104,7 +107,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(b, err)
 
 	// pre-create all encoded chunks.
@@ -120,7 +123,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			last64KStart = time.Now()
 		}
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(b, err)
 		last64KIndex--
 	}
@@ -163,7 +166,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLedgerDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
-	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLastestBlockDownload)
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLatestBlockDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateBlocksDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
@@ -234,16 +237,16 @@ func TestBuildMerkleTrie(t *testing.T) {
 	progressCallCount = 0
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
-	// TODO: catchpointAccessor.ProgressStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
+	// TODO: catchpointAccessor.ProcessStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
 	var blob []byte = nil // TODO: content!
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "ignoredContent", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "ignoredContent", blob, &progress)
 	require.NoError(t, err)
 	// this shouldn't work yet
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 	// this needs content
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// content.msgpack from this:
@@ -259,14 +262,14 @@ func TestBuildMerkleTrie(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(t, err)
 	// shouldn't work a second time
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.Error(t, err)
 
 	// This should still fail, but slightly different coverage path
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// create some catchpoint data
@@ -274,7 +277,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 
 	for _, encodedAccounts := range encodedAccountChunks {
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(t, err)
 	}
 
@@ -368,4 +371,54 @@ func TestVerifyCatchpoint(t *testing.T) {
 	err = catchpointAccessor.CompleteCatchup(ctx)
 	require.Error(t, err)
 	//require.NoError(t, err)
+}
+
+func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	var progress CatchpointCatchupAccessorProgress
+	ctx := context.Background()
+
+	// content.msgpack from this:
+	fileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     basics.Round(0),
+		BlocksRound:       basics.Round(0),
+		Totals:            ledgercore.AccountTotals{},
+		TotalAccounts:     1,
+		TotalChunks:       1,
+		Catchpoint:        "",
+		BlockHeaderDigest: crypto.Digest{},
+	}
+	encodedFileHeader := protocol.Encode(&fileHeader)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	require.NoError(t, err)
+
+	var balances catchpointFileChunkV6
+	balances.Balances = make([]encodedBalanceRecordV6, 1)
+	var randomAccount encodedBalanceRecordV6
+	accountData := baseAccountData{}
+	accountData.MicroAlgos.Raw = crypto.RandUint63()
+	accountData.TotalAppParams = 1
+	randomAccount.AccountData = protocol.Encode(&accountData)
+	crypto.RandBytes(randomAccount.Address[:])
+	binary.LittleEndian.PutUint64(randomAccount.Address[:], 0)
+	balances.Balances[0] = randomAccount
+	encodedAccounts := protocol.Encode(&balances)
+
+	// expect error since there is a resource count mismatch
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+	require.Error(t, err)
 }

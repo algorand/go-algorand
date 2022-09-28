@@ -191,7 +191,7 @@ func heuristicFormatVal(val basics.TealValue) basics.TealValue {
 }
 
 func heuristicFormat(state map[string]basics.TealValue) map[string]basics.TealValue {
-	result := make(map[string]basics.TealValue)
+	result := make(map[string]basics.TealValue, len(state))
 	for k, v := range state {
 		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
 	}

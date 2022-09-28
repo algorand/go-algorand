@@ -1131,6 +1131,59 @@ func TestAcctParams(t *testing.T) {
 
 	source = "int 0; acct_params_get AcctAuthAddr; assert; global ZeroAddress; =="
 	testApp(t, source, ep)
+
+	// No apps or schema at first, then 1 created and the global schema noted
+	source = "int 0; acct_params_get AcctTotalAppsCreated; assert; !"
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumUint; assert; !"
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumByteSlice; assert; !"
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalExtraAppPages; assert; !"
+	testApp(t, source, ep)
+	ledger.NewApp(tx.Sender, 2000, basics.AppParams{
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema: basics.StateSchema{
+				NumUint:      6,
+				NumByteSlice: 7,
+			},
+			GlobalStateSchema: basics.StateSchema{
+				NumUint:      8,
+				NumByteSlice: 9,
+			},
+		},
+		ExtraProgramPages: 2,
+	})
+	source = "int 0; acct_params_get AcctTotalAppsCreated; assert; int 1; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumUint; assert; int 8; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumByteSlice; assert; int 9; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalExtraAppPages; assert; int 2; =="
+	testApp(t, source, ep)
+
+	// Not opted in at first, then opted into 1, schema added
+	source = "int 0; acct_params_get AcctTotalAppsOptedIn; assert; !"
+	testApp(t, source, ep)
+	ledger.NewLocals(tx.Sender, 2000)
+	source = "int 0; acct_params_get AcctTotalAppsOptedIn; assert; int 1; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumUint; assert; int 8; int 6; +; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalNumByteSlice; assert; int 9; int 7; +; =="
+	testApp(t, source, ep)
+
+	// No ASAs at first, then 1 created AND in total
+	source = "int 0; acct_params_get AcctTotalAssetsCreated; assert; !"
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalAssets; assert; !"
+	testApp(t, source, ep)
+	ledger.NewAsset(tx.Sender, 3000, basics.AssetParams{})
+	source = "int 0; acct_params_get AcctTotalAssetsCreated; assert; int 1; =="
+	testApp(t, source, ep)
+	source = "int 0; acct_params_get AcctTotalAssets; assert; int 1; =="
+	testApp(t, source, ep)
 }
 
 func TestGlobalNonDelete(t *testing.T) {
@@ -1814,11 +1867,8 @@ int 7
 `
 	txn := makeSampleAppl(100)
 	ep := defaultEvalParams(txn)
-	ledger := NewLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
+	ledger := NewLedger(nil)
+	ledger.NewAccount(txn.Txn.Sender, 1)
 	ep.Ledger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 
@@ -2429,6 +2479,8 @@ func TestReturnTypes(t *testing.T) {
 							cmd += " 0x12 0x34 0x56"
 						case immLabel:
 							cmd += " done; done: ;"
+						case immLabels:
+							cmd += " done1 done2; done1: ; done2: ;"
 						default:
 							require.Fail(t, "bad immediate", "%s", imm)
 						}

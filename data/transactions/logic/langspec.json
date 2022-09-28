@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 7,
+  "EvalMaxVersion": 8,
   "LogicSigVersion": 7,
   "Ops": [
     {
@@ -1499,9 +1499,18 @@
       "ArgEnum": [
         "AcctBalance",
         "AcctMinBalance",
-        "AcctAuthAddr"
+        "AcctAuthAddr",
+        "AcctTotalNumUint",
+        "AcctTotalNumByteSlice",
+        "AcctTotalExtraAppPages",
+        "AcctTotalAppsCreated",
+        "AcctTotalAppsOptedIn",
+        "AcctTotalAssetsCreated",
+        "AcctTotalAssets",
+        "AcctTotalBoxes",
+        "AcctTotalBoxBytes"
       ],
-      "ArgEnumTypes": "UUB",
+      "ArgEnumTypes": "UUBUUUUUUUUU",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "Groups": [
@@ -1572,6 +1581,17 @@
       "Size": 1,
       "Doc": "pop the top instruction from the call stack and branch to it",
       "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 138,
+      "Name": "switch",
+      "Args": "U",
+      "Size": 0,
+      "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
       "Groups": [
         "Flow Control"
       ]
@@ -2164,6 +2184,84 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Inner Transactions"
+      ]
+    },
+    {
+      "Opcode": 185,
+      "Name": "box_create",
+      "Args": "BU",
+      "Returns": "U",
+      "Size": 1,
+      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 186,
+      "Name": "box_extract",
+      "Args": "BUU",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 187,
+      "Name": "box_replace",
+      "Args": "BUB",
+      "Size": 1,
+      "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 188,
+      "Name": "box_del",
+      "Args": "B",
+      "Returns": "U",
+      "Size": 1,
+      "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 189,
+      "Name": "box_len",
+      "Args": "B",
+      "Returns": "UU",
+      "Size": 1,
+      "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 190,
+      "Name": "box_get",
+      "Args": "B",
+      "Returns": "BU",
+      "Size": 1,
+      "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 191,
+      "Name": "box_put",
+      "Args": "BB",
+      "Size": 1,
+      "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "State Access"
       ]
     },
     {

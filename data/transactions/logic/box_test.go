@@ -189,8 +189,41 @@ func TestBoxReadBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ledger := logic.NewLedger(nil)
-	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+	appID := basics.AppIndex(888)
+	appAddr := appID.Address()
+
+	ep, txn, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, appID, basics.AppParams{})
+
+	// Sample txn has two box refs, so read budget is 2*100
+
+	ledger.NewBox(appID, "self", string(make([]byte, 100)), appAddr)
+	ledger.NewBox(appID, "other", string(make([]byte, 100)), appAddr)
+	ledger.NewBox(appID, "third", string(make([]byte, 100)), appAddr)
+
+	// Right at budget
+	logic.TestApp(t, `byte "self"; box_len; assert; byte "other"; box_len; assert; ==`, ep)
+
+	// With three box refs, read budget is now 3*100
+	txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("third")})
+	logic.TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep)
+
+	// Increase "third" box size to 101
+	ledger.DelBox(appID, "third", appAddr)
+	ledger.NewBox(appID, "third", string(make([]byte, 101)), appAddr)
+
+	// Budget exceeded
+	logic.TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "box read budget (300) exceeded")
+	// Still exceeded if we don't touch the boxes
+	logic.TestApp(t, `int 1`, ep, "box read budget (300) exceeded")
+
+	// Still exceeded with one box ref
+	txn.Boxes = txn.Boxes[2:]
+	logic.TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "box read budget (100) exceeded")
+
+	// But not with two
+	txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
+	logic.TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep)
 }
 
 func TestBoxWriteBudget(t *testing.T) {
@@ -329,6 +362,26 @@ func TestConveniences(t *testing.T) {
                       byte "self"; box_get; assert; len`, ep,
 		"box_get produced a too big")
 
+}
+
+func TestBoxTotals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := logic.MakeSampleEnv()
+
+	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+	// The SENDER certainly has no boxes (but does exist)
+	logic.TestApp(t, `int 0; acct_params_get AcctTotalBoxes; pop; !`, ep)
+	// Nor does the app account, to start
+	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
+	                  acct_params_get AcctTotalBoxes; pop; !; `, ep)
+	// Create a 31 byte box with a 4 byte name
+	logic.TestApp(t, `byte "self"; int 31; box_create`, ep)
+	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
+	                  acct_params_get AcctTotalBoxes; pop; int 1; ==`, ep)
+	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
+	                  acct_params_get AcctTotalBoxBytes; pop; int 35; ==`, ep)
 }
 
 func TestMakeBoxKey(t *testing.T) {

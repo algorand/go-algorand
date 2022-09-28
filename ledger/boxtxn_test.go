@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"bytes"
@@ -26,14 +26,19 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-var appSource = main(`
+var boxAppSource = main(`
 		txn ApplicationArgs 0
         byte "create"			// create box named arg[1]
         ==
+		txn ApplicationArgs 0
+		byte "recreate"
+		==
+		||
         bz del
 		txn ApplicationArgs 1
 		int 24
@@ -45,7 +50,16 @@ var appSource = main(`
         txn ApplicationArgs 2
         btoi
      default:
+		txn ApplicationArgs 0
+		byte "recreate"
+		==
+		bz first
 		box_create
+		!
+		assert
+		b end
+	 first:
+	    box_create
         assert
         b end
      del:						// delete box arg[1]
@@ -85,21 +99,22 @@ var appSource = main(`
         err
 `)
 
+const boxVersion = 35
+
 // TestBoxCreate tests MBR changes around allocation, deallocation
 func TestBoxCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 35
-	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		// increment for a size 24 box with 4 letter name
 		const mbr = 2500 + 28*400
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, appSource)
+		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -145,14 +160,64 @@ func TestBoxCreate(t *testing.T) {
 	})
 }
 
+// TestBoxRecreate tests behavior when box_create is called for a box that already exists
+func TestBoxRecreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		// increment for a size 4 box with 4 letter name
+		const mbr = 2500 + 8*400
+
+		appIndex := dl.fundedApp(addrs[0], 100_000+mbr, boxAppSource)
+
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("adam")}},
+		}
+
+		create := call.Args("create", "adam", "\x04") // box value size is 4 bytes
+		recreate := call.Args("recreate", "adam", "\x04")
+
+		dl.txn(recreate, "box_create\n!\nassert")
+		dl.txn(create)
+		dl.txn(recreate)
+		dl.txn(call.Args("set", "adam", "\x01\x02\x03\x04"))
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04"))
+		dl.txn(recreate.Noted("again"))
+		// a recreate does not change the value
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after recreate"))
+		// recreating with a smaller size fails
+		dl.txn(call.Args("recreate", "adam", "\x03"), "new box size mismatch 4 3")
+		// recreating with a larger size fails
+		dl.txn(call.Args("recreate", "adam", "\x05"), "new box size mismatch 4 5")
+		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after failed recreates"))
+
+		// delete and actually create again
+		dl.txn(call.Args("delete", "adam"))
+		dl.txn(call.Args("create", "adam", "\x03"))
+
+		dl.txn(call.Args("set", "adam", "\x03\x02\x01"))
+		dl.txn(call.Args("check", "adam", "\x03\x02\x01"))
+		dl.txn(recreate.Noted("after delete"), "new box size mismatch 3 4")
+		dl.txn(call.Args("recreate", "adam", "\x03"))
+		dl.txn(call.Args("check", "adam", "\x03\x02\x01").Noted("after delete and recreate"))
+	})
+}
+
 func TestBoxCreateAvailability(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 35
-	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		accessInCreate := txntest.Txn{
@@ -254,16 +319,15 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// boxes begin in 35
-	testConsensusRange(t, 35, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		var bufNewLogger bytes.Buffer
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, appSource)
+		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],

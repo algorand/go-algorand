@@ -180,6 +180,8 @@ func (ep *EvalParams) reset() {
 	if ep.Trace != nil {
 		ep.Trace = &strings.Builder{}
 	}
+	ep.txidCache = nil
+	ep.innerTxidCache = nil
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -915,6 +917,18 @@ func TestBytecTooFar(t *testing.T) {
 	t.Parallel()
 	testPanics(t, "bytec_1; btoi", 1)
 	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
+}
+
+func TestManualCBlockEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// TestManualCBlock in assembler_test.go demonstrates that these will use
+	// an inserted constant block.
+	testAccepts(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", 2)
+	testAccepts(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", 2)
+	testAccepts(t, "byte 0x2222; byte 0x2222; concat; len; int 4; ==; return; bytecblock 0x11", 2)
+	testAccepts(t, "b skip; bytecblock 0x11; skip: byte 0x2222; byte 0x2222; concat; len; int 4; ==", 2)
 }
 
 func TestTxnBadField(t *testing.T) {
@@ -4669,9 +4683,11 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
 	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
+	testPanics(t, "int 65; bzero; byte 0x01; b/; int 1; return", 4)
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
+	testPanics(t, "int 65; bzero; byte 0x10; b%", 4)
 
 	// Even 128 byte outputs are ok
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
@@ -4696,6 +4712,7 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b<=", 4)
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
 	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 
@@ -4704,6 +4721,7 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>=", 4)
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b>=", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
@@ -4714,6 +4732,7 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
 	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
+	testPanics(t, "byte 0x10; int 65; bzero; b!=", 4)
 }
 
 func TestBytesBits(t *testing.T) {
@@ -5524,4 +5543,85 @@ func TestTypeComplaints(t *testing.T) {
 
 	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
+}
+
+func TestSwitchInt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// take the 0th label
+	testAccepts(t, `
+int 0
+switch zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label
+	testRejects(t, `
+int 1
+switch zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// same, but jumping to end of program
+	testAccepts(t, `
+int 1; dup
+switch zero one
+zero: err
+one:
+`, 8)
+
+	// no match
+	testAccepts(t, `
+int 2
+switch zero one
+int 1; return					// falls through to here
+zero: int 0; return
+one:  int 0; return
+`, 8)
+
+	// jump forward and backward
+	testAccepts(t, `
+int 0
+start:
+int 1
++
+dup
+int 1
+-
+switch start end
+err
+end:
+int 2
+==
+assert
+int 1
+`, 8)
+
+	// 0 labels are allowed, but weird!
+	testAccepts(t, `
+int 0
+switch
+int 1
+`, 8)
+
+	testPanics(t, notrack("switch; int 1"), 8)
+
+	// make the switch the final instruction
+	testAccepts(t, `
+int 1
+int 0
+switch done1 done2; done1: ; done2: ;
+`, 8)
+
+	// make the switch the final instruction, and don't match
+	testAccepts(t, `
+int 1
+int 88
+switch done1 done2; done1: ; done2: ;
+`, 8)
 }

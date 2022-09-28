@@ -49,6 +49,10 @@ func serviceUnavailable(ctx echo.Context, internal error, external string, log l
 	return returnError(ctx, http.StatusServiceUnavailable, internal, external, log)
 }
 
+func timeout(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusRequestTimeout, internal, external, log)
+}
+
 func internalError(ctx echo.Context, internal error, external string, log logging.Logger) error {
 	return returnError(ctx, http.StatusInternalServerError, internal, external, log)
 }
