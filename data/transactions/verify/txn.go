@@ -469,7 +469,7 @@ type VerificationResult struct {
 	txnGroup []transactions.SignedTxn
 	verified bool
 }
-
+/*
 func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
 	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult) {
 
@@ -504,3 +504,4 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 	}()
 
 }
+*/

@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -123,4 +124,72 @@ func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifier()
 	require.NoError(t, bv.Verify())
+}
+
+// TestBatchVerifierBadFailedArray tests that VerifyWithFeedback returns
+// the expected error if the failed array size is not correct
+func TestBatchVerifierBadFailedArray(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var s Seed
+	bv := MakeBatchVerifierWithHint(4)
+	for i := 0; i < 4; i++ {
+		msg := randString()
+		RandBytes(s[:])
+		sigSecrets := GenerateSignatureSecrets(s)
+		sig := sigSecrets.Sign(msg)
+		bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+	}
+	require.Equal(t, 4, bv.GetNumberOfEnqueuedSignatures())
+	failed := make([]bool, 4, 6)
+	err := bv.VerifyWithFeedback(failed)
+	require.NoError(t, err)
+
+	failed = make([]bool, 3, 4)
+	err = bv.VerifyWithFeedback(failed)
+	require.Error(t, err)
+	require.Equal(t, errInvalidResultSize, err)
+
+	failed = make([]bool, 5, 5)
+	err = bv.VerifyWithFeedback(failed)
+	require.Error(t, err)
+	require.Equal(t, errInvalidResultSize, err)
+}
+
+// TestBatchVerifierIndividualResults tests that VerifyWithFeedback
+// returns the correct failed signature indexes
+func TestBatchVerifierIndividualResults(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for i := 1; i < 64*2+3; i++ {
+		n := i
+		bv := MakeBatchVerifierWithHint(n)
+		var s Seed
+		badSigs := make([]bool, n, n)
+		failed := make([]bool, n, n)
+		hasBadSig := false
+		for i := 0; i < n; i++ {
+			msg := randString()
+			RandBytes(s[:])
+			sigSecrets := GenerateSignatureSecrets(s)
+			sig := sigSecrets.Sign(msg)
+			if rand.Float32() > 0.5 {
+				// make a bad sig
+				sig[0] = sig[0] + 1
+				badSigs[i] = true
+				hasBadSig = true
+			}
+			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+		}
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		err := bv.VerifyWithFeedback(failed)
+		if hasBadSig {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+		}
+		for i := range badSigs {
+			require.Equal(t, badSigs[i], failed[i])
+		}
+	}
 }
