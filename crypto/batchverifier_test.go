@@ -148,12 +148,12 @@ func TestBatchVerifierBadFailedArray(t *testing.T) {
 	failed = make([]bool, 3, 4)
 	err = bv.VerifyWithFeedback(failed)
 	require.Error(t, err)
-	require.Equal(t, errInvalidResultSize, err)
+	require.Equal(t, errInvalidFailedSlice, err)
 
 	failed = make([]bool, 5, 5)
 	err = bv.VerifyWithFeedback(failed)
 	require.Error(t, err)
-	require.Equal(t, errInvalidResultSize, err)
+	require.Equal(t, errInvalidFailedSlice, err)
 }
 
 // TestBatchVerifierIndividualResults tests that VerifyWithFeedback

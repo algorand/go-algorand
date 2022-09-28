@@ -53,7 +53,7 @@ const minBatchVerifierAlloc = 16
 // Batch verifications errors
 var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
-	errInvalidResultSize       = errors.New("results size is not equal to the number of enqueued signatures")
+	errInvalidFailedSlice      = errors.New("failed slice size is not equal to the number of enqueued signatures")
 )
 
 //export ed25519_randombytes_unsafe
@@ -128,16 +128,16 @@ func (b *BatchVerifier) Verify() error {
 }
 
 // VerifyWithFeedback verifies that all the signatures are valid.
-// results slice should have len equal to GetNumberOfEnqueuedSignatures
+// failed slice should have len equal to GetNumberOfEnqueuedSignatures
 // if all sigs are valid, nil will be returned
-// if some txns are invalid, false will be set at the appropriate index in results
+// if some txns are invalid, true will be set at the appropriate index in failed
 func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return ErrZeroTransactionInBatch
 	}
 
 	if len(failed) != b.GetNumberOfEnqueuedSignatures() {
-		return errInvalidResultSize
+		return errInvalidFailedSlice
 	}
 
 	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
@@ -153,6 +153,7 @@ func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
+// otherwise, returns an error, and sets the indexes of the failed sigs in failed
 func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature, failed []bool) bool {
 
 	numberOfSignatures := len(messages)
