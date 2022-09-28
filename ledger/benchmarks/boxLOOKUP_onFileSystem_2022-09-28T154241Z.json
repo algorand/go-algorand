@@ -1,0 +1,92 @@
+[
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 1000,
+    "numOps": 2513335,
+    "opDuration": 17386874307,
+    "nsPerOp": 6917,
+    "realDuration": 20107623823
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 2000,
+    "numOps": 2459471,
+    "opDuration": 17410818887,
+    "nsPerOp": 7079,
+    "realDuration": 20115531509
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 4000,
+    "numOps": 2454137,
+    "opDuration": 17462915832,
+    "nsPerOp": 7115,
+    "realDuration": 20131728988
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 8000,
+    "numOps": 2383558,
+    "opDuration": 17469791908,
+    "nsPerOp": 7329,
+    "realDuration": 20133707061
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 16000,
+    "numOps": 2242225,
+    "opDuration": 17441233376,
+    "nsPerOp": 7778,
+    "realDuration": 20178507427
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 32000,
+    "numOps": 2398911,
+    "opDuration": 17436993174,
+    "nsPerOp": 7268,
+    "realDuration": 20291120771
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 64000,
+    "numOps": 2145306,
+    "opDuration": 17717635941,
+    "nsPerOp": 8258,
+    "realDuration": 20550801525
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 128000,
+    "numOps": 2035206,
+    "opDuration": 17825206426,
+    "nsPerOp": 8758,
+    "realDuration": 21221323807
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 256000,
+    "numOps": 1907905,
+    "opDuration": 17906772088,
+    "nsPerOp": 9385,
+    "realDuration": 22787874643
+  },
+  {
+    "name": "boxLOOKUP_onFileSystem",
+    "sqliteInMemory": false,
+    "n": 512000,
+    "numOps": 2016063,
+    "opDuration": 17916990981,
+    "nsPerOp": 8887,
+    "realDuration": 25020661512
+  }
+]

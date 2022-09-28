@@ -146,14 +146,14 @@ go test -v -timeout 7200s -run ^TestManualBoxBenchmark$ github.com/algorand/go-a
 */
 
 func TestManualBoxBenchmark(t *testing.T) {
-	testName := "boxLOOKUP_onFileSystem"
-	lookup := "SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';"
-	var customLookup *string = &lookup
+	testName := "boxlookupKeysByPrefix_onFileSystem"
+	// lookup := "SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';"
+	var customLookup *string // = &lookup
 	inMemory := false
 	duration := 20 * time.Second
 
 	sleepInBetween := 10 * time.Second
-	tests := 10 // 17 is really the max
+	tests := 16 // 17 is really the max
 	results := make([]manualBenchmarkResult, tests)
 
 	base := 2
