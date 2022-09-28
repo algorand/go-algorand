@@ -1113,15 +1113,23 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	require.NoError(t, err)
 	defer qs.close()
 
-	kvPairTestCases := []struct {
+	kvPairDBPrepareSet := []struct {
 		key   []byte
 		value []byte
 	}{
-		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}, value: []byte("value0")},
-		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}, value: []byte("value1")},
-		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}, value: []byte("value2")},
-		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}, value: []byte("value3")},
-		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, value: []byte("value4")},
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}, value: []byte("val0")},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}, value: []byte("val1")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}, value: []byte("val2")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}, value: []byte("val3")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, value: []byte("val4")},
+		{key: []byte{0xFF, 0xFE, 0xFF}, value: []byte("val5")},
+		{key: []byte{0xFF, 0xFF}, value: []byte("should not confuse with 0xFF-0xFE")},
+		{key: []byte("TACOCAT"), value: []byte("val6")},
+		{key: []byte("TACOBELL"), value: []byte("2bucks50cents?")},
+		{key: []byte("DingHo-SmallPack"), value: []byte("3bucks75cents")},
+		{key: []byte("DingHo-StandardPack"), value: []byte("5bucks25cents")},
+		{key: []byte("BostonKitchen-CheeseSlice"), value: []byte("3bucks50cents")},
+		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
 	}
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -1133,24 +1141,140 @@ func TestLookupKeysByPrefix(t *testing.T) {
 		return
 	}
 
-	for i := 0; i < len(kvPairTestCases); i++ {
-		err := writer.upsertKvPair(string(kvPairTestCases[i].key), string(kvPairTestCases[i].value))
+	for i := 0; i < len(kvPairDBPrepareSet); i++ {
+		err := writer.upsertKvPair(string(kvPairDBPrepareSet[i].key), string(kvPairDBPrepareSet[i].value))
 		require.NoError(t, err)
 	}
 
 	tx.Commit()
 	writer.close()
 
-	for length := 1; length <= len(kvPairTestCases); length++ {
-		t.Run("lookupKVByPrefix-prefix-with-"+strconv.Itoa(length)+"-0xFF", func(t *testing.T) {
-			results := make(map[string]bool)
-			prefix := make([]byte, length)
-			for i := 0; i < length; i++ {
-				prefix[i] = 0xFF
-			}
-			_, err := qs.lookupKeysByPrefix(string(prefix), uint64(len(kvPairTestCases)), results, 0)
+	testCases := []struct {
+		prefix        []byte
+		expectedNames [][]byte
+	}{
+		{
+			prefix: []byte{0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0x12, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFE, 0xFF},
+				{0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFE},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFE, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte("TACO"),
+			expectedNames: [][]byte{
+				[]byte("TACOCAT"),
+				[]byte("TACOBELL"),
+			},
+		},
+		{
+			prefix:        []byte("TACOC"),
+			expectedNames: [][]byte{[]byte("TACOCAT")},
+		},
+		{
+			prefix: []byte("DingHo"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix: []byte("DingHo-S"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix:        []byte("DingHo-Small"),
+			expectedNames: [][]byte{[]byte("DingHo-SmallPack")},
+		},
+		{
+			prefix:        []byte("BostonKitchen"),
+			expectedNames: [][]byte{[]byte("BostonKitchen-CheeseSlice")},
+		},
+		{
+			prefix:        []byte(`™£´´∂ƒ∂ƒßƒ©`),
+			expectedNames: [][]byte{[]byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
+		},
+		{
+			prefix: []byte{},
+			expectedNames: [][]byte{
+				{0xFF, 0x12, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0x34, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0x56, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0x78},
+				{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				{0xFF, 0xFE, 0xFF},
+				{0xFF, 0xFF},
+				[]byte("TACOCAT"),
+				[]byte("TACOBELL"),
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+				[]byte("BostonKitchen-CheeseSlice"),
+				[]byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`),
+			},
+		},
+	}
+
+	for index, testCase := range testCases {
+		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
+			actual := make(map[string]bool)
+			_, err := qs.lookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
 			require.NoError(t, err)
-			require.Len(t, results, len(kvPairTestCases)+1-length)
+			expected := make(map[string]bool)
+			for _, name := range testCase.expectedNames {
+				expected[string(name)] = true
+			}
+			require.Equal(t, actual, expected)
 		})
 	}
 }
