@@ -203,9 +203,8 @@ func assembler(asm asmFunc) OpDetails {
 }
 
 func (d OpDetails) assembler(asm asmFunc) OpDetails {
-	clone := d
-	clone.asm = asm
-	return clone
+	d.asm = asm
+	return d
 }
 
 func costly(cost int) OpDetails {
@@ -215,9 +214,8 @@ func costly(cost int) OpDetails {
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	clone := d
-	clone.FullCost = linearCost{baseCost: cost}
-	return clone
+	d.FullCost = linearCost{baseCost: cost}
+	return d
 }
 
 func only(m runMode) OpDetails {
@@ -227,15 +225,13 @@ func only(m runMode) OpDetails {
 }
 
 func (d OpDetails) only(m runMode) OpDetails {
-	clone := d
-	clone.Modes = m
-	return clone
+	d.Modes = m
+	return d
 }
 
 func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	clone := d
-	clone.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
-	return clone
+	d.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
+	return d
 }
 
 func immediates(names ...string) OpDetails {
@@ -243,9 +239,8 @@ func immediates(names ...string) OpDetails {
 }
 
 func (d OpDetails) trust() OpDetails {
-	clone := d
-	clone.trusted = true
-	return clone
+	d.trusted = true
+	return d
 }
 
 func immKinded(kind immKind, names ...string) OpDetails {
@@ -265,9 +260,8 @@ func typed(typer refineFunc) OpDetails {
 }
 
 func (d OpDetails) typed(typer refineFunc) OpDetails {
-	clone := d
-	clone.refine = typer
-	return clone
+	d.refine = typer
+	return d
 }
 
 // field is used to create an opDetails for an opcode with a single field
