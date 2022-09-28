@@ -219,7 +219,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
 	batchVerifier := MakeBatchVerifier()
 
-	if verified, err = MultisigBatchVerify(msg, addr, sig, batchVerifier); err != nil {
+	if verified, err = MultisigBatchVerifyPrep(msg, addr, sig, batchVerifier); err != nil {
 		return
 	}
 	if !verified {
@@ -236,7 +236,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 
 // MultisigBatchVerify verifies an assembled MultisigSig.
 // it is the caller responsibility to call batchVerifier.verify()
-func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
+func MultisigBatchVerifyPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
 	verified = false
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)

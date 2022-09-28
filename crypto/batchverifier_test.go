@@ -122,5 +122,5 @@ func BenchmarkBatchVerifier(b *testing.B) {
 func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifier()
-	require.Error(t, bv.Verify())
+	require.NoError(t, bv.Verify())
 }

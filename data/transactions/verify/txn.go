@@ -122,10 +122,6 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 		return nil, err
 	}
 
-	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
-		return groupCtx, nil
-	}
-
 	if err := batchVerifier.Verify(); err != nil {
 		return nil, err
 	}
@@ -212,7 +208,7 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return nil
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigBatchVerify(s.Txn,
+		if ok, _ := crypto.MultisigBatchVerifyPrep(s.Txn,
 			crypto.Digest(s.Authorizer()),
 			s.Msig,
 			batchVerifier); ok {
@@ -308,7 +304,7 @@ func logicSigSanityCheckBatchVerifyPrep(txn *transactions.SignedTxn, groupIndex 
 		batchVerifier.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
 		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigBatchVerify(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
+		if ok, _ := crypto.MultisigBatchVerifyPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
 			return errors.New("logic multisig validation failed")
 		}
 	}
