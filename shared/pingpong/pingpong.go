@@ -603,6 +603,7 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac *libgoal.Client) {
 				_, _ = fmt.Fprintf(os.Stderr, "error sending transactions, sleeping .5 seconds: %v\n", err)
 				pps.nextSendTime = time.Now().Add(500 * time.Millisecond)
 				pps.schedule(1)
+				panic(err.Error())
 			}
 
 			if pps.cfg.RefreshTime > 0 && time.Now().After(refreshTime) {

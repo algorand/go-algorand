@@ -782,7 +782,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	for appid := range pps.cinfo.AppParams {
-		// opt-in the account to the app
+		// use source account to fund all apps
 		err = pps.appFundFromSourceAccount(appid, client)
 		if err != nil {
 			return
