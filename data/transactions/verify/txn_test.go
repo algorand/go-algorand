@@ -54,7 +54,7 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchVerifyPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
 		return err
 	}
 
