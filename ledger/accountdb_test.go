@@ -1192,10 +1192,10 @@ func TestManualBoxBenchmark(t *testing.T) {
 	duration := 20 * time.Second
 
 	sleepInBetween := 10 * time.Second
-	tests := 6
+	tests := 16
 	results := make([]manualBenchmarkResult, tests)
 
-	base := 10
+	base := 2
 	N := 1000
 	for exp := 0; exp < tests; exp++ {
 		results[exp] = manualBoxDbBenchmarkFactory(testName, customLookup, inMemory, N, duration)(t)
