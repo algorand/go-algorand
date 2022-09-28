@@ -409,5 +409,42 @@ func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
 		newStateProofInterval, true, any)
 }
 
-// TODO: Test lookup for not yet generated
-// TODO: Test lookup errors
+func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(10)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+
+	expectedDataInDbNum := uint64(2)
+
+	mockCommit(t, spt, ml, 0, basics.Round(defaultStateProofInterval*expectedDataInDbNum))
+
+	_, err := spt.LookupVerificationData(basics.Round(0))
+	a.ErrorIs(err, sql.ErrNoRows)
+
+	lastStateProofRound := basics.Round(defaultStateProofInterval + dataToAdd*defaultStateProofInterval)
+	_, err = spt.LookupVerificationData(lastStateProofRound + basics.Round(defaultStateProofInterval))
+	a.ErrorIs(err, errStateProofVerificationDataNotYetGenerated)
+
+	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
+	dbData, err := spt.LookupVerificationData(dbDataRound)
+	a.NoError(err)
+	a.Equal(dbDataRound, dbData.TargetStateProofRound)
+
+	memoryDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
+
+	memoryData, err := spt.LookupVerificationData(memoryDataRound)
+	a.NoError(err)
+	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
+
+	// This error shouldn't happen in normal flow - we force it to happen for the test.
+	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
+	_, err = spt.LookupVerificationData(memoryDataRound)
+	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+}

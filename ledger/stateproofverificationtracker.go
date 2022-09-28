@@ -31,7 +31,7 @@ import (
 
 var (
 	errStateProofVerificationDataNotFound        = errors.New("requested state proof verification data not found in memory")
-	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data is in a future block")
+	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data later than latest data available")
 )
 
 type verificationDeleteData struct {
@@ -170,8 +170,6 @@ func (spt *stateProofVerificationTracker) close() {
 		spt.dbQueries.lookupStateProofVerificationData.Close()
 	}
 }
-
-// TODO: additional data in error messages
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	spt.stateProofVerificationMu.RLock()
