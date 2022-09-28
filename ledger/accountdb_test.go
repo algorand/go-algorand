@@ -1366,7 +1366,8 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 				prefix = logic.MakeBoxKey(appID, "")
 			}
 		}
-		tx.Commit()
+		err = tx.Commit()
+		require.NoError(b, err)
 		writer.close()
 
 		// benchmark the query against large DB, see if we have O(log N) speed
