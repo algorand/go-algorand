@@ -244,6 +244,8 @@ type wsPeer struct {
 
 	// inSendScheduler should only be read/written from sendScheduler code
 	inSendScheduler bool
+
+	hasDedicatedWriteThread bool
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -340,7 +342,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -376,7 +378,15 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	wp.wg.Add(1)
 	go wp.readLoop()
-	//go wp.writeLoop()
+	if wp.outgoing {
+		wp.startWriteLoop()
+	}
+}
+
+func (wp *wsPeer) startWriteLoop() {
+	wp.hasDedicatedWriteThread = true
+	wp.wg.Add(1)
+	go wp.writeLoop()
 }
 
 // returns the originating address of an incoming connection. For outgoing connection this function returns an empty string.
@@ -547,7 +557,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 	// the rationale here is that this message is rarely sent, and we would benefit from having it being lock-free.
 	select {
 	case wp.sendBufferHighPrio <- sm:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 		return
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
@@ -557,9 +567,9 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 
 	select {
 	case wp.sendBufferHighPrio <- sm:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 	case wp.sendBufferBulk <- sm:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		shutdown = true
@@ -738,11 +748,18 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	}
 	select {
 	case outchan <- sendMessages{msgs: msgs}:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 		return true
 	default:
 	}
 	return false
+}
+
+func (wp *wsPeer) beSendable() {
+	if wp.hasDedicatedWriteThread {
+		return
+	}
+	wp.net.makePeerSendable(wp)
 }
 
 const pingLength = 8
@@ -858,7 +875,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
-		wp.net.makePeerSendable(wp)
+		wp.beSendable()
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return

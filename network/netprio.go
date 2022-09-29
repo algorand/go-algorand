@@ -96,6 +96,9 @@ func (pt *prioTracker) setPriority(peer *wsPeer, addr basics.Address, weight uin
 		// we will finish setup in that call.
 		peer.prioAddress = addr
 		peer.prioWeight = weight
+		if weight > 0 && !peer.hasDedicatedWriteThread {
+			peer.startWriteLoop()
+		}
 		return
 	}
 
@@ -125,6 +128,9 @@ func (pt *prioTracker) setPriority(peer *wsPeer, addr basics.Address, weight uin
 	pt.peerByAddress[addr] = peer
 	peer.prioAddress = addr
 	peer.prioWeight = weight
+	if weight > 0 && !peer.hasDedicatedWriteThread {
+		peer.startWriteLoop()
+	}
 	heap.Fix(peersHeap{wn}, peer.peerIndex)
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 }
