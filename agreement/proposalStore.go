@@ -18,7 +18,15 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var proposalAlreadyFilledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_filled", Description: "Number of times a duplicate proposal payload was received before validation"})
+
+var proposalAlreadyAssembledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_assembled", Description: "Number of times a duplicate proposal payload was received after validation"})
 
 // An blockAssembler contains the proposal data associated with some
 // proposal-value.
@@ -52,10 +60,12 @@ type blockAssembler struct {
 // an error if the pipelining operation is redundant.
 func (a blockAssembler) pipeline(p unauthenticatedProposal) (blockAssembler, error) {
 	if a.Assembled {
+		proposalAlreadyAssembledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already assembled")
 	}
 
 	if a.Filled {
+		proposalAlreadyFilledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already filled")
 	}
 
