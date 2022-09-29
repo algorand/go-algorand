@@ -2410,6 +2410,9 @@ func TestReturnTypes(t *testing.T) {
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 
 		"block": "block BlkSeed",
+
+		"proto": "callsub p; p: proto 0 3",
+		"bury":  ": int 1; int 2; int 3; bury 2; pop; pop;",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2432,9 +2435,8 @@ func TestReturnTypes(t *testing.T) {
 
 		"vrf_verify": true,
 
-		"bn256_add":        true,
-		"bn256_scalar_mul": true,
-		"bn256_pairing":    true,
+		"frame_dig":  true, // would need a "proto" subroutine
+		"frame_bury": true, // would need a "proto" subroutine
 
 		// It's too annoying to set things up for them to work in this context.
 		// Tested in box_test.go
@@ -2442,6 +2444,10 @@ func TestReturnTypes(t *testing.T) {
 		"box_extract": true,
 		"box_replace": true,
 		"box_del":     true,
+
+		"bn256_add":        true,
+		"bn256_scalar_mul": true,
+		"bn256_pairing":    true,
 	}
 
 	byName := OpsByName[LogicVersion]
@@ -2451,7 +2457,7 @@ func TestReturnTypes(t *testing.T) {
 			if (m & spec.Modes) == 0 {
 				continue
 			}
-			if skipCmd[name] {
+			if skipCmd[name] || spec.trusted {
 				continue
 			}
 			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
@@ -2469,6 +2475,8 @@ func TestReturnTypes(t *testing.T) {
 						switch imm.kind {
 						case immByte:
 							cmd += " 0"
+						case immInt8:
+							cmd += " -2"
 						case immInt:
 							cmd += " 10"
 						case immInts:

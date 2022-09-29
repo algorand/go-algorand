@@ -64,6 +64,7 @@ const appAddressAvailableVersion = 7
 
 const fidoVersion = 7       // base64, json, secp256r1
 const randomnessVersion = 7 // vrf_verify, block
+const fpVersion = 8         // changes for frame pointers and simpler function discipline
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
@@ -125,6 +126,8 @@ type OpDetails struct {
 	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
 	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
 	Immediates []immediate // details of each immediate arg to opcode
+
+	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -171,11 +174,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
 func detBranch() OpDetails {
@@ -203,9 +206,8 @@ func assembler(asm asmFunc) OpDetails {
 }
 
 func (d OpDetails) assembler(asm asmFunc) OpDetails {
-	clone := d
-	clone.asm = asm
-	return clone
+	d.asm = asm
+	return d
 }
 
 func costly(cost int) OpDetails {
@@ -215,9 +217,8 @@ func costly(cost int) OpDetails {
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	clone := d
-	clone.FullCost = linearCost{baseCost: cost}
-	return clone
+	d.FullCost = linearCost{baseCost: cost}
+	return d
 }
 
 func only(m runMode) OpDetails {
@@ -227,29 +228,41 @@ func only(m runMode) OpDetails {
 }
 
 func (d OpDetails) only(m runMode) OpDetails {
-	clone := d
-	clone.Modes = m
-	return clone
+	d.Modes = m
+	return d
 }
 
 func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	clone := d
-	clone.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
-	return clone
+	d.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
+	return d
 }
 
 func immediates(names ...string) OpDetails {
+	return immKinded(immByte, names...)
+}
+
+func (d OpDetails) trust() OpDetails {
+	d.trusted = true
+	return d
+}
+
+func immKinded(kind immKind, names ...string) OpDetails {
 	d := detDefault()
 	d.Size = len(names) + 1
 	d.Immediates = make([]immediate, len(names))
 	for i, name := range names {
-		d.Immediates[i] = imm(name, immByte)
+		d.Immediates[i] = imm(name, kind)
 	}
 	return d
 }
 
-func stacky(typer refineFunc, imms ...string) OpDetails {
-	d := immediates(imms...)
+func typed(typer refineFunc) OpDetails {
+	d := detDefault()
+	d.refine = typer
+	return d
+}
+
+func (d OpDetails) typed(typer refineFunc) OpDetails {
 	d.refine = typer
 	return d
 }
@@ -295,6 +308,7 @@ type immKind byte
 
 const (
 	immByte immKind = iota
+	immInt8
 	immLabel
 	immInt
 	immBytes
@@ -422,8 +436,8 @@ var OpSpecs = []OpSpec{
 	{0x0f, ">=", opGe, proto("ii:i"), 1, detDefault()},
 	{0x10, "&&", opAnd, proto("ii:i"), 1, detDefault()},
 	{0x11, "||", opOr, proto("ii:i"), 1, detDefault()},
-	{0x12, "==", opEq, proto("aa:i"), 1, stacky(typeEquals)},
-	{0x13, "!=", opNeq, proto("aa:i"), 1, stacky(typeEquals)},
+	{0x12, "==", opEq, proto("aa:i"), 1, typed(typeEquals)},
+	{0x13, "!=", opNeq, proto("aa:i"), 1, typed(typeEquals)},
 	{0x14, "!", opNot, proto("i:i"), 1, detDefault()},
 	{0x15, "len", opLen, proto("b:i"), 1, detDefault()},
 	{0x16, "itob", opItob, proto("i:b"), 1, detDefault()},
@@ -459,8 +473,8 @@ var OpSpecs = []OpSpec{
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
-	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},
-	{0x35, "store", opStore, proto("a:"), 1, stacky(typeStore, "i")},
+	{0x34, "load", opLoad, proto(":a"), 1, immediates("i").typed(typeLoad)},
+	{0x35, "store", opStore, proto("a:"), 1, immediates("i").typed(typeStore)},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
 	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
@@ -474,31 +488,32 @@ var OpSpecs = []OpSpec{
 	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(modeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
-	{0x3e, "loads", opLoads, proto("i:a"), 5, stacky(typeLoads)},
-	{0x3f, "stores", opStores, proto("ia:"), 5, stacky(typeStores)},
+	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
+	{0x3f, "stores", opStores, proto("ia:"), 5, typed(typeStores)},
 
 	{0x40, "bnz", opBnz, proto("i:"), 1, detBranch()},
 	{0x41, "bz", opBz, proto("i:"), 2, detBranch()},
 	{0x42, "b", opB, proto(":"), 2, detBranch()},
 	{0x43, "return", opReturn, proto("i:x"), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
+	{0x45, "bury", opBury, proto("a:"), fpVersion, immediates("n").typed(typeBury)},
+	{0x46, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, immediates("n").typed(typePopN).trust()},
+	{0x47, "dupn", opDupN, proto("a:", "", "A, [N copies of A]"), fpVersion, immediates("n").typed(typeDupN).trust()},
 	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
-	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, stacky(typeDup)},
-	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, stacky(typeDupTwo)},
-	// There must be at least one thing on the stack for dig, but
-	// it would be nice if we did better checking than that.
-	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, stacky(typeDig, "n")},
-	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, stacky(typeSwap)},
-	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, stacky(typeSelect)},
-	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]"), 5, stacky(typeCover, "n")},
-	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A"), 5, stacky(typeUncover, "n")},
+	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, typed(typeDup)},
+	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, typed(typeDupTwo)},
+	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, immediates("n").typed(typeDig)},
+	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, typed(typeSwap)},
+	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, typed(typeSelect)},
+	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]"), 5, immediates("n").typed(typeCover)},
+	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A"), 5, immediates("n").typed(typeUncover)},
 
 	// byteslice processing / StringOps
 	{0x50, "concat", opConcat, proto("bb:b"), 2, detDefault()},
 	{0x51, "substring", opSubstring, proto("b:b"), 2, immediates("s", "e").assembler(asmSubstring)},
 	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, detDefault()},
 	{0x53, "getbit", opGetBit, proto("ai:i"), 3, detDefault()},
-	{0x54, "setbit", opSetBit, proto("aii:a"), 3, stacky(typeSetBit)},
+	{0x54, "setbit", opSetBit, proto("aii:a"), 3, typed(typeSetBit)},
 	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, detDefault()},
 	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, detDefault()},
 	{0x57, "extract", opExtract, proto("b:b"), 5, immediates("s", "l")},
@@ -508,7 +523,6 @@ var OpSpecs = []OpSpec{
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, detDefault()},
 	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
 	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, detDefault()},
-
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
@@ -546,9 +560,13 @@ var OpSpecs = []OpSpec{
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
-	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault()},
-	{0x8a, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	// 0x8b will likely be a switch on pairs of values/targets
+	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault().trust()},
+	// protoByte is a named constant because opCallSub needs to know it.
+	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
+	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0x8c, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
+	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
+	// 0x8e will likely be a switch on pairs of values/targets, called `match`
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
@@ -589,7 +607,7 @@ var OpSpecs = []OpSpec{
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(modeApp)},
 	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(modeApp)},
-	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, stacky(typeTxField, "f").field("f", &TxnFields).only(modeApp).assembler(asmItxnField)},
+	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(modeApp).assembler(asmItxnField)},
 	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(modeApp)},
 	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(modeApp).assembler(asmItxn)},
 	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(modeApp)},
