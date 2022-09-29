@@ -62,7 +62,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 			sig := sigSecrets.Sign(msg)
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
 		require.NoError(t, bv.Verify())
 	}
 

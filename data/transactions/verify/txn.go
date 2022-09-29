@@ -227,12 +227,6 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 	if err := logicSigSanityCheckBatchPrep(txn, groupIndex, groupCtx, batchVerifier); err != nil {
 		return err
 	}
-
-	// in case of contract account the signature len might 0. that's ok
-	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
-
 	return batchVerifier.Verify()
 }
 
@@ -387,11 +381,9 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 							return grpErr
 						}
 					}
-					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
-						verifyErr := batchVerifier.Verify()
-						if verifyErr != nil {
-							return verifyErr
-						}
+					verifyErr := batchVerifier.Verify()
+					if verifyErr != nil {
+						return verifyErr
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil

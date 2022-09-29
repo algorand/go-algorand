@@ -266,17 +266,17 @@ func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier
 	}
 
 	// checks individual signature verifies
-	var verifiedCount int
+	var sigCount int
 	for _, subsigi := range sig.Subsigs {
 		if (subsigi.Sig != Signature{}) {
 			batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
-			verifiedCount++
+			sigCount++
 		}
 	}
 
 	// sanity check. if we get here then every non-blank subsig should have
 	// been verified successfully, and we should have had enough of them
-	if verifiedCount < int(sig.Threshold) {
+	if sigCount < int(sig.Threshold) {
 		return errInvalidNumberOfSignature
 	}
 	return
