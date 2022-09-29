@@ -701,6 +701,19 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		senders = senders[:0]
 	}
 
+	// update pps.cinfo.AppParams to ensure newly created apps are present
+	for addr, _ := range pps.accounts {
+		var ai v1.Account
+		ai, err = client.AccountInformation(addr)
+		if err != nil {
+			return
+		}
+
+		for appID, ap := range ai.AppParams {
+			pps.cinfo.AppParams[appID] = ap
+		}
+	}
+
 	// opt-in more accounts to apps
 	acctPerApp := (pps.cfg.NumAppOptIn * pps.cfg.NumPartAccounts) / pps.cfg.NumApp
 	for appid := range pps.cinfo.AppParams {
