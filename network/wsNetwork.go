@@ -1749,9 +1749,10 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
-			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
-			TelemetryGUID:      peer.TelemetryGUID,
-			InstanceName:       peer.InstanceName,
+			ConnectionDuration:   uint(now.Sub(peer.createTime).Seconds()),
+			TelemetryGUID:        peer.TelemetryGUID,
+			InstanceName:         peer.InstanceName,
+			DuplicateFilterCount: peer.duplicateFilterCount,
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
