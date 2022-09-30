@@ -463,6 +463,11 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// TXTailRecentsFix modifies the logic of the txtail's comittedUpTo function to address an off-by-one-error
+	// txtail previously trimmed up to (but not including) round `r + maxlife`. Doing this left 1001 transaction objects after trimming.
+	// the intention is to have only 1000 items after trim, so the logic is modified to trim *including* round `r + maxlife`
+	TXTailRecentsFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -534,7 +539,7 @@ var MaxBytesKeyValueLen int
 var MaxExtraAppProgramLen int
 
 // MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
-//supported supported by any of the consensus protocols. used for decoding purposes.
+// supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
 // MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
@@ -1214,6 +1219,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.TXTailRecentsFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
