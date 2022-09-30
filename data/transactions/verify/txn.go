@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -469,9 +470,17 @@ type VerificationResult struct {
 	txnGroup []transactions.SignedTxn
 	verified bool
 }
-/*
+
+type streamManager struct {
+	returnChans      []chan interface{}
+	poolSeats        chan int
+	verificationPool execpool.BacklogPool
+	ctx              context.Context
+	cache            VerifiedTransactionCache
+}
+
 func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
-	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult) {
+	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult, verificationPool execpool.BacklogPool) {
 
 	// wait time for another txn should satisfy the following inequality:
 	// [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
@@ -481,27 +490,86 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 	// [wait time] <= [validation time of a single txn] / 2
 	singelTxnValidationTime := 100 * time.Millisecond
 
+	numberOfExecPoolSeats := 4
+
+	sm := streamManager{
+		returnChans:      make([]chan interface{}, 4, 4),
+		poolSeats:        make(chan int, numberOfExecPoolSeats),
+		verificationPool: verificationPool,
+		ctx:              ctx,
+		cache:            cache,
+	}
+
 	batchVerifier := crypto.MakeBatchVerifier()
-	timer := time.NewTicker(singelTxnValidationTime)
+	var timer *time.Ticker
 
 	go func() {
-		select {
-		case stx := <-stxnChan:
-			groupCtxs[i], grpErr = txnGroupBatchVerifyPrep(stx.txnGroup, stx.contextHdr, cache,
-				ledger, batchVerifier)
-		case <-timer.C:
-			numSigs := batchVerifier.GetNumberOfEnqueuedSignatures()
-			if numSigs != 0 {
-				results := make([]bool, numSigs, numSigs)
-				verifyError := batchVerifier.VerifyWithFeedback(results)
-			}
-			timer = time.NewTicker(singelTxnValidationTime)
-			batchVerifier = crypto.MakeBatchVerifier()
-		case <-ctx.Done():
-			return ctx.Err()
+		var groupCtxs []*GroupContext
+		var txnGroups [][]transactions.SignedTxn
+		var messagesForTxn []int
+		for {
+			select {
+			case stx := <-stxnChan:
+				if timer == nil {
+					timer = time.NewTicker(singelTxnValidationTime)
+				}
+				// TODO: separate operations here, and get the sig verification inside LogicSig outside
+				groupCtx, err := txnGroupBatchVerifyPrep(stx.txnGroup, stx.contextHdr,
+					ledger, batchVerifier)
+				//TODO: report the error ctx.Err()
+				fmt.Println(err)
+				if err != nil {
+					continue
+				}
+				groupCtxs = append(groupCtxs, groupCtx)
+				txnGroups = append(txnGroups, stx.txnGroup)
+				messagesForTxn = append(messagesForTxn, batchVerifier.GetNumberOfEnqueuedSignatures())
+			case <-timer.C:
+				select {
+				// try to pick a seat in the pool
+				case seatID := <-sm.poolSeats:
+					sm.addVerificationTaskToThePool(batchVerifier, txnGroups, groupCtxs, messagesForTxn, seatID)
+					// TODO: queue to the pool.
+					//				fmt.Println(err)
+				default:
+					// if no free seats, wait some more for more txns
+					timer = time.NewTicker(singelTxnValidationTime / 2)
+					continue
+				}
+				batchVerifier = crypto.MakeBatchVerifier()
+				groupCtxs = groupCtxs[:0]
+				txnGroups = txnGroups[:0]
+				messagesForTxn = messagesForTxn[:0]
+				timer = nil
+			case <-ctx.Done():
+				return //TODO: report the error ctx.Err()
 
+			}
 		}
 	}()
 
 }
-*/
+
+func (sm *streamManager) addVerificationTaskToThePool(
+	batchVerifier *crypto.BatchVerifier, txnGroups [][]transactions.SignedTxn,
+	groupCtxs []*GroupContext, messagesForTxn []int, seatID int) error {
+
+	function := func(arg interface{}) interface{} {
+		//		var grpErr error
+		// check if we've canceled the request while this was in the queue.
+		if sm.ctx.Err() != nil {
+			return sm.ctx.Err()
+		}
+		numSigs := batchVerifier.GetNumberOfEnqueuedSignatures()
+		failed := make([]bool, numSigs, numSigs)
+		_ = batchVerifier.VerifyWithFeedback(failed)
+
+		for txIdx := range txnGroups {
+			if 
+		}
+		sm.cache.AddPayset(txnGroups, groupCtxs)
+		return nil
+	}
+	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, nil, sm.returnChans[seatID])
+	return err
+}

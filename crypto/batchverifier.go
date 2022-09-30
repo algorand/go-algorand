@@ -133,7 +133,7 @@ func (b *BatchVerifier) Verify() error {
 // if some txns are invalid, true will be set at the appropriate index in failed
 func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return ErrZeroTransactionInBatch
+		return nil
 	}
 
 	if len(failed) != b.GetNumberOfEnqueuedSignatures() {
