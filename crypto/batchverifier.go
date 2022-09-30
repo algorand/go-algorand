@@ -112,6 +112,18 @@ func (b *BatchVerifier) getNumberOfEnqueuedSignatures() int {
 // Verify verifies that all the signatures are valid. in that case nil is returned
 // if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
+	return b.VerifyWithFeedback(nil)
+}
+
+// VerifyWithFeedback verifies that all the signatures are valid.
+// failed slice should have len equal to getNumberOfEnqueuedSignatures
+// if all sigs are valid, nil will be returned
+// if some txns are invalid, true will be set at the appropriate index in failed
+func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
+	if failed != nil && len(failed) != b.getNumberOfEnqueuedSignatures() {
+		return errInvalidFailedSlice
+	}
+
 	if b.getNumberOfEnqueuedSignatures() == 0 {
 		return nil
 	}
@@ -120,35 +132,10 @@ func (b *BatchVerifier) Verify() error {
 	for i, m := range b.messages {
 		messages[i] = HashRep(m)
 	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures, nil) {
-		return nil
-	}
-	return ErrBatchVerificationFailed
-
-}
-
-// VerifyWithFeedback verifies that all the signatures are valid.
-// failed slice should have len equal to GetNumberOfEnqueuedSignatures
-// if all sigs are valid, nil will be returned
-// if some txns are invalid, true will be set at the appropriate index in failed
-func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
-
-	if len(failed) != b.GetNumberOfEnqueuedSignatures() {
-		return errInvalidFailedSlice
-	}
-
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
-	for i, m := range b.messages {
-		messages[i] = HashRep(m)
-	}
 	if batchVerificationImpl(messages, b.publicKeys, b.signatures, failed) {
 		return nil
 	}
 	return ErrBatchVerificationFailed
-
 }
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
