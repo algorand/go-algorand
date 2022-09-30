@@ -667,12 +667,17 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	// generate new apps
+	// cycle through accts and create apps until the desired quantity is reached
 	var txgroup []transactions.Transaction
 	var senders []string
-	for addr, acct := range pps.accounts {
-		if len(pps.cinfo.AppParams) >= int(pps.cfg.NumApp) {
-			break
-		}
+	appsPerAddr := make(map[string]int)
+	addrs := make([]string, 0, len(pps.accounts))
+	for addr := range pps.accounts {
+		addrs = append(addrs, addr)
+	}
+	for addrPos, appCnt := 0, 0; appCnt < int(pps.cfg.NumApp); addrPos, appCnt = (addrPos+1)%len(addrs), appCnt+1 {
+		addr := addrs[addrPos]
+		acct := pps.accounts[addr]
 		var tx transactions.Transaction
 		tx, err = pps.newApp(addr, client)
 		if err != nil {
@@ -690,6 +695,8 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 			txgroup = txgroup[:0]
 			senders = senders[:0]
 		}
+
+		appsPerAddr[addr]++
 	}
 	if len(txgroup) > 0 {
 		pps.schedule(len(txgroup))
@@ -702,14 +709,27 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	// update pps.cinfo.AppParams to ensure newly created apps are present
-	for addr, _ := range pps.accounts {
+	for addr := range pps.accounts {
 		var ai v1.Account
+		for {
+			ai, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			if len(ai.AppParams) >= appsPerAddr[addr] {
+				break
+			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
+			// TODO : if we fail here for too long, we should re-create new accounts, etc.
+		}
 		ai, err = client.AccountInformation(addr)
 		if err != nil {
 			return
 		}
 
 		for appID, ap := range ai.AppParams {
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
 			pps.cinfo.AppParams[appID] = ap
 		}
 	}
