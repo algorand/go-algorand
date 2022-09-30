@@ -671,32 +671,34 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	var txgroup []transactions.Transaction
 	var senders []string
 	appsPerAddr := make(map[string]int)
-	addrs := make([]string, 0, len(pps.accounts))
-	for addr := range pps.accounts {
-		addrs = append(addrs, addr)
-	}
-	for addrPos, appCnt := 0, 0; appCnt < int(pps.cfg.NumApp); addrPos, appCnt = (addrPos+1)%len(addrs), appCnt+1 {
-		addr := addrs[addrPos]
-		acct := pps.accounts[addr]
-		var tx transactions.Transaction
-		tx, err = pps.newApp(addr, client)
-		if err != nil {
-			return
-		}
-		acct.addBalance(-int64(pps.cfg.MaxFee))
-		txgroup = append(txgroup, tx)
-		senders = append(senders, addr)
-		if len(txgroup) == int(pps.cfg.GroupSize) {
-			pps.schedule(len(txgroup))
-			err = pps.sendAsGroup(txgroup, client, senders)
+	totalAppCnt := 0
+	for totalAppCnt < int(pps.cfg.NumApp) {
+		for addr, acct := range pps.accounts {
+			if totalAppCnt >= int(pps.cfg.NumApp) {
+				break
+			}
+
+			var tx transactions.Transaction
+			tx, err = pps.newApp(addr, client)
 			if err != nil {
 				return
 			}
-			txgroup = txgroup[:0]
-			senders = senders[:0]
-		}
+			acct.addBalance(-int64(pps.cfg.MaxFee))
+			txgroup = append(txgroup, tx)
+			senders = append(senders, addr)
+			if len(txgroup) == int(pps.cfg.GroupSize) {
+				pps.schedule(len(txgroup))
+				err = pps.sendAsGroup(txgroup, client, senders)
+				if err != nil {
+					return
+				}
+				txgroup = txgroup[:0]
+				senders = senders[:0]
+			}
 
-		appsPerAddr[addr]++
+			appsPerAddr[addr]++
+			totalAppCnt++
+		}
 	}
 	if len(txgroup) > 0 {
 		pps.schedule(len(txgroup))
@@ -710,6 +712,10 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 
 	// update pps.cinfo.AppParams to ensure newly created apps are present
 	for addr := range pps.accounts {
+		if appsPerAddr[addr] == 0 {
+			continue
+		}
+
 		var ai v1.Account
 		for {
 			ai, err = client.AccountInformation(addr)
