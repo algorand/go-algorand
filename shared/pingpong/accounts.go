@@ -670,8 +670,9 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	// cycle through accts and create apps until the desired quantity is reached
 	var txgroup []transactions.Transaction
 	var senders []string
+	var newAppAddrs []string
 	appsPerAddr := make(map[string]int)
-	totalAppCnt := 0
+	totalAppCnt := len(pps.cinfo.AppParams)
 	for totalAppCnt < int(pps.cfg.NumApp) {
 		for addr, acct := range pps.accounts {
 			if totalAppCnt >= int(pps.cfg.NumApp) {
@@ -683,6 +684,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 			if err != nil {
 				return
 			}
+			newAppAddrs = append(newAppAddrs, addr)
 			acct.addBalance(-int64(pps.cfg.MaxFee))
 			txgroup = append(txgroup, tx)
 			senders = append(senders, addr)
@@ -711,11 +713,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	// update pps.cinfo.AppParams to ensure newly created apps are present
-	for addr := range pps.accounts {
-		if appsPerAddr[addr] == 0 {
-			continue
-		}
-
+	for _, addr := range newAppAddrs {
 		var ai v1.Account
 		for {
 			ai, err = client.AccountInformation(addr)
