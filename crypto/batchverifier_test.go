@@ -140,7 +140,7 @@ func TestBatchVerifierBadFailedArray(t *testing.T) {
 		sig := sigSecrets.Sign(msg)
 		bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 	}
-	require.Equal(t, 4, bv.GetNumberOfEnqueuedSignatures())
+	require.Equal(t, 4, bv.getNumberOfEnqueuedSignatures())
 	failed := make([]bool, 4, 6)
 	err := bv.VerifyWithFeedback(failed)
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 			}
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
 		err := bv.VerifyWithFeedback(failed)
 		if hasBadSig {
 			require.Error(t, err)
