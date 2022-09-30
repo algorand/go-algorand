@@ -216,33 +216,23 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 }
 
 // MultisigVerify verifies an assembled MultisigSig
-func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
+func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 	batchVerifier := MakeBatchVerifier()
 
-	if verified, err = MultisigBatchVerify(msg, addr, sig, batchVerifier); err != nil {
+	if err = MultisigBatchPrep(msg, addr, sig, batchVerifier); err != nil {
 		return
 	}
-	if !verified {
-		return
-	}
-	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
-		return true, nil
-	}
-	if err = batchVerifier.Verify(); err != nil {
-		return false, err
-	}
-	return true, nil
+	err = batchVerifier.Verify()
+	return
 }
 
-// MultisigBatchVerify verifies an assembled MultisigSig.
-// it is the caller responsibility to call batchVerifier.verify()
-func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
-	verified = false
+// MultisigBatchPrep performs checks on the assembled MultisigSig and adds to the batch.
+// The caller must call batchVerifier.verify() to verify it.
+func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (err error) {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
-		err = errInvalidNumberOfSignature
-		return
+		return errInvalidNumberOfSignature
 	}
 
 	// check the address is correct
@@ -251,20 +241,17 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 		return
 	}
 	if addr != addrnew {
-		err = errInvalidAddress
-		return
+		return errInvalidAddress
 	}
 
 	// check that we don't have too many multisig subsigs
 	if len(sig.Subsigs) > maxMultisig {
-		err = errInvalidNumberOfSignature
-		return
+		return errInvalidNumberOfSignature
 	}
 
 	// check that we don't have too few multisig subsigs
 	if len(sig.Subsigs) < int(sig.Threshold) {
-		err = errInvalidNumberOfSignature
-		return
+		return errInvalidNumberOfSignature
 	}
 
 	// checks the number of non-blank signatures is no less than threshold
@@ -275,27 +262,23 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 		}
 	}
 	if counter < sig.Threshold {
-		err = errInvalidNumberOfSignature
-		return
+		return errInvalidNumberOfSignature
 	}
 
 	// checks individual signature verifies
-	var verifiedCount int
+	var sigCount int
 	for _, subsigi := range sig.Subsigs {
 		if (subsigi.Sig != Signature{}) {
 			batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
-			verifiedCount++
+			sigCount++
 		}
 	}
 
 	// sanity check. if we get here then every non-blank subsig should have
 	// been verified successfully, and we should have had enough of them
-	if verifiedCount < int(sig.Threshold) {
-		err = errInvalidNumberOfSignature
-		return
+	if sigCount < int(sig.Threshold) {
+		return errInvalidNumberOfSignature
 	}
-
-	verified = true
 	return
 }
 
