@@ -626,6 +626,13 @@ type ApplicationResponse Application
 // AssetResponse defines model for AssetResponse.
 type AssetResponse Asset
 
+// BlockHashResponse defines model for BlockHashResponse.
+type BlockHashResponse struct {
+
+	// Block header hash.
+	BlockHash string `json:"blockHash"`
+}
+
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
 
