@@ -91,6 +91,7 @@ type BlockAcceptedEventDetails struct {
 	Hash         string
 	Round        uint64
 	ValidatedAt  time.Duration
+	ReceivedAt   time.Duration
 	PreValidated bool
 	PropBufLen   uint64
 	VoteBufLen   uint64

@@ -52,7 +52,7 @@ const minBatchVerifierAlloc = 16
 
 // Batch verifications errors
 var (
-	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
+	ErrBatchHasFailedSigs = errors.New("At least one signature didn't pass verification")
 	errInvalidFailedSlice      = errors.New("failed slice size is not equal to the number of enqueued signatures")
 )
 
@@ -112,19 +112,7 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 // Verify verifies that all the signatures are valid. in that case nil is returned
 // if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
-
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
-	for i, m := range b.messages {
-		messages[i] = HashRep(m)
-	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures, nil) {
-		return nil
-	}
-	return ErrBatchVerificationFailed
-
+	return b.VerifyWithFeedback(nil)
 }
 
 // VerifyWithFeedback verifies that all the signatures are valid.
@@ -132,12 +120,12 @@ func (b *BatchVerifier) Verify() error {
 // if all sigs are valid, nil will be returned
 // if some txns are invalid, true will be set at the appropriate index in failed
 func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
+	if failed != nil && len(failed) != b.GetNumberOfEnqueuedSignatures() {
+		return errInvalidFailedSlice
 	}
 
-	if len(failed) != b.GetNumberOfEnqueuedSignatures() {
-		return errInvalidFailedSlice
+	if b.GetNumberOfEnqueuedSignatures() == 0 {
+		return nil
 	}
 
 	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
@@ -147,8 +135,7 @@ func (b *BatchVerifier) VerifyWithFeedback(failed []bool) error {
 	if batchVerificationImpl(messages, b.publicKeys, b.signatures, failed) {
 		return nil
 	}
-	return ErrBatchVerificationFailed
-
+	return ErrBatchHasFailedSigs
 }
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.

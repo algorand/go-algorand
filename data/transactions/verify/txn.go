@@ -474,6 +474,7 @@ type VerificationResult struct {
 type streamManager struct {
 	returnChans      []chan interface{}
 	poolSeats        chan int
+	resultChan       chan<- VerificationResult
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	cache            VerifiedTransactionCache
@@ -562,12 +563,50 @@ func (sm *streamManager) addVerificationTaskToThePool(
 		}
 		numSigs := batchVerifier.GetNumberOfEnqueuedSignatures()
 		failed := make([]bool, numSigs, numSigs)
-		_ = batchVerifier.VerifyWithFeedback(failed)
-
-		for txIdx := range txnGroups {
-			if 
+		err := batchVerifier.VerifyWithFeedback(failed)
+		if err != nil && err != ErrBatchHasFailedSigs {
+			// something bad happened
+			// TODO:  report error and discard the batch
 		}
-		sm.cache.AddPayset(txnGroups, groupCtxs)
+
+		verifiedTxnGroups := make([][]transactions.SignedTxn, len(txnGroups))
+		verifiedGroupCtxs := make([]*GroupContext, len(groupCtxs))
+		failedSigIdx := 0
+		for txgIdx := range txnGroups {
+			txGroupSigFailed = false
+			// if err == nil, means all sigs are verified, no need to check for the failed
+			for err != nil && failedSigIdx < messagesForTxn[txgIdx] {
+				if failed[failedSigIdx] {
+					failedSigIdx = messagesForTxn[txgIdx]
+					txGroupSigFailed = true
+				}
+			}
+			var vr VerificationResult
+			if !txGroupSigFailed {
+				verifiedTxnGroups = append(verifiedTxnGroups, txnGroups[txgIdx])
+				verifiedGroupCtxs = append(verifiedGroupCtxs, groupCtxs[txgIdx])
+				vr = VerificationResult{
+					txnGroup: txnGroups[txgIdx],
+					verified: false,
+				}
+			} else {
+				vr = VerificationResult{
+					txnGroup: txnGroups[txgIdx],
+					verified: false,
+				}
+			}
+			// send the txn result out the pipe
+			select{
+				case sm.resultChan<- vr:
+				// if the channel is not accepting, should not block here
+				// report dropped txn. caching is fine, if it comes back in the block
+				default:
+				//TODO: report this
+			}
+		}
+		// loading them all at once to lock the cache once
+		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+
 		return nil
 	}
 	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, nil, sm.returnChans[seatID])
