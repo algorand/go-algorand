@@ -4761,7 +4761,7 @@ func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
 func (pac *persistedOnlineAccountData) before(other *persistedOnlineAccountData) bool {
-	return pac.round < other.round
+	return pac.updRound < other.updRound
 }
 
 // txTailRoundLease is used as part of txTailRound for storing
