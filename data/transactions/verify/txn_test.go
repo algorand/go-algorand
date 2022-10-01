@@ -520,7 +520,8 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
+	numOfTxnGroups := 10000
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxnGroups, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
@@ -539,12 +540,12 @@ func TestStreamVerifier(t *testing.T) {
 
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 	stxnChan := make(chan VerificationElement, 3)
 	resultChan := make(chan VerificationResult, 3)
 
-	defer ctx.Done()
+	defer cancel()
 	Stream(ctx, cache, nil, stxnChan, resultChan, verificationPool)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
@@ -558,26 +559,45 @@ func TestStreamVerifier(t *testing.T) {
 		}
 	}
 
-	lenTGs := len(txnGroups)
-	tgi := 0
-	for x := 0; x < lenTGs; {
-		select {
-		case result := <-resultChan:
-			x++
-			if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
-				fmt.Printf("%d  ", len(badTxnGroups))
-				delete(badTxnGroups, result.txnGroup[0].Sig)
-				fmt.Printf("%dn ", len(badTxnGroups))
-				require.False(t, result.verified)
-			} else {
-				require.True(t, result.verified)
-			}
-		default:
-			if tgi < lenTGs {
-				stxnChan <- VerificationElement{txnGroup: txnGroups[tgi], contextHdr: blkHdr}
-				tgi++
+	errChan := make(chan error)
+	go func() {
+		defer close(errChan)
+		// process the thecked signatures
+		for x := 0; x < numOfTxnGroups; x++ {
+			fmt.Printf("receiving x=%d\n", x)
+			select {
+			case result := <-resultChan:
+				if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
+					fmt.Printf("%d  ", len(badTxnGroups))
+					delete(badTxnGroups, result.txnGroup[0].Sig)
+					fmt.Printf("%dn ", len(badTxnGroups))
+					err := fmt.Errorf("%dth transaction varified with a bad sig", x)
+					errChan <- err
+				} else {
+					err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
+					errChan <- err
+				}
+			case <-ctx.Done():
+				break
 			}
 		}
+	}()
+
+	// send txn groups to be verified
+	go func() {
+		for _, tg := range txnGroups {
+			select {
+			case <-ctx.Done():
+				break
+			default:
+				stxnChan <- VerificationElement{txnGroup: tg, contextHdr: blkHdr}
+			}
+		}
+	}()
+
+	for err := range errChan {
+		require.NoError(t, err)
 	}
+
 	require.Equal(t, 0, len(badTxnGroups))
 }

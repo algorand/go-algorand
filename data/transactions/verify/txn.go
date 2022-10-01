@@ -469,6 +469,28 @@ type streamManager struct {
 	cache            VerifiedTransactionCache
 }
 
+type batchLoad struct {
+	batchVerifier  *crypto.BatchVerifier
+	groupCtxs      []*GroupContext
+	txnGroups      [][]transactions.SignedTxn
+	messagesForTxn []int
+}
+
+func makeBatchLoad() {
+	bl := batchLoad{}
+	bl.batchVerifier = crypto.MakeBatchVerifier()
+	bl.groupCtxs = make([]*GroupContext, 0)
+	bl.txnGroups = make([][]transactions.SignedTxn, 0)
+	bl.messagesForTxn = make([]int, 0)
+}
+
+func (bl batchLoad) reset() {
+	bl.batchVerifier = crypto.MakeBatchVerifier()
+	bl.groupCtxs = groupCtxs[:0]
+	bl.txnGroups = txnGroups[:0]
+	bl.messagesForTxn = messagesForTxn[:0]
+}
+
 // wait time for another txn should satisfy the following inequality:
 // [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
 // since these are difficult to estimate, the simplified version could be to assume:
@@ -494,14 +516,9 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 	for x := 0; x < numberOfExecPoolSeats; x++ {
 		sm.poolSeats <- x
 	}
-
-	batchVerifier := crypto.MakeBatchVerifier()
 	timer := time.NewTicker(singelTxnValidationTime / 2)
 
 	go func() {
-		var groupCtxs []*GroupContext
-		var txnGroups [][]transactions.SignedTxn
-		var messagesForTxn []int
 		for {
 			select {
 			case stx := <-stxnChan:
@@ -549,10 +566,6 @@ func (sm *streamManager) processBatch(batchVerifier *crypto.BatchVerifier,
 		// if no free seats, wait some more for more txns
 		timer = time.NewTicker(singelTxnValidationTime / 2)
 	}
-	batchVerifier = crypto.MakeBatchVerifier()
-	groupCtxs = groupCtxs[:0]
-	txnGroups = txnGroups[:0]
-	messagesForTxn = messagesForTxn[:0]
 	return
 }
 
@@ -582,8 +595,13 @@ func (sm *streamManager) addVerificationTaskToThePool(
 			// if err == nil, means all sigs are verified, no need to check for the failed
 			for err != nil && failedSigIdx < messagesForTxn[txgIdx] {
 				if failed[failedSigIdx] {
+					// if there is a failed sig check, then no need to check the rest of the
+					// sigs for this txnGroup
 					failedSigIdx = messagesForTxn[txgIdx]
 					txGroupSigFailed = true
+				} else {
+					// proceed to check the next sig belonging to this txnGroup
+					failedSigIdx++
 				}
 			}
 			var vr VerificationResult
@@ -604,12 +622,15 @@ func (sm *streamManager) addVerificationTaskToThePool(
 			select {
 			case sm.resultChan <- vr:
 				fmt.Println("sent!")
-			// if the channel is not accepting, should not block here
-			// report dropped txn. caching is fine, if it comes back in the block
-			default:
-				fmt.Println("skipped!!")
-				//TODO: report this
+				/*
+					// if the channel is not accepting, should not block here
+					// report dropped txn. caching is fine, if it comes back in the block
+					default:
+						fmt.Println("skipped!!")
+						//TODO: report this
+				*/
 			}
+
 		}
 		// loading them all at once to lock the cache once
 		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
