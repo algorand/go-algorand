@@ -75,6 +75,7 @@ var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name
 
 var duplicateNetworkMessageReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedTotal)
 var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedBytesTotal)
+var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
 
@@ -184,6 +185,9 @@ type wsPeer struct {
 
 	incomingMsgFilter *messageFilter
 	outgoingMsgFilter *messageFilter
+	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
+	// to filter that it had already sent before.
+	duplicateFilterCount int64
 
 	processed chan struct{}
 
@@ -576,7 +580,14 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
 	//wp.net.log.Debugf("add filter %v", digest)
-	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	has := wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	if has {
+		// Count that this peer has sent us duplicate filter messages: this means it received the same
+		// large message concurrently from several peers, and then sent the filter message to us after
+		// each large message finished transferring.
+		duplicateNetworkFilterReceivedTotal.Inc(nil)
+		atomic.AddInt64(&wp.duplicateFilterCount, 1)
+	}
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
