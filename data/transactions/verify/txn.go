@@ -100,10 +100,10 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 		g.minAvmVersion == other.minAvmVersion
 }
 
-// txnBatchVerifyPrep verifies a SignedTxn having no obviously inconsistent data.
+// txnBatchPrep verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnBatchVerifyPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
+func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying is not supported")
 	}
@@ -119,7 +119,7 @@ func txnBatchVerifyPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupCo
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchVerifyPrep(stxs, contextHdr, ledger, batchVerifier); err != nil {
+	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier); err != nil {
 		return nil, err
 	}
 
@@ -134,9 +134,9 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return
 }
 
-// txnGroupBatchVerifyPrep verifies a []SignedTxn having no obviously inconsistent data.
+// txnGroupBatchPrep verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnGroupBatchVerifyPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func txnGroupBatchVerifyPrep(stxs []transactions.SignedTxn, contextHdr bookkeepi
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		err = txnBatchVerifyPrep(&stxn, i, groupCtx, verifier)
+		err = txnBatchPrep(&stxn, i, groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
@@ -209,13 +209,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return nil
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigBatchVerifyPrep(s.Txn,
-			crypto.Digest(s.Authorizer()),
-			s.Msig,
-			batchVerifier); ok {
-			return nil
+		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
+			return fmt.Errorf("multisig validation failed: %w", err)
 		}
-		return errors.New("multisig validation failed")
+		return nil
 	}
 	if hasLogicSig {
 		return logicSigVerify(s, txnIdx, groupCtx)
@@ -228,22 +225,16 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := logicSigSanityCheckBatchVerifyPrep(txn, groupIndex, groupCtx, batchVerifier); err != nil {
+	if err := logicSigSanityCheckBatchPrep(txn, groupIndex, groupCtx, batchVerifier); err != nil {
 		return err
 	}
-
-	// in case of contract account the signature len might 0. that's ok
-	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
-
 	return batchVerifier.Verify()
 }
 
-// logicSigSanityCheckBatchVerifyPrep checks that the signature is valid and that the program is basically well formed.
+// logicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 // it is the caller responsibility to call batchVerifier.Verify()
-func logicSigSanityCheckBatchVerifyPrep(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	lsig := txn.Lsig
 
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
@@ -305,8 +296,8 @@ func logicSigSanityCheckBatchVerifyPrep(txn *transactions.SignedTxn, groupIndex 
 		batchVerifier.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
 		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigBatchVerifyPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
-			return errors.New("logic multisig validation failed")
+		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
+			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
 	}
 	return nil
@@ -385,17 +376,15 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 					batchVerifier := crypto.MakeBatchVerifierWithHint(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = txnGroupBatchVerifyPrep(signTxnsGrp, blkHeader, ledger, batchVerifier)
+						groupCtxs[i], grpErr = txnGroupBatchPrep(signTxnsGrp, blkHeader, ledger, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr
 						}
 					}
-					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
-						verifyErr := batchVerifier.Verify()
-						if verifyErr != nil {
-							return verifyErr
-						}
+					verifyErr := batchVerifier.Verify()
+					if verifyErr != nil {
+						return verifyErr
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
@@ -480,29 +469,34 @@ type streamManager struct {
 	cache            VerifiedTransactionCache
 }
 
+// wait time for another txn should satisfy the following inequality:
+// [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
+// since these are difficult to estimate, the simplified version could be to assume:
+// [validation time added to the group by one more txn] = [validation time of a single txn] / 2
+// This gives us:
+// [wait time] <= [validation time of a single txn] / 2
+const singelTxnValidationTime = 100 * time.Millisecond
+
 func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
 	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult, verificationPool execpool.BacklogPool) {
-
-	// wait time for another txn should satisfy the following inequality:
-	// [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
-	// since these are difficult to estimate, the simplified version could be to assume:
-	// [validation time added to the group by one more txn] = [validation time of a single txn] / 2
-	// This gives us:
-	// [wait time] <= [validation time of a single txn] / 2
-	singelTxnValidationTime := 100 * time.Millisecond
 
 	numberOfExecPoolSeats := 4
 
 	sm := streamManager{
 		returnChans:      make([]chan interface{}, 4, 4),
 		poolSeats:        make(chan int, numberOfExecPoolSeats),
+		resultChan:       resultChan,
 		verificationPool: verificationPool,
 		ctx:              ctx,
 		cache:            cache,
 	}
 
+	for x := 0; x < numberOfExecPoolSeats; x++ {
+		sm.poolSeats <- x
+	}
+
 	batchVerifier := crypto.MakeBatchVerifier()
-	var timer *time.Ticker
+	timer := time.NewTicker(singelTxnValidationTime / 2)
 
 	go func() {
 		var groupCtxs []*GroupContext
@@ -511,44 +505,55 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 		for {
 			select {
 			case stx := <-stxnChan:
-				if timer == nil {
-					timer = time.NewTicker(singelTxnValidationTime)
-				}
+				timer = time.NewTicker(singelTxnValidationTime / 2)
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
-				groupCtx, err := txnGroupBatchVerifyPrep(stx.txnGroup, stx.contextHdr,
+				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, stx.contextHdr,
 					ledger, batchVerifier)
 				//TODO: report the error ctx.Err()
-				fmt.Println(err)
+
 				if err != nil {
 					continue
 				}
 				groupCtxs = append(groupCtxs, groupCtx)
 				txnGroups = append(txnGroups, stx.txnGroup)
 				messagesForTxn = append(messagesForTxn, batchVerifier.GetNumberOfEnqueuedSignatures())
+				if len(groupCtxs) == txnPerWorksetThreshold {
+					timer = sm.processBatch(batchVerifier, txnGroups, groupCtxs, messagesForTxn)
+				}
 			case <-timer.C:
-				select {
-				// try to pick a seat in the pool
-				case seatID := <-sm.poolSeats:
-					sm.addVerificationTaskToThePool(batchVerifier, txnGroups, groupCtxs, messagesForTxn, seatID)
-					// TODO: queue to the pool.
-					//				fmt.Println(err)
-				default:
-					// if no free seats, wait some more for more txns
+				if len(groupCtxs) == 0 {
+					// nothing yet... wait some more
 					timer = time.NewTicker(singelTxnValidationTime / 2)
 					continue
 				}
-				batchVerifier = crypto.MakeBatchVerifier()
-				groupCtxs = groupCtxs[:0]
-				txnGroups = txnGroups[:0]
-				messagesForTxn = messagesForTxn[:0]
-				timer = nil
+				timer = sm.processBatch(batchVerifier, txnGroups, groupCtxs, messagesForTxn)
 			case <-ctx.Done():
 				return //TODO: report the error ctx.Err()
-
 			}
 		}
 	}()
 
+}
+
+func (sm *streamManager) processBatch(batchVerifier *crypto.BatchVerifier,
+	txnGroups [][]transactions.SignedTxn, groupCtxs []*GroupContext,
+	messagesForTxn []int) (timer *time.Ticker) {
+	select {
+	// try to pick a seat in the pool
+	case seatID := <-sm.poolSeats:
+		sm.addVerificationTaskToThePool(batchVerifier, txnGroups, groupCtxs, messagesForTxn, seatID)
+		timer = time.NewTicker(singelTxnValidationTime / 2)
+		// TODO: queue to the pool.
+		//				fmt.Println(err)
+	default:
+		// if no free seats, wait some more for more txns
+		timer = time.NewTicker(singelTxnValidationTime / 2)
+	}
+	batchVerifier = crypto.MakeBatchVerifier()
+	groupCtxs = groupCtxs[:0]
+	txnGroups = txnGroups[:0]
+	messagesForTxn = messagesForTxn[:0]
+	return
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(
@@ -564,7 +569,7 @@ func (sm *streamManager) addVerificationTaskToThePool(
 		numSigs := batchVerifier.GetNumberOfEnqueuedSignatures()
 		failed := make([]bool, numSigs, numSigs)
 		err := batchVerifier.VerifyWithFeedback(failed)
-		if err != nil && err != ErrBatchHasFailedSigs {
+		if err != nil && err != crypto.ErrBatchHasFailedSigs {
 			// something bad happened
 			// TODO:  report error and discard the batch
 		}
@@ -573,7 +578,7 @@ func (sm *streamManager) addVerificationTaskToThePool(
 		verifiedGroupCtxs := make([]*GroupContext, len(groupCtxs))
 		failedSigIdx := 0
 		for txgIdx := range txnGroups {
-			txGroupSigFailed = false
+			txGroupSigFailed := false
 			// if err == nil, means all sigs are verified, no need to check for the failed
 			for err != nil && failedSigIdx < messagesForTxn[txgIdx] {
 				if failed[failedSigIdx] {
@@ -587,7 +592,7 @@ func (sm *streamManager) addVerificationTaskToThePool(
 				verifiedGroupCtxs = append(verifiedGroupCtxs, groupCtxs[txgIdx])
 				vr = VerificationResult{
 					txnGroup: txnGroups[txgIdx],
-					verified: false,
+					verified: true,
 				}
 			} else {
 				vr = VerificationResult{
@@ -596,11 +601,13 @@ func (sm *streamManager) addVerificationTaskToThePool(
 				}
 			}
 			// send the txn result out the pipe
-			select{
-				case sm.resultChan<- vr:
-				// if the channel is not accepting, should not block here
-				// report dropped txn. caching is fine, if it comes back in the block
-				default:
+			select {
+			case sm.resultChan <- vr:
+				fmt.Println("sent!")
+			// if the channel is not accepting, should not block here
+			// report dropped txn. caching is fine, if it comes back in the block
+			default:
+				fmt.Println("skipped!!")
 				//TODO: report this
 			}
 		}

@@ -18,6 +18,7 @@ package verify
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -514,4 +515,69 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	require.Len(t, unverifiedGroups, 1)
 
 	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])
+}
+
+func TestStreamVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
+
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+
+	ctx := context.Background()
+	cache := MakeVerifiedTransactionCache(50000)
+	stxnChan := make(chan VerificationElement, 3)
+	resultChan := make(chan VerificationResult, 3)
+
+	defer ctx.Done()
+	Stream(ctx, cache, nil, stxnChan, resultChan, verificationPool)
+
+	badTxnGroups := make(map[crypto.Signature]struct{})
+
+	for tgi := range txnGroups {
+		if rand.Float32() > 0.7 {
+			// make a bad sig
+			t := rand.Intn(len(txnGroups[tgi]))
+			txnGroups[tgi][t].Sig[0] = txnGroups[tgi][t].Sig[0] + 1
+			badTxnGroups[txnGroups[tgi][0].Sig] = struct{}{}
+		}
+	}
+
+	lenTGs := len(txnGroups)
+	tgi := 0
+	for x := 0; x < lenTGs; {
+		select {
+		case result := <-resultChan:
+			x++
+			if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
+				fmt.Printf("%d  ", len(badTxnGroups))
+				delete(badTxnGroups, result.txnGroup[0].Sig)
+				fmt.Printf("%dn ", len(badTxnGroups))
+				require.False(t, result.verified)
+			} else {
+				require.True(t, result.verified)
+			}
+		default:
+			if tgi < lenTGs {
+				stxnChan <- VerificationElement{txnGroup: txnGroups[tgi], contextHdr: blkHdr}
+				tgi++
+			}
+		}
+	}
+	require.Equal(t, 0, len(badTxnGroups))
 }
