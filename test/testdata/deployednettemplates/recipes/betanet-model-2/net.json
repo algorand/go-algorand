@@ -1026,7 +1026,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1037,7 +1036,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1048,7 +1046,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1059,7 +1056,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1070,7 +1066,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1081,7 +1076,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1092,7 +1086,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1103,7 +1096,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1114,7 +1106,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1125,7 +1116,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1142,7 +1132,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1153,7 +1142,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1164,7 +1152,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1175,7 +1162,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1186,7 +1172,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1197,7 +1182,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1208,7 +1192,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1219,7 +1202,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1230,7 +1212,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1241,7 +1222,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1258,7 +1238,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1269,7 +1248,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1280,7 +1258,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1291,7 +1268,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1302,7 +1278,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1313,7 +1288,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1324,7 +1298,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1335,7 +1308,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1346,7 +1318,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1357,7 +1328,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1374,7 +1344,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1385,7 +1354,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1396,7 +1364,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1407,7 +1374,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1418,7 +1384,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1429,7 +1394,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1440,7 +1404,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1451,7 +1414,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1462,7 +1424,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1473,7 +1434,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1490,7 +1450,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1501,7 +1460,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1512,7 +1470,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1523,7 +1480,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1534,7 +1490,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1545,7 +1500,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1556,7 +1510,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1567,7 +1520,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1578,7 +1530,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1589,7 +1540,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1606,7 +1556,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1617,7 +1566,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1628,7 +1576,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1639,7 +1586,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1650,7 +1596,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1661,7 +1606,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1672,7 +1616,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1683,7 +1626,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1694,7 +1636,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1705,7 +1646,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1722,7 +1662,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1733,7 +1672,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1744,7 +1682,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1755,7 +1692,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1766,7 +1702,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1777,7 +1712,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1788,7 +1722,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1799,7 +1732,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1810,7 +1742,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1821,7 +1752,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1838,7 +1768,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1849,7 +1778,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1860,7 +1788,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1871,7 +1798,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1882,7 +1808,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1893,7 +1818,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1904,7 +1828,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1915,7 +1838,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1926,7 +1848,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1937,7 +1858,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1954,7 +1874,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1965,7 +1884,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1976,7 +1894,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1987,7 +1904,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -1998,7 +1914,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2009,7 +1924,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2020,7 +1934,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2031,7 +1944,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2042,7 +1954,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2053,7 +1964,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2070,7 +1980,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2081,7 +1990,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2092,7 +2000,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2103,7 +2010,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2114,7 +2020,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2125,7 +2030,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2136,7 +2040,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2147,7 +2050,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2158,7 +2060,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2169,7 +2070,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2186,7 +2086,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2197,7 +2096,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2208,7 +2106,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2219,7 +2116,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2230,7 +2126,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2241,7 +2136,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2252,7 +2146,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2263,7 +2156,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2274,7 +2166,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2285,7 +2176,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2302,7 +2192,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2313,7 +2202,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2324,7 +2212,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2335,7 +2222,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2346,7 +2232,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2357,7 +2242,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2368,7 +2252,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2379,7 +2262,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2390,7 +2272,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2401,7 +2282,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2418,7 +2298,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2429,7 +2308,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2440,7 +2318,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2451,7 +2328,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2462,7 +2338,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2473,7 +2348,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2484,7 +2358,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2495,7 +2368,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2506,7 +2378,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2517,7 +2388,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2534,7 +2404,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2545,7 +2414,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2556,7 +2424,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2567,7 +2434,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2578,7 +2444,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2589,7 +2454,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2600,7 +2464,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2611,7 +2474,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2622,7 +2484,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2633,7 +2494,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2650,7 +2510,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2661,7 +2520,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2672,7 +2530,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2683,7 +2540,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2694,7 +2550,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2705,7 +2560,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2716,7 +2570,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2727,7 +2580,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2738,7 +2590,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2749,7 +2600,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2766,7 +2616,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2777,7 +2626,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2788,7 +2636,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2799,7 +2646,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2810,7 +2656,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2821,7 +2666,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2832,7 +2676,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2843,7 +2686,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2854,7 +2696,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2865,7 +2706,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2882,7 +2722,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2893,7 +2732,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2904,7 +2742,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2915,7 +2752,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2926,7 +2762,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2937,7 +2772,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2948,7 +2782,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2959,7 +2792,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2970,7 +2802,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2981,7 +2812,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -2998,7 +2828,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3009,7 +2838,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3020,7 +2848,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3031,7 +2858,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3042,7 +2868,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3053,7 +2878,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3064,7 +2888,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3075,7 +2898,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3086,7 +2908,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3097,7 +2918,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3114,7 +2934,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3125,7 +2944,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3136,7 +2954,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3147,7 +2964,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3158,7 +2974,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3169,7 +2984,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3180,7 +2994,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3191,7 +3004,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3202,7 +3014,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3213,7 +3024,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3230,7 +3040,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3241,7 +3050,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3252,7 +3060,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3263,7 +3070,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3274,7 +3080,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3285,7 +3090,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3296,7 +3100,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3307,7 +3110,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3318,7 +3120,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3329,7 +3130,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3346,7 +3146,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3357,7 +3156,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3368,7 +3166,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3379,7 +3176,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3390,7 +3186,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3401,7 +3196,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3412,7 +3206,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3423,7 +3216,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3434,7 +3226,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3445,7 +3236,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3462,7 +3252,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3473,7 +3262,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3484,7 +3272,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3495,7 +3282,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3506,7 +3292,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3517,7 +3302,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3528,7 +3312,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3539,7 +3322,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3550,7 +3332,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3561,7 +3342,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3578,7 +3358,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3589,7 +3368,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3600,7 +3378,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3611,7 +3388,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3622,7 +3398,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3633,7 +3408,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3644,7 +3418,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3655,7 +3428,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3666,7 +3438,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3677,7 +3448,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3694,7 +3464,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3705,7 +3474,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3716,7 +3484,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3727,7 +3494,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3738,7 +3504,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3749,7 +3514,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3760,7 +3524,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3771,7 +3534,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3782,7 +3544,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3793,7 +3554,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3810,7 +3570,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3821,7 +3580,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3832,7 +3590,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3843,7 +3600,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3854,7 +3610,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3865,7 +3620,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3876,7 +3630,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3887,7 +3640,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3898,7 +3650,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3909,7 +3660,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3926,7 +3676,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3937,7 +3686,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3948,7 +3696,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3959,7 +3706,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3970,7 +3716,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3981,7 +3726,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -3992,7 +3736,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4003,7 +3746,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4014,7 +3756,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4025,7 +3766,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4042,7 +3782,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4053,7 +3792,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4064,7 +3802,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4075,7 +3812,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4086,7 +3822,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4097,7 +3832,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4108,7 +3842,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4119,7 +3852,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4130,7 +3862,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4141,7 +3872,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4158,7 +3888,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4169,7 +3898,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4180,7 +3908,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4191,7 +3918,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4202,7 +3928,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4213,7 +3938,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4224,7 +3948,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4235,7 +3958,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4246,7 +3968,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4257,7 +3978,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4274,7 +3994,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4285,7 +4004,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4296,7 +4014,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4307,7 +4024,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4318,7 +4034,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4329,7 +4044,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4340,7 +4054,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4351,7 +4064,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4362,7 +4074,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4373,7 +4084,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4390,7 +4100,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4401,7 +4110,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4412,7 +4120,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4423,7 +4130,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4434,7 +4140,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4445,7 +4150,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4456,7 +4160,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4467,7 +4170,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4478,7 +4180,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4489,7 +4190,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4506,7 +4206,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4517,7 +4216,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4528,7 +4226,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4539,7 +4236,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4550,7 +4246,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4561,7 +4256,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4572,7 +4266,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4583,7 +4276,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4594,7 +4286,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4605,7 +4296,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4622,7 +4312,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4633,7 +4322,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4644,7 +4332,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4655,7 +4342,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4666,7 +4352,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4677,7 +4362,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4688,7 +4372,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4699,7 +4382,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4710,7 +4392,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4721,7 +4402,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4738,7 +4418,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4749,7 +4428,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4760,7 +4438,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4771,7 +4448,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4782,7 +4458,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4793,7 +4468,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4804,7 +4478,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4815,7 +4488,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4826,7 +4498,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4837,7 +4508,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4854,7 +4524,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4865,7 +4534,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4876,7 +4544,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4887,7 +4554,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4898,7 +4564,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4909,7 +4574,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4920,7 +4584,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4931,7 +4594,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4942,7 +4604,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4953,7 +4614,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4970,7 +4630,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4981,7 +4640,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -4992,7 +4650,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5003,7 +4660,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5014,7 +4670,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5025,7 +4680,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5036,7 +4690,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5047,7 +4700,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5058,7 +4710,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5069,7 +4720,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5086,7 +4736,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5097,7 +4746,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5108,7 +4756,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5119,7 +4766,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5130,7 +4776,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5141,7 +4786,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5152,7 +4796,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5163,7 +4806,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5174,7 +4816,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5185,7 +4826,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5202,7 +4842,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5213,7 +4852,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5224,7 +4862,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5235,7 +4872,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5246,7 +4882,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5257,7 +4892,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5268,7 +4902,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5279,7 +4912,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5290,7 +4922,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5301,7 +4932,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5318,7 +4948,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5329,7 +4958,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5340,7 +4968,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5351,7 +4978,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5362,7 +4988,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5373,7 +4998,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5384,7 +5008,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5395,7 +5018,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5406,7 +5028,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5417,7 +5038,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5434,7 +5054,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5445,7 +5064,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5456,7 +5074,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5467,7 +5084,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5478,7 +5094,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5489,7 +5104,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5500,7 +5114,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5511,7 +5124,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5522,7 +5134,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5533,7 +5144,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5550,7 +5160,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5561,7 +5170,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5572,7 +5180,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5583,7 +5190,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5594,7 +5200,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5605,7 +5210,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5616,7 +5220,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5627,7 +5230,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5638,7 +5240,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5649,7 +5250,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5666,7 +5266,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5677,7 +5276,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5688,7 +5286,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5699,7 +5296,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5710,7 +5306,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5721,7 +5316,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5732,7 +5326,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5743,7 +5336,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5754,7 +5346,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5765,7 +5356,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5782,7 +5372,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5793,7 +5382,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5804,7 +5392,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5815,7 +5402,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5826,7 +5412,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5837,7 +5422,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5848,7 +5432,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5859,7 +5442,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5870,7 +5452,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5881,7 +5462,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5898,7 +5478,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5909,7 +5488,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5920,7 +5498,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5931,7 +5508,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5942,7 +5518,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5953,7 +5528,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5964,7 +5538,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5975,7 +5548,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5986,7 +5558,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -5997,7 +5568,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6014,7 +5584,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6025,7 +5594,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6036,7 +5604,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6047,7 +5614,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6058,7 +5624,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6069,7 +5634,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6080,7 +5644,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6091,7 +5654,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6102,7 +5664,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6113,7 +5674,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6130,7 +5690,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6141,7 +5700,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6152,7 +5710,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6163,7 +5720,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6174,7 +5730,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6185,7 +5740,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6196,7 +5750,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6207,7 +5760,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6218,7 +5770,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6229,7 +5780,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6246,7 +5796,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6257,7 +5806,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6268,7 +5816,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6279,7 +5826,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6290,7 +5836,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6301,7 +5846,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6312,7 +5856,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6323,7 +5866,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6334,7 +5876,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6345,7 +5886,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6362,7 +5902,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6373,7 +5912,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6384,7 +5922,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6395,7 +5932,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6406,7 +5942,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6417,7 +5952,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6428,7 +5962,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6439,7 +5972,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6450,7 +5982,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6461,7 +5992,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6478,7 +6008,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6489,7 +6018,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6500,7 +6028,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6511,7 +6038,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6522,7 +6048,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6533,7 +6058,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6544,7 +6068,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6555,7 +6078,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6566,7 +6088,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6577,7 +6098,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6594,7 +6114,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6605,7 +6124,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6616,7 +6134,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6627,7 +6144,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6638,7 +6154,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6649,7 +6164,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6660,7 +6174,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6671,7 +6184,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6682,7 +6194,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6693,7 +6204,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6710,7 +6220,6 @@
 			"Nodes": [
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6721,7 +6230,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6732,7 +6240,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6743,7 +6250,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6754,7 +6260,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6765,7 +6270,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6776,7 +6280,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6787,7 +6290,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6798,7 +6300,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,
@@ -6809,7 +6310,6 @@
 				},
 				{
 					"Wallets": [],
-					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
 					"EnableTelemetry": false,
 					"EnableMetrics": false,

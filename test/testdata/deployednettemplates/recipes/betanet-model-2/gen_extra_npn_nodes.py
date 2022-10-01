@@ -56,7 +56,6 @@ with open("topology.json", "w") as f:
     f.write(json.dumps(ec2_hosts, indent=2) + os.linesep)
 
 npx_node = {'Wallets': [],
-            'APIEndpoint': "{{APIEndpoint}}",
             'APIToken': "{{APIToken}}",
             'EnableTelemetry': False,
             'EnableMetrics': False,
