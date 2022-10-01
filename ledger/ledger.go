@@ -19,7 +19,9 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
@@ -283,11 +285,14 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	if !dbMem {
 		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
-		if !os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			// before launch, we used to have both blocks and tracker
 			// state in a single SQLite db file. We don't have that anymore,
 			// and we want to fail when that's the case.
 			err = fmt.Errorf("a single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+			return
+		} else if err != nil {
+			err = fmt.Errorf("an error occurred checking for legacy database file '%s': %w", commonDBFilename, err)
 			return
 		}
 	}
