@@ -491,11 +491,11 @@ func makeBatchLoad() batchLoad {
 // This gives us:
 // [wait time] <= [validation time of a single txn] / 2
 const singelTxnValidationTime = 100 * time.Millisecond
-
+const numberOfExecPoolSeats = 8
+//const txnPerWorksetThreshold = 32
 func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
 	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult, verificationPool execpool.BacklogPool) {
 
-	numberOfExecPoolSeats := 128
 	sm := streamManager{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
 		resultChan:       resultChan,
@@ -526,6 +526,7 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 				bl.txnGroups = append(bl.txnGroups, stx.txnGroup)
 				bl.messagesForTxn = append(bl.messagesForTxn, bl.batchVerifier.GetNumberOfEnqueuedSignatures())
 				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
+					// TODO: the limit of 32 should not pass
 					timer, added = sm.processBatch(bl)
 					if added {
 						bl = makeBatchLoad()
@@ -550,8 +551,19 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 }
 
 func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added bool) {
+	if bl.batchVerifier.GetNumberOfEnqueuedSignatures() >= txnPerWorksetThreshold {
+		// Should not allow addition of more txns to the batch
+		// the varifier might be saturated.
+		// block and wait for a free seat
+		<-sm.seatReturnChan
+		sm.addVerificationTaskToThePool(bl)
+		timer = time.NewTicker(singelTxnValidationTime / 2)
+		added = true
+		return
+	}
+	// Otherwise, if cannot find a seat, can go back and collect
+	// more signatures instead of waiting here
 	select {
-	// try to pick a seat in the pool
 	case <-sm.seatReturnChan:
 		sm.addVerificationTaskToThePool(bl)
 		timer = time.NewTicker(singelTxnValidationTime / 2)
