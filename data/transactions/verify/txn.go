@@ -462,7 +462,6 @@ type VerificationResult struct {
 
 type streamManager struct {
 	seatReturnChan   chan interface{}
-	poolSeats        chan int
 	resultChan       chan<- VerificationResult
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
@@ -496,10 +495,9 @@ const singelTxnValidationTime = 100 * time.Millisecond
 func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
 	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult, verificationPool execpool.BacklogPool) {
 
-	numberOfExecPoolSeats := 4
+	numberOfExecPoolSeats := 128
 	sm := streamManager{
-		seatReturnChan:   make(chan interface{}),
-		poolSeats:        make(chan int, numberOfExecPoolSeats),
+		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
 		resultChan:       resultChan,
 		verificationPool: verificationPool,
 		ctx:              ctx,
@@ -507,11 +505,12 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 	}
 
 	for x := 0; x < numberOfExecPoolSeats; x++ {
-		sm.poolSeats <- x
+		sm.seatReturnChan <- struct{}{}
 	}
-	timer := time.NewTicker(singelTxnValidationTime / 2)
 	go func() {
 		bl := makeBatchLoad()
+		timer := time.NewTicker(singelTxnValidationTime / 2)
+		var added bool
 		for {
 			select {
 			case stx := <-stxnChan:
@@ -526,9 +525,11 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 				bl.groupCtxs = append(bl.groupCtxs, groupCtx)
 				bl.txnGroups = append(bl.txnGroups, stx.txnGroup)
 				bl.messagesForTxn = append(bl.messagesForTxn, bl.batchVerifier.GetNumberOfEnqueuedSignatures())
-				if len(bl.groupCtxs) == txnPerWorksetThreshold {
-					timer = sm.processBatch(bl)
-					bl = makeBatchLoad()
+				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
+					timer, added = sm.processBatch(bl)
+					if added {
+						bl = makeBatchLoad()
+					}
 				}
 			case <-timer.C:
 				if len(bl.groupCtxs) == 0 {
@@ -536,8 +537,10 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 					timer = time.NewTicker(singelTxnValidationTime / 2)
 					continue
 				}
-				timer = sm.processBatch(bl)
-				bl = makeBatchLoad()
+				timer, added = sm.processBatch(bl)
+				if added {
+					bl = makeBatchLoad()
+				}
 			case <-ctx.Done():
 				return //TODO: report the error ctx.Err()
 			}
@@ -546,12 +549,13 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 
 }
 
-func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker) {
+func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added bool) {
 	select {
 	// try to pick a seat in the pool
-	case seatID := <-sm.poolSeats:
-		sm.addVerificationTaskToThePool(bl, seatID)
+	case <-sm.seatReturnChan:
+		sm.addVerificationTaskToThePool(bl)
 		timer = time.NewTicker(singelTxnValidationTime / 2)
+		added = true
 		// TODO: queue to the pool.
 		//				fmt.Println(err)
 	default:
@@ -561,7 +565,7 @@ func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker) {
 	return
 }
 
-func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad, seatID int) error {
+func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 
 	function := func(arg interface{}) interface{} {
 		bl = arg.(batchLoad)
@@ -612,7 +616,6 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad, seatID int) 
 			// send the txn result out the pipe
 			select {
 			case sm.resultChan <- vr:
-				fmt.Println("sent!")
 				/*
 					// if the channel is not accepting, should not block here
 					// report dropped txn. caching is fine, if it comes back in the block
@@ -625,8 +628,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad, seatID int) 
 		}
 		// loading them all at once to lock the cache once
 		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
-		// return the seat
-		return nil
+		return struct{}{}
 	}
 	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, bl, sm.seatReturnChan)
 	return err

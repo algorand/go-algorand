@@ -520,8 +520,8 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numOfTxnGroups := 10000
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxnGroups, 20, 50)
+	numOfTxns := 10000
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
@@ -539,7 +539,7 @@ func TestStreamVerifier(t *testing.T) {
 	defer verificationPool.Shutdown()
 
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
-
+	numOfTxnGroups := len(txnGroups)
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 	stxnChan := make(chan VerificationElement, 3)
@@ -549,7 +549,7 @@ func TestStreamVerifier(t *testing.T) {
 	Stream(ctx, cache, nil, stxnChan, resultChan, verificationPool)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
-	/*
+
 	for tgi := range txnGroups {
 		if rand.Float32() > 0.7 {
 			// make a bad sig
@@ -558,13 +558,12 @@ func TestStreamVerifier(t *testing.T) {
 			badTxnGroups[txnGroups[tgi][0].Sig] = struct{}{}
 		}
 	}
-*/
+
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
 		// process the thecked signatures
 		for x := 0; x < numOfTxnGroups; x++ {
-			fmt.Printf("receiving x=%d/%d\n", x, numOfTxnGroups)
 			select {
 			case result := <-resultChan:
 				
