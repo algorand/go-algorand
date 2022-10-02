@@ -549,7 +549,7 @@ func TestStreamVerifier(t *testing.T) {
 	Stream(ctx, cache, nil, stxnChan, resultChan, verificationPool)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
-
+	/*
 	for tgi := range txnGroups {
 		if rand.Float32() > 0.7 {
 			// make a bad sig
@@ -558,24 +558,27 @@ func TestStreamVerifier(t *testing.T) {
 			badTxnGroups[txnGroups[tgi][0].Sig] = struct{}{}
 		}
 	}
-
+*/
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
 		// process the thecked signatures
 		for x := 0; x < numOfTxnGroups; x++ {
-			fmt.Printf("receiving x=%d\n", x)
+			fmt.Printf("receiving x=%d/%d\n", x, numOfTxnGroups)
 			select {
 			case result := <-resultChan:
+				
 				if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
-					fmt.Printf("%d  ", len(badTxnGroups))
 					delete(badTxnGroups, result.txnGroup[0].Sig)
-					fmt.Printf("%dn ", len(badTxnGroups))
-					err := fmt.Errorf("%dth transaction varified with a bad sig", x)
-					errChan <- err
+					if result.verified {
+						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
+						errChan <- err
+					}
 				} else {
-					err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
-					errChan <- err
+					if !result.verified {
+						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
+						errChan <- err
+					}
 				}
 			case <-ctx.Done():
 				break
