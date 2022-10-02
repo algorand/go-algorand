@@ -611,19 +611,15 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 					failedSigIdx++
 				}
 			}
-			var vr VerificationResult
+			verified := false
 			if !txGroupSigFailed {
 				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
-				vr = VerificationResult{
-					txnGroup: bl.txnGroups[txgIdx],
-					verified: true,
-				}
-			} else {
-				vr = VerificationResult{
-					txnGroup: bl.txnGroups[txgIdx],
-					verified: false,
-				}
+				verified = true
+			}
+			vr := VerificationResult{
+				txnGroup: bl.txnGroups[txgIdx],
+				verified: verified,
 			}
 			// send the txn result out the pipe
 			select {
