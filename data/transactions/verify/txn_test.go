@@ -609,10 +609,10 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Sig[0] += 1
+		txn.Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Sig[0] -= 1
+		txn.Sig[0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
@@ -639,10 +639,10 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 		txnGroups[i][0] = signedTxn[i]
 	}
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Msig.Subsigs[0].Sig[0] += 1
+		txn.Msig.Subsigs[0].Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Msig.Subsigs[0].Sig[0] -= 1
+		txn.Msig.Subsigs[0].Sig[0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
@@ -684,10 +684,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Args[0][0] += 1
+		txn.Lsig.Args[0][0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Args[0][0] -= 1
+		txn.Lsig.Args[0][0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 
@@ -733,10 +733,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Sig[0] += 1
+		txn.Lsig.Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Sig[0] -= 1
+		txn.Lsig.Sig[0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
@@ -813,10 +813,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Msig.Subsigs[0].Sig[0] += 1
+		txn.Lsig.Msig.Subsigs[0].Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Msig.Subsigs[0].Sig[0] -= 1
+		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
