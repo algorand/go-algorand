@@ -53,7 +53,6 @@ const minBatchVerifierAlloc = 16
 // Batch verifications errors
 var (
 	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
-	ErrZeroTransactionInBatch  = errors.New("Could not validate empty signature set")
 )
 
 //export ed25519_randombytes_unsafe
@@ -104,19 +103,19 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
-// GetNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
-func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
+// getNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
+func (b *BatchVerifier) getNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
 // if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return ErrZeroTransactionInBatch
+	if b.getNumberOfEnqueuedSignatures() == 0 {
+		return nil
 	}
 
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+	var messages = make([][]byte, b.getNumberOfEnqueuedSignatures())
 	for i, m := range b.messages {
 		messages[i] = HashRep(m)
 	}
