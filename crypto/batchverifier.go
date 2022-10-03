@@ -116,13 +116,13 @@ func (b *BatchVerifier) Verify() error {
 
 // VerifyWithFeedback verifies that all the signatures are valid.
 // if all sigs are valid, nil will be returned for err (failed will have all false)
-// if some txns are invalid, true will be set in failed at the corresponding indexes, and 
+// if some txns are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
 func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if b.getNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	failed = make([]bool, b.getNumberOfEnqueuedSignatures(), b.getNumberOfEnqueuedSignatures())	
+	failed = make([]bool, b.getNumberOfEnqueuedSignatures())
 
 	var messages = make([][]byte, b.getNumberOfEnqueuedSignatures())
 	for i, m := range b.messages {
