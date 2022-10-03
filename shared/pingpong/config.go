@@ -61,8 +61,10 @@ type PpConfig struct {
 	NumApp uint32
 	// NumAppOptIn is the number of apps each account opts in to
 	NumAppOptIn uint32
-	// NumBox is the number of boxes used per app
-	NumBox          uint32
+	// NumBoxUpdate is the number of boxes used per app, where box values are updated each call
+	NumBoxUpdate uint32
+	// NumBoxRead is the number of boxes used per app, where box values are only read each call
+	NumBoxRead      uint32
 	AppProgOps      uint32
 	AppProgHashes   uint32
 	AppProgHashSize string
@@ -107,7 +109,8 @@ var DefaultConfig = PpConfig{
 	NumAsset:        0,
 	MinAccountAsset: 10000000,
 	NumApp:          0,
-	NumBox:          0,
+	NumBoxUpdate:    0,
+	NumBoxRead:      0,
 	AppProgOps:      0,
 	AppProgHashes:   0,
 	AppProgHashSize: "sha256",

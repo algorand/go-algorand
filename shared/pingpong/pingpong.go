@@ -150,6 +150,17 @@ type WorkerState struct {
 	client *libgoal.Client
 }
 
+// returns the number of boxes per app
+func (pps *WorkerState) getNumBoxes() uint32 {
+	// only one of NumBoxUpdate and NumBoxRead should be nonzero. There isn't
+	// currently support for mixed box workloads so these numbers should not be
+	// added together.
+	if pps.cfg.NumBoxUpdate > 0 {
+		return pps.cfg.NumBoxUpdate
+	}
+	return pps.cfg.NumBoxRead
+}
+
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
 func (pps *WorkerState) PrepareAccounts(ac *libgoal.Client) (err error) {
 	pps.client = ac
@@ -891,7 +902,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee uint64, client *libgoa
 	target -= pps.cfg.WeightAsset
 	if target < pps.cfg.WeightApp && pps.cfg.NumApp > 0 {
 		var boxRefs []transactions.BoxRef
-		for i := uint32(0); i < pps.cfg.NumBox; i++ {
+		for i := uint32(0); i < pps.getNumBoxes(); i++ {
 			boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
 		}
 		txn, sender, update, err = pps.constructAppTxn(from, to, fee, client, noteField, lease, boxRefs)
