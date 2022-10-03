@@ -136,7 +136,7 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
-// otherwise, returns an error, and sets the indexes of the failed sigs in failed
+// otherwise, returns false, and sets the indexes of the failed sigs in failed
 func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature, failed []bool) bool {
 
 	numberOfSignatures := len(messages)
