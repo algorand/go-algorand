@@ -261,18 +261,19 @@ func TestBoxWriteBudget(t *testing.T) {
 
 	logic.TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 6; box_create; assert
-                      byte "other"; int 196; box_create; assert
-                      byte "self"; box_del;`, ep) // deletion means we don't pay for write bytes
+                      byte "other"; int 196; box_create; assert // fails in create, never gets a chance to del
+                      byte "self"; box_del;`, ep, "write budget (200) exceeded")
 
-	logic.TestApp(t, `byte "other"; box_del`, ep) // cleanup (self was already deleted in last test)
-	logic.TestApp(t, `byte "other"; box_del; !`, ep)
+	logic.TestApp(t, `byte "self"; box_del`, ep)     // since last failed, the deletion did not happen
+	logic.TestApp(t, `byte "other"; box_del; !`, ep) // since last failed, del should return 0
 	logic.TestApp(t, `byte "junk"; box_del`, ep, "invalid Box reference")
 
 	// Create two boxes, that sum to over budget, then test trying to use them together
 	logic.TestApp(t, `byte "self"; int 101; box_create`, ep)
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 101; box_create`, ep, "write budget (200) exceeded")
-	// error was detected, but the TestLedger now has both boxes present
+
+	logic.TestApp(t, `byte "other"; int 101; box_create`, ep) // didn't happen b/c of failure
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep, "read budget (200) exceeded")

@@ -13,12 +13,13 @@ application call transactions.
 Programs have read-only access to the transaction they are attached
 to, the other transactions in their atomic transaction group, and a
 few global values. In addition, _Smart Contracts_ have access to
-limited state that is global to the application and per-account local
-state for each account that has opted-in to the application. For both
-types of program, approval is signaled by finishing with the stack
-containing a single non-zero uint64 value, though `return` can be used
-to signal an early approval which approves based only upon the top
-stack value being a non-zero uint64 value.
+limited state that is global to the application, per-account local
+state for each account that has opted-in to the application, and
+per-application named _boxes_ of arbitrary state. For both types of
+program, approval is signaled by finishing with the stack containing a
+single non-zero uint64 value, though `return` can be used to signal an
+early approval which approves based only upon the top stack value
+being a non-zero uint64 value.
 
 ## The Stack
 
@@ -38,7 +39,9 @@ In addition to the stack there are 256 positions of scratch
 space. Like stack values, scratch locations may be uint64s or
 byte-arrays. Scratch locations are initialized as uint64 zero. Scratch
 space is accessed by the `load(s)` and `store(s)` opcodes which move
-data from or to scratch space, respectively.
+data from or to scratch space, respectively. Application calls may
+inspect the final scratch space of earlier application calls in the
+same group using `gload(s)(s)`
 
 ## Versions
 
@@ -116,11 +119,13 @@ while being evaluated. If the program exceeds its budget, it fails.
 
 Smart Contracts are executed in ApplicationCall transactions. Like
 Smart Signatures, contracts indicate success by leaving a single
-non-zero integer on the stack.  A failed Smart Contract call is not a
-valid transaction, thus not written to the blockchain. Nodes maintain
-a list of transactions that would succeed, given the current state of
-the blockchain, called the transaction pool. Nodes draw from the pool
-if they are called upon to propose a block.
+non-zero integer on the stack.  A failed Smart Contract call to an
+ApprovalProgram is not a valid transaction, thus not written to the
+blockchain. An ApplicationCall with OnComplete set to ClearState
+invokes the ClearStateProgram, rather than the usual
+ApprovalProgram. If the ClearStateProgram fails, application state
+changes are rolled back, but the transaction still succeeds, and the
+Sender's local state for the called application is removed.
 
 Smart Contracts have access to everything a Smart Signature may access
 (see previous section), as well as the ability to examine blockchain
@@ -134,14 +139,15 @@ blockchain.
 
 Smart contracts have limits on their execution cost (700, consensus
 parameter MaxAppProgramCost). Before v4, this was a static limit on
-the cost of all the instructions in the program. Since then, the cost
+the cost of all the instructions in the program. Starting in v4, the cost
 is tracked dynamically during execution and must not exceed
 MaxAppProgramCost. Beginning with v5, programs costs are pooled and
 tracked dynamically across app executions in a group.  If `n`
 application invocations appear in a group, then the total execution
-cost of such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
+cost of all such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
 application calls become possible, and each such call increases the
-pooled budget by MaxAppProgramCost.
+pooled budget by MaxAppProgramCost at the time the inner group is submitted
+with `itxn_submit`.
 
 Executions of the ClearStateProgram are more stringent, in order to
 ensure that applications may be closed out, but that applications also
@@ -158,7 +164,7 @@ ClearStateProgram fails, and the app's state _is cleared_.
 
 Smart contracts have limits on the amount of blockchain state they
 may examine.  Opcodes may only access blockchain resources such as
-Accounts, Assets, and contract state if the given resource is
+Accounts, Assets, Boxes, and contract state if the given resource is
 _available_.
 
  * A resource in the "foreign array" fields of the ApplicationCall
@@ -180,6 +186,13 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+
+ * A Box is _available_ if _any_ transaction in the same group
+   contains a box reference that denotes the box. The index `i` in the
+   box reference refers to the `ith` application in the containing
+   transaction's ForeignApplications array, with the usual convention
+   that 0 indicates the application ID of the app called by that
+   transaction.
 
 ## Constants
 
@@ -615,8 +628,8 @@ Account fields used in the `acct_params_get` opcode.
 
 | Opcode | Description |
 | - | -- |
-| `balance` | get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `balance` | balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
+| `min_balance` | minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
 | `app_opted_in` | 1 if account A is opted in to application B, else 0 |
 | `app_local_get` | local state of the key B in the current application in account A |
 | `app_local_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |
@@ -632,6 +645,21 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
+
+### Box Access
+
+All box related opcodes fail immediately if used in a
+ClearStateProgram. This behavior is meant to discourage Smart Contract
+authors from depending upon the availability of boxes in a ClearState
+transaction, as accounts using ClearState are under no requirement to
+furnish appropriate Box References.  Authors would do well to keep the
+same issue in mind with respect to the availability of Accounts,
+Assets, and Apps though State Access opcodes _are_ allowed in
+ClearState programs because the current application and sender account
+are sure to be _available_.
+
+| Opcode | Description |
+| - | -- |
 | `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
 | `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |

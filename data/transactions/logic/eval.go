@@ -253,6 +253,9 @@ type resources struct {
 	// during NewEvalParams(). refs using 0 on an appl create are resolved and
 	// added when the appl executes.
 	boxes map[boxRef]boxTouch
+
+	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
+	dirtyBytes uint64
 }
 
 // boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
@@ -464,6 +467,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		available:               caller.available,
 		appAddrCache:            caller.appAddrCache,
 		caller:                  caller,
+		ioBudget:                caller.ioBudget,
 	}
 	return ep
 }
@@ -756,20 +760,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
-
-	// Check the I/O budget for writing. TODO: Only need to do this once if we
-	// figure out we're the last app call in the group.
-	if cx.caller == nil {
-		used := uint64(0)
-		for _, bt := range cx.available.boxes {
-			if bt.dirty {
-				used = basics.AddSaturate(used, bt.size)
-			}
-			if used > cx.ioBudget {
-				return false, nil, fmt.Errorf("box write budget (%d) exceeded", cx.ioBudget)
-			}
-		}
-	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)

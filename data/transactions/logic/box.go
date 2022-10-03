@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 const (
@@ -31,20 +32,36 @@ const (
 )
 
 func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) error {
+	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
+		return fmt.Errorf("boxes may not be accesses from ClearState program")
+	}
+
 	bt, ok := cx.available.boxes[boxRef{cx.appID, name}]
 	if !ok {
 		return fmt.Errorf("invalid Box reference %v", name)
 	}
 	switch operation {
 	case boxCreate:
+		if !bt.dirty {
+			cx.available.dirtyBytes += createSize
+		}
 		bt.dirty = true
 		bt.size = createSize
 	case boxWrite:
+		if !bt.dirty {
+			cx.available.dirtyBytes += bt.size
+		}
 		bt.dirty = true
 	case boxDelete:
+		if bt.dirty {
+			cx.available.dirtyBytes -= bt.size
+		}
 		bt.size = 0
 	case boxRead:
 		/* nothing to do */
+	}
+	if cx.available.dirtyBytes > cx.ioBudget {
+		return fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
 	}
 	cx.available.boxes[boxRef{cx.appID, name}] = bt
 	return nil

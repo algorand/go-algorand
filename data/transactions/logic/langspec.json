@@ -1342,7 +1342,7 @@
       "Args": ".",
       "Returns": "U",
       "Size": 1,
-      "Doc": "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
+      "Doc": "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
@@ -1555,7 +1555,7 @@
       "Args": ".",
       "Returns": "U",
       "Size": 1,
-      "Doc": "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
+      "Doc": "minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
@@ -2260,7 +2260,7 @@
       "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
       "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2271,7 +2271,7 @@
       "Size": 1,
       "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2281,7 +2281,7 @@
       "Size": 1,
       "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2292,7 +2292,7 @@
       "Size": 1,
       "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2303,7 +2303,7 @@
       "Size": 1,
       "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2315,7 +2315,7 @@
       "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
       "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
@@ -2326,7 +2326,7 @@
       "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
       "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
       "Groups": [
-        "State Access"
+        "Box Access"
       ]
     },
     {
