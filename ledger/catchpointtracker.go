@@ -1357,62 +1357,47 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
-func hashBufV6(affinity uint64, kind byte) []byte {
-	hash := make([]byte, 4+crypto.DigestSize)
-	// write out the lowest 32 bits of the affinity value. This should improve
-	// the caching of the trie by allowing recent updates to be in-cache, and
-	// "older" nodes will be left alone.
-	for i, prefix := 3, affinity; i >= 0; i, prefix = i-1, prefix>>8 {
-		// the following takes the prefix & 255 -> hash[i]
-		hash[i] = byte(prefix)
-	}
-	hash[4] = kind
-	return hash
-}
-
-func finishV6(v6hash []byte, prehash []byte) []byte {
-	entryHash := crypto.Hash(prehash)
-	copy(v6hash[5:], entryHash[1:])
-	return v6hash[:]
-
-}
-
-// stateProofVerificationDataHashBuilderV7 calculates the hash key used for the trie when dealing with state proof
-// verification data.
-func stateProofVerificationDataHashBuilderV7(verificationData *ledgercore.StateProofVerificationData) []byte {
-	// TODO: kind should be an enum
-	hash := hashBufV6(0, 4) // 4 indicates state proof verification data
-	prehash := []byte(fmt.Sprintf("%v", verificationData))
-	return finishV6(hash, prehash)
-}
-
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
 func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) []byte {
+	hash := make([]byte, 4+crypto.DigestSize)
 	hashIntPrefix := accountData.UpdateRound
 	if hashIntPrefix == 0 {
 		hashIntPrefix = accountData.RewardsBase
 	}
-	hash := hashBufV6(hashIntPrefix, 0) // 0 indicates an account
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, prefix := 3, hashIntPrefix; i >= 0; i, prefix = i-1, prefix>>8 {
+		// the following takes the prefix & 255 -> hash[i]
+		hash[i] = byte(prefix)
+	}
+	hash[4] = 0 // set the 5th byte to zero to indicate it's a account base record hash
 
 	prehash := make([]byte, crypto.DigestSize+len(encodedAccountData))
 	copy(prehash[:], addr[:])
 	copy(prehash[crypto.DigestSize:], encodedAccountData[:])
-
-	return finishV6(hash, prehash)
+	entryHash := crypto.Hash(prehash)
+	copy(hash[5:], entryHash[1:])
+	return hash[:]
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
 func resourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
-	hash := hashBufV6(updateRound, byte(ctype+1)) // one or two ( asset / application ) so we could differentiate the hashes.
+	hash := make([]byte, 4+crypto.DigestSize)
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, prefix := 3, updateRound; i >= 0; i, prefix = i-1, prefix>>8 {
+		// the following takes the prefix & 255 -> hash[i]
+		hash[i] = byte(prefix)
+	}
+	hash[4] = byte(ctype + 1) // set the 5th byte to one or two ( asset / application ) so we could differentiate the hashes.
 
 	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
 	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(cidx))
 	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
-
-	return finishV6(hash, prehash)
+	entryHash := crypto.Hash(prehash)
+	copy(hash[5:], entryHash[1:])
+	return hash[:]
 }
 
 // accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
