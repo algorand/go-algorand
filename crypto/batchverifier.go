@@ -122,13 +122,12 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if b.getNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	failed = make([]bool, b.getNumberOfEnqueuedSignatures())
-
 	var messages = make([][]byte, b.getNumberOfEnqueuedSignatures())
 	for i, m := range b.messages {
 		messages[i] = HashRep(m)
 	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures, failed) {
+	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
+	if allValid {
 		return failed, nil
 	}
 	return failed, ErrBatchVerificationFailed
@@ -137,7 +136,7 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature, failed []bool) bool {
+func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
 	numberOfSignatures := len(messages)
 
@@ -172,11 +171,11 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
-	if allValid != 0 && failed != nil {
-		for i := 0; i < numberOfSignatures; i++ {
-			cint := *(*C.int)(unsafe.Pointer(uintptr(valid) + uintptr(i*C.sizeof_int)))
-			failed[i] = (cint == 0)
-		}
+
+	failed = make([]bool, numberOfSignatures)
+	for i := 0; i < numberOfSignatures; i++ {
+		cint := *(*C.int)(unsafe.Pointer(uintptr(valid) + uintptr(i*C.sizeof_int)))
+		failed[i] = (cint == 0)
 	}
-	return allValid == 0
+	return allValid == 0, failed
 }
