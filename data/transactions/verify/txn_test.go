@@ -494,6 +494,8 @@ func TestTxnGroupMixedSignatures(t *testing.T) {
 		},
 	}
 
+	// add a simple logic that verifies this condition:
+	// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 	op, err := logic.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -665,6 +667,8 @@ func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 
 	// sign the transcation with logic
 	for i := 0; i < len(signedTxn); i++ {
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -710,6 +714,8 @@ func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	}
 
 	for i := 0; i < len(signedTxn); i++ {
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -781,7 +787,8 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
 			},
 		}
-
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -857,6 +864,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr book
 	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
 	require.Len(t, unverifiedGroups, 0)
 
+	cache = MakeVerifiedTransactionCache(1000)
 	// Break a random signature
 	txgIdx := rand.Intn(len(txnGroups))
 	txIdx := rand.Intn(len(txnGroups[txgIdx]))
