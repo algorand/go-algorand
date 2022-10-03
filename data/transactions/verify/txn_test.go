@@ -478,6 +478,90 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	b.StopTimer()
 }
 
+func TestTxnGroupMixedSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 50)
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
+
+	op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+	require.NoError(t, err)
+
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+
+	dummyLedger := DummyLedgerForSignature{}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+	
+	///// no sig
+	tmpSig := txnGroups[0][0].Sig
+	txnGroups[0][0].Sig = crypto.Signature{}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "has no sig")
+	txnGroups[0][0].Sig = tmpSig
+
+	///// Sig + multiSig
+	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Msig.Subsigs = nil
+
+	///// Sig + logic
+	txnGroups[0][0].Lsig.Logic = op.Program
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Lsig.Logic = []byte{}
+
+	///// MultiSig + logic
+	txnGroups[0][0].Sig = crypto.Signature{}
+	txnGroups[0][0].Lsig.Logic = op.Program
+	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Lsig.Logic = []byte{}
+	txnGroups[0][0].Sig = tmpSig
+	txnGroups[0][0].Msig.Subsigs = nil
+
+	/////  logic with sig and multi sig
+	txnGroups[0][0].Sig = crypto.Signature{}
+	txnGroups[0][0].Lsig.Logic = op.Program
+	txnGroups[0][0].Lsig.Sig = tmpSig
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
+
+}
+
 func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
 	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
 	for i, addr := range addrs {
