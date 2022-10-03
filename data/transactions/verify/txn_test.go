@@ -86,23 +86,11 @@ func keypair() *crypto.SignatureSecrets {
 }
 
 func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testing.T) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	secrets, addresses, pks, multiAddress := generateMultiSigAccounts(t, numAccs)
 
-	numMultiSigAcct := numAccs
-	// multiple numAccs by 3 in order to create numAccs groups of 3 addresses in every multisig account
-	numAccs = 3 * numAccs
-
-	secrets, addresses, pks := generateAccounts(numAccs)
-
+	numMultiSigAcct := len(multiAddress)
 	txs := make([]transactions.Transaction, numTxs)
 	signed := make([]transactions.SignedTxn, numTxs)
-	multiAddress := make([]basics.Address, numMultiSigAcct)
-
-	// create multiAccounts
-	for i := 0; i < numAccs; i += 3 {
-		multiSigAdd, err := crypto.MultisigAddrGen(1, 2, pks[i:i+3])
-		require.NoError(t, err)
-		multiAddress[i/3] = basics.Address(multiSigAdd)
-	}
 
 	var iss, exp int
 	u := uint64(0)
@@ -150,6 +138,23 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 	}
 
 	return txs, signed, secrets, addresses
+}
+
+func generateMultiSigAccounts(t *testing.T, numAccs int) ([]*crypto.SignatureSecrets, []basics.Address, []crypto.PublicKey, []basics.Address) {
+	require.Equal(t, numAccs%3, 0, "numAccs should be multiple of 3 to create multiaccounts")
+
+	numMultiSigAcct := numAccs / 3
+	secrets, addresses, pks := generateAccounts(numAccs)
+
+	multiAddress := make([]basics.Address, numMultiSigAcct)
+
+	// create multiAccounts
+	for i := 0; i < numAccs; i += 3 {
+		multiSigAdd, err := crypto.MultisigAddrGen(1, 2, pks[i:i+3])
+		require.NoError(t, err)
+		multiAddress[i/3] = basics.Address(multiSigAdd)
+	}
+	return secrets, addresses, pks, multiAddress
 }
 
 func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address, []crypto.PublicKey) {
@@ -531,7 +536,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 func TestTxnGroupCacheUpdateWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, _, _ := generateMultiSigTxn(100, 20, 50, t)
+	_, signedTxn, _, _ := generateMultiSigTxn(100, 30, 50, t)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
@@ -655,6 +660,85 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
+func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, _, pks, multiAddress := generateMultiSigAccounts(t, 30)
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
+
+	const numOfTxn = 20
+	signedTxn := make([]transactions.SignedTxn, numOfTxn)
+
+	numMultiSigAcct := len(multiAddress)
+	for i := 0; i < numOfTxn; i++ {
+		s := rand.Intn(numMultiSigAcct)
+		r := rand.Intn(numMultiSigAcct)
+		a := rand.Intn(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
+
+		signedTxn[i].Txn = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      multiAddress[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(1),
+				LastValid:   basics.Round(100),
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: multiAddress[r],
+				Amount:   basics.MicroAlgos{Raw: uint64(a)},
+			},
+		}
+
+		op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+		require.NoError(t, err)
+
+		signedTxn[i].Sig = crypto.Signature{}
+		signedTxn[i].Txn.Sender = multiAddress[s]
+		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+		signedTxn[i].Lsig.Logic = op.Program
+		program := logic.Program(op.Program)
+
+		// create multi sig that 2 out of 3 has signed the txn
+		var sigs [2]crypto.MultisigSig
+		for j := 0; j < 2; j++ {
+			msig, err := crypto.MultisigSign(program, crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
+			require.NoError(t, err)
+			sigs[j] = msig
+		}
+		msig, err := crypto.MultisigAssemble(sigs[:])
+		require.NoError(t, err)
+		signedTxn[i].Lsig.Msig = msig
+	}
+
+	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = signedTxn[i]
+	}
+
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Msig.Subsigs[0].Sig[0] += 1
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Msig.Subsigs[0].Sig[0] -= 1
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+}
 
 // verifyGroup uses TxnGroup to verify txns and add them to the
 // cache. Then makes sure that only the valid txns are verified and added to
