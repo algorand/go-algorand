@@ -91,20 +91,11 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 	// multiple numAccs by 3 in order to create numAccs groups of 3 addresses in every multisig account
 	numAccs = 3 * numAccs
 
+	secrets, addresses, pks := generateAccounts(numAccs)
+
 	txs := make([]transactions.Transaction, numTxs)
 	signed := make([]transactions.SignedTxn, numTxs)
-	secrets := make([]*crypto.SignatureSecrets, numAccs)
-	addresses := make([]basics.Address, numAccs)
-	pks := make([]crypto.PublicKey, numAccs)
 	multiAddress := make([]basics.Address, numMultiSigAcct)
-
-	for i := 0; i < numAccs; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-		pks[i] = secret.SignatureVerifier
-	}
 
 	// create multiAccounts
 	for i := 0; i < numAccs; i += 3 {
@@ -161,18 +152,26 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 	return txs, signed, secrets, addresses
 }
 
-func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
-	txs := make([]transactions.Transaction, numTxs)
-	signed := make([]transactions.SignedTxn, numTxs)
+func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address, []crypto.PublicKey) {
 	secrets := make([]*crypto.SignatureSecrets, numAccs)
 	addresses := make([]basics.Address, numAccs)
+	pks := make([]crypto.PublicKey, numAccs)
 
 	for i := 0; i < numAccs; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
+		pks[i] = secret.SignatureVerifier
 	}
+	return secrets, addresses, pks
+}
+
+func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	txs := make([]transactions.Transaction, numTxs)
+	signed := make([]transactions.SignedTxn, numTxs)
+	secrets, addresses, _ := generateAccounts(numAccs)
+
 	var iss, exp int
 	u := uint64(0)
 	for i := 0; i < numTxs; i++ {
@@ -503,9 +502,6 @@ func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*c
 	return txnGroups
 }
 
-// TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
-// cache. Then makes sure that only the valid txns are verified and added to
-// the cache.
 func TestTxnGroupCacheUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -532,9 +528,6 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
-// TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
-// cache. Then makes sure that only the valid txns are verified and added to
-// the cache.
 func TestTxnGroupCacheUpdateWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -568,7 +561,7 @@ func TestTxnGroupCacheUpdateWithMultiSig(t *testing.T) {
 // TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
 // cache. Then makes sure that only the valid txns are verified and added to
 // the cache.
-func TestTxnGroupCacheUpdateLogic(t *testing.T) {
+func TestTxnGroupCacheFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
@@ -584,6 +577,7 @@ func TestTxnGroupCacheUpdateLogic(t *testing.T) {
 		},
 	}
 
+	// sign the transcation with logic
 	for i := 0; i < len(signedTxn); i++ {
 		op, err := logic.AssembleString(`arg 0
 sha256
@@ -613,9 +607,6 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 }
 
-// TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
-// cache. Then makes sure that only the valid txns are verified and added to
-// the cache.
 func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -664,6 +655,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
+
+// verifyGroup uses TxnGroup to verify txns and add them to the
+// cache. Then makes sure that only the valid txns are verified and added to
+// the cache.
 func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
 	cache := MakeVerifiedTransactionCache(1000)
 
