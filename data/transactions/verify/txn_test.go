@@ -619,6 +619,8 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
+// TestTxnGroupCacheUpdateMultiSig makes sure that a payment transaction signed with multisig
+// is valid (and added to the cache) only if all signatures in the multisig are correct
 func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -649,6 +651,8 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
+// TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
+// is valid (and added to the cache) only if logic passes
 func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -697,6 +701,9 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 }
 
+// TestTxnGroupCacheUpdateLogicWithSig makes sure that a payment transaction contains logicsig signed with single signature is valid (and added to the cache) only
+// if the logic passes and the signature is correct.
+// for this, we will break the signature and make sure that txn verification fails.
 func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -745,8 +752,20 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		txn.Lsig.Sig[0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+
+	// signature is correct and logic fails
+	breakSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]++
+	}
+	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
+// TestTxnGroupCacheUpdateLogicWithMultiSig makes sure that a payment transaction contains logicsig signed with multisig is valid
+// if the logic passes and the multisig is correct.
+// for this, we will break one of the multisig and the logic and make sure that txn verification fails.
 func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -825,7 +844,16 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
+	
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	// signature is correct and logic fails
+	breakSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]++
+	}
+	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
 // verifyGroup uses TxnGroup to verify txns and add them to the
@@ -888,6 +916,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr book
 	require.Len(t, unverifiedGroups, 1)
 
 	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])
+	restoreSig(&txnGroups[txgIdx][txIdx])
 }
 
 func BenchmarkTxn(b *testing.B) {
