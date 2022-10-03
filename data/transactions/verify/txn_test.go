@@ -505,7 +505,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	dummyLedger := DummyLedgerForSignature{}
 	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
-	
+
 	///// no sig
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
@@ -617,7 +617,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
-func TestTxnGroupCacheUpdateWithMultiSig(t *testing.T) {
+func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateMultiSigTxn(100, 30, 50, t)
@@ -647,10 +647,7 @@ func TestTxnGroupCacheUpdateWithMultiSig(t *testing.T) {
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 }
 
-// TestTxnGroupCacheUpdate uses TxnGroup to verify txns and add them to the
-// cache. Then makes sure that only the valid txns are verified and added to
-// the cache.
-func TestTxnGroupCacheFailLogic(t *testing.T) {
+func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
