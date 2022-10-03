@@ -492,16 +492,21 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 		`
 
 		progParts := []string{prologue}
-		for i := uint32(0); i < numBoxUpdate; i++ {
-			progParts = append(progParts, fmt.Sprintf(createBoxes, i))
-		}
 
 		// note: only one of numBoxUpdate or numBoxRead should be nonzero
 		if numBoxUpdate != 0 {
 			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxUpdate; i++ {
 				progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
 			}
 		} else {
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
 			for i := uint32(0); i < numBoxRead; i++ {
 				progParts = append(progParts, fmt.Sprintf(getBoxes, i))
 			}
