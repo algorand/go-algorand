@@ -5105,3 +5105,38 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 	err := db.Retry(queryFunc)
 	return &data, err
 }
+
+// stateProofVerificationData returns all verification data currently committed to the database.
+func stateProofVerificationData(ctx context.Context, tx *sql.Tx) (*[]ledgercore.StateProofVerificationData, error) {
+	var result []ledgercore.StateProofVerificationData
+	queryFunc := func() error {
+		rows, err := tx.QueryContext(ctx, "SELECT verificationdata FROM stateproofverification")
+
+		if err != nil {
+			return err
+		}
+
+		// Clear `res` in case this function is repeated.
+		result = result[:0]
+		for rows.Next() {
+			var rawData []byte
+			err = rows.Scan(&rawData)
+			if err != nil {
+				return err
+			}
+
+			var record ledgercore.StateProofVerificationData
+			err = protocol.Decode(rawData, &record)
+			if err != nil {
+				return err
+			}
+
+			result = append(result, record)
+		}
+
+		return nil
+	}
+
+	err := db.Retry(queryFunc)
+	return &result, err
+}
