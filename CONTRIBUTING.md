@@ -45,7 +45,7 @@ Again, if you have a patch for a critical security vulnerability, please use our
 
 For Go code we use the [Golang guidelines defined here](https://golang.org/doc/effective_go.html).
 * Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
-* We use **gofmt** and **golint**. Also make sure to run `make sanity` and `make generate` before opening a pull request.
+* We use **gofmt** and **golangci-lint**. Also make sure to run `make sanity` and `make generate` before opening a pull request.
 * Code must be documented adhering to the official Go commentary guidelines.
 
 For JavaScript code we use the [MDN formatting rules](https://developer.mozilla.org/en-US/docs/MDN/Contribute/Guidelines/Code_guidelines/JavaScript).

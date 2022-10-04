@@ -472,6 +472,15 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 }
 
+type frame struct {
+	retpc  int
+	height int
+
+	clear   bool // perform "shift and clear" in retsub
+	args    int
+	returns int
+}
+
 type scratchSpace [256]stackValue
 
 // EvalContext is the execution context of AVM bytecode.  It contains the full
@@ -497,8 +506,9 @@ type EvalContext struct {
 	// keeping the running changes, the debugger can be changed to display them
 	// as the app runs.
 
-	stack     []stackValue
-	callstack []int
+	stack       []stackValue
+	callstack   []frame
+	fromCallsub bool
 
 	appID   basics.AppIndex
 	program []byte
@@ -980,7 +990,7 @@ func (cx *EvalContext) step() error {
 	preheight := len(cx.stack)
 	err := spec.op(cx)
 
-	if err == nil {
+	if err == nil && !spec.trusted {
 		postheight := len(cx.stack)
 		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
@@ -1341,17 +1351,17 @@ func opLt(cx *EvalContext) error {
 // opSwap, opLt, and opNot always succeed (return nil). So error checking elided in Gt,Le,Ge
 
 func opGt(cx *EvalContext) error {
-	opSwap(cx)
+	opSwap(cx) //nolint:errcheck // opSwap always succeeds
 	return opLt(cx)
 }
 
 func opLe(cx *EvalContext) error {
-	opGt(cx)
+	opGt(cx) //nolint:errcheck // opGt always succeeds
 	return opNot(cx)
 }
 
 func opGe(cx *EvalContext) error {
-	opLt(cx)
+	opLt(cx) //nolint:errcheck // opLt always succeeds
 	return opNot(cx)
 }
 
@@ -1965,12 +1975,17 @@ func opArgs(cx *EvalContext) error {
 	return opArgN(cx, n)
 }
 
+func decodeBranchOffset(program []byte, pos int) int {
+	// tricky casting to preserve signed value
+	return int(int16(program[pos])<<8 | int16(program[pos+1]))
+}
+
 func branchTarget(cx *EvalContext) (int, error) {
-	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
+	offset := decodeBranchOffset(cx.program, cx.pc+1)
 	if offset < 0 && cx.version < backBranchEnabledVersion {
 		return 0, fmt.Errorf("negative branch offset %x", offset)
 	}
-	target := cx.pc + 3 + int(offset)
+	target := cx.pc + 3 + offset
 	var branchTooFar bool
 	if cx.version >= 2 {
 		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
@@ -1982,6 +1997,32 @@ func branchTarget(cx *EvalContext) (int, error) {
 		return 0, fmt.Errorf("branch target %d outside of program", target)
 	}
 
+	return target, nil
+}
+
+func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	numOffsets := int(cx.program[cx.pc+1])
+
+	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
+	eoi := end + 2*numOffsets // end of instruction
+
+	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
+		return 0, fmt.Errorf("switch claims to extend beyond program")
+	}
+
+	offset := 0
+	if branchIdx < uint64(numOffsets) {
+		pos := end + int(2*branchIdx) // position of referenced offset: each offset is 2 bytes
+		offset = decodeBranchOffset(cx.program, pos)
+	}
+
+	target := eoi + offset
+
+	// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction,
+	// is okay and ends normally
+	if target > len(cx.program) || target < 0 {
+		return 0, fmt.Errorf("branch target %d outside of program", target)
+	}
 	return target, nil
 }
 
@@ -2000,6 +2041,32 @@ func checkBranch(cx *EvalContext) error {
 	cx.branchTargets[target] = true
 	return nil
 }
+
+// checks switch is encoded properly (and calculates nextpc)
+func checkSwitch(cx *EvalContext) error {
+	numOffsets := int(cx.program[cx.pc+1])
+	eoi := cx.pc + 2 + 2*numOffsets
+
+	for branchIdx := 0; branchIdx < numOffsets; branchIdx++ {
+		target, err := switchTarget(cx, uint64(branchIdx))
+		if err != nil {
+			return err
+		}
+
+		if target < eoi {
+			// If a branch goes backwards, we should have already noted that an instruction began at that location.
+			if _, ok := cx.instructionStarts[target]; !ok {
+				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+			}
+		}
+		cx.branchTargets[target] = true
+	}
+
+	// this opcode's size is dynamic so nextpc must be set here
+	cx.nextpc = eoi
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	cx.nextpc = cx.pc + 3
@@ -2039,9 +2106,39 @@ func opB(cx *EvalContext) error {
 	return nil
 }
 
+func opSwitch(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	branchIdx := cx.stack[last].Uint
+
+	cx.stack = cx.stack[:last]
+	target, err := switchTarget(cx, branchIdx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+const protoByte = 0x8a
+
 func opCallSub(cx *EvalContext) error {
-	cx.callstack = append(cx.callstack, cx.pc+3)
-	return opB(cx)
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
+		height: len(cx.stack),
+	})
+	err := opB(cx)
+
+	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
+	   we confirm we came directly from callsub by checking (and resetting) the
+	   flag. This is really a little handshake between callsub and proto. Done
+	   this way, we don't have to waste time clearing the fromCallsub flag in
+	   every instruction, only in proto since we know we're going there next.
+	*/
+
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return err
 }
 
 func opRetSub(cx *EvalContext) error {
@@ -2049,9 +2146,26 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	target := cx.callstack[top]
+	frame := cx.callstack[top]
+	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
+		expect := frame.height + frame.returns
+		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
+			switch {
+			case len(cx.stack) < frame.height:
+				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
+			case len(cx.stack) == frame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			default:
+				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
+					len(cx.stack)-frame.height, frame.returns)
+			}
+		}
+		argstart := frame.height - frame.args
+		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
+		cx.stack = cx.stack[:argstart+frame.returns]
+	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = target
+	cx.nextpc = frame.retpc
 	return nil
 }
 

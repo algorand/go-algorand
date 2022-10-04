@@ -27,11 +27,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/abi"
+	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -48,10 +49,13 @@ type Writer interface {
 type labelReference struct {
 	sourceLine int
 
-	// position of the opcode start that refers to the label
+	// position of the label reference
 	position int
 
 	label string
+
+	// ending positions of the opcode containing the label reference.
+	offsetPosition int
 }
 
 type constReference interface {
@@ -224,11 +228,13 @@ type OpStream struct {
 
 	intc         []uint64       // observed ints in code. We'll put them into a intcblock
 	intcRefs     []intReference // references to int pseudo-op constants, used for optimization
-	hasIntcBlock bool           // prevent prepending intcblock because asm has one
+	cntIntcBlock int            // prevent prepending intcblock because asm has one
+	hasPseudoInt bool           // were any `int` pseudo ops used?
 
 	bytec         [][]byte        // observed bytes in code. We'll put them into a bytecblock
 	bytecRefs     []byteReference // references to byte/addr pseudo-op constants, used for optimization
-	hasBytecBlock bool            // prevent prepending bytecblock because asm has one
+	cntBytecBlock int             // prevent prepending bytecblock because asm has one
+	hasPseudoByte bool            // were any `byte` (or equivalent) pseudo ops used?
 
 	// tracks information we know to be true at the point being assembled
 	known        ProgramKnowledge
@@ -260,6 +266,7 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
+		known:        ProgramKnowledge{fp: -1},
 	}
 
 	for i := range o.known.scratchSpace {
@@ -277,7 +284,7 @@ type ProgramKnowledge struct {
 	// Return.Types. If `deadcode` is true, `stack` should be empty.
 	stack StackTypes
 
-	// bottom is the type given out when known is empty. It is StackNone at
+	// bottom is the type given out when `stack` is empty. It is StackNone at
 	// program start, so, for example, a `+` opcode at the start of a program
 	// fails. But when a label or callsub is encountered, `stack` is truncated
 	// and `bottom` becomes StackAny, because we don't track program state
@@ -289,7 +296,22 @@ type ProgramKnowledge struct {
 	// errors should be reported.
 	deadcode bool
 
+	// fp is the frame pointer, if known/usable, or -1 if not.  When
+	// encountering a `proto`, `stack` is grown to fit `args`, and this `fp` is
+	// set to the top of those args.  This may not be the "real" fp when the
+	// program is actually evaluated, but it is good enough for frame_{dig/bury}
+	// to work from there.
+	fp int
+
 	scratchSpace [256]StackType
+}
+
+func (pgm *ProgramKnowledge) top() (StackType, bool) {
+	if len(pgm.stack) == 0 {
+		return pgm.bottom, pgm.bottom != StackNone
+	}
+	last := len(pgm.stack) - 1
+	return pgm.stack[last], true
 }
 
 func (pgm *ProgramKnowledge) pop() StackType {
@@ -322,6 +344,7 @@ func (pgm *ProgramKnowledge) label() {
 func (pgm *ProgramKnowledge) reset() {
 	pgm.stack = nil
 	pgm.bottom = StackAny
+	pgm.fp = -1
 	pgm.deadcode = false
 	for i := range pgm.scratchSpace {
 		pgm.scratchSpace[i] = StackAny
@@ -344,11 +367,11 @@ func (ops *OpStream) recordSourceLine() {
 }
 
 // referToLabel records an opcode label reference to resolve later
-func (ops *OpStream) referToLabel(pc int, label string) {
-	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
+func (ops *OpStream) referToLabel(pc int, label string, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label, offsetPosition})
 }
 
-type refineFunc func(pgm *ProgramKnowledge, immediates []string) (StackTypes, StackTypes)
+type refineFunc func(pgm *ProgramKnowledge, immediates []string) (StackTypes, StackTypes, error)
 
 // returns allows opcodes like `txn` to be specific about their return value
 // types, based on the field requested, rather than use Any as specified by
@@ -373,18 +396,18 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 func (ops *OpStream) Intc(constIndex uint) {
 	switch constIndex {
 	case 0:
-		ops.pending.WriteByte(0x22) // intc_0
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_0"].Opcode)
 	case 1:
-		ops.pending.WriteByte(0x23) // intc_1
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_1"].Opcode)
 	case 2:
-		ops.pending.WriteByte(0x24) // intc_2
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_2"].Opcode)
 	case 3:
-		ops.pending.WriteByte(0x25) // intc_3
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc_3"].Opcode)
 	default:
 		if constIndex > 0xff {
 			ops.error("cannot have more than 256 int constants")
 		}
-		ops.pending.WriteByte(0x21) // intc
+		ops.pending.WriteByte(OpsByName[ops.Version]["intc"].Opcode)
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.intc)) {
@@ -394,8 +417,10 @@ func (ops *OpStream) Intc(constIndex uint) {
 	}
 }
 
-// Uint writes opcodes for loading a uint literal
-func (ops *OpStream) Uint(val uint64) {
+// IntLiteral writes opcodes for loading a uint literal
+func (ops *OpStream) IntLiteral(val uint64) {
+	ops.hasPseudoInt = true
+
 	found := false
 	var constIndex uint
 	for i, cv := range ops.intc {
@@ -405,7 +430,11 @@ func (ops *OpStream) Uint(val uint64) {
 			break
 		}
 	}
+
 	if !found {
+		if ops.cntIntcBlock > 0 {
+			ops.errorf("int %d used without %d in intcblock", val, val)
+		}
 		constIndex = uint(len(ops.intc))
 		ops.intc = append(ops.intc, val)
 	}
@@ -420,18 +449,18 @@ func (ops *OpStream) Uint(val uint64) {
 func (ops *OpStream) Bytec(constIndex uint) {
 	switch constIndex {
 	case 0:
-		ops.pending.WriteByte(0x28) // bytec_0
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_0"].Opcode)
 	case 1:
-		ops.pending.WriteByte(0x29) // bytec_1
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_1"].Opcode)
 	case 2:
-		ops.pending.WriteByte(0x2a) // bytec_2
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_2"].Opcode)
 	case 3:
-		ops.pending.WriteByte(0x2b) // bytec_3
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec_3"].Opcode)
 	default:
 		if constIndex > 0xff {
 			ops.error("cannot have more than 256 byte constants")
 		}
-		ops.pending.WriteByte(0x27) // bytec
+		ops.pending.WriteByte(OpsByName[ops.Version]["bytec"].Opcode)
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.bytec)) {
@@ -444,6 +473,8 @@ func (ops *OpStream) Bytec(constIndex uint) {
 // ByteLiteral writes opcodes and data for loading a []byte literal
 // Values are accumulated so that they can be put into a bytecblock
 func (ops *OpStream) ByteLiteral(val []byte) {
+	ops.hasPseudoByte = true
+
 	found := false
 	var constIndex uint
 	for i, cv := range ops.bytec {
@@ -454,6 +485,9 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 		}
 	}
 	if !found {
+		if ops.cntBytecBlock > 0 {
+			ops.errorf("byte/addr/method used without value in bytecblock")
+		}
 		constIndex = uint(len(ops.bytec))
 		ops.bytec = append(ops.bytec, val)
 	}
@@ -468,23 +502,46 @@ func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
 	}
+
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntIntcBlock > 0 && ops.Version >= backBranchEnabledVersion {
+		// We don't understand control-flow, so use pushint
+		ops.warnf("int %s used with explicit intcblock. must pushint", args[0])
+		pushint := OpsByName[ops.Version]["pushint"]
+		return asmPushInt(ops, &pushint, args)
+	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntIntcBlock > 1 {
+		pushint, ok := OpsByName[ops.Version]["pushint"]
+		if ok {
+			return asmPushInt(ops, &pushint, args)
+		}
+		return ops.errorf("int %s used with manual intcblocks. Use intc.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// intcblock dominates the current instruction. If so, we could use it.
+
 	// check txn type constants
 	i, ok := txnTypeMap[args[0]]
 	if ok {
-		ops.Uint(i)
+		ops.IntLiteral(i)
 		return nil
 	}
-	// check OnCompetion constants
+	// check OnCompletion constants
 	oc, isOCStr := onCompletionMap[args[0]]
 	if isOCStr {
-		ops.Uint(oc)
+		ops.IntLiteral(oc)
 		return nil
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	ops.Uint(val)
+	ops.IntLiteral(val)
 	return nil
 }
 
@@ -493,7 +550,7 @@ func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
-	constIndex, err := simpleImm(args[0], "constant")
+	constIndex, err := byteImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -504,7 +561,7 @@ func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("bytec operation needs one argument")
 	}
-	constIndex, err := simpleImm(args[0], "constant")
+	constIndex, err := byteImm(args[0], "constant")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -545,7 +602,7 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func base32DecdodeAnyPadding(x string) (val []byte, err error) {
+func base32DecodeAnyPadding(x string) (val []byte, err error) {
 	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
 	if err != nil {
 		// try again with standard padding
@@ -567,7 +624,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = errors.New("byte base32 arg lacks close paren")
 			return
 		}
-		val, err = base32DecdodeAnyPadding(arg[open+1 : close])
+		val, err = base32DecodeAnyPadding(arg[open+1 : close])
 		if err != nil {
 			return
 		}
@@ -595,7 +652,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			err = fmt.Errorf("need literal after 'byte %s'", arg)
 			return
 		}
-		val, err = base32DecdodeAnyPadding(args[1])
+		val, err = base32DecodeAnyPadding(args[1])
 		if err != nil {
 			return
 		}
@@ -696,6 +753,29 @@ func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
+
+	// After backBranchEnabledVersion, control flow is confusing, so if there's
+	// a manual cblock, use push instead of trying to use what's given.
+	if ops.cntBytecBlock > 0 && ops.Version >= backBranchEnabledVersion {
+		// We don't understand control-flow, so use pushbytes
+		ops.warnf("byte %s used with explicit bytecblock. must pushbytes", args[0])
+		pushbytes := OpsByName[ops.Version]["pushbytes"]
+		return asmPushBytes(ops, &pushbytes, args)
+	}
+
+	// There are no backjumps, but there are multiple cblocks. Maybe one is
+	// conditional skipped. Too confusing.
+	if ops.cntBytecBlock > 1 {
+		pushbytes, ok := OpsByName[ops.Version]["pushbytes"]
+		if ok {
+			return asmPushBytes(ops, &pushbytes, args)
+		}
+		return ops.errorf("byte %s used with manual bytecblocks. Use bytec.", args[0])
+	}
+
+	// In both of the above clauses, we _could_ track whether a particular
+	// bytecblock dominates the current instruction. If so, we could use it.
+
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
 		return ops.error(err)
@@ -723,7 +803,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error()) // nolint:errcheck
+			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error())
 		}
 		hash := sha512.Sum512_256(methodSig)
 		ops.ByteLiteral(hash[0:4])
@@ -734,11 +814,10 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
+	ivals := make([]uint64, len(args))
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:l])
-	ops.intcRefs = nil
-	ops.intc = make([]uint64, len(args))
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
@@ -746,9 +825,21 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
-		ops.intc[i] = cu
+		if !ops.known.deadcode {
+			ivals[i] = cu
+		}
 	}
-	ops.hasIntcBlock = true
+	if !ops.known.deadcode {
+		// If we previously processed an `int`, we thought we could insert our
+		// own intcblock, but now we see a manual one.
+		if ops.hasPseudoInt {
+			ops.error("intcblock following int")
+		}
+		ops.intcRefs = nil
+		ops.intc = ivals
+		ops.cntIntcBlock++
+	}
+
 	return nil
 }
 
@@ -763,8 +854,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			// intcblock, but parseBinaryArgs would have
 			// to return a useful consumed value even in
 			// the face of errors.  Hard.
-			ops.error(err)
-			return nil
+			return ops.error(err)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -777,9 +867,16 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(scratch[:l])
 		ops.pending.Write(bv)
 	}
-	ops.bytecRefs = nil
-	ops.bytec = bvals
-	ops.hasBytecBlock = true
+	if !ops.known.deadcode {
+		// If we previously processed a pseudo `byte`, we thought we could
+		// insert our own bytecblock, but now we see a manual one.
+		if ops.hasPseudoByte {
+			ops.error("bytecblock following byte/addr/method")
+		}
+		ops.bytecRefs = nil
+		ops.bytec = bvals
+		ops.cntBytecBlock++
+	}
 	return nil
 }
 
@@ -801,7 +898,7 @@ func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
-	val, err := simpleImm(args[0], "argument")
+	val, err := byteImm(args[0], "argument")
 	if err != nil {
 		return ops.error(err)
 	}
@@ -827,11 +924,28 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
-	ops.referToLabel(ops.pending.Len(), args[0])
+	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
+	return nil
+}
+
+func asmSwitch(ops *OpStream, spec *OpSpec, args []string) error {
+	numOffsets := len(args)
+	if numOffsets > math.MaxUint8 {
+		return ops.errorf("%s cannot take more than 255 labels", spec.Name)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(byte(numOffsets))
+	opEndPos := ops.pending.Len() + 2*numOffsets
+	for _, arg := range args {
+		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
+		// zero bytes will get replaced with actual offset in resolveLabels()
+		ops.pending.WriteByte(0)
+		ops.pending.WriteByte(0)
+	}
 	return nil
 }
 
@@ -849,13 +963,21 @@ func asmSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func simpleImm(value string, label string) (byte, error) {
+func byteImm(value string, label string) (byte, error) {
 	res, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
 		return 0, fmt.Errorf("unable to parse %s %#v as integer", label, value)
 	}
 	if res > 255 {
 		return 0, fmt.Errorf("%s beyond 255: %d", label, res)
+	}
+	return byte(res), err
+}
+
+func int8Imm(value string, label string) (byte, error) {
+	res, err := strconv.ParseInt(value, 10, 8)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse %s %#v as int8", label, value)
 	}
 	return byte(res), err
 }
@@ -923,7 +1045,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 			if imm.Group != nil {
 				fs, ok := imm.Group.SpecByName(args[i])
 				if !ok {
-					_, err := simpleImm(args[i], "")
+					_, err := byteImm(args[i], "")
 					if err == nil {
 						// User supplied a uint, so we see if any of the other immediates take uints
 						for j, otherImm := range spec.OpDetails.Immediates {
@@ -966,7 +1088,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				ops.pending.WriteByte(fs.Field())
 			} else {
 				// simple immediate that must be a number from 0-255
-				val, err := simpleImm(args[i], imm.Name)
+				val, err := byteImm(args[i], imm.Name)
 				if err != nil {
 					if strings.Contains(err.Error(), "unable to parse") {
 						// Perhaps the field works in a different order
@@ -989,6 +1111,12 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 				}
 				ops.pending.WriteByte(val)
 			}
+		case immInt8:
+			val, err := int8Imm(args[i], imm.Name)
+			if err != nil {
+				return ops.errorf("%s %w", spec.Name, err)
+			}
+			ops.pending.WriteByte(val)
 		default:
 			return ops.errorf("unable to assemble immKind %d", imm.kind)
 		}
@@ -996,72 +1124,169 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// Interprets the arg at index argIndex as byte-long immediate
-func getByteImm(args []string, argIndex int) (byte, bool) {
+// getImm interprets the arg at index argIndex as an immediate
+func getImm(args []string, argIndex int) (int, bool) {
 	if len(args) <= argIndex {
 		return 0, false
 	}
-	n, err := strconv.ParseUint(args[argIndex], 0, 8)
+	// We want to parse anything from -128 up to 255. So allow 9 bits.
+	// Normal assembly checking will catch signed as byte, vice versa
+	n, err := strconv.ParseInt(args[argIndex], 0, 9)
 	if err != nil {
 		return 0, false
 	}
-	return byte(n), true
+	return int(n), true
 }
 
-func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	topTwo := StackTypes{StackAny, StackAny}
+func anyTypes(n int) StackTypes {
+	as := make(StackTypes, n)
+	for i := range as {
+		as[i] = StackAny
+	}
+	return as
+}
+
+func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	swapped := StackTypes{StackAny, StackAny}
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		topTwo[1] = pgm.stack[top]
+		swapped[0] = pgm.stack[top]
 		if top >= 1 {
-			topTwo[0] = pgm.stack[top-1]
+			swapped[1] = pgm.stack[top-1]
 		}
 	}
-	reversed := StackTypes{topTwo[1], topTwo[0]}
-	return nil, reversed
+	return nil, swapped, nil
 }
 
-func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getByteImm(args, 0)
+func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	depth := int(n) + 1
-	anys := make(StackTypes, depth)
-	returns := make(StackTypes, depth+1)
-	for i := range anys {
-		anys[i] = StackAny
-		returns[i] = StackAny
-	}
-	returns[depth] = StackAny
+	depth := n + 1
+	returns := anyTypes(depth + 1)
 	idx := len(pgm.stack) - depth
 	if idx >= 0 {
+		// We return exactly what on the stack...
+		copy(returns[:], pgm.stack[idx:])
+		// plus a repeat of what was at idx
 		returns[len(returns)-1] = pgm.stack[idx]
-		for i := idx; i < len(pgm.stack); i++ {
-			returns[i-idx] = pgm.stack[i]
-		}
 	}
-	return anys, returns
+	return anyTypes(depth), returns, nil
 }
 
-func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
+	if !ok {
+		return nil, nil, nil
+	}
+	if n == 0 {
+		return nil, nil, errors.New("bury 0 always fails")
+	}
+
+	top := len(pgm.stack) - 1
+	typ, ok := pgm.top()
+	if !ok {
+		return nil, nil, nil // Will error because bury demands a stack arg
+	}
+
+	idx := top - n
+	if idx < 0 {
+		if pgm.bottom == StackNone {
+			// By demanding n+1 elements, we'll trigger an error
+			return anyTypes(n + 1), nil, nil
+		}
+		// We're going to bury below the tracked portion of the stack, so there's
+		// nothing to update.
+		return nil, nil, nil
+	}
+
+	returns := make(StackTypes, n)
+	copy(returns, pgm.stack[idx:]) // Won't have room to copy the top type
+	returns[0] = typ               // Replace the bottom with the top type
+	return pgm.stack[idx:], returns, nil
+}
+
+func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
+	if !ok {
+		return nil, nil, nil
+	}
+	// If we have no frame pointer, we can't do better than "any"
+	if pgm.fp == -1 {
+		return nil, nil, nil
+	}
+
+	// If we do have a framepointer, we can try to get the type
+	idx := pgm.fp + n
+	if idx < 0 {
+		return nil, nil, fmt.Errorf("frame_dig %d in sub with %d args", n, pgm.fp)
+	}
+	if idx >= len(pgm.stack) {
+		return nil, nil, fmt.Errorf("frame_dig above stack")
+	}
+	return nil, StackTypes{pgm.stack[idx]}, nil
+}
+
+func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	top := len(pgm.stack) - 1
+	typ, ok := pgm.top()
+	if !ok {
+		return nil, nil, nil // Will error because fbury demands a stack arg
+	}
+
+	// If we have no frame pointer, we have to wipe out any belief that the
+	// stack contains anything but the supplied type.
+	if pgm.fp == -1 {
+		// Perhaps it would be cleaner to build up the args, return slices to
+		// cause this, rather than manipulate the pgm.stack directly.
+		for i := range pgm.stack {
+			if pgm.stack[i] != typ {
+				pgm.stack[i] = StackAny
+			}
+		}
+		return nil, nil, nil
+	}
+
+	// If we do have a framepointer, we can try to update the typestack
+	idx := pgm.fp + n
+	if idx < 0 {
+		return nil, nil, fmt.Errorf("frame_bury %d in sub with %d args", n, pgm.fp)
+	}
+	if idx >= top {
+		return nil, nil, fmt.Errorf("frame_bury above stack")
+	}
+	depth := top - idx
+
+	returns := make(StackTypes, depth)
+	copy(returns, pgm.stack[idx:]) // Won't have room to copy the top type
+	returns[0] = typ               // Replace the bottom with the top type
+	return pgm.stack[idx:], returns, nil
+}
+
+func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
 		//Require arg0 and arg1 to have same type
-		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil
+		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeDup(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeDup(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		return StackTypes{pgm.stack[top]}, StackTypes{pgm.stack[top], pgm.stack[top]}
+		return nil, StackTypes{pgm.stack[top], pgm.stack[top]}, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	topTwo := StackTypes{StackAny, StackAny}
 	top := len(pgm.stack) - 1
 	if top >= 0 {
@@ -1070,41 +1295,35 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 			topTwo[0] = pgm.stack[top-1]
 		}
 	}
-	return nil, append(topTwo, topTwo...)
+	return nil, append(topTwo, topTwo...), nil
 }
 
-func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
 		if pgm.stack[top-1] == pgm.stack[top-2] {
-			return nil, StackTypes{pgm.stack[top-1]}
+			return nil, StackTypes{pgm.stack[top-1]}, nil
 		}
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		return nil, StackTypes{pgm.stack[top-2]}
+		return nil, StackTypes{pgm.stack[top-2]}, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getByteImm(args, 0)
+func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	depth := int(n) + 1
-	anys := make(StackTypes, depth)
-	for i := range anys {
-		anys[i] = StackAny
-	}
-	returns := make(StackTypes, depth)
-	for i := range returns {
-		returns[i] = StackAny
-	}
+	returns := anyTypes(depth)
+
 	idx := len(pgm.stack) - depth
 	// This rotates all the types if idx is >= 0. But there's a potential
 	// improvement: when pgm.bottom is StackAny, and the cover is going "under"
@@ -1116,23 +1335,16 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 			returns[i-idx+1] = pgm.stack[i]
 		}
 	}
-	return anys, returns
+	return anyTypes(depth), returns, nil
 }
 
-func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getByteImm(args, 0)
+func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	depth := int(n) + 1
-	anys := make(StackTypes, depth)
-	for i := range anys {
-		anys[i] = StackAny
-	}
-	returns := make(StackTypes, depth)
-	for i := range returns {
-		returns[i] = StackAny
-	}
+	depth := n + 1
+	returns := anyTypes(depth)
 	idx := len(pgm.stack) - depth
 	// See precision comment in typeCover
 	if idx >= 0 {
@@ -1141,36 +1353,36 @@ func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) 
 			returns[i-idx-1] = pgm.stack[i]
 		}
 	}
-	return anys, returns
+	return anyTypes(depth), returns, nil
 }
 
-func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return StackTypes{fs.ftype}, nil
+	return StackTypes{fs.ftype}, nil, nil
 }
 
-func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	scratchIndex, ok := getByteImm(args, 0)
+func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	scratchIndex, ok := getImm(args, 0)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	top := len(pgm.stack) - 1
 	if top >= 0 {
 		pgm.scratchSpace[scratchIndex] = pgm.stack[top]
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top < 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
@@ -1178,26 +1390,68 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 			pgm.scratchSpace[i] = StackAny
 		}
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
-func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	scratchIndex, ok := getByteImm(args, 0)
+func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	scratchIndex, ok := getImm(args, 0)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return nil, StackTypes{pgm.scratchSpace[scratchIndex]}
+	return nil, StackTypes{pgm.scratchSpace[scratchIndex]}, nil
 }
 
-func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	a, aok := getImm(args, 0)
+	_, rok := getImm(args, 1)
+	if !aok || !rok {
+		return nil, nil, nil
+	}
+
+	if len(pgm.stack) != 0 || pgm.bottom != StackAny {
+		return nil, nil, fmt.Errorf("proto must be unreachable from previous PC")
+	}
+	pgm.stack = anyTypes(a)
+	pgm.fp = a
+	return nil, nil, nil
+}
+
+func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	scratchType := pgm.scratchSpace[0]
 	for _, item := range pgm.scratchSpace {
 		// If all the scratch slots are one type, then we can say we are loading that type
 		if item != scratchType {
-			return nil, nil
+			return nil, nil, nil
 		}
 	}
-	return nil, StackTypes{scratchType}
+	return nil, StackTypes{scratchType}, nil
+}
+
+func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
+	if !ok {
+		return nil, nil, nil
+	}
+	return anyTypes(n), nil, nil
+}
+
+func typeDupN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	n, ok := getImm(args, 0)
+	if !ok {
+		return nil, nil, nil
+	}
+	top := len(pgm.stack) - 1
+	if top < 0 {
+		return nil, nil, nil
+	}
+
+	// `dupn 3` ends up with 4 copies of ToS on top
+	copies := make(StackTypes, n+1)
+	for i := range copies {
+		copies[i] = pgm.stack[top]
+	}
+
+	return nil, copies, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -1399,25 +1653,29 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-var spaces = [256]uint8{'\t': 1, ' ': 1}
+// newline not included since handled in scanner
+var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
-func fieldsFromLine(line string) []string {
-	var fields []string
+func tokensFromLine(line string) []string {
+	var tokens []string
 
 	i := 0
-	for i < len(line) && spaces[line[i]] != 0 {
+	for i < len(line) && tokenSeparators[line[i]] {
+		if line[i] == ';' {
+			tokens = append(tokens, ";")
+		}
 		i++
 	}
 
 	start := i
-	inString := false
-	inBase64 := false
+	inString := false // tracked to allow spaces and comments inside
+	inBase64 := false // tracked to allow '//' inside
 	for i < len(line) {
-		if spaces[line[i]] == 0 { // if not space
+		if !tokenSeparators[line[i]] { // if not space
 			switch line[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+					if i == 0 || i > 0 && tokenSeparators[line[i-1]] {
 						inString = true
 					}
 				} else {
@@ -1428,9 +1686,9 @@ func fieldsFromLine(line string) []string {
 			case '/': // is a comment?
 				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
 					if start != i { // if a comment without whitespace
-						fields = append(fields, line[start:i])
+						tokens = append(tokens, line[start:i])
 					}
-					return fields
+					return tokens
 				}
 			case '(': // is base64( seq?
 				prefix := line[start:i]
@@ -1446,19 +1704,29 @@ func fieldsFromLine(line string) []string {
 			i++
 			continue
 		}
+
+		// we've hit a space, end last token unless inString
+
 		if !inString {
-			field := line[start:i]
-			fields = append(fields, field)
-			if field == "base64" || field == "b64" {
-				inBase64 = true
-			} else if inBase64 {
+			token := line[start:i]
+			tokens = append(tokens, token)
+			if line[i] == ';' {
+				tokens = append(tokens, ";")
+			}
+			if inBase64 {
 				inBase64 = false
+			} else if token == "base64" || token == "b64" {
+				inBase64 = true
 			}
 		}
 		i++
 
+		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && spaces[line[i]] != 0 {
+			for i < len(line) && tokenSeparators[line[i]] {
+				if line[i] == ';' {
+					tokens = append(tokens, ";")
+				}
 				i++
 			}
 			start = i
@@ -1467,10 +1735,10 @@ func fieldsFromLine(line string) []string {
 
 	// add rest of the string if any
 	if start < len(line) {
-		fields = append(fields, line[start:i])
+		tokens = append(tokens, line[start:i])
 	}
 
-	return fields
+	return tokens
 }
 
 func (ops *OpStream) trace(format string, args ...interface{}) {
@@ -1480,9 +1748,9 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 	fmt.Fprintf(ops.Trace, format, args...)
 }
 
-func (ops *OpStream) typeError(err error) {
+func (ops *OpStream) typeErrorf(format string, args ...interface{}) {
 	if ops.typeTracking {
-		ops.error(err)
+		ops.errorf(format, args...)
 	}
 }
 
@@ -1494,9 +1762,8 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 	argcount := len(args)
 	if argcount > len(ops.known.stack) && ops.known.bottom == StackNone {
-		err := fmt.Errorf("%s expects %d stack arguments but stack height is %d",
+		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
 			strings.Join(instruction, " "), argcount, len(ops.known.stack))
-		ops.typeError(err)
 	} else {
 		firstPop := true
 		for i := argcount - 1; i >= 0; i-- {
@@ -1509,9 +1776,8 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 				ops.trace(", %s", argType)
 			}
 			if !typecheck(argType, stype) {
-				err := fmt.Errorf("%s arg %d wanted type %s got %s",
+				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
-				ops.typeError(err)
 			}
 		}
 		if !firstPop {
@@ -1531,6 +1797,16 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+// splitTokens breaks tokens into two slices at the first semicolon.
+func splitTokens(tokens []string) (current, rest []string) {
+	for i, token := range tokens {
+		if token == ";" {
+			return tokens[:i], tokens[i+1:]
+		}
+	}
+	return tokens, nil
+}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	fin := strings.NewReader(text)
@@ -1541,74 +1817,85 @@ func (ops *OpStream) assemble(text string) error {
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if len(line) == 0 {
-			ops.trace("%3d: 0 line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			ops.trace("%3d: // line\n", ops.sourceLine)
-			continue
-		}
-		if strings.HasPrefix(line, "#pragma") {
-			ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			ops.pragma(line)
-			continue
-		}
-		fields := fieldsFromLine(line)
-		if len(fields) == 0 {
-			ops.trace("%3d: no fields\n", ops.sourceLine)
-			continue
-		}
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-		}
-		opstring := fields[0]
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			fields = fields[1:]
-			if len(fields) == 0 {
-				ops.trace("%3d: label only\n", ops.sourceLine)
+		tokens := tokensFromLine(line)
+		if len(tokens) > 0 {
+			if first := tokens[0]; first[0] == '#' {
+				directive := first[1:]
+				switch directive {
+				case "pragma":
+					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
+					ops.trace("%3d: #pragma line\n", ops.sourceLine)
+				default:
+					ops.errorf("Unknown directive: %s", directive)
+				}
 				continue
 			}
-			opstring = fields[0]
 		}
-		spec, expandedName, ok := getSpec(ops, opstring, fields[1:])
-		if ok {
-			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-			ops.recordSourceLine()
-			if spec.Modes == modeApp {
-				ops.HasStatefulOps = true
+		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
+			if len(current) == 0 {
+				continue
 			}
-			args, returns := spec.Arg.Types, spec.Return.Types
-			if spec.refine != nil {
-				nargs, nreturns := spec.refine(&ops.known, fields[1:])
-				if nargs != nil {
-					args = nargs
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+			}
+			opstring := current[0]
+			if opstring[len(opstring)-1] == ':' {
+				ops.createLabel(opstring[:len(opstring)-1])
+				current = current[1:]
+				if len(current) == 0 {
+					ops.trace("%3d: label only\n", ops.sourceLine)
+					continue
 				}
-				if nreturns != nil {
-					returns = nreturns
+				opstring = current[0]
+			}
+			spec, expandedName, ok := getSpec(ops, opstring, current[1:])
+			if ok {
+				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+				ops.recordSourceLine()
+				if spec.Modes == modeApp {
+					ops.HasStatefulOps = true
 				}
-			}
-			ops.trackStack(args, returns, append([]string{expandedName}, fields[1:]...))
-			spec.asm(ops, &spec, fields[1:])
-			if spec.deadens() { // An unconditional branch deadens the following code
-				ops.known.deaden()
-			}
-			if spec.Name == "callsub" {
-				// since retsub comes back to the callsub, it is an entry point like a label
-				ops.known.label()
+				args, returns := spec.Arg.Types, spec.Return.Types
+				if spec.refine != nil {
+					nargs, nreturns, err := spec.refine(&ops.known, current[1:])
+					if err != nil {
+						ops.typeErrorf("%w", err)
+					}
+					if nargs != nil {
+						args = nargs
+					}
+					if nreturns != nil {
+						returns = nreturns
+					}
+				}
+				ops.trackStack(args, returns, append([]string{expandedName}, current[1:]...))
+				spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+
+				if spec.deadens() { // An unconditional branch deadens the following code
+					ops.known.deaden()
+				}
+				if spec.Name == "callsub" {
+					// since retsub comes back to the callsub, it is an entry point like a label
+					ops.known.label()
+				}
 			}
 			ops.trace("\n")
 			continue
 		}
 	}
 
-	// backward compatibility: do not allow jumps behind last instruction in v1
+	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			err = errors.New("line too long")
+		}
+		ops.error(err)
+	}
+
+	// backward compatibility: do not allow jumps past last instruction in v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
@@ -1635,21 +1922,20 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(line string) error {
-	fields := strings.Split(line, " ")
-	if fields[0] != "#pragma" {
-		return ops.errorf("invalid syntax: %s", fields[0])
+func (ops *OpStream) pragma(tokens []string) error {
+	if tokens[0] != "#pragma" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
-	if len(fields) < 2 {
+	if len(tokens) < 2 {
 		return ops.error("empty pragma")
 	}
-	key := fields[1]
+	key := tokens[1]
 	switch key {
 	case "version":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no version value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		var ver uint64
 		if ops.pending.Len() > 0 {
 			return ops.error("#pragma version is only allowed before instructions")
@@ -1674,10 +1960,10 @@ func (ops *OpStream) pragma(line string) error {
 		}
 		return nil
 	case "typetrack":
-		if len(fields) < 3 {
+		if len(tokens) < 3 {
 			return ops.error("no typetrack value")
 		}
-		value := fields[2]
+		value := tokens[2]
 		on, err := strconv.ParseBool(value)
 		if err != nil {
 			return ops.errorf("bad #pragma typetrack: %#v", value)
@@ -1708,19 +1994,20 @@ func (ops *OpStream) resolveLabels() {
 			reported[lr.label] = true
 			continue
 		}
-		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
-		naturalPc := lr.position + 3
-		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+
+		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
+		// instruction they appear in, which is available in lr.offsetPostion
+		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label)
 			continue
 		}
-		jump := dest - naturalPc
+		jump := dest - lr.offsetPosition
 		if jump > 0x7fff {
 			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
-		raw[lr.position+1] = uint8(jump >> 8)
-		raw[lr.position+2] = uint8(jump & 0x0ff)
+		raw[lr.position] = uint8(jump >> 8)
+		raw[lr.position+1] = uint8(jump & 0x0ff)
 	}
 	ops.pending = *bytes.NewBuffer(raw)
 	ops.sourceLine = saved
@@ -1769,7 +2056,7 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
 func (ops *OpStream) optimizeIntcBlock() error {
-	if ops.hasIntcBlock {
+	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
@@ -1812,7 +2099,7 @@ func (ops *OpStream) optimizeIntcBlock() error {
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
 func (ops *OpStream) optimizeBytecBlock() error {
-	if ops.hasBytecBlock {
+	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
@@ -1954,6 +2241,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		for i := range ops.labelReferences {
 			if ops.labelReferences[i].position > position {
 				ops.labelReferences[i].position += positionDelta
+				ops.labelReferences[i].offsetPosition += positionDelta
 			}
 		}
 
@@ -1987,8 +2275,8 @@ func (ops *OpStream) prependCBlocks() []byte {
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 && !ops.hasIntcBlock {
-		prebytes.WriteByte(0x20) // intcblock
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
+		prebytes.WriteByte(OpsByName[ops.Version]["intcblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
 		for _, iv := range ops.intc {
@@ -1996,8 +2284,8 @@ func (ops *OpStream) prependCBlocks() []byte {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 && !ops.hasBytecBlock {
-		prebytes.WriteByte(0x26) // bytecblock
+	if len(ops.bytec) > 0 && ops.cntBytecBlock == 0 {
+		prebytes.WriteByte(OpsByName[ops.Version]["bytecblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])
 		for _, bv := range ops.bytec {
@@ -2163,7 +2451,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
-		case immByte:
+		case immByte, immInt8:
 			if pc >= len(dis.program) {
 				return "", fmt.Errorf("program end while reading immediate %s for %s",
 					imm.Name, spec.Name)
@@ -2179,7 +2467,11 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 				out += name
 			} else {
-				out += fmt.Sprintf("%d", b)
+				if imm.kind == immByte {
+					out += fmt.Sprintf("%d", b)
+				} else if imm.kind == immInt8 {
+					out += fmt.Sprintf("%d", int8(b))
+				}
 			}
 			if spec.Name == "intc" && int(b) < len(dis.intc) {
 				out += fmt.Sprintf(" // %d", dis.intc[b])
@@ -2190,11 +2482,8 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			offset := (uint(dis.program[pc]) << 8) | uint(dis.program[pc+1])
-			target := int(offset) + pc + 2
-			if target > 0xffff {
-				target -= 0x10000
-			}
+			offset := decodeBranchOffset(dis.program, pc)
+			target := offset + pc + 2
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2235,7 +2524,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				return "", err
 			}
 
-			dis.intc = append(dis.intc, intc...)
+			dis.intc = intc
 			for i, iv := range intc {
 				if i != 0 {
 					out += " "
@@ -2248,13 +2537,37 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			dis.bytec = append(dis.bytec, bytec...)
+			dis.bytec = bytec
 			for i, bv := range bytec {
 				if i != 0 {
 					out += " "
 				}
 				out += fmt.Sprintf("0x%s", hex.EncodeToString(bv))
 			}
+			pc = nextpc
+		case immLabels:
+			targets, nextpc, err := parseSwitch(dis.program, pc)
+			if err != nil {
+				return "", err
+			}
+
+			var labels []string
+			for _, target := range targets {
+				var label string
+				if dis.numericTargets {
+					label = fmt.Sprintf("%d", target)
+				} else {
+					if known, ok := dis.pendingLabels[target]; ok {
+						label = known
+					} else {
+						dis.labelCount++
+						label = fmt.Sprintf("label%d", dis.labelCount)
+						dis.putLabel(label, target)
+					}
+				}
+				labels = append(labels, label)
+			}
+			out += strings.Join(labels, " ")
 			pc = nextpc
 		default:
 			return "", fmt.Errorf("unknown immKind %d", imm.kind)
@@ -2407,6 +2720,20 @@ func checkByteConstBlock(cx *EvalContext) error {
 	}
 	cx.nextpc = pos
 	return nil
+}
+
+func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
+	numOffsets := int(program[pos])
+	pos++
+	end := pos + 2*numOffsets // end of op: offset is applied to this position
+	for i := 0; i < numOffsets; i++ {
+		offset := decodeBranchOffset(program, pos)
+		target := end + offset
+		targets = append(targets, target)
+		pos += 2
+	}
+	nextpc = pos
+	return
 }
 
 func allPrintableASCII(bytes []byte) bool {

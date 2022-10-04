@@ -477,6 +477,8 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 			return "devnet.algodev.network"
 		} else if network == Betanet {
 			return "betanet.algodev.network"
+		} else if network == Alphanet {
+			return "alphanet.algodev.network"
 		}
 	}
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)

@@ -22,7 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -201,7 +201,7 @@ type GossipNode interface {
 	// this node to send corresponding MsgOfInterest notifications to any
 	// newly connecting peers.  This should be called before the network
 	// is started.
-	RegisterMessageInterest(protocol.Tag) error
+	RegisterMessageInterest(protocol.Tag)
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
@@ -1749,9 +1749,10 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
-			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
-			TelemetryGUID:      peer.TelemetryGUID,
-			InstanceName:       peer.InstanceName,
+			ConnectionDuration:   uint(now.Sub(peer.createTime).Seconds()),
+			TelemetryGUID:        peer.TelemetryGUID,
+			InstanceName:         peer.InstanceName,
+			DuplicateFilterCount: peer.duplicateFilterCount,
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
@@ -2031,7 +2032,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which alredy finsihed reading all the data from the network
 			// and placed it all in a ioutil.NopCloser reader.
-			bodyBytes, _ := ioutil.ReadAll(response.Body)
+			bodyBytes, _ := io.ReadAll(response.Body)
 			errString := string(bodyBytes)
 			if len(errString) > 128 {
 				errString = errString[:128]
@@ -2308,7 +2309,7 @@ func SetUserAgentHeader(header http.Header) {
 // this node to send corresponding MsgOfInterest notifications to any
 // newly connecting peers.  This should be called before the network
 // is started.
-func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
+func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2321,11 +2322,10 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 
 	wn.messagesOfInterest[t] = true
 	wn.updateMessagesOfInterestEnc()
-	return nil
 }
 
 // DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
-func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
+func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2338,7 +2338,6 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
 
 	delete(wn.messagesOfInterest, t)
 	wn.updateMessagesOfInterestEnc()
-	return nil
 }
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {

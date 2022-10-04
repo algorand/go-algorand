@@ -533,6 +533,16 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
+	// `rndBQ` gives the latest known block round added to the ledger
+	// we should wait until `rndBQ` block to be committed to blockQueue,
+	// in case there is a data race, noted in
+	// https://github.com/algorand/go-algorand/issues/4349
+	// where writing to `callTxnGroup` after `dl.fullBlock` caused data race,
+	// because the underlying async goroutine `go bq.syncer()` is reading `callTxnGroup`.
+	// A solution here would be wait until all new added blocks are committed,
+	// then we return the result and continue the execution.
+	rndBQ := ledger.Latest()
+	ledger.WaitForCommit(rndBQ)
 	return validatedBlock
 }
 
@@ -1037,13 +1047,13 @@ func TestLogsInBlock(t *testing.T) {
 		}
 		vb := dl.fullBlock(&createTxn)
 		createInBlock := vb.Block().Payset[0]
-		appId := createInBlock.ApplyData.ApplicationID
+		appID := createInBlock.ApplyData.ApplicationID
 		require.Equal(t, "APP", createInBlock.ApplyData.EvalDelta.Logs[0])
 
 		optInTxn := txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        addrs[1],
-			ApplicationID: appId,
+			ApplicationID: appID,
 			OnCompletion:  transactions.OptInOC,
 		}
 		vb = dl.fullBlock(&optInTxn)
@@ -1053,7 +1063,7 @@ func TestLogsInBlock(t *testing.T) {
 		clearTxn := txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        addrs[1],
-			ApplicationID: appId,
+			ApplicationID: appID,
 			OnCompletion:  transactions.ClearStateOC,
 		}
 		vb = dl.fullBlock(&clearTxn)
@@ -1092,7 +1102,7 @@ func TestUnfundedSenders(t *testing.T) {
 
 		ghost := basics.Address{0x01}
 
-		asa_create := txntest.Txn{
+		asaCreate := txntest.Txn{
 			Type:   "acfg",
 			Sender: addrs[0],
 			AssetParams: basics.AssetParams{
@@ -1103,12 +1113,12 @@ func TestUnfundedSenders(t *testing.T) {
 			},
 		}
 
-		app_create := txntest.Txn{
+		appCreate := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
 		}
 
-		dl.fullBlock(&asa_create, &app_create)
+		dl.fullBlock(&asaCreate, &appCreate)
 
 		// Advance so that rewardsLevel increases
 		for i := 1; i < 10; i++ {
@@ -1220,7 +1230,7 @@ func TestAppCallAppDuringInit(t *testing.T) {
 			dl.fullBlock()
 		}
 
-		call_in_init := txntest.Txn{
+		callInInit := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
 			ApprovalProgram: `
@@ -1241,6 +1251,6 @@ func TestAppCallAppDuringInit(t *testing.T) {
 			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
 			problem = "balance 0 below min"
 		}
-		dl.txn(&call_in_init, problem)
+		dl.txn(&callInInit, problem)
 	})
 }

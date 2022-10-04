@@ -28,6 +28,8 @@ function verify_at_least_one_running() {
 }
 
 function verify_none_running() {
+    local datadir=$1
+
     # Shutting down can take some time, so wait at least 5 seconds
     for TRIES in 1 2 3 4 5; do
         update_running_count
@@ -37,6 +39,15 @@ function verify_none_running() {
         sleep 1.4
     done
     echo "algod not expected to be running but it is"
+    if [ -n "$datadir" ]; then
+        echo "last 20 lines of node.log:"
+        tail -20 "$datadir/node.log"
+        echo "================================"
+        echo "stdout and stdin:"
+        cat "$datadir/algod-out.log"
+        echo "================================"
+        cat "$datadir/algod-err.log"
+    fi
     exit 1
 }
 
@@ -64,7 +75,7 @@ verify_at_least_one_running
 
 echo Verifying we can stop it using goal
 goal node stop -d ${DATADIR}
-verify_none_running
+verify_none_running ${DATADIR}
 
 #----------------------
 # Test that we can start a generic node straight with no overrides
@@ -72,7 +83,7 @@ echo Verifying a generic node will start directly
 algod -d ${DATADIR} &
 verify_at_least_one_running
 pkill -u $(whoami) -x algod || true
-verify_none_running
+verify_none_running ${DATADIR}
 
 #----------------------
 # Test that we can start a generic node against the datadir
@@ -85,7 +96,7 @@ verify_at_least_one_running # one should still be running
 verify_one_running # in fact, exactly one should still be running
 # clean up
 pkill -u $(whoami) -x algod || true
-verify_none_running
+verify_none_running ${DATADIR}
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: e2e_basic_start_stop"

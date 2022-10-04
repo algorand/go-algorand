@@ -610,6 +610,27 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
+## bury n
+
+- Opcode: 0x45 {uint8 depth}
+- Stack: ..., A &rarr; ...
+- Replace the Nth value from the top of the stack. bury 0 fails.
+- Availability: v8
+
+## popn n
+
+- Opcode: 0x46 {uint8 stack depth}
+- Stack: ..., [N items] &rarr; ...
+- Remove N values from the top of the stack
+- Availability: v8
+
+## dupn n
+
+- Opcode: 0x47 {uint8 copy count}
+- Stack: ..., A &rarr; ..., A, [N copies of A]
+- duplicate A, N times
+- Availability: v8
+
 ## pop
 
 - Opcode: 0x48
@@ -790,7 +811,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## json_ref r
 
-- Opcode: 0x5f {string return type}
+- Opcode: 0x5f {uint8 return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -1042,7 +1063,7 @@ pushint args are not added to the intcblock during assembly processes
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.
 
 ## retsub
 
@@ -1051,7 +1072,37 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - pop the top instruction from the call stack and branch to it
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
+
+## proto a r
+
+- Opcode: 0x8a {uint8 arguments} {uint8 return values}
+- Stack: ... &rarr; ...
+- Prepare top call frame for a retsub that will assume A args and R return values.
+- Availability: v8
+
+Fails unless the last instruction executed was a `callsub`.
+
+## frame_dig i
+
+- Opcode: 0x8b {int8 frame slot}
+- Stack: ... &rarr; ..., any
+- Nth (signed) value from the frame pointer.
+- Availability: v8
+
+## frame_bury i
+
+- Opcode: 0x8c {int8 frame slot}
+- Stack: ..., A &rarr; ...
+- Replace the Nth (signed) value from the frame pointer in the stack
+- Availability: v8
+
+## switch target ...
+
+- Opcode: 0x8d {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- Availability: v8
 
 ## shl
 
@@ -1401,7 +1452,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Opcode: 0xd1 {uint8 block field}
 - Stack: ..., A: uint64 &rarr; ..., any
-- field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive)
+- field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
 
 `block` Fields:

@@ -584,16 +584,23 @@ Account fields used in the `acct_params_get` opcode.
 | `b target` | branch unconditionally to TARGET |
 | `return` | use A as success value; end |
 | `pop` | discard A |
+| `popn n` | Remove N values from the top of the stack |
 | `dup` | duplicate A |
 | `dup2` | duplicate A and B |
+| `dupn n` | duplicate A, N times |
 | `dig n` | Nth value from the top of the stack. dig 0 is equivalent to dup |
+| `bury n` | Replace the Nth value from the top of the stack. bury 0 fails. |
 | `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N. |
 | `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N. |
+| `frame_dig i` | Nth (signed) value from the frame pointer. |
+| `frame_bury i` | Replace the Nth (signed) value from the frame pointer in the stack |
 | `swap` | swaps A and B on stack |
 | `select` | selects one of two values based on top-of-stack: B if C != 0, else A |
 | `assert` | immediately fail unless A is a non-zero number |
 | `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
+| `proto a r` | Prepare top call frame for a retsub that will assume A args and R return values. |
 | `retsub` | pop the top instruction from the call stack and branch to it |
+| `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
 
 ### State Access
 
@@ -615,7 +622,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
-| `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and the current round (exclusive) |
+| `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 
 ### Inner Transactions
 
