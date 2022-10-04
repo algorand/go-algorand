@@ -322,7 +322,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	allValid, _ := batchVerificationImpl(
 		[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
 		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
-		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)}, nil,
+		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)
 	return allValid
 }

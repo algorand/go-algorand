@@ -126,36 +126,6 @@ func TestEmpty(t *testing.T) {
 	require.NoError(t, bv.Verify())
 }
 
-// TestBatchVerifierBadFailedArray tests that VerifyWithFeedback returns
-// the expected error if the failed array size is not correct
-func TestBatchVerifierBadFailedArray(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var s Seed
-	bv := MakeBatchVerifierWithHint(4)
-	for i := 0; i < 4; i++ {
-		msg := randString()
-		RandBytes(s[:])
-		sigSecrets := GenerateSignatureSecrets(s)
-		sig := sigSecrets.Sign(msg)
-		bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-	}
-	require.Equal(t, 4, bv.GetNumberOfEnqueuedSignatures())
-	failed := make([]bool, 4, 6)
-	err := bv.VerifyWithFeedback(failed)
-	require.NoError(t, err)
-
-	failed = make([]bool, 3, 4)
-	err = bv.VerifyWithFeedback(failed)
-	require.Error(t, err)
-	require.Equal(t, errInvalidFailedSlice, err)
-
-	failed = make([]bool, 5, 5)
-	err = bv.VerifyWithFeedback(failed)
-	require.Error(t, err)
-	require.Equal(t, errInvalidFailedSlice, err)
-}
-
 // TestBatchVerifierIndividualResults tests that VerifyWithFeedback
 // returns the correct failed signature indexes
 func TestBatchVerifierIndividualResults(t *testing.T) {
@@ -166,7 +136,6 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 		bv := MakeBatchVerifierWithHint(n)
 		var s Seed
 		badSigs := make([]bool, n, n)
-		failed := make([]bool, n, n)
 		hasBadSig := false
 		for i := 0; i < n; i++ {
 			msg := randString()
@@ -182,7 +151,7 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
 		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
-		err := bv.VerifyWithFeedback(failed)
+		failed, err := bv.VerifyWithFeedback()
 		if hasBadSig {
 			require.Error(t, err)
 		} else {
@@ -190,6 +159,32 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 		}
 		for i := range badSigs {
 			require.Equal(t, badSigs[i], failed[i])
+		}
+	}
+}
+
+// TestBatchVerifierIndividualResultsAllValid tests that VerifyWithFeedback
+// returns the correct failed signature indexes when all are valid
+func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for i := 1; i < 64*2+3; i++ {
+		n := i
+		bv := MakeBatchVerifierWithHint(n)
+		var s Seed
+		for i := 0; i < n; i++ {
+			msg := randString()
+			RandBytes(s[:])
+			sigSecrets := GenerateSignatureSecrets(s)
+			sig := sigSecrets.Sign(msg)
+			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+		}
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		failed, err := bv.VerifyWithFeedback()
+		require.NoError(t, err)
+		require.Equal(t, bv.GetNumberOfEnqueuedSignatures(), len(failed))
+		for _, f := range failed {
+			require.False(t, f)
 		}
 	}
 }

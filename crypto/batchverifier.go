@@ -119,7 +119,7 @@ func (b *BatchVerifier) Verify() error {
 // if some txns are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
 func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
-	if b.getNumberOfEnqueuedSignatures() == 0 {
+	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
 

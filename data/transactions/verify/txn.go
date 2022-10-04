@@ -586,9 +586,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 		if sm.ctx.Err() != nil {
 			return sm.ctx.Err()
 		}
-		numSigs := bl.batchVerifier.GetNumberOfEnqueuedSignatures()
-		failed := make([]bool, numSigs, numSigs)
-		err := bl.batchVerifier.VerifyWithFeedback(failed)
+		failed, err := bl.batchVerifier.VerifyWithFeedback()
 		if err != nil && err != crypto.ErrBatchHasFailedSigs {
 			// something bad happened
 			// TODO:  report error and discard the batch
