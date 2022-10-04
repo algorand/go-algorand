@@ -645,6 +645,10 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
 
+	if !stopReprocessingAtFirstAsmBlock && pool.cancelSpeculativeAssembly != nil {
+		pool.cancelSpeculativeAssembly()
+	}
+
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
 		// - If there was less than one full block in the pool, reduce
@@ -672,7 +676,7 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, false)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, stopReprocessingAtFirstAsmBlock)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
