@@ -373,17 +373,7 @@ func TestPaysetGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
@@ -453,17 +443,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 		b.N = 2000
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
@@ -482,17 +462,7 @@ func TestTxnGroupMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	// add a simple logic that verifies this condition:
 	// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
@@ -597,17 +567,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
@@ -625,17 +585,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateMultiSigTxn(100, 30, 50, t)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
 	for i := 0; i < len(txnGroups); i++ {
@@ -657,17 +607,7 @@ func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	// sign the transcation with logic
 	for i := 0; i < len(signedTxn); i++ {
@@ -708,17 +648,7 @@ func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	for i := 0; i < len(signedTxn); i++ {
 		// add a simple logic that verifies this condition:
@@ -770,17 +700,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	secrets, _, pks, multiAddress := generateMultiSigAccounts(t, 30)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	const numOfTxn = 20
 	signedTxn := make([]transactions.SignedTxn, numOfTxn)
@@ -844,7 +764,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
-	
+
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
@@ -854,6 +774,20 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		txn.Lsig.Args[0][0]--
 	}
 	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+}
+
+func createDummyBlockHeader() bookkeeping.BlockHeader {
+	return bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
 }
 
 // verifyGroup uses TxnGroup to verify txns and add them to the
