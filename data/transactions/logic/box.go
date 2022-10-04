@@ -33,7 +33,7 @@ const (
 
 func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) error {
 	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
-		return fmt.Errorf("boxes may not be accesses from ClearState program")
+		return fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
 	bt, ok := cx.available.boxes[boxRef{cx.appID, name}]

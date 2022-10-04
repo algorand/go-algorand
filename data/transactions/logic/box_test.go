@@ -146,6 +146,30 @@ func TestBoxAcrossTxns(t *testing.T) {
 	}, nil, 8, ledger)
 }
 
+func TestBoxUnavailableWithClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := map[string]string{
+		"box_create":  `byte "self"; int 64; box_create`,
+		"box_del":     `byte "self"; box_del`,
+		"box_extract": `byte "self"; int 7; int 0; box_extract`,
+		"box_get":     `byte "self"; box_get`,
+		"box_len":     `byte "self"; box_len`,
+		"box_put":     `byte "put"; byte "self"; box_put`,
+		"box_replace": `byte "self"; int 0; byte "new"; box_replace`,
+	}
+
+	for name, program := range tests {
+		t.Run(name, func(t *testing.T) {
+			ep, _, l := logic.MakeSampleEnv()
+			l.NewApp(basics.Address{}, 888, basics.AppParams{})
+			ep.TxnGroup[0].Txn.OnCompletion = transactions.ClearStateOC
+			logic.TestApp(t, program, ep, "boxes may not be accessed from ClearState program")
+		})
+	}
+}
+
 func TestBoxAvailability(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
