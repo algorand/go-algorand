@@ -346,6 +346,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 				break
 			}
 		}
+	case reflect.Interface:
 	default:
 		return fmt.Errorf("unsupported object kind %v", v.Kind())
 	}
