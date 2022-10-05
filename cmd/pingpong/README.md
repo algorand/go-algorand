@@ -1,7 +1,7 @@
 # PingPong usage
 
 In order to run PingPong locally, an Algorand network must be available. It's
-sufficient to set it up using `goal network create -r {data directory} -r {network template json file}`.
+sufficient to set it up using `goal network create -r {data directory} -t {network template json file}`.
 The `-r` tells `goal` where to set up a directory for the local network data and `-t` describes the network
 to be created.
 
