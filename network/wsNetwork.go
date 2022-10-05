@@ -1420,6 +1420,45 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 	return dest, peerChangeCounter
 }
 
+// checkCanCompress checks if there is an proposal payload message and peers supporting compression
+func checkCanCompress(request broadcastRequest, prio bool, peers []*wsPeer) bool {
+	canCompress := false
+	if prio {
+		hasPP := false
+		for _, tag := range request.tags {
+			if tag == protocol.ProposalPayloadTag {
+				hasPP = true
+				break
+			}
+		}
+		// if have proposal payload check if there are any peers supporting compression
+		if hasPP {
+			for _, peer := range peers {
+				if peer.features&vfCompressedProposal != 0 {
+					canCompress = true
+				}
+			}
+		}
+	}
+	return canCompress
+}
+
+// compressMsgTag returns a message with tag and compressed data
+func compressMsgTag(tbytes []byte, d []byte, log logging.Logger) []byte {
+	bound := zstd.CompressBound(len(d))
+	mbytesComp := make([]byte, len(tbytes)+bound)
+	copy(mbytesComp, tbytes)
+	comp, err := zstd.Compress(mbytesComp[len(tbytes):], d)
+	if err != nil {
+		log.Errorf("Failed to compress into buffer of len %d", len(d))
+		// fallback and reuse non-compressed
+		copied := copy(mbytesComp[len(tbytes):], d)
+		return mbytesComp[:len(tbytes)+copied]
+	}
+	mbytesComp = mbytesComp[:len(tbytes)+len(comp)]
+	return mbytesComp
+}
+
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, peers []*wsPeer) {
 	if request.done != nil {
@@ -1433,26 +1472,8 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		return
 	}
 
-	// check if there is an proposal payload message and peers supporting compression
-	needCompressedData := false
-	if prio {
-		hasPP := false
-		for _, tag := range request.tags {
-			if tag == protocol.ProposalPayloadTag {
-				hasPP = true
-				break
-			}
-		}
-		// if have proposal payload check if there are any peers supporting compression
-		if hasPP {
-			for _, peer := range peers {
-				if peer.features&vfCompressedProposal != 0 {
-					needCompressedData = true
-					break
-				}
-			}
-		}
-	}
+	// determine if there is a payload proposal and peers supporting compressed payloads
+	needCompressedData := checkCanCompress(request, prio, peers)
 
 	start := time.Now()
 	digests := make([]crypto.Digest, len(request.data))
@@ -1475,22 +1496,14 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 
 		if needCompressedData {
 			if request.tags[i] == protocol.ProposalPayloadTag {
-				mbytesComp := make([]byte, len(tbytes)+len(d))
-				copy(mbytesComp, tbytes)
-				_, err := zstd.Compress(mbytesComp[len(tbytes):], d)
-				if err != nil {
-					wn.log.Errorf("Failed to compress into buffer of len %d", len(d))
-					// fallback and reuse non-compressed
-					copy(mbytesComp[len(tbytes):], d)
-				}
-				dataCompressed[i] = mbytesComp
-				if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
-					digestsCompressed[i] = crypto.Hash(mbytesComp)
-				}
+				compressed := compressMsgTag(tbytes, d, wn.log)
+				dataCompressed[i] = compressed
 			} else {
 				// otherwise reuse non-compressed from above
 				dataCompressed[i] = mbytes
-				digestsCompressed[i] = crypto.Hash(mbytes)
+			}
+			if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
+				digestsCompressed[i] = crypto.Hash(dataCompressed[i])
 			}
 		}
 	}
@@ -1892,7 +1905,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1", "2.2"}
+var SupportedProtocolVersions = []string{"2.2", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:

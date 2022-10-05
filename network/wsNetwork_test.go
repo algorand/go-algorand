@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -200,6 +201,38 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 	return &messageCounterHandler{target: target, done: make(chan struct{}), t: t}
 }
 
+type messageMatcherHandler struct {
+	target   [][]byte
+	received [][]byte
+	done     chan struct{}
+}
+
+func (mmh *messageMatcherHandler) Handle(message IncomingMessage) OutgoingMessage {
+	mmh.received = append(mmh.received, message.Data)
+	if len(mmh.target) > 0 && mmh.done != nil && len(mmh.received) >= len(mmh.target) {
+		close(mmh.done)
+		mmh.done = nil
+	}
+
+	return OutgoingMessage{Action: Ignore}
+}
+
+func (mmh *messageMatcherHandler) Match() bool {
+	if len(mmh.target) != len(mmh.received) {
+		return false
+	}
+	for i := 0; i < len(mmh.target); i++ {
+		if !bytes.Equal(mmh.target[i], mmh.received[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func newMessageMatcher(t testing.TB, target [][]byte) *messageMatcherHandler {
+	return &messageMatcherHandler{target: target, done: make(chan struct{})}
+}
+
 func TestWebsocketNetworkStartStop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -278,9 +311,13 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
-	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: counter}})
+	messages := [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+	}
+	matcher := newMessageMatcher(t, messages)
+	counterDone := matcher.done
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -288,14 +325,17 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte("bar"), false, nil)
+	for _, msg := range messages {
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+	}
 
 	select {
 	case <-counterDone:
 	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+		t.Errorf("timeout, count=%d, wanted 2", len(matcher.received))
 	}
+
+	require.True(t, matcher.Match())
 }
 
 // Repeat basic, but test a unicast
