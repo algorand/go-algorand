@@ -59,6 +59,18 @@ var teal string
 var groupSize uint32
 var numAsset uint32
 var numApp uint32
+
+/*
+Note on box workloads:
+
+two different box workloads are supported in order to exercise different
+portions of the performance critical codepath while keeping the app programs
+relatively simple. The BoxUpdate workload updates the content of the boxes
+during every app call, to verify that box manipulation is performant. The BoxRead
+workload only reads the box contents, which requires every box read to work its
+way through the in memory state deltas, into the box cache, and potentially all the
+way to the database.
+*/
 var numBoxUpdate uint32
 var numBoxRead uint32
 var numAppOptIn uint32
