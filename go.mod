@@ -38,6 +38,8 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 )
 
+replace github.com/algorand/msgp v1.1.52 => /Users/iansuvak/Code/msgp
+
 require (
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e // indirect
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect

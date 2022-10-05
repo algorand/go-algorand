@@ -17,13 +17,17 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // A message represents an internal message which is passed between components
 // of the agreement service.
+//msgp:ignore MessageHandle
 type message struct {
-	MessageHandle
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	MessageHandle `codec:"-"`
 
 	Tag protocol.Tag
 
@@ -46,6 +50,8 @@ type message struct {
 // These messages are concatenated as an optimization which prevents proposals
 // from being dropped.
 type compoundMessage struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Vote     unauthenticatedVote
 	Proposal unauthenticatedProposal
 }
@@ -93,3 +99,7 @@ func decodeProposal(data []byte) (interface{}, error) {
 		Proposal: p.unauthenticatedProposal,
 	}, nil
 }
+
+// SortUint64 implements sorting by uint64 keys for
+// canonical encoding of maps in msgpack format.
+type SortUint64 = basics.SortUint64

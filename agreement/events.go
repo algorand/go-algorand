@@ -43,7 +43,9 @@ type event interface {
 // A ConsensusVersionView is a view of the consensus version as read from a
 // LedgerReader, associated with some round.
 type ConsensusVersionView struct {
-	Err     serializableError
+	_struct struct{} `codec:""`
+
+	Err     serializableError `codec:"-"`
 	Version protocol.ConsensusVersion
 }
 
@@ -69,8 +71,7 @@ type externalEvent interface {
 // type of the implementing struct.
 //
 //go:generate stringer -type=eventType
-//msgp:ignore eventType
-type eventType int
+type eventType uint8
 
 const (
 	// none is returned by state machines which have no event to return
@@ -255,6 +256,7 @@ func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent
 }
 
 type messageEvent struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// {vote,bundle,payload}{Present,Verified}
 	T eventType
 
@@ -266,7 +268,7 @@ type messageEvent struct {
 	Err serializableError
 	// TaskIndex is optionally set to track a message as it is processed
 	// through cryptographic verification.
-	TaskIndex int
+	TaskIndex uint64
 
 	// Tail is an optionally-set field which specifies an unauthenticated
 	// proposal which should be processed after Input is processed.  Tail is
@@ -314,6 +316,8 @@ func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) externalEve
 // freshnessData is bundled with filterableMessageEvent
 // to allow for delegated freshness computation
 type freshnessData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	PlayerRound          round
 	PlayerPeriod         period
 	PlayerStep           step

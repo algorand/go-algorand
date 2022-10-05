@@ -25,7 +25,9 @@ import (
 
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
+//blasdfmsgp:shim time.Duration as:string using:(time.Duration).String/ParseDuration mode:convert
 type player struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// Round, Period, and Step hold the current round, period, and step of
 	// the player state machine.
 	Round  round

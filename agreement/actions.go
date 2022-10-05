@@ -26,8 +26,7 @@ import (
 )
 
 //go:generate stringer -type=actionType
-//msgp:ignore actionType
-type actionType int
+type actionType uint8
 
 const (
 	noop actionType = iota
@@ -181,7 +180,7 @@ type cryptoAction struct {
 	Period    period
 	Step      step
 	Pinned    bool
-	TaskIndex int
+	TaskIndex uint64
 }
 
 func (a cryptoAction) t() actionType {
@@ -441,7 +440,7 @@ func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
 	return a
 }
 
-func verifyVoteAction(e messageEvent, r round, p period, taskIndex int) action {
+func verifyVoteAction(e messageEvent, r round, p period, taskIndex uint64) action {
 	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex}
 }
 

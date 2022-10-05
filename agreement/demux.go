@@ -167,7 +167,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 }
 
 // verifyVote enqueues a vote message to be verified.
-func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r round, p period) {
+func (d *demux) verifyVote(ctx context.Context, m message, taskIndex uint64, r round, p period) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierVote, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
 	d.crypto.VerifyVote(ctx, cryptoVoteRequest{message: m, TaskIndex: taskIndex, Round: r, Period: p})

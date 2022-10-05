@@ -402,11 +402,11 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	cryptoVerifier := makeCryptoVerifier(nil, nil, voteVerifier, logging.TestingLog(t))
 	defer cryptoVerifier.Quit()
 
-	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: 14})
+	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: uint64(14)})
 	// read the failed response from VerifiedVotes:
 	votesout := cryptoVerifier.VerifiedVotes()
 	voteResponse := <-votesout
 	require.Equal(t, context.Canceled, voteResponse.err)
 	require.True(t, voteResponse.cancelled)
-	require.Equal(t, 14, voteResponse.index)
+	require.Equal(t, uint64(14), voteResponse.index)
 }

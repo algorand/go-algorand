@@ -84,7 +84,7 @@ type (
 
 	cryptoVoteRequest struct {
 		message                   // the message we would like to verify.
-		TaskIndex int             // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
+		TaskIndex uint64          // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
@@ -92,7 +92,7 @@ type (
 
 	cryptoProposalRequest struct {
 		message                   // the message we would like to verify.
-		TaskIndex int             // Caller specific number that would be passed back in the cryptoResult.TaskIndex field
+		TaskIndex uint64          // Caller specific number that would be passed back in the cryptoResult.TaskIndex field
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
 		Pinned    bool            // A flag that is set if this is a pinned value for the given round.
@@ -101,7 +101,7 @@ type (
 
 	cryptoBundleRequest struct {
 		message                   // the message we would like to verify.
-		TaskIndex int             // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
+		TaskIndex uint64          // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
 		Round     round           // The round that we're going to test against.
 		Period    period          // The period associated with the message we're going to test.
 		Certify   bool            // A flag that set if this is a cert bundle.
@@ -111,8 +111,8 @@ type (
 	cryptoResult struct {
 		message
 		Err       serializableError
-		TaskIndex int  // the TaskIndex that was passed to the cryptoVerifier during the Verify call on the cryptoRequest.TaskIndex
-		Cancelled bool // whether the corresponding request was cancelled before verification completed
+		TaskIndex uint64 // the TaskIndex that was passed to the cryptoVerifier during the Verify call on the cryptoRequest.TaskIndex
+		Cancelled bool   // whether the corresponding request was cancelled before verification completed
 	}
 
 	// A poolCryptoVerifier uses asynchronous goroutines to implement cryptoVerifier.
@@ -148,7 +148,7 @@ type (
 
 	bundleFuture struct {
 		message
-		index int
+		index uint64
 		wait  func() (bundle, error)
 		ctx   context.Context
 	}
