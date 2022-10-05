@@ -51,7 +51,7 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
 	numAccounts := initCfg.NumPartAccounts
 	totalAccounts := initCfg.GeneratedAccountsCount
-	if totalAccounts < numAccounts*4 {
+	if totalAccounts < uint64(numAccounts)*4 {
 		// simpler rand strategy for smaller totalAccounts
 		order := rand.Perm(int(totalAccounts))[:numAccounts]
 		for _, acct := range order {

@@ -40,6 +40,6 @@ func main() {
 		var seed crypto.Seed
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
 		secrets := crypto.GenerateSignatureSecrets(seed)
-		fmt.Println(i, basics.Address(secrets.SignatureVerifier).String())
+		fmt.Println(i, acct, basics.Address(secrets.SignatureVerifier).String())
 	}
 }

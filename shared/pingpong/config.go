@@ -77,9 +77,9 @@ type PpConfig struct {
 	// configuration related to using bootstrapped ledgers built by netgoal
 	// TODO: support generatedAssetsCount, generatedApplicationCount
 	DeterministicKeys            bool
-	GeneratedAccountsCount       uint32
+	GeneratedAccountsCount       uint64
 	GeneratedAccountSampleMethod string
-	GeneratedAccountsOffset      uint32
+	GeneratedAccountsOffset      uint64
 
 	WeightPayment     float64
 	WeightAsset       float64
@@ -190,7 +190,7 @@ func (cfg *PpConfig) Check() error {
 	if !sampleOk {
 		return fmt.Errorf("unknown GeneratedAccountSampleMethod: %s", cfg.GeneratedAccountSampleMethod)
 	}
-	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+cfg.NumPartAccounts > cfg.GeneratedAccountsCount) {
+	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+uint64(cfg.NumPartAccounts) > cfg.GeneratedAccountsCount) {
 		return fmt.Errorf("(GeneratedAccountsOffset %d) + (NumPartAccounts %d) > (GeneratedAccountsCount %d)", cfg.GeneratedAccountsOffset, cfg.NumPartAccounts, cfg.GeneratedAccountsCount)
 	}
 	return nil
