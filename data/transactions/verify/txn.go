@@ -451,13 +451,14 @@ func (w *worksetBuilder) completed() bool {
 }
 
 type VerificationElement struct {
-	txnGroup   []transactions.SignedTxn
-	contextHdr bookkeeping.BlockHeader
+	txnGroup []transactions.SignedTxn
+	context  interface{}
 }
 
 type VerificationResult struct {
 	txnGroup []transactions.SignedTxn
-	verified bool
+	context  interface{}
+	err      error
 }
 
 type streamManager struct {
@@ -472,6 +473,7 @@ type batchLoad struct {
 	batchVerifier  *crypto.BatchVerifier
 	txnGroups      [][]transactions.SignedTxn
 	groupCtxs      []*GroupContext
+	elementContext []interface{}
 	messagesForTxn []int
 }
 
@@ -492,9 +494,17 @@ func makeBatchLoad() batchLoad {
 // [wait time] <= [validation time of a single txn] / 2
 const singelTxnValidationTime = 100 * time.Millisecond
 const numberOfExecPoolSeats = 8
+
+// internalBufferSize is the size of the chan that will hold the arriving stxns before they get pre-processed
+const internalBufferSize = 25000
+
 //const txnPerWorksetThreshold = 32
-func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.LedgerForSignature,
-	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult, verificationPool execpool.BacklogPool) {
+
+func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
+	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult) {
+
+	stxnChan = make(<-chan VerificationElement, internalBufferSize)
+	resultChan = make(chan<- VerificationResult)
 
 	sm := streamManager{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
@@ -504,10 +514,11 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 		cache:            cache,
 	}
 
-	for x := 0; x < numberOfExecPoolSeats; x++ {
-		sm.seatReturnChan <- struct{}{}
-	}
 	go func() {
+		for x := 0; x < numberOfExecPoolSeats; x++ {
+			sm.seatReturnChan <- struct{}{}
+		}
+
 		bl := makeBatchLoad()
 		timer := time.NewTicker(singelTxnValidationTime / 2)
 		var added bool
@@ -516,7 +527,7 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 			case stx := <-stxnChan:
 				timer = time.NewTicker(singelTxnValidationTime / 2)
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
-				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, stx.contextHdr, ledger, bl.batchVerifier)
+				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, bookkeeping.BlockHeader{}, ledger, bl.batchVerifier)
 				//TODO: report the error ctx.Err()
 
 				if err != nil {
@@ -524,6 +535,7 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 				}
 				bl.groupCtxs = append(bl.groupCtxs, groupCtx)
 				bl.txnGroups = append(bl.txnGroups, stx.txnGroup)
+				bl.elementContext = append(bl.elementContext, stx.context)
 				bl.messagesForTxn = append(bl.messagesForTxn, bl.batchVerifier.GetNumberOfEnqueuedSignatures())
 				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
 					// TODO: the limit of 32 should not pass
@@ -547,7 +559,7 @@ func Stream(ctx context.Context, cache VerifiedTransactionCache, ledger logic.Le
 			}
 		}
 	}()
-
+	return
 }
 
 func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added bool) {
@@ -575,6 +587,21 @@ func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added b
 		timer = time.NewTicker(singelTxnValidationTime / 2)
 	}
 	return
+}
+
+// send the result out the chan
+func (sm *streamManager) sendOut(vr VerificationResult) {
+	// send the txn result out the pipe
+	select {
+	case sm.resultChan <- vr:
+		/*
+			// if the channel is not accepting, should not block here
+			// report dropped txn. caching is fine, if it comes back in the block
+			default:
+				fmt.Println("skipped!!")
+				//TODO: report this
+		*/
+	}
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
@@ -617,20 +644,11 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 			}
 			vr := VerificationResult{
 				txnGroup: bl.txnGroups[txgIdx],
-				verified: verified,
-			}
-			// send the txn result out the pipe
-			select {
-			case sm.resultChan <- vr:
-				/*
-					// if the channel is not accepting, should not block here
-					// report dropped txn. caching is fine, if it comes back in the block
-					default:
-						fmt.Println("skipped!!")
-						//TODO: report this
-				*/
+				context:  bl.elementContext[txgIdx],
+				err:      nil,
 			}
 
+			sm.snedOut(vr)
 		}
 		// loading them all at once to lock the cache once
 		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)

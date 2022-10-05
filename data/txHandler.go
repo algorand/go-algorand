@@ -66,6 +66,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
+	streamVerifierChan    chan []transactions.SignedTxn
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -90,9 +91,32 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
+		streamVerifierChan:    make(chan verify.VerificationElement),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	var outChan chan<- VerificationResult
+	handler.streamVerifierChan, outChan = verifier.MakeStream(ctx, handler.ledger, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache)
+
+	// This goroutine will listen to the results of the handled txn verification and pass them to postVerificationQueue
+	go func() {
+		for {
+			select {
+			case <-cts.Done():
+				return
+			case result := <-outChan:
+				txBLMsg := result.context.(*txBacklogMsg)
+				txBLMsg.verificationErr = result.err
+				select {
+				case handler.postVerificationQueue <- tx:
+				default:
+					// we failed to write to the output queue, since the queue was full.
+					// adding the metric here allows us to monitor how frequently it happens.
+					transactionMessagesDroppedFromPool.Inc(nil)
+				}
+			}
+		}
+	}()
 	return handler
 }
 
@@ -147,8 +171,9 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			// enqueue the task to the verification pool.
-			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
+			handler.streamVerifierChan <- verify.VerificationElement{txnGroup: wi.unverifiedTxGroup, context: wi}
+			//			// enqueue the task to the verification pool.
+			//			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
@@ -192,6 +217,8 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
+
+//func batchVerifySignature(
 
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
