@@ -107,7 +107,7 @@ func TestSpeculative(t *testing.T) {
 	ad11, rnd, err := blk2aslfe.LookupWithoutRewards(blk1.Round(), addr1)
 	require.NoError(t, err)
 	// account was never changed
-	require.Equal(t, rnd, basics.Round(0))
+	require.Equal(t, rnd, blk1.Round())
 
 	ad22, rnd, err := blk2aslfe.LookupWithoutRewards(blk2.Round(), addr1)
 	require.NoError(t, err)
