@@ -41,7 +41,8 @@ var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
-var InvalidSignature = errors.New("At least one signature didn't pass verification")
+// ErrInvalidSignature is the error returned to report that at least one signature is invalid
+var ErrInvalidSignature = errors.New("At least one signature didn't pass verification")
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
@@ -456,11 +457,17 @@ func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
 
+// VerificationElement is the element passed the Stream verifier
+// Context is a reference associated with the txn group which is passed
+// with the result
 type VerificationElement struct {
 	TxnGroup []transactions.SignedTxn
 	Context  interface{}
 }
 
+// VerificationResult is the result of the txn group verification
+// Context is a reference associated with the txn group which was
+// initially passed to the stream verifier
 type VerificationResult struct {
 	TxnGroup []transactions.SignedTxn
 	Context  interface{}
@@ -483,17 +490,22 @@ type batchLoad struct {
 	messagesForTxn []int
 }
 
+// NewBlockWatcher is a struct used to provide a new block header to the
+// stream verifier
 type NewBlockWatcher struct {
 	blkHeader bookkeeping.BlockHeader
 	mu        deadlock.RWMutex
 }
 
-func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw NewBlockWatcher) {
-	nbw = NewBlockWatcher{
+// MakeNewBlockWatcher construct a new block watcher with the initial blkHdr
+func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *NewBlockWatcher) {
+	nbw = &NewBlockWatcher{
 		blkHeader: blkHdr,
 	}
 	return nbw
 }
+
+// OnNewBlock implements the interface to subscribe to new block notifications from the ledger
 func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if nbw.blkHeader.Round >= block.BlockHeader.Round {
 		return
@@ -502,6 +514,7 @@ func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore
 	defer nbw.mu.Unlock()
 	nbw.blkHeader = block.BlockHeader
 }
+
 func (nbw *NewBlockWatcher) getBlockHeader() (bh bookkeeping.BlockHeader) {
 	nbw.mu.RLock()
 	defer nbw.mu.RUnlock()
@@ -531,7 +544,10 @@ const internalBufferSize = 25000
 
 //const txnPerWorksetThreshold = 32
 
-func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw NewBlockWatcher, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
+// MakeStream creates a new stream verifier and returns the chans used to send txn groups
+// to it and obtain the txn signature verification result from
+func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBlockWatcher,
+	verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
 	stxnInput chan<- VerificationElement, resultOtput <-chan VerificationResult) {
 
 	stxnChan := make(chan VerificationElement, internalBufferSize)
@@ -599,7 +615,11 @@ func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added b
 		// the varifier might be saturated.
 		// block and wait for a free seat
 		<-sm.seatReturnChan
-		sm.addVerificationTaskToThePool(bl)
+		err := sm.addVerificationTaskToThePool(bl)
+		if err != nil {
+			// TODO: report the error
+			fmt.Println(err)
+		}
 		timer = time.NewTicker(singelTxnValidationTime / 2)
 		added = true
 		return
@@ -608,9 +628,13 @@ func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added b
 	// more signatures instead of waiting here
 	select {
 	case <-sm.seatReturnChan:
-		sm.addVerificationTaskToThePool(bl)
+		err := sm.addVerificationTaskToThePool(bl)
 		timer = time.NewTicker(singelTxnValidationTime / 2)
 		added = true
+		if err != nil {
+			// TODO: report the error
+			fmt.Println(err)
+		}
 		// TODO: queue to the pool.
 		//				fmt.Println(err)
 	default:
@@ -623,16 +647,19 @@ func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added b
 // send the result out the chan
 func (sm *streamManager) sendOut(vr VerificationResult) {
 	// send the txn result out the pipe
-	select {
-	case sm.resultChan <- vr:
-		/*
-			// if the channel is not accepting, should not block here
-			// report dropped txn. caching is fine, if it comes back in the block
-			default:
-				fmt.Println("skipped!!")
-				//TODO: report this
-		*/
-	}
+	sm.resultChan <- vr
+	/*
+		select {
+		case sm.resultChan <- vr:
+
+				// if the channel is not accepting, should not block here
+				// report dropped txn. caching is fine, if it comes back in the block
+				default:
+					fmt.Println("skipped!!")
+					//TODO: report this
+
+		}
+	*/
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
@@ -646,6 +673,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 		}
 		failed, err := bl.batchVerifier.VerifyWithFeedback()
 		if err != nil && err != crypto.ErrBatchHasFailedSigs {
+			fmt.Println(err)
 			// something bad happened
 			// TODO:  report error and discard the batch
 		}
@@ -672,7 +700,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
 			} else {
-				result = InvalidSignature
+				result = ErrInvalidSignature
 			}
 			vr := VerificationResult{
 				TxnGroup: bl.txnGroups[txgIdx],
@@ -682,7 +710,11 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 			sm.sendOut(vr)
 		}
 		// loading them all at once to lock the cache once
-		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+		err = sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+		if err != nil {
+			// TODO: handle the error
+			fmt.Println(err)
+		}
 		return struct{}{}
 	}
 	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, bl, sm.seatReturnChan)
