@@ -124,6 +124,10 @@ func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifier()
 	require.NoError(t, bv.Verify())
+
+	failed, err := bv.VerifyWithFeedback()
+	require.NoError(t, err)
+	require.Empty(t, failed)
 }
 
 // TestBatchVerifierIndividualResults tests that VerifyWithFeedback
@@ -153,10 +157,11 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
 		failed, err := bv.VerifyWithFeedback()
 		if hasBadSig {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrBatchVerificationFailed)
 		} else {
 			require.NoError(t, err)
 		}
+		require.Equal(t, len(badSigs), len(failed))
 		for i := range badSigs {
 			require.Equal(t, badSigs[i], failed[i])
 		}
