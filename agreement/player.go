@@ -56,8 +56,8 @@ type player struct {
 	// must be verified after some vote has been verified.
 	Pending proposalTable
 
-	// the current concensus version
-	ConcensusVersion protocol.ConsensusVersion
+	// the current consensus version
+	ConsensusVersion protocol.ConsensusVersion
 
 	// the time offset before the filter deadline to start speculative block assembly
 	SpeculativeAsmTimeDuration time.Duration
@@ -365,7 +365,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.FastRecoveryDeadline = 0 // set immediately
 	p.Deadline = FilterTimeout(target, source.Proto)
 	if target == 0 {
-		p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(target, p.ConcensusVersion, p.SpeculativeAsmTimeDuration)
+		p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(target, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
 	} else {
 		// only speculate on block assembly in period 0
 		p.SpeculativeAssemblyDeadline = 0
@@ -414,7 +414,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(0, p.ConcensusVersion, p.SpeculativeAsmTimeDuration)
+	p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(0, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:

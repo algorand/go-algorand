@@ -222,14 +222,14 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	}
 
 	for {
-		status.ConcensusVersion, err = s.Ledger.ConsensusVersion(status.Round.SubSaturate(2))
+		status.ConsensusVersion, err = s.Ledger.ConsensusVersion(status.Round.SubSaturate(2))
 		if err != nil {
 			s.Panicf("cannot read latest concensus version, round %d: %v", status.Round.SubSaturate(2), err)
 		}
 
 		// set speculative block assembly based on the current local configuration
 		status.SpeculativeAsmTimeDuration = s.parameters.Local.ProposalAssemblyTime + s.parameters.Local.SpeculativeBlockAssemblyGraceTime
-		specClock := SpeculativeBlockAsmTime(status.Period, status.ConcensusVersion, status.SpeculativeAsmTimeDuration)
+		specClock := SpeculativeBlockAsmTime(status.Period, status.ConsensusVersion, status.SpeculativeAsmTimeDuration)
 
 		output <- a
 		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round}
