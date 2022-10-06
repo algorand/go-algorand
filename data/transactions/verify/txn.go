@@ -679,7 +679,6 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 				Context:  bl.elementContext[txgIdx],
 				Err:      result,
 			}
-
 			sm.sendOut(vr)
 		}
 		// loading them all at once to lock the cache once

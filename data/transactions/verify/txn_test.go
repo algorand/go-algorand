@@ -568,14 +568,14 @@ func TestStreamVerifier(t *testing.T) {
 			select {
 			case result := <-resultChan:
 
-				if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
-					delete(badTxnGroups, result.txnGroup[0].Sig)
-					if result.err == nil {
+				if _, has := badTxnGroups[result.TxnGroup[0].Sig]; has {
+					delete(badTxnGroups, result.TxnGroup[0].Sig)
+					if result.Err == nil {
 						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
 						errChan <- err
 					}
 				} else {
-					if result.err != nil {
+					if result.Err != nil {
 						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
 						errChan <- err
 					}
@@ -593,7 +593,7 @@ func TestStreamVerifier(t *testing.T) {
 			case <-ctx.Done():
 				break
 			default:
-				stxnChan <- VerificationElement{txnGroup: tg, context: nil}
+				stxnChan <- VerificationElement{TxnGroup: tg, Context: nil}
 			}
 		}
 	}()
