@@ -228,8 +228,6 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
-//func batchVerifySignature(
-
 // asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
 func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	tx := arg.(*txBacklogMsg)

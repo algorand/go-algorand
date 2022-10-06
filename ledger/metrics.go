@@ -56,7 +56,7 @@ func (mt *metricsTracker) close() {
 
 func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
-	mt.ledgerRound.Set(float64(rnd), map[string]string{})
+	mt.ledgerRound.Set(float64(rnd))
 	mt.ledgerTransactionsTotal.Add(float64(len(blk.Payset)), map[string]string{})
 	// TODO rewards: need to provide meaningful metric here.
 	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
