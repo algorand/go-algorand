@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/passphrase"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,6 +45,8 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 		go randomDeterministicAccounts(initCfg, out)
 	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
 		go sequentialDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "mnemonic" {
+		go mnemonicDeterministicAccounts(initCfg, out)
 	}
 	return out
 }
@@ -84,6 +87,19 @@ func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.Signatur
 		acct := uint64(i) + uint64(initCfg.GeneratedAccountsOffset)
 		var seed crypto.Seed
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+}
+
+func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for _, mnemonic := range initCfg.GeneratedAccountsMnemonics {
+		seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
+			os.Exit(1)
+		}
+		var seed crypto.Seed
+		copy(seed[:], seedbytes)
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
 }

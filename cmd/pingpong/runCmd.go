@@ -393,6 +393,10 @@ var runCmd = &cobra.Command{
 		if generatedAccountSampleMethod != "" {
 			cfg.GeneratedAccountSampleMethod = generatedAccountSampleMethod
 		}
+		// check if numAccounts is greater than the length of the mnemonic list, if provided
+		if cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
+			reportErrorf("numAccounts is greater than number of account mnemonics provided")
+		}
 
 		cfg.SetDefaultWeights()
 		err = cfg.Check()

@@ -80,6 +80,7 @@ type PpConfig struct {
 	GeneratedAccountsCount       uint64
 	GeneratedAccountSampleMethod string
 	GeneratedAccountsOffset      uint64
+	GeneratedAccountsMnemonics   []string
 
 	WeightPayment     float64
 	WeightAsset       float64
@@ -176,6 +177,7 @@ var accountSampleMethods = []string{
 	"",
 	"random",
 	"sequential",
+	"mnemonic",
 }
 
 // Check returns an error if config is invalid.
@@ -193,5 +195,6 @@ func (cfg *PpConfig) Check() error {
 	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+uint64(cfg.NumPartAccounts) > cfg.GeneratedAccountsCount) {
 		return fmt.Errorf("(GeneratedAccountsOffset %d) + (NumPartAccounts %d) > (GeneratedAccountsCount %d)", cfg.GeneratedAccountsOffset, cfg.NumPartAccounts, cfg.GeneratedAccountsCount)
 	}
+
 	return nil
 }
