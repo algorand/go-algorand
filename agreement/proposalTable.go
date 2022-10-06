@@ -21,7 +21,7 @@ package agreement
 type proposalTable struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Pending     map[uint64]*messageEvent `codec:"p,allocbound=-"`
+	Pending     map[uint64]*messageEvent `codec:"Pending,allocbound=-"`
 	PendingNext uint64
 }
 

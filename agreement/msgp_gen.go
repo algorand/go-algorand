@@ -1001,21 +1001,21 @@ func (z *blockAssembler) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x1
 	}
-	if (*z).Filled == false {
+	if len((*z).Authenticators) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).Payload.MsgIsZero() {
+	if (*z).Filled == false {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
-	if (*z).Pipeline.MsgIsZero() {
+	if (*z).Payload.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
-	if len((*z).Authenticators) == 0 {
+	if (*z).Pipeline.MsgIsZero() {
 		zb0002Len--
-		zb0002Mask |= 0x20
+		zb0002Mask |= 0x10
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -1026,23 +1026,8 @@ func (z *blockAssembler) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBool(o, (*z).Assembled)
 		}
 		if (zb0002Mask & 0x2) == 0 { // if not empty
-			// string "Filled"
-			o = append(o, 0xa6, 0x46, 0x69, 0x6c, 0x6c, 0x65, 0x64)
-			o = msgp.AppendBool(o, (*z).Filled)
-		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "Payload"
-			o = append(o, 0xa7, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
-			o = (*z).Payload.MarshalMsg(o)
-		}
-		if (zb0002Mask & 0x8) == 0 { // if not empty
-			// string "Pipeline"
-			o = append(o, 0xa8, 0x50, 0x69, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x65)
-			o = (*z).Pipeline.MarshalMsg(o)
-		}
-		if (zb0002Mask & 0x20) == 0 { // if not empty
-			// string "auths"
-			o = append(o, 0xa5, 0x61, 0x75, 0x74, 0x68, 0x73)
+			// string "Authenticators"
+			o = append(o, 0xae, 0x41, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x6f, 0x72, 0x73)
 			if (*z).Authenticators == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -1051,6 +1036,21 @@ func (z *blockAssembler) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).Authenticators {
 				o = (*z).Authenticators[zb0001].MarshalMsg(o)
 			}
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "Filled"
+			o = append(o, 0xa6, 0x46, 0x69, 0x6c, 0x6c, 0x65, 0x64)
+			o = msgp.AppendBool(o, (*z).Filled)
+		}
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "Payload"
+			o = append(o, 0xa7, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
+			o = (*z).Payload.MarshalMsg(o)
+		}
+		if (zb0002Mask & 0x10) == 0 { // if not empty
+			// string "Pipeline"
+			o = append(o, 0xa8, 0x50, 0x69, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x65)
+			o = (*z).Pipeline.MarshalMsg(o)
 		}
 	}
 	return
@@ -1177,7 +1177,7 @@ func (z *blockAssembler) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Assembled")
 					return
 				}
-			case "auths":
+			case "Authenticators":
 				var zb0006 int
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -1219,7 +1219,7 @@ func (_ *blockAssembler) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *blockAssembler) Msgsize() (s int) {
-	s = 1 + 9 + (*z).Pipeline.Msgsize() + 7 + msgp.BoolSize + 8 + (*z).Payload.Msgsize() + 10 + msgp.BoolSize + 6 + msgp.ArrayHeaderSize
+	s = 1 + 9 + (*z).Pipeline.Msgsize() + 7 + msgp.BoolSize + 8 + (*z).Payload.Msgsize() + 10 + msgp.BoolSize + 15 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Authenticators {
 		s += (*z).Authenticators[zb0001].Msgsize()
 	}
@@ -4513,47 +4513,44 @@ func (z *diskState) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(5)
 	var zb0003Mask uint8 /* 6 bits */
-	if len((*z).Clock) == 0 {
+	if len((*z).ActionTypes) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x1
 	}
-	if len((*z).Player) == 0 {
+	if len((*z).Actions) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if len((*z).Router) == 0 {
+	if len((*z).Clock) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
-	if len((*z).Actions) == 0 {
+	if len((*z).Player) == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x8
+	}
+	if len((*z).Router) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x10
-	}
-	if len((*z).ActionTypes) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x20
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x1) == 0 { // if not empty
-			// string "Clock"
-			o = append(o, 0xa5, 0x43, 0x6c, 0x6f, 0x63, 0x6b)
-			o = msgp.AppendBytes(o, (*z).Clock)
+			// string "ActionTypes"
+			o = append(o, 0xab, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x73)
+			if (*z).ActionTypes == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).ActionTypes)))
+			}
+			for zb0001 := range (*z).ActionTypes {
+				o = msgp.AppendUint8(o, uint8((*z).ActionTypes[zb0001]))
+			}
 		}
 		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "Player"
-			o = append(o, 0xa6, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72)
-			o = msgp.AppendBytes(o, (*z).Player)
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "Router"
-			o = append(o, 0xa6, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x72)
-			o = msgp.AppendBytes(o, (*z).Router)
-		}
-		if (zb0003Mask & 0x10) == 0 { // if not empty
-			// string "as"
-			o = append(o, 0xa2, 0x61, 0x73)
+			// string "Actions"
+			o = append(o, 0xa7, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73)
 			if (*z).Actions == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -4563,17 +4560,20 @@ func (z *diskState) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).Actions[zb0002])
 			}
 		}
-		if (zb0003Mask & 0x20) == 0 { // if not empty
-			// string "ats"
-			o = append(o, 0xa3, 0x61, 0x74, 0x73)
-			if (*z).ActionTypes == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = msgp.AppendArrayHeader(o, uint32(len((*z).ActionTypes)))
-			}
-			for zb0001 := range (*z).ActionTypes {
-				o = msgp.AppendUint8(o, uint8((*z).ActionTypes[zb0001]))
-			}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "Clock"
+			o = append(o, 0xa5, 0x43, 0x6c, 0x6f, 0x63, 0x6b)
+			o = msgp.AppendBytes(o, (*z).Clock)
+		}
+		if (zb0003Mask & 0x8) == 0 { // if not empty
+			// string "Player"
+			o = append(o, 0xa6, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72)
+			o = msgp.AppendBytes(o, (*z).Player)
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "Router"
+			o = append(o, 0xa6, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x72)
+			o = msgp.AppendBytes(o, (*z).Router)
 		}
 	}
 	return
@@ -4714,7 +4714,7 @@ func (z *diskState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Clock")
 					return
 				}
-			case "ats":
+			case "ActionTypes":
 				var zb0010 int
 				var zb0011 bool
 				zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -4740,7 +4740,7 @@ func (z *diskState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						(*z).ActionTypes[zb0001] = actionType(zb0012)
 					}
 				}
-			case "as":
+			case "Actions":
 				var zb0013 int
 				var zb0014 bool
 				zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -4782,7 +4782,7 @@ func (_ *diskState) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *diskState) Msgsize() (s int) {
-	s = 1 + 7 + msgp.BytesPrefixSize + len((*z).Router) + 7 + msgp.BytesPrefixSize + len((*z).Player) + 6 + msgp.BytesPrefixSize + len((*z).Clock) + 4 + msgp.ArrayHeaderSize + (len((*z).ActionTypes) * (msgp.Uint8Size)) + 3 + msgp.ArrayHeaderSize
+	s = 1 + 7 + msgp.BytesPrefixSize + len((*z).Router) + 7 + msgp.BytesPrefixSize + len((*z).Player) + 6 + msgp.BytesPrefixSize + len((*z).Clock) + 12 + msgp.ArrayHeaderSize + (len((*z).ActionTypes) * (msgp.Uint8Size)) + 8 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).Actions {
 		s += msgp.BytesPrefixSize + len((*z).Actions[zb0002])
 	}
@@ -6946,7 +6946,7 @@ func (z *networkAction) MarshalMsg(b []byte) (o []byte) {
 	}
 	if len((*z).UnauthenticatedVotes) == 0 {
 		zb0002Len--
-		zb0002Mask |= 0x200
+		zb0002Mask |= 0x40
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -7003,9 +7003,9 @@ func (z *networkAction) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xb3, 0x55, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x56, 0x6f, 0x74, 0x65)
 			o = (*z).UnauthenticatedVote.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x200) == 0 { // if not empty
-			// string "unauthv"
-			o = append(o, 0xa7, 0x75, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x76)
+		if (zb0002Mask & 0x40) == 0 { // if not empty
+			// string "UnauthenticatedVotes"
+			o = append(o, 0xb4, 0x55, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x56, 0x6f, 0x74, 0x65, 0x73)
 			if (*z).UnauthenticatedVotes == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -7298,7 +7298,7 @@ func (z *networkAction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			case "unauthv":
+			case "UnauthenticatedVotes":
 				var zb0012 int
 				var zb0013 bool
 				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -7346,7 +7346,7 @@ func (_ *networkAction) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *networkAction) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint8Size + 4 + (*z).Tag.Msgsize() + 20 + (*z).UnauthenticatedVote.Msgsize() + 22 + (*z).UnauthenticatedBundle.Msgsize() + 16 + 1 + 5 + (*z).CompoundMessage.Vote.Msgsize() + 9 + (*z).CompoundMessage.Proposal.Msgsize() + 8 + msgp.ArrayHeaderSize
+	s = 1 + 2 + msgp.Uint8Size + 4 + (*z).Tag.Msgsize() + 20 + (*z).UnauthenticatedVote.Msgsize() + 22 + (*z).UnauthenticatedBundle.Msgsize() + 16 + 1 + 5 + (*z).CompoundMessage.Vote.Msgsize() + 9 + (*z).CompoundMessage.Proposal.Msgsize() + 21 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).UnauthenticatedVotes {
 		s += (*z).UnauthenticatedVotes[zb0001].Msgsize()
 	}
@@ -7622,43 +7622,28 @@ func (z *periodRouter) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(4)
 	var zb0003Mask uint8 /* 7 bits */
-	if (*z).ProposalTracker.MsgIsZero() {
+	if len((*z).Children) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x1
 	}
-	if (*z).ProposalTrackerContract.MsgIsZero() {
+	if (*z).ProposalTracker.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).VoteTrackerPeriod.MsgIsZero() {
+	if (*z).ProposalTrackerContract.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
-	if len((*z).Children) == 0 {
+	if (*z).VoteTrackerPeriod.MsgIsZero() {
 		zb0003Len--
-		zb0003Mask |= 0x10
+		zb0003Mask |= 0x8
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x1) == 0 { // if not empty
-			// string "ProposalTracker"
-			o = append(o, 0xaf, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72)
-			o = (*z).ProposalTracker.MarshalMsg(o)
-		}
-		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "ProposalTrackerContract"
-			o = append(o, 0xb7, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x61, 0x63, 0x74)
-			o = (*z).ProposalTrackerContract.MarshalMsg(o)
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "VoteTrackerPeriod"
-			o = append(o, 0xb1, 0x56, 0x6f, 0x74, 0x65, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72, 0x50, 0x65, 0x72, 0x69, 0x6f, 0x64)
-			o = (*z).VoteTrackerPeriod.MarshalMsg(o)
-		}
-		if (zb0003Mask & 0x10) == 0 { // if not empty
-			// string "children"
-			o = append(o, 0xa8, 0x63, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
+			// string "Children"
+			o = append(o, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
 			if (*z).Children == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -7678,6 +7663,21 @@ func (z *periodRouter) MarshalMsg(b []byte) (o []byte) {
 					o = zb0002.MarshalMsg(o)
 				}
 			}
+		}
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "ProposalTracker"
+			o = append(o, 0xaf, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72)
+			o = (*z).ProposalTracker.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "ProposalTrackerContract"
+			o = append(o, 0xb7, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x61, 0x63, 0x74)
+			o = (*z).ProposalTrackerContract.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x8) == 0 { // if not empty
+			// string "VoteTrackerPeriod"
+			o = append(o, 0xb1, 0x56, 0x6f, 0x74, 0x65, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72, 0x50, 0x65, 0x72, 0x69, 0x6f, 0x64)
+			o = (*z).VoteTrackerPeriod.MarshalMsg(o)
 		}
 	}
 	return
@@ -7808,7 +7808,7 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ProposalTrackerContract")
 					return
 				}
-			case "children":
+			case "Children":
 				var zb0007 int
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -9309,29 +9309,24 @@ func (z *proposalStore) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0005Len := uint32(3)
 	var zb0005Mask uint8 /* 4 bits */
-	if (*z).Pinned.MsgIsZero() {
+	if len((*z).Assemblers) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x1
 	}
-	if len((*z).Assemblers) == 0 {
+	if (*z).Pinned.MsgIsZero() {
 		zb0005Len--
-		zb0005Mask |= 0x4
+		zb0005Mask |= 0x2
 	}
 	if len((*z).Relevant) == 0 {
 		zb0005Len--
-		zb0005Mask |= 0x8
+		zb0005Mask |= 0x4
 	}
 	// variable map header, size zb0005Len
 	o = append(o, 0x80|uint8(zb0005Len))
 	if zb0005Len != 0 {
 		if (zb0005Mask & 0x1) == 0 { // if not empty
-			// string "Pinned"
-			o = append(o, 0xa6, 0x50, 0x69, 0x6e, 0x6e, 0x65, 0x64)
-			o = (*z).Pinned.MarshalMsg(o)
-		}
-		if (zb0005Mask & 0x4) == 0 { // if not empty
-			// string "assemblers"
-			o = append(o, 0xaa, 0x61, 0x73, 0x73, 0x65, 0x6d, 0x62, 0x6c, 0x65, 0x72, 0x73)
+			// string "Assemblers"
+			o = append(o, 0xaa, 0x41, 0x73, 0x73, 0x65, 0x6d, 0x62, 0x6c, 0x65, 0x72, 0x73)
 			if (*z).Assemblers == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -9348,9 +9343,14 @@ func (z *proposalStore) MarshalMsg(b []byte) (o []byte) {
 				o = zb0004.MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x8) == 0 { // if not empty
-			// string "rel"
-			o = append(o, 0xa3, 0x72, 0x65, 0x6c)
+		if (zb0005Mask & 0x2) == 0 { // if not empty
+			// string "Pinned"
+			o = append(o, 0xa6, 0x50, 0x69, 0x6e, 0x6e, 0x65, 0x64)
+			o = (*z).Pinned.MarshalMsg(o)
+		}
+		if (zb0005Mask & 0x4) == 0 { // if not empty
+			// string "Relevant"
+			o = append(o, 0xa8, 0x52, 0x65, 0x6c, 0x65, 0x76, 0x61, 0x6e, 0x74)
 			if (*z).Relevant == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -9482,7 +9482,7 @@ func (z *proposalStore) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "rel":
+			case "Relevant":
 				var zb0011 int
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -9517,7 +9517,7 @@ func (z *proposalStore) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Pinned")
 					return
 				}
-			case "assemblers":
+			case "Assemblers":
 				var zb0013 int
 				var zb0014 bool
 				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -9566,7 +9566,7 @@ func (_ *proposalStore) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *proposalStore) Msgsize() (s int) {
-	s = 1 + 4 + msgp.MapHeaderSize
+	s = 1 + 9 + msgp.MapHeaderSize
 	if (*z).Relevant != nil {
 		for zb0001, zb0002 := range (*z).Relevant {
 			_ = zb0001
@@ -9596,25 +9596,20 @@ func (z *proposalTable) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
 	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PendingNext == 0 {
+	if len((*z).Pending) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x1
 	}
-	if len((*z).Pending) == 0 {
+	if (*z).PendingNext == 0 {
 		zb0003Len--
-		zb0003Mask |= 0x4
+		zb0003Mask |= 0x2
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x1) == 0 { // if not empty
-			// string "PendingNext"
-			o = append(o, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4e, 0x65, 0x78, 0x74)
-			o = msgp.AppendUint64(o, (*z).PendingNext)
-		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "p"
-			o = append(o, 0xa1, 0x70)
+			// string "Pending"
+			o = append(o, 0xa7, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67)
 			if (*z).Pending == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -9634,6 +9629,11 @@ func (z *proposalTable) MarshalMsg(b []byte) (o []byte) {
 					o = zb0002.MarshalMsg(o)
 				}
 			}
+		}
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "PendingNext"
+			o = append(o, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4e, 0x65, 0x78, 0x74)
+			o = msgp.AppendUint64(o, (*z).PendingNext)
 		}
 	}
 	return
@@ -9730,7 +9730,7 @@ func (z *proposalTable) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "p":
+			case "Pending":
 				var zb0007 int
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -9796,7 +9796,7 @@ func (_ *proposalTable) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *proposalTable) Msgsize() (s int) {
-	s = 1 + 2 + msgp.MapHeaderSize
+	s = 1 + 8 + msgp.MapHeaderSize
 	if (*z).Pending != nil {
 		for zb0001, zb0002 := range (*z).Pending {
 			_ = zb0001
@@ -9824,34 +9824,24 @@ func (z *proposalTracker) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(3)
 	var zb0003Mask uint8 /* 4 bits */
-	if (*z).Freezer.MsgIsZero() {
+	if len((*z).Duplicate) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x1
 	}
-	if (*z).Staging.MsgIsZero() {
+	if (*z).Freezer.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if len((*z).Duplicate) == 0 {
+	if (*z).Staging.MsgIsZero() {
 		zb0003Len--
-		zb0003Mask |= 0x8
+		zb0003Mask |= 0x4
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x1) == 0 { // if not empty
-			// string "Freezer"
-			o = append(o, 0xa7, 0x46, 0x72, 0x65, 0x65, 0x7a, 0x65, 0x72)
-			o = (*z).Freezer.MarshalMsg(o)
-		}
-		if (zb0003Mask & 0x2) == 0 { // if not empty
-			// string "Staging"
-			o = append(o, 0xa7, 0x53, 0x74, 0x61, 0x67, 0x69, 0x6e, 0x67)
-			o = (*z).Staging.MarshalMsg(o)
-		}
-		if (zb0003Mask & 0x8) == 0 { // if not empty
-			// string "dupe"
-			o = append(o, 0xa4, 0x64, 0x75, 0x70, 0x65)
+			// string "Duplicate"
+			o = append(o, 0xa9, 0x44, 0x75, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65)
 			if (*z).Duplicate == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -9867,6 +9857,16 @@ func (z *proposalTracker) MarshalMsg(b []byte) (o []byte) {
 				o = zb0001.MarshalMsg(o)
 				o = msgp.AppendBool(o, zb0002)
 			}
+		}
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "Freezer"
+			o = append(o, 0xa7, 0x46, 0x72, 0x65, 0x65, 0x7a, 0x65, 0x72)
+			o = (*z).Freezer.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "Staging"
+			o = append(o, 0xa7, 0x53, 0x74, 0x61, 0x67, 0x69, 0x6e, 0x67)
+			o = (*z).Staging.MarshalMsg(o)
 		}
 	}
 	return
@@ -9960,7 +9960,7 @@ func (z *proposalTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "dupe":
+			case "Duplicate":
 				var zb0007 int
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -10021,7 +10021,7 @@ func (_ *proposalTracker) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *proposalTracker) Msgsize() (s int) {
-	s = 1 + 5 + msgp.MapHeaderSize
+	s = 1 + 10 + msgp.MapHeaderSize
 	if (*z).Duplicate != nil {
 		for zb0001, zb0002 := range (*z).Duplicate {
 			_ = zb0001
@@ -10408,7 +10408,7 @@ func (z *proposalVoteCounter) MarshalMsg(b []byte) (o []byte) {
 	}
 	if len((*z).Votes) == 0 {
 		zb0003Len--
-		zb0003Mask |= 0x4
+		zb0003Mask |= 0x2
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -10418,9 +10418,9 @@ func (z *proposalVoteCounter) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa5, 0x43, 0x6f, 0x75, 0x6e, 0x74)
 			o = msgp.AppendUint64(o, (*z).Count)
 		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "votes"
-			o = append(o, 0xa5, 0x76, 0x6f, 0x74, 0x65, 0x73)
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "Votes"
+			o = append(o, 0xa5, 0x56, 0x6f, 0x74, 0x65, 0x73)
 			if (*z).Votes == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -10527,7 +10527,7 @@ func (z *proposalVoteCounter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Count")
 					return
 				}
-			case "votes":
+			case "Votes":
 				var zb0007 int
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -11253,26 +11253,14 @@ func (z *rootRouter) MarshalMsg(b []byte) (o []byte) {
 	var zb0003Mask uint8 /* 7 bits */
 	if len((*z).Children) == 0 {
 		zb0003Len--
-		zb0003Mask |= 0x8
+		zb0003Mask |= 0x1
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
-		// string "ProposalManager"
-		o = append(o, 0xaf, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72)
-		// omitempty: check for empty values
-		zb0004Len := uint32(0)
-		// variable map header, size zb0004Len
-		o = append(o, 0x80|uint8(zb0004Len))
-		// string "VoteAggregator"
-		o = append(o, 0xae, 0x56, 0x6f, 0x74, 0x65, 0x41, 0x67, 0x67, 0x72, 0x65, 0x67, 0x61, 0x74, 0x6f, 0x72)
-		// omitempty: check for empty values
-		zb0005Len := uint32(0)
-		// variable map header, size zb0005Len
-		o = append(o, 0x80|uint8(zb0005Len))
-		if (zb0003Mask & 0x8) == 0 { // if not empty
-			// string "children"
-			o = append(o, 0xa8, 0x63, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
+		if (zb0003Mask & 0x1) == 0 { // if not empty
+			// string "Children"
+			o = append(o, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
 			if (*z).Children == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -11293,6 +11281,18 @@ func (z *rootRouter) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
+		// string "ProposalManager"
+		o = append(o, 0xaf, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72)
+		// omitempty: check for empty values
+		zb0004Len := uint32(0)
+		// variable map header, size zb0004Len
+		o = append(o, 0x80|uint8(zb0004Len))
+		// string "VoteAggregator"
+		o = append(o, 0xae, 0x56, 0x6f, 0x74, 0x65, 0x41, 0x67, 0x67, 0x72, 0x65, 0x67, 0x61, 0x74, 0x6f, 0x72)
+		// omitempty: check for empty values
+		zb0005Len := uint32(0)
+		// variable map header, size zb0005Len
+		o = append(o, 0x80|uint8(zb0005Len))
 	}
 	return
 }
@@ -11552,7 +11552,7 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			case "children":
+			case "Children":
 				var zb0015 int
 				var zb0016 bool
 				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -11639,27 +11639,50 @@ func (z *roundRouter) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(3)
 	var zb0003Mask uint8 /* 6 bits */
-	if (*z).ProposalStore.MsgIsZero() {
+	if len((*z).Children) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x1
 	}
-	if ((*z).VoteTrackerRound.Freshest.MsgIsZero()) && ((*z).VoteTrackerRound.Ok == false) {
+	if (*z).ProposalStore.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if len((*z).Children) == 0 {
+	if ((*z).VoteTrackerRound.Freshest.MsgIsZero()) && ((*z).VoteTrackerRound.Ok == false) {
 		zb0003Len--
-		zb0003Mask |= 0x8
+		zb0003Mask |= 0x4
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
 	if zb0003Len != 0 {
 		if (zb0003Mask & 0x1) == 0 { // if not empty
+			// string "Children"
+			o = append(o, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
+			if (*z).Children == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
+			}
+			zb0001_keys := make([]period, 0, len((*z).Children))
+			for zb0001 := range (*z).Children {
+				zb0001_keys = append(zb0001_keys, zb0001)
+			}
+			for _, zb0001 := range zb0001_keys {
+				zb0002 := (*z).Children[zb0001]
+				_ = zb0002
+				o = zb0001.MarshalMsg(o)
+				if zb0002 == nil {
+					o = msgp.AppendNil(o)
+				} else {
+					o = zb0002.MarshalMsg(o)
+				}
+			}
+		}
+		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "ProposalStore"
 			o = append(o, 0xad, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x53, 0x74, 0x6f, 0x72, 0x65)
 			o = (*z).ProposalStore.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x2) == 0 { // if not empty
+		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "VoteTrackerRound"
 			o = append(o, 0xb0, 0x56, 0x6f, 0x74, 0x65, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72, 0x52, 0x6f, 0x75, 0x6e, 0x64)
 			// omitempty: check for empty values
@@ -11684,29 +11707,6 @@ func (z *roundRouter) MarshalMsg(b []byte) (o []byte) {
 				// string "Ok"
 				o = append(o, 0xa2, 0x4f, 0x6b)
 				o = msgp.AppendBool(o, (*z).VoteTrackerRound.Ok)
-			}
-		}
-		if (zb0003Mask & 0x8) == 0 { // if not empty
-			// string "children"
-			o = append(o, 0xa8, 0x63, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
-			if (*z).Children == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
-			}
-			zb0001_keys := make([]period, 0, len((*z).Children))
-			for zb0001 := range (*z).Children {
-				zb0001_keys = append(zb0001_keys, zb0001)
-			}
-			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).Children[zb0001]
-				_ = zb0002
-				o = zb0001.MarshalMsg(o)
-				if zb0002 == nil {
-					o = msgp.AppendNil(o)
-				} else {
-					o = zb0002.MarshalMsg(o)
-				}
 			}
 		}
 	}
@@ -11952,7 +11952,7 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
-			case "children":
+			case "Children":
 				var zb0011 int
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -15896,33 +15896,28 @@ func (z *voteTracker) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0007Len := uint32(4)
 	var zb0007Mask uint8 /* 5 bits */
-	if (*z).EquivocatorsCount == 0 {
+	if len((*z).Counts) == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x1
 	}
-	if len((*z).Counts) == 0 {
+	if len((*z).Equivocators) == 0 {
+		zb0007Len--
+		zb0007Mask |= 0x2
+	}
+	if (*z).EquivocatorsCount == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x4
 	}
-	if len((*z).Equivocators) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x8
-	}
 	if len((*z).Voters) == 0 {
 		zb0007Len--
-		zb0007Mask |= 0x10
+		zb0007Mask |= 0x8
 	}
 	// variable map header, size zb0007Len
 	o = append(o, 0x80|uint8(zb0007Len))
 	if zb0007Len != 0 {
 		if (zb0007Mask & 0x1) == 0 { // if not empty
-			// string "EquivocatorsCount"
-			o = append(o, 0xb1, 0x45, 0x71, 0x75, 0x69, 0x76, 0x6f, 0x63, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-			o = msgp.AppendUint64(o, (*z).EquivocatorsCount)
-		}
-		if (zb0007Mask & 0x4) == 0 { // if not empty
-			// string "counts"
-			o = append(o, 0xa6, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73)
+			// string "Counts"
+			o = append(o, 0xa6, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x73)
 			if (*z).Counts == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -15939,9 +15934,9 @@ func (z *voteTracker) MarshalMsg(b []byte) (o []byte) {
 				o = zb0004.MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x8) == 0 { // if not empty
-			// string "equivocators"
-			o = append(o, 0xac, 0x65, 0x71, 0x75, 0x69, 0x76, 0x6f, 0x63, 0x61, 0x74, 0x6f, 0x72, 0x73)
+		if (zb0007Mask & 0x2) == 0 { // if not empty
+			// string "Equivocators"
+			o = append(o, 0xac, 0x45, 0x71, 0x75, 0x69, 0x76, 0x6f, 0x63, 0x61, 0x74, 0x6f, 0x72, 0x73)
 			if (*z).Equivocators == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -15958,9 +15953,14 @@ func (z *voteTracker) MarshalMsg(b []byte) (o []byte) {
 				o = zb0006.MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x10) == 0 { // if not empty
-			// string "voters"
-			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x72, 0x73)
+		if (zb0007Mask & 0x4) == 0 { // if not empty
+			// string "EquivocatorsCount"
+			o = append(o, 0xb1, 0x45, 0x71, 0x75, 0x69, 0x76, 0x6f, 0x63, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).EquivocatorsCount)
+		}
+		if (zb0007Mask & 0x8) == 0 { // if not empty
+			// string "Voters"
+			o = append(o, 0xa6, 0x56, 0x6f, 0x74, 0x65, 0x72, 0x73)
 			if (*z).Voters == nil {
 				o = msgp.AppendNil(o)
 			} else {
@@ -16123,7 +16123,7 @@ func (z *voteTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "voters":
+			case "Voters":
 				var zb0015 int
 				var zb0016 bool
 				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -16152,7 +16152,7 @@ func (z *voteTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).Voters[zb0001] = zb0002
 				}
-			case "counts":
+			case "Counts":
 				var zb0017 int
 				var zb0018 bool
 				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -16181,7 +16181,7 @@ func (z *voteTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).Counts[zb0003] = zb0004
 				}
-			case "equivocators":
+			case "Equivocators":
 				var zb0019 int
 				var zb0020 bool
 				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)

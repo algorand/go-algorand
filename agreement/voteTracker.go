@@ -30,7 +30,7 @@ type proposalVoteCounter struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Count uint64
-	Votes map[basics.Address]vote `codec:"votes,allocbound=-"`
+	Votes map[basics.Address]vote `codec:"Votes,allocbound=-"`
 }
 
 // A voteTracker is a voteMachineStep which handles duplication and
@@ -45,18 +45,18 @@ type voteTracker struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// Voters holds the set of voters which have voted in the current step.
 	// It is used to track whether a voter has equivocated.
-	Voters map[basics.Address]vote `codec:"voters,allocbound=-"`
+	Voters map[basics.Address]vote `codec:"Voters,allocbound=-"`
 
 	// Counts holds the weighted sum of the votes for a given proposal.
 	// it also hold the individual votes.
 	// preconditions :
 	// Any proposalValue in Counts is gurenteed to contain at least one vote
-	Counts map[proposalValue]proposalVoteCounter `codec:"counts,allocbound=-"`
+	Counts map[proposalValue]proposalVoteCounter `codec:"Counts,allocbound=-"`
 
 	// Equivocators holds the set of voters which have already equivocated
 	// once.  Future votes from these voters are dropped and not
 	// propagated.
-	Equivocators map[basics.Address]equivocationVote `codec:"equivocators,allocbound=-"`
+	Equivocators map[basics.Address]equivocationVote `codec:"Equivocators,allocbound=-"`
 
 	// EquivocatorsCount holds the number of equivocating votes which count
 	// for any proposal-value.

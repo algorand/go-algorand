@@ -39,8 +39,8 @@ type diskState struct {
 	Player []byte
 	Clock  []byte
 
-	ActionTypes []actionType `codec:"ats,allocbound=-"`
-	Actions     [][]byte     `codec:"as,allocbound=-"`
+	ActionTypes []actionType `codec:"ActionTypes,allocbound=-"`
+	Actions     [][]byte     `codec:"Actions,allocbound=-"`
 }
 
 func persistent(as []action) bool {

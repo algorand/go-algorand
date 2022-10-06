@@ -54,7 +54,7 @@ type blockAssembler struct {
 	// for a given proposal-value.  When a proposal payload is relayed by
 	// the state machine, a matching can be concatenated with the vote to
 	// ensure that peers do not drop the proposal payload.
-	Authenticators []vote `codec:"auths,allocbound=-"`
+	Authenticators []vote `codec:"Authenticators,allocbound=-"`
 }
 
 // pipeline adds the given unvalidated proposal to the blockAssembler, returning
@@ -126,7 +126,7 @@ type proposalStore struct {
 	// in the round. Relevant is indexed by period, and the proposalValue is
 	// the last one reported by the corresponding proposalMachinePeriod.
 	// Each corresponding proposal is tracked in Assemblers.
-	Relevant map[period]proposalValue `codec:"rel,allocbound=-"`
+	Relevant map[period]proposalValue `codec:"Relevant,allocbound=-"`
 	// Pinned contains the extra proposal-value, not tracked in Relevant,
 	// for which a certificate may have formed (i.e., vbar in the spec).
 	// The proposal corresponding to Pinned is tracked in Assemblers.
@@ -134,7 +134,7 @@ type proposalStore struct {
 
 	// Assemblers contains the set of proposal-values currently tracked and
 	// held by the proposalStore.
-	Assemblers map[proposalValue]blockAssembler `codec:"assemblers,allocbound=-"`
+	Assemblers map[proposalValue]blockAssembler `codec:"Assemblers,allocbound=-"`
 }
 
 func (store *proposalStore) T() stateMachineTag {

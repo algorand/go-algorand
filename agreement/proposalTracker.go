@@ -71,7 +71,7 @@ type proposalTracker struct {
 	// Duplicate holds the set of senders which has been seen by the
 	// proposalTracker.  A duplicate proposal-vote or an equivocating
 	// proposal-vote is dropped by a proposalTracker.
-	Duplicate map[basics.Address]bool `codec:"dupe,allocbound=-"`
+	Duplicate map[basics.Address]bool `codec:"Duplicate,allocbound=-"`
 	// Freezer holds a proposalSeeker, which seeks the proposal-vote with
 	// the lowest credential seen by the proposalTracker.
 	Freezer proposalSeeker

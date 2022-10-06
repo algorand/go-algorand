@@ -75,7 +75,7 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[round]*roundRouter `codec:"children,allocbound=-"`
+	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
 
 type roundRouter struct {
@@ -87,7 +87,7 @@ type roundRouter struct {
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
 
-	Children map[period]*periodRouter `codec:"children,allocbound=-"`
+	Children map[period]*periodRouter `codec:"Children,allocbound=-"`
 }
 
 type periodRouter struct {
@@ -101,7 +101,7 @@ type periodRouter struct {
 
 	ProposalTrackerContract proposalTrackerContract
 
-	Children map[step]*stepRouter `codec:"children,allocbound=-"`
+	Children map[step]*stepRouter `codec:"Children,allocbound=-"`
 }
 
 type stepRouter struct {

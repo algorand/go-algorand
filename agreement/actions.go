@@ -109,7 +109,7 @@ type networkAction struct {
 	UnauthenticatedBundle unauthenticatedBundle
 	CompoundMessage       compoundMessage
 
-	UnauthenticatedVotes []unauthenticatedVote `codec:"unauthv,allocbound=-"`
+	UnauthenticatedVotes []unauthenticatedVote `codec:"UnauthenticatedVotes,allocbound=-"`
 
 	Err serializableError
 }
