@@ -33,10 +33,14 @@ import (
 
 // diskState represents the state required by the agreement protocol to be persistent.
 type diskState struct {
-	Router, Player, Clock []byte
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ActionTypes []actionType
-	Actions     [][]byte
+	Router []byte
+	Player []byte
+	Clock  []byte
+
+	ActionTypes []actionType `codec:"ats,allocbound=-"`
+	Actions     [][]byte     `codec:"as,allocbound=-"`
 }
 
 func persistent(as []action) bool {
@@ -54,13 +58,16 @@ func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
 	s.Router = protocol.EncodeReflect(rr)
 	s.Player = protocol.EncodeReflect(p)
 	pr := protocol.Encode(&p)
+	mr := protocol.Encode(&rr)
 	fmt.Println(pr)
+	fmt.Println(mr)
 	s.Clock = t.Encode()
 	for _, act := range a {
 		s.ActionTypes = append(s.ActionTypes, act.t())
+
 		s.Actions = append(s.Actions, protocol.EncodeReflect(act))
 	}
-	raw := protocol.EncodeReflect(s)
+	raw := protocol.Encode(&s)
 	return raw
 }
 

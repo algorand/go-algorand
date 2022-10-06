@@ -21,6 +21,8 @@ import (
 )
 
 type proposalTrackerContract struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	SawOneVote       bool
 	Froze            bool
 	SawSoftThreshold bool

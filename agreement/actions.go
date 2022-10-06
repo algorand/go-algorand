@@ -65,6 +65,13 @@ type action interface {
 	do(context.Context, *Service)
 
 	String() string
+
+	// MarshalMsg(interface{}) []byte
+	// CanMarshalMsg(interface{}) bool
+	// UnmarshalMsg(interface{}) []byte
+	// CanUnmarshalMsg(interface{}) bool
+	// Msgsize(interface{}) int
+	// MsgIsZero(interface{}) bool
 }
 
 type nonpersistent struct{}
@@ -74,6 +81,7 @@ func (nonpersistent) persistent() bool {
 }
 
 type noopAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 }
 
@@ -88,6 +96,7 @@ func (a noopAction) String() string {
 }
 
 type networkAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 
 	// ignore, broadcast, broadcastVotes, relay, disconnect
@@ -100,7 +109,7 @@ type networkAction struct {
 	UnauthenticatedBundle unauthenticatedBundle
 	CompoundMessage       compoundMessage
 
-	UnauthenticatedVotes []unauthenticatedVote
+	UnauthenticatedVotes []unauthenticatedVote `codec:"unauthv,allocbound=-"`
 
 	Err serializableError
 }
@@ -169,6 +178,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 }
 
 type cryptoAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 
 	// verify{Vote,Payload,Bundle}
@@ -203,6 +213,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 }
 
 type ensureAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 
 	// the payload that we will give to the ledger
@@ -265,6 +276,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 }
 
 type stageDigestAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 	// Certificate identifies a block and is a proof commitment
 	Certificate Certificate // a block digest is probably sufficient; keep certificate for now to match ledger interface
@@ -291,6 +303,7 @@ func (a stageDigestAction) do(ctx context.Context, service *Service) {
 }
 
 type rezeroAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	nonpersistent
 
 	Round round
@@ -309,6 +322,7 @@ func (a rezeroAction) do(ctx context.Context, s *Service) {
 }
 
 type pseudonodeAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// assemble, repropose, attest
 	T actionType
 
@@ -475,6 +489,8 @@ func zeroAction(t actionType) action {
 }
 
 type checkpointAction struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Round  round
 	Period period
 	Step   step

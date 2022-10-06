@@ -627,6 +627,7 @@ func (e pinnedValueEvent) ComparableStr() string {
 }
 
 type thresholdEvent struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// {{soft,cert,next}Threshold, none}
 	T eventType
 
@@ -822,6 +823,7 @@ func (e nextThresholdStatusRequestEvent) ComparableStr() string {
 }
 
 type nextThresholdStatusEvent struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// the result of a nextThresholdStatusRequest. Contains two bits of information,
 	// capturing four cases:
 	// Bottom = false, Proposal = unset/bottom --> received no next value thresholds

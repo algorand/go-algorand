@@ -66,6 +66,8 @@ type router interface {
 }
 
 type rootRouter struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	root         actor    // playerMachine   (not restored: explicitly set on construction)
 	proposalRoot listener // proposalMachine
 	voteRoot     listener // voteMachine
@@ -73,20 +75,24 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[round]*roundRouter
+	Children map[round]*roundRouter `codec:"children,allocbound=-"`
 }
 
 type roundRouter struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	proposalRoot listener // proposalMachineRound
 	voteRoot     listener // voteMachineRound
 
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
 
-	Children map[period]*periodRouter
+	Children map[period]*periodRouter `codec:"children,allocbound=-"`
 }
 
 type periodRouter struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	proposalRoot listener // proposalMachinePeriod
 	voteRoot     listener // voteMachinePeriod
 
@@ -95,10 +101,11 @@ type periodRouter struct {
 
 	ProposalTrackerContract proposalTrackerContract
 
-	Children map[step]*stepRouter
+	Children map[step]*stepRouter `codec:"children,allocbound=-"`
 }
 
 type stepRouter struct {
+	_struct  struct{} `codec:",omitempty,omitemptyarray"`
 	voteRoot listener // voteMachineStep
 
 	VoteTracker voteTracker
