@@ -457,14 +457,14 @@ func (w *worksetBuilder) completed() bool {
 }
 
 type VerificationElement struct {
-	txnGroup []transactions.SignedTxn
-	context  interface{}
+	TxnGroup []transactions.SignedTxn
+	Context  interface{}
 }
 
 type VerificationResult struct {
-	txnGroup []transactions.SignedTxn
-	context  interface{}
-	err      error
+	TxnGroup []transactions.SignedTxn
+	Context  interface{}
+	Err      error
 }
 
 type streamManager struct {
@@ -558,15 +558,15 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw NewBlo
 			case stx := <-stxnChan:
 				timer = time.NewTicker(singelTxnValidationTime / 2)
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
-				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
+				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
 				//TODO: report the error ctx.Err()
 
 				if err != nil {
 					continue
 				}
 				bl.groupCtxs = append(bl.groupCtxs, groupCtx)
-				bl.txnGroups = append(bl.txnGroups, stx.txnGroup)
-				bl.elementContext = append(bl.elementContext, stx.context)
+				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
+				bl.elementContext = append(bl.elementContext, stx.Context)
 				bl.messagesForTxn = append(bl.messagesForTxn, bl.batchVerifier.GetNumberOfEnqueuedSignatures())
 				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
 					// TODO: the limit of 32 should not pass
@@ -675,9 +675,9 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 				result = InvalidSignature
 			}
 			vr := VerificationResult{
-				txnGroup: bl.txnGroups[txgIdx],
-				context:  bl.elementContext[txgIdx],
-				err:      result,
+				TxnGroup: bl.txnGroups[txgIdx],
+				Context:  bl.elementContext[txgIdx],
+				Err:      result,
 			}
 
 			sm.sendOut(vr)

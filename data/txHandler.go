@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	ledgerpkg "github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -66,7 +67,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	streamVerifierChan    chan []transactions.SignedTxn
+	streamVerifierChan    chan<- verify.VerificationElement
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -95,30 +96,30 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	var outChan chan<- VerificationResult
+	var outChan <-chan verify.VerificationResult
 
 
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
-		return network.OutgoingMessage{}, true
+		logging.Base().Fatal("MakeTxHandler: Could not get header for previous block")
+		return nil
 	}
-	nbw := verifier.MakeNewBlockWatcher(latestHdr)
-	handler.ledger.RegisterBlockListeners([]BlockListener{&nbw})
-	handler.streamVerifierChan, outChan = verifier.MakeStream(ctx, handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache)
+	nbw := verify.MakeNewBlockWatcher(latestHdr)
+	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{&nbw})
+	handler.streamVerifierChan, outChan = verify.MakeStream(handler.ctx, handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
 
 	// This goroutine will listen to the results of the handled txn verification and pass them to postVerificationQueue
 	go func() {
 		for {
 			select {
-			case <-cts.Done():
+			case <-handler.ctx.Done():
 				return
 			case result := <-outChan:
-				txBLMsg := result.context.(*txBacklogMsg)
-				txBLMsg.verificationErr = result.err
+				txBLMsg := result.Context.(*txBacklogMsg)
+				txBLMsg.verificationErr = result.Err
 				select {
-				case handler.postVerificationQueue <- tx:
+				case handler.postVerificationQueue <- txBLMsg:
 				default:
 					// we failed to write to the output queue, since the queue was full.
 					// adding the metric here allows us to monitor how frequently it happens.
@@ -181,7 +182,7 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			handler.streamVerifierChan <- verify.VerificationElement{txnGroup: wi.unverifiedTxGroup, context: wi}
+			handler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
 			//			// enqueue the task to the verification pool.
 			//			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
 
