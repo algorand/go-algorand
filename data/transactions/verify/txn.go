@@ -85,7 +85,6 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 	consensusParams, ok := config.Consensus[contextHdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(contextHdr.CurrentProtocol)
-		//		return nil, fmt.Errorf("Unsupported protocol: %w", protocol.Error(contextHdr.CurrentProtocol))
 	}
 	return &GroupContext{
 		specAddrs: transactions.SpecialAddresses{
