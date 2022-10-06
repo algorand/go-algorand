@@ -78,7 +78,6 @@ type TxHandler struct {
 
 	prevRound uint64
 
-	//txRequests   map[transactions.Txid]*requestedTxn
 	txRequests   requestedTxnSet
 	txRequestsMu deadlock.Mutex
 	// TODO: age-out txRequests, remove txids that have been committed more than N (probably 2) rounds ago, remove txns no longer valid range
