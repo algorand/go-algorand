@@ -542,11 +542,12 @@ func TestStreamVerifier(t *testing.T) {
 	numOfTxnGroups := len(txnGroups)
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
-	stxnChan := make(chan VerificationElement, 3)
-	resultChan := make(chan VerificationResult, 3)
 
 	defer cancel()
-	Stream(ctx, cache, nil, stxnChan, resultChan, verificationPool)
+
+	nbw := MakeNewBlockWatcher(blkHdr)
+
+	stxnChan, resultChan := MakeStream(ctx, nil, nbw, verificationPool, cache)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
 
@@ -566,15 +567,15 @@ func TestStreamVerifier(t *testing.T) {
 		for x := 0; x < numOfTxnGroups; x++ {
 			select {
 			case result := <-resultChan:
-				
+
 				if _, has := badTxnGroups[result.txnGroup[0].Sig]; has {
 					delete(badTxnGroups, result.txnGroup[0].Sig)
-					if result.verified {
+					if result.err == nil {
 						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
 						errChan <- err
 					}
 				} else {
-					if !result.verified {
+					if result.err != nil {
 						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
 						errChan <- err
 					}
@@ -592,7 +593,7 @@ func TestStreamVerifier(t *testing.T) {
 			case <-ctx.Done():
 				break
 			default:
-				stxnChan <- VerificationElement{txnGroup: tg, contextHdr: blkHdr}
+				stxnChan <- VerificationElement{txnGroup: tg, context: nil}
 			}
 		}
 	}()

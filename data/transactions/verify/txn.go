@@ -23,12 +23,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -37,6 +40,8 @@ import (
 var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
+
+var InvalidSignature = errors.New("At least one signature didn't pass verification")
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
@@ -79,6 +84,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 	consensusParams, ok := config.Consensus[contextHdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(contextHdr.CurrentProtocol)
+		//		return nil, fmt.Errorf("Unsupported protocol: %w", protocol.Error(contextHdr.CurrentProtocol))
 	}
 	return &GroupContext{
 		specAddrs: transactions.SpecialAddresses{
@@ -477,6 +483,31 @@ type batchLoad struct {
 	messagesForTxn []int
 }
 
+type NewBlockWatcher struct {
+	blkHeader bookkeeping.BlockHeader
+	mu        deadlock.RWMutex
+}
+
+func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw NewBlockWatcher) {
+	nbw = NewBlockWatcher{
+		blkHeader: blkHdr,
+	}
+	return nbw
+}
+func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	if nbw.blkHeader.Round >= block.BlockHeader.Round {
+		return
+	}
+	nbw.mu.Lock()
+	defer nbw.mu.Unlock()
+	nbw.blkHeader = block.BlockHeader
+}
+func (nbw *NewBlockWatcher) getBlockHeader() (bh bookkeeping.BlockHeader) {
+	nbw.mu.RLock()
+	defer nbw.mu.RUnlock()
+	return nbw.blkHeader
+}
+
 func makeBatchLoad() batchLoad {
 	bl := batchLoad{}
 	bl.batchVerifier = crypto.MakeBatchVerifier()
@@ -500,11 +531,11 @@ const internalBufferSize = 25000
 
 //const txnPerWorksetThreshold = 32
 
-func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
-	stxnChan <-chan VerificationElement, resultChan chan<- VerificationResult) {
+func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw NewBlockWatcher, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
+	stxnInput chan<- VerificationElement, resultOtput <-chan VerificationResult) {
 
-	stxnChan = make(<-chan VerificationElement, internalBufferSize)
-	resultChan = make(chan<- VerificationResult)
+	stxnChan := make(chan VerificationElement, internalBufferSize)
+	resultChan := make(chan VerificationResult)
 
 	sm := streamManager{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
@@ -527,7 +558,7 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, verificati
 			case stx := <-stxnChan:
 				timer = time.NewTicker(singelTxnValidationTime / 2)
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
-				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, bookkeeping.BlockHeader{}, ledger, bl.batchVerifier)
+				groupCtx, err := txnGroupBatchPrep(stx.txnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
 				//TODO: report the error ctx.Err()
 
 				if err != nil {
@@ -559,7 +590,7 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, verificati
 			}
 		}
 	}()
-	return
+	return stxnChan, resultChan
 }
 
 func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added bool) {
@@ -636,19 +667,20 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 					failedSigIdx++
 				}
 			}
-			verified := false
+			var result error
 			if !txGroupSigFailed {
 				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
-				verified = true
+			} else {
+				result = InvalidSignature
 			}
 			vr := VerificationResult{
 				txnGroup: bl.txnGroups[txgIdx],
 				context:  bl.elementContext[txgIdx],
-				err:      nil,
+				err:      result,
 			}
 
-			sm.snedOut(vr)
+			sm.sendOut(vr)
 		}
 		// loading them all at once to lock the cache once
 		sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)

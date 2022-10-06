@@ -96,7 +96,17 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	var outChan chan<- VerificationResult
-	handler.streamVerifierChan, outChan = verifier.MakeStream(ctx, handler.ledger, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache)
+
+
+	latest := handler.ledger.Latest()
+	latestHdr, err := handler.ledger.BlockHdr(latest)
+	if err != nil {
+		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
+		return network.OutgoingMessage{}, true
+	}
+	nbw := verifier.MakeNewBlockWatcher(latestHdr)
+	handler.ledger.RegisterBlockListeners([]BlockListener{&nbw})
+	handler.streamVerifierChan, outChan = verifier.MakeStream(ctx, handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache)
 
 	// This goroutine will listen to the results of the handled txn verification and pass them to postVerificationQueue
 	go func() {
