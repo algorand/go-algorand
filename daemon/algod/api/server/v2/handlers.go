@@ -627,6 +627,25 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// GetBlockHash gets the block hash for the given round.
+// (GET /v2/blocks/{round}/hash)
+func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	response := generated.BlockHashResponse{BlockHash: crypto.Digest(block.Hash()).String()}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetTransactionProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid string, params generated.GetTransactionProofParams) error {
