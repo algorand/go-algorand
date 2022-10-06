@@ -577,7 +577,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateMultiSig makes sure that a payment transaction signed with multisig
@@ -599,7 +599,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Msig.Subsigs[0].Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
@@ -682,7 +682,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
@@ -766,7 +766,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
 
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]++
