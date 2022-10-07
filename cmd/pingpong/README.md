@@ -58,4 +58,4 @@ Example:
 
 Note: if you don't set the `--duration` parameter the test will continue running until it's stopped externally.
 
-`pingpong -h` will describe each CLI parameter.
+`pingpong run -h` will describe each CLI parameter.
