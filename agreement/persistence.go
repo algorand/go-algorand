@@ -55,12 +55,8 @@ func persistent(as []action) bool {
 // encode serializes the current state into a byte array.
 func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
 	var s diskState
-	s.Router = protocol.EncodeReflect(rr)
-	s.Player = protocol.EncodeReflect(p)
-	pr := protocol.Encode(&p)
-	mr := protocol.Encode(&rr)
-	fmt.Println(pr)
-	fmt.Println(mr)
+	s.Router = protocol.Encode(&rr)
+	s.Player = protocol.Encode(&p)
 	s.Clock = t.Encode()
 	for _, act := range a {
 		s.ActionTypes = append(s.ActionTypes, act.t())
