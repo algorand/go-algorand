@@ -76,14 +76,14 @@ type TxHandler struct {
 
 	relayMessages bool
 
+	// prevRound atomic set by OnNewBlock
 	prevRound uint64
 
 	txRequests   requestedTxnSet
 	txRequestsMu deadlock.Mutex
-	// TODO: age-out txRequests, remove txids that have been committed more than N (probably 2) rounds ago, remove txns no longer valid range
-	// TODO: keep a prio-heap of open requests sorted by expiration
 
-	// prevTxns is map[transactions.Txid]SignedTxn
+	// prevTxns contains the stxns from the previous block.
+	// The value is map[transactions.Txid]SignedTxn
 	prevTxns atomic.Value
 }
 
@@ -92,11 +92,11 @@ type TxHandler struct {
 // * Until they expire by LastValid. (txPool does this)
 // * Fetch them by txid when requested by a peer
 //
+// We store advertisements of txid:
+// * Until we have the stxn, then it's in the tx pool.
+// * Until the request times out and no other advertising peer is available to query
+//
 // data.Ledger.LookupTxid() is horribly expensive, inflating the entire block's Txns, calculating Txid one by one, and then throwing away the set when done.
-
-// We need to keep track of Txn requests
-// * Until we get the txn data
-// * Or N rounds then give up?
 
 type requestedTxn struct {
 	txid          transactions.Txid
@@ -338,13 +338,10 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 		handler.log.Infof("unable to pin transaction: %v", err)
 	}
 
-	// TODO: at this point we need to either send TX data or Ta txid advertisement depending on what protocol the peer is
-	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-	// handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 	if handler.relayMessages {
 		err = TxnBroadcast(handler.ctx, handler.net, verifiedTxGroup, wi.rawmsg.Sender)
 		if err != nil {
-			handler.log.Infof("unable to pin transaction: %v", err)
+			handler.log.Infof("txn relay err: %v", err)
 		}
 	}
 }
@@ -370,13 +367,10 @@ func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 			// TODO: this logic needs to change before network.ProtocolVersion advances beyond "3"
 			out = &tx3Data{enabled: true}
 			net.SetPeerData(npeer, peerTxn2Key, out)
-			logging.Base().Infof("peer %p is version 3!", peer)
 			return out
-		} else {
-			logging.Base().Infof("peer %p is version %s", peer, version)
 		}
 	} else {
-		logging.Base().Infof("peer %p is not UnicastPeer", peer)
+		logging.Base().Infof("peer %p is not UnicastPeer (this should never happen)", peer)
 	}
 	out = &tx3Data{enabled: false}
 	net.SetPeerData(npeer, peerTxn2Key, out)
@@ -401,12 +395,13 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 		}
 		peer, ok := npeer.(network.UnicastPeer)
 		if !ok {
-			logging.Base().Info("peer is not UnicastPeer")
+			logging.Base().Info("peer is not UnicastPeer (this should never happen)")
 			continue
 		}
 		txpd := tx3Check(net, npeer)
 		if txpd.enabled {
 			// tx3 protocol
+			// avertise the txid, but don't send full txn data yet
 			if txid == nil {
 				for i := range verifiedTxGroup {
 					id := verifiedTxGroup[i].ID()
@@ -418,6 +413,7 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 		} else {
 			// not a tx3 protocol client, broadcast txn
 			if blob == nil {
+				// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
 				blob = reencode(verifiedTxGroup)
 			}
 			err = peer.Unicast(ctx, blob, protocol.TxnTag)
@@ -531,7 +527,6 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 			req = new(requestedTxn)
 			req.txid = txid
 			req.requestedAt = now
-			//req.LastValid = basics.Round(handler.prevRound + 1000)
 			handler.txRequests.add(req)
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 		} else {
@@ -558,6 +553,8 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 	return network.OutgoingMessage{}
 }
 
+// retryHandler thread retries txn requests that waited too long
+// watches heap of requstedTxn inside TxHandler.txRequests heap sorted on (requestedAt time.Time)
 func (handler *TxHandler) retryHandler() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer handler.backlogWg.Done()
@@ -571,6 +568,8 @@ func (handler *TxHandler) retryHandler() {
 		}
 	}
 }
+
+// retryHandlerTick gets a list of requests to send then Unicast sends them
 func (handler *TxHandler) retryHandlerTick(now time.Time) {
 	toRequest := handler.retryHandlerTickRequestList(now)
 	if len(toRequest) == 0 {
@@ -588,6 +587,8 @@ func (handler *TxHandler) retryHandlerTick(now time.Time) {
 		}
 	}
 }
+
+// retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
 func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
 	handler.txRequestsMu.Lock()
 	defer handler.txRequestsMu.Unlock()
@@ -600,14 +601,15 @@ func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest 
 		var nextSource network.Peer
 		// find a peer that has advertised it who we haven't asked yet
 		for _, source := range req.advertisedBy {
-			found := false
+			alreadyAsked := false
 			for _, prevReq := range req.requestedFrom {
+				// skip source we already asked
 				if prevReq == source {
-					found = true
+					alreadyAsked = true
 					break
 				}
 			}
-			if !found {
+			if !alreadyAsked {
 				nextSource = source
 				break
 			}
@@ -621,6 +623,7 @@ func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest 
 			req.requestedFrom = append(req.requestedFrom, nextSource)
 			heap.Fix(&handler.txRequests, 0)
 		} else {
+			// no next source, nothing to do, forget this request, a new advertisement will trigger a new request
 			heap.Pop(&handler.txRequests)
 			delete(handler.txRequests.byTxid, req.txid)
 		}
@@ -680,9 +683,9 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 			handler.log.Errorf("Tr res err, %v", err)
 		}
 	}
-	// TODO: add NACK message to protocol so they can ask another node?
-	// But really, this should never happen. We advertised it. We should have it. (Unless it just got committed to a block?) ((TODO: search most recent block for txn by txid?))
-	//handler.log.Error("request for txid we don't have: %s", txid.String())
+	// Maybe add NACK message to protocol so they can ask another node?
+	// But really, this should never happen. We advertised it. We should have it.
+	handler.log.Error("request for txid we don't have: %s", txid.String())
 	return network.OutgoingMessage{}
 }
 

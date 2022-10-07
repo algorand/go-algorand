@@ -517,19 +517,6 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
-	// var enc []byte
-	// var txids []transactions.Txid
-	// for _, tx := range txgroup {
-	// 	enc = append(enc, protocol.Encode(&tx)...)
-	// 	txids = append(txids, tx.ID())
-	// }
-	// err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
-	// if err != nil {
-	// 	node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
-	// 	return err
-	// }
-	// node.log.Infof("Sent signed tx group with IDs %v", txids)
-	// return nil
 	return data.TxnBroadcast(context.TODO(), node.net, txgroup, nil)
 }
 
