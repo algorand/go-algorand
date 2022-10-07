@@ -221,6 +221,10 @@ func (mmh *messageMatcherHandler) Match() bool {
 	if len(mmh.target) != len(mmh.received) {
 		return false
 	}
+
+	sort.Slice(mmh.target, func(i, j int) bool { return bytes.Compare(mmh.target[i], mmh.target[j]) == -1 })
+	sort.Slice(mmh.received, func(i, j int) bool { return bytes.Compare(mmh.received[i], mmh.received[j]) == -1 })
+
 	for i := 0; i < len(mmh.target); i++ {
 		if !bytes.Equal(mmh.target[i], mmh.received[i]) {
 			return false
@@ -299,43 +303,76 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	messages := [][]byte{
-		[]byte("foo"),
-		[]byte("bar"),
-	}
-	matcher := newMessageMatcher(t, messages)
-	counterDone := matcher.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
-
-	for _, msg := range messages {
-		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+	type testDef struct {
+		netASupProto []string
+		netAProto    string
+		netBSupProto []string
+		netBProto    string
 	}
 
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", len(matcher.received))
+	var tests []testDef = []testDef{
+		// two old nodes
+		{[]string{"2.1"}, "2.1", []string{"2.1"}, "2.1"},
+
+		// two new nodes with overwritten config
+		{[]string{"2.2"}, "2.2", []string{"2.2"}, "2.2"},
+
+		// old node + new node
+		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.1"}, "2.1"},
+
+		// combinations
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.2"},
 	}
 
-	require.True(t, matcher.Match())
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_%s(%s)+B_%s(%s)", test.netASupProto, test.netAProto, test.netBSupProto, test.netBProto), func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.GossipFanout = 1
+			netA.protocolVersion = test.netAProto
+			netA.supportedProtocolVersions = test.netASupProto
+			netA.Start()
+			defer netStop(t, netA, "A")
+			netB := makeTestWebsocketNode(t)
+			netB.config.GossipFanout = 1
+			netB.protocolVersion = test.netBProto
+			netA.supportedProtocolVersions = test.netBSupProto
+			addrA, postListen := netA.Address()
+			require.True(t, postListen)
+			t.Log(addrA)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+			netB.Start()
+			defer netStop(t, netB, "B")
+			messages := [][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+			}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
+
+			readyTimeout := time.NewTimer(2 * time.Second)
+			waitReady(t, netA, readyTimeout.C)
+			t.Log("a ready")
+			waitReady(t, netB, readyTimeout.C)
+			t.Log("b ready")
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+		})
+	}
 }
 
 // Repeat basic, but test a unicast
@@ -1670,23 +1707,17 @@ func TestSetUserAgentHeader(t *testing.T) {
 func TestCheckProtocolVersionMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// note - this test changes the SupportedProtocolVersions global variable ( SupportedProtocolVersions ) and therefore cannot be parallelized.
-	originalSupportedProtocolVersions := SupportedProtocolVersions
-	defer func() {
-		SupportedProtocolVersions = originalSupportedProtocolVersions
-	}()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    defaultConfig,
-		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
-		NetworkID: config.Devtestnet,
+		log:                       log,
+		config:                    defaultConfig,
+		phonebook:                 MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:                 "go-test-network-genesis",
+		NetworkID:                 config.Devtestnet,
+		supportedProtocolVersions: []string{"2", "1"},
 	}
 	wn.setup()
-
-	SupportedProtocolVersions = []string{"2", "1"}
 
 	header1 := make(http.Header)
 	header1.Add(ProtocolAcceptVersionHeader, "1")

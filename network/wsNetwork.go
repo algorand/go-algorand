@@ -387,7 +387,7 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu syncronized the access to lastNetworkAdvance
+	// lastNetworkAdvanceMu synchronized the access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
 
 	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
@@ -431,6 +431,13 @@ type WebsocketNetwork struct {
 
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
+
+	// supportedProtocolVersions defines versions supported by this network.
+	// Should be used instead of a global network.SupportedProtocolVersions for network/peers configuration
+	supportedProtocolVersions []string
+
+	// protocolVersion is an actual version announced as ProtocolVersionHeader
+	protocolVersion string
 }
 
 const (
@@ -761,9 +768,15 @@ func (wn *WebsocketNetwork) setup() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
 
+	// set our supported versions
 	if wn.config.NetworkProtocolVersion != "" {
-		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
+		wn.supportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
+	} else {
+		wn.supportedProtocolVersions = SupportedProtocolVersions
 	}
+
+	// set our actual version
+	wn.protocolVersion = ProtocolVersion
 
 	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
@@ -931,7 +944,7 @@ func (wn *WebsocketNetwork) setHeaders(header http.Header) {
 func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
 	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
 	if matchingVersion == "" {
-		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)))
+		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, wn.supportedProtocolVersions, otherVersion, otherHeader)))
 		return false, ""
 	}
 	otherRandom := otherHeader.Get(NodeRandomHeader)
@@ -1004,7 +1017,7 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		for _, supportedProtocolVersion := range SupportedProtocolVersions {
+		for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
 			if supportedProtocolVersion == otherAcceptedVersion {
 				matchingVersion = supportedProtocolVersion
 				return matchingVersion, ""
@@ -1013,7 +1026,7 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
 		if supportedProtocolVersion == otherVersion {
 			return supportedProtocolVersion, otherVersion
 		}
@@ -1098,10 +1111,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
 	if matchingVersion == "" {
-		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, SupportedProtocolVersions, otherVersion, request.Header)))
+		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, wn.supportedProtocolVersions, otherVersion, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
 		response.WriteHeader(http.StatusPreconditionFailed)
-		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", filterASCII(otherVersion), SupportedProtocolVersions)
+		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", filterASCII(otherVersion), wn.supportedProtocolVersions)
 		n, err := response.Write([]byte(message))
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
@@ -2079,11 +2092,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	defer wn.wg.Done()
 	requestHeader := make(http.Header)
 	wn.setHeaders(requestHeader)
-	for _, supportedProtocolVersion := range SupportedProtocolVersions {
+	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 	// for backward compatibility, include the ProtocolVersion header as well.
-	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
+	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
@@ -2098,7 +2111,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
-			// reading here from ioutil is safe only because it came from DialContext above, which alredy finsihed reading all the data from the network
+			// reading here from ioutil is safe only because it came from DialContext above, which already finished reading all the data from the network
 			// and placed it all in a ioutil.NopCloser reader.
 			bodyBytes, _ := io.ReadAll(response.Body)
 			errString := string(bodyBytes)

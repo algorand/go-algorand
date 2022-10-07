@@ -480,9 +480,6 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
-		if msg.Tag == protocol.ProposalPayloadTag {
-			fmt.Printf("%v\n", msg.Data)
-		}
 		if msg.Tag == protocol.ProposalPayloadTag &&
 			wp.features&vfCompressedProposal != 0 &&
 			len(msg.Data) > 4 &&
