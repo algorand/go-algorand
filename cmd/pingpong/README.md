@@ -1,7 +1,7 @@
 # PingPong usage
 
 In order to run PingPong locally, an Algorand network must be available. It's
-sufficient to set it up using `goal network create -r {data directory} -r {network template json file}`.
+sufficient to set it up using `goal network create -r {data directory} -t {network template json file}`.
 The `-r` tells `goal` where to set up a directory for the local network data and `-t` describes the network
 to be created.
 
@@ -56,6 +56,6 @@ Now you should be able to run PingPong on your local machine.
 Example:
 `pingpong run -d {node data directory} --numapp 10 --numboxread 4 --tps 200 --refresh 1800 --numaccounts 500 --duration 120`
 
-Note: if you don't set the `--duration` paramter the test will continue running until its stopped externally.
+Note: if you don't set the `--duration` parameter the test will continue running until it's stopped externally.
 
 `pingpong -h` will describe each CLI parameter.
