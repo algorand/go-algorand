@@ -154,7 +154,7 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 			}
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		failed, err := bv.VerifyWithFeedback()
 		if hasBadSig {
 			require.ErrorIs(t, err, ErrBatchVerificationFailed)
@@ -162,69 +162,6 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 			require.NoError(t, err)
 		}
 		require.Equal(t, len(badSigs), len(failed))
-		for i := range badSigs {
-			require.Equal(t, badSigs[i], failed[i])
-		}
-	}
-}
-
-// TestBatchVerifierIndividualResultsAllValid tests that VerifyWithFeedback
-// returns the correct failed signature indexes when all are valid
-func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for i := 1; i < 64*2+3; i++ {
-		n := i
-		bv := MakeBatchVerifierWithHint(n)
-		var s Seed
-		for i := 0; i < n; i++ {
-			msg := randString()
-			RandBytes(s[:])
-			sigSecrets := GenerateSignatureSecrets(s)
-			sig := sigSecrets.Sign(msg)
-			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-		}
-		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
-		failed, err := bv.VerifyWithFeedback()
-		require.NoError(t, err)
-		require.Equal(t, bv.getNumberOfEnqueuedSignatures(), len(failed))
-		for _, f := range failed {
-			require.False(t, f)
-		}
-	}
-}
-
-// TestBatchVerifierIndividualResults tests that VerifyWithFeedback
-// returns the correct failed signature indexes
-func TestBatchVerifierIndividualResults(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for i := 1; i < 64*2+3; i++ {
-		n := i
-		bv := MakeBatchVerifierWithHint(n)
-		var s Seed
-		badSigs := make([]bool, n, n)
-		hasBadSig := false
-		for i := 0; i < n; i++ {
-			msg := randString()
-			RandBytes(s[:])
-			sigSecrets := GenerateSignatureSecrets(s)
-			sig := sigSecrets.Sign(msg)
-			if rand.Float32() > 0.5 {
-				// make a bad sig
-				sig[0] = sig[0] + 1
-				badSigs[i] = true
-				hasBadSig = true
-			}
-			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-		}
-		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
-		failed, err := bv.VerifyWithFeedback()
-		if hasBadSig {
-			require.Error(t, err)
-		} else {
-			require.NoError(t, err)
-		}
 		for i := range badSigs {
 			require.Equal(t, badSigs[i], failed[i])
 		}
