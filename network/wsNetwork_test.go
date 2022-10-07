@@ -202,12 +202,17 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 }
 
 type messageMatcherHandler struct {
+	lock deadlock.Mutex
+
 	target   [][]byte
 	received [][]byte
 	done     chan struct{}
 }
 
 func (mmh *messageMatcherHandler) Handle(message IncomingMessage) OutgoingMessage {
+	mmh.lock.Lock()
+	defer mmh.lock.Unlock()
+
 	mmh.received = append(mmh.received, message.Data)
 	if len(mmh.target) > 0 && mmh.done != nil && len(mmh.received) >= len(mmh.target) {
 		close(mmh.done)
@@ -1710,14 +1715,14 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:                       log,
-		config:                    defaultConfig,
-		phonebook:                 MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:                 "go-test-network-genesis",
-		NetworkID:                 config.Devtestnet,
-		supportedProtocolVersions: []string{"2", "1"},
+		log:       log,
+		config:    defaultConfig,
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
+		GenesisID: "go-test-network-genesis",
+		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
+	wn.supportedProtocolVersions = []string{"2", "1"}
 
 	header1 := make(http.Header)
 	header1.Add(ProtocolAcceptVersionHeader, "1")

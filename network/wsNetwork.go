@@ -1492,10 +1492,8 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	digests := make([]crypto.Digest, len(request.data))
 	data := make([][]byte, len(request.data))
 	var dataCompressed [][]byte
-	var digestsCompressed []crypto.Digest
 	if needCompressedData {
 		dataCompressed = make([][]byte, len(request.data))
-		digestsCompressed = make([]crypto.Digest, len(request.data))
 	}
 	for i, d := range request.data {
 		tbytes := []byte(request.tags[i])
@@ -1515,9 +1513,6 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 				// otherwise reuse non-compressed from above
 				dataCompressed[i] = mbytes
 			}
-			if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
-				digestsCompressed[i] = crypto.Hash(dataCompressed[i])
-			}
 		}
 	}
 
@@ -1532,7 +1527,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		}
 		var ok bool
 		if peer.features&vfCompressedProposal != 0 && needCompressedData {
-			ok = peer.writeNonBlockMsgs(request.ctx, dataCompressed, prio, digestsCompressed, request.enqueueTime)
+			ok = peer.writeNonBlockMsgs(request.ctx, dataCompressed, prio, digests, request.enqueueTime)
 		} else {
 			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		}
