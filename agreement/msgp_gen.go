@@ -9340,7 +9340,7 @@ func (z *proposalStore) MarshalMsg(b []byte) (o []byte) {
 			for zb0003 := range (*z).Assemblers {
 				zb0003_keys = append(zb0003_keys, zb0003)
 			}
-			sort.Sort((zb0003_keys))
+			sort.Sort(SortProposalValue(zb0003_keys))
 			for _, zb0003 := range zb0003_keys {
 				zb0004 := (*z).Assemblers[zb0003]
 				_ = zb0004
@@ -15940,7 +15940,7 @@ func (z *voteTracker) MarshalMsg(b []byte) (o []byte) {
 			for zb0003 := range (*z).Counts {
 				zb0003_keys = append(zb0003_keys, zb0003)
 			}
-			sort.Sort((zb0003_keys))
+			sort.Sort(SortProposalValue(zb0003_keys))
 			for _, zb0003 := range zb0003_keys {
 				zb0004 := (*z).Counts[zb0003]
 				_ = zb0004

@@ -65,13 +65,6 @@ type action interface {
 	do(context.Context, *Service)
 
 	String() string
-
-	// MarshalMsg(interface{}) []byte
-	// CanMarshalMsg(interface{}) bool
-	// UnmarshalMsg(interface{}) []byte
-	// CanUnmarshalMsg(interface{}) bool
-	// Msgsize(interface{}) int
-	// MsgIsZero(interface{}) bool
 }
 
 type nonpersistent struct{}
