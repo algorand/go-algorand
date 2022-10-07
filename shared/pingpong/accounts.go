@@ -461,7 +461,67 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return ops.Program
 }
 
-func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
+	if numBoxUpdate != 0 || numBoxRead != 0 {
+		prologue := `#pragma version 8
+			txn ApplicationID
+			bz done
+		`
+		createBoxes := `
+			byte "%d"
+			int 1024
+			box_create
+			pop
+		`
+		updateBoxes := `
+			byte "%d"
+			int 0
+			byte "1"
+			box_replace
+		`
+		getBoxes := `
+			byte "%d"
+			box_get
+			assert
+			pop
+		`
+		done := `
+			done:
+			int 1
+			return
+		`
+
+		progParts := []string{prologue}
+
+		// note: only one of numBoxUpdate or numBoxRead should be nonzero
+		if numBoxUpdate != 0 {
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
+			}
+		} else {
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(getBoxes, i))
+			}
+		}
+		progParts = append(progParts, done)
+
+		// assemble
+		progAsm := strings.Join(progParts, "\n")
+		ops, err := logic.AssembleString(progAsm)
+		if err != nil {
+			panic(err)
+		}
+		return ops.Program, progAsm
+	}
+
 	prologueSize := uint32(2 + 3 + 2 + 1 + 1 + 3)
 	prologue := `#pragma version 2
 		txn ApplicationID
@@ -776,12 +836,21 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		//txgroup = txgroup[:0]
 		//senders = senders[:0]
 	}
+
+	for appid := range pps.cinfo.AppParams {
+		// use source account to fund all apps
+		err = pps.appFundFromSourceAccount(appid, client)
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 
 func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transactions.Transaction, err error) {
 	// generate app program with roughly some number of operations
-	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys)
+	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys, pps.cfg.NumBoxUpdate, pps.cfg.NumBoxRead)
 	if !pps.cfg.Quiet {
 		fmt.Printf("generated program: \n%s\n", asm)
 	}
@@ -824,6 +893,35 @@ func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Clie
 	// Ensure different txids
 	tx.Note = pps.makeNextUniqueNoteField()
 	return
+}
+
+func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.Client) (err error) {
+	// currently, apps only need to be funded if boxes are used
+	if pps.getNumBoxes() > 0 {
+		var srcFunds uint64
+		srcFunds, err = client.GetBalance(pps.cfg.SrcAccount)
+		if err != nil {
+			return err
+		}
+
+		appAddr := basics.AppIndex(appID).Address()
+		mbr := proto.MinBalance +
+			proto.BoxFlatMinBalance*uint64(pps.getNumBoxes()) +
+			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())
+
+		pps.schedule(1)
+		var txn transactions.Transaction
+		txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, pps.accounts[pps.cfg.SrcAccount])
+		if err != nil {
+			return err
+		}
+
+		srcFunds -= mbr
+		srcFunds -= txn.Fee.Raw
+		pps.accounts[pps.cfg.SrcAccount].setBalance(srcFunds)
+	}
+
+	return nil
 }
 
 func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
