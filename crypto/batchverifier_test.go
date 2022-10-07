@@ -157,7 +157,7 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		failed, err := bv.VerifyWithFeedback()
 		if hasBadSig {
-			require.ErrorIs(t, err, ErrBatchVerificationFailed)
+			require.ErrorIs(t, err, ErrBatchHasFailedSigs)
 		} else {
 			require.NoError(t, err)
 		}
