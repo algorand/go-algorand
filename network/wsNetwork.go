@@ -1162,8 +1162,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	peers.Set(float64(wn.NumPeers()), nil)
-	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
+	peers.Set(float64(wn.NumPeers()))
+	incomingPeers.Set(float64(wn.numIncomingPeers()))
 }
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
@@ -2104,8 +2104,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	peers.Set(float64(wn.NumPeers()), nil)
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
+	peers.Set(float64(wn.NumPeers()))
+	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
 
 	if wn.prioScheme != nil {
 		challenge := response.Header.Get(PriorityChallengeHeader)
@@ -2218,9 +2218,9 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			Reason:           string(reason),
 		})
 
-	peers.Set(float64(wn.NumPeers()), nil)
-	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
+	peers.Set(float64(wn.NumPeers()))
+	incomingPeers.Set(float64(wn.numIncomingPeers()))
+	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
 
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
@@ -2285,8 +2285,8 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 			numIn++
 		}
 	}
-	networkIncomingConnections.Set(float64(numIn), nil)
-	networkOutgoingConnections.Set(float64(numOut), nil)
+	networkIncomingConnections.Set(float64(numIn))
+	networkOutgoingConnections.Set(float64(numOut))
 }
 
 func justHost(hostPort string) string {
