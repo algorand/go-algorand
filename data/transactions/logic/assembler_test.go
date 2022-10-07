@@ -407,7 +407,17 @@ switch_label1:
 pushint 1
 `
 
-const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense
+const matchNonsense = `
+match_label0:
+pushint 1
+pushint 2
+pushint 1
+match match_label0 match_label1
+match_label1:
+pushint 1
+`
+
+const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense
 
 const v9Nonsense = v8Nonsense + pairingNonsense
 
@@ -419,8 +429,9 @@ const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988
 	randomnessCompiled + "800243218001775c0280018881015d"
 
 const switchCompiled = "81018d02fff800008101"
+const matchCompiled = "8101810281018e02fff400008101"
 
-const v8Compiled = v7Compiled + switchCompiled + frameCompiled
+const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled
 
 const v9Compiled = v7Compiled + pairingCompiled
 
@@ -2886,6 +2897,81 @@ int 1
 	source = `
 	pushint 1
 	switch label1 label1
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion)
+}
+
+func TestAssembleMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// fail when target doesn't correspond to existing label
+	source := `
+	pushint 1
+	pushint 1
+	pushint 1
+	match label1 label2
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion, NewExpect(5, "reference to undefined label \"label2\""))
+
+	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
+	testProg(t, `
+int 0
+match
+int 1
+`, AssemblerMaxVersion)
+
+	// confirm arg limit
+	source = `
+	pushint 1
+	pushint 2
+	pushint 1
+	match label1 label2
+	label1:
+	label2:
+	`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 13) // ver (1) + pushints (6) + opcode (1) + length (1) + labels (2*2)
+
+	// confirm byte array args are assembled successfully
+	source = `
+	pushbytes "1"
+	pushbytes "2"
+	pushbytes "1"
+	match label1 label2
+	label1:
+	label2:
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	var labels []string
+	for i := 0; i < 255; i++ {
+		labels = append(labels, fmt.Sprintf("label%d", i))
+	}
+
+	// test that 255 labels is ok
+	source = fmt.Sprintf(`
+	pushint 1
+	match %s
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+
+	// 256 is too many
+	source = fmt.Sprintf(`
+	pushint 1
+	match %s extra
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "match cannot take more than 255 labels"})
+
+	// allow duplicate label reference
+	source = `
+	pushint 1
+	match label1 label1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)

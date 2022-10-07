@@ -601,6 +601,7 @@ Account fields used in the `acct_params_get` opcode.
 | `proto a r` | Prepare top call frame for a retsub that will assume A args and R return values. |
 | `retsub` | pop the top instruction from the call stack and branch to it |
 | `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
+| `match target ...` | construct a list of match cases from B_1 to B_N and branch to the Ith label where B_I = A. Continue to the following instruction if no matches are found. |
 
 ### State Access
 

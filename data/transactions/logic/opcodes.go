@@ -563,7 +563,7 @@ var OpSpecs = []OpSpec{
 	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
 	{0x8c, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	// 0x8e will likely be a switch on pairs of values/targets, called `match`
+	{0x8e, "match", opMatch, proto(":", "[N items]", ""), 8, detSwitch()},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},

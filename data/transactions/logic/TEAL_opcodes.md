@@ -1104,6 +1104,15 @@ Fails unless the last instruction executed was a `callsub`.
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
 - Availability: v8
 
+## match target ...
+
+- Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., [N items] &rarr; ...
+- construct a list of match cases from B_1 to B_N and branch to the Ith label where B_I = A. Continue to the following instruction if no matches are found.
+- Availability: v8
+
+`match` consumes N+1 values from the stack. Let the top stack value be A. The following N values represent an ordered list of match cases/constants (B), where the first value (B[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (L). `match` will branch to the L[I], where B[I] = A. If there are no matches then execution continues on to the next instruction.
+
 ## shl
 
 - Opcode: 0x90

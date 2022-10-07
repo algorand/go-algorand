@@ -5691,3 +5691,110 @@ int 88
 switch done1 done2; done1: ; done2: ;
 `, 8)
 }
+
+func TestMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// take the 0th label with int cases
+	testAccepts(t, `
+int 0
+int 1
+int 0
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 0th label with bytes cases
+	testAccepts(t, `
+bytes "0"
+bytes "1"
+bytes "0"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label with int cases
+	testRejects(t, `
+int 0
+int 1
+int 1
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label with bytes cases
+	testRejects(t, `
+bytes "0"
+bytes "1"
+bytes "1"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// same, but jumping to end of program
+	testAccepts(t, `
+int 0; int 1; int 1
+match zero one
+zero: err
+one:
+`, 8)
+
+	// no match
+	testAccepts(t, `
+int 2
+switch zero one
+int 1; return					// falls through to here
+zero: int 0; return
+one:  int 0; return
+`, 8)
+
+	// jump forward and backward
+	testAccepts(t, `
+int 0
+start:
+int 1
++
+dup
+int 1
+-
+switch start end
+err
+end:
+int 2
+==
+assert
+int 1
+`, 8)
+
+	// 0 labels are allowed, but weird!
+	testAccepts(t, `
+int 0
+switch
+int 1
+`, 8)
+
+	testPanics(t, notrack("switch; int 1"), 8)
+
+	// make the switch the final instruction
+	testAccepts(t, `
+int 1
+int 0
+switch done1 done2; done1: ; done2: ;
+`, 8)
+
+	// make the switch the final instruction, and don't match
+	testAccepts(t, `
+int 1
+int 88
+switch done1 done2; done1: ; done2: ;
+`, 8)
+}

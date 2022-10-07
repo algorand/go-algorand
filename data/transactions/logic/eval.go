@@ -2119,6 +2119,49 @@ func opSwitch(cx *EvalContext) error {
 	return nil
 }
 
+func opMatch(cx *EvalContext) error {
+	n := int(cx.program[cx.pc+1])
+	// stack contains the n sized match list and the single match value
+	if n+1 > len(cx.stack) {
+		return fmt.Errorf("match expects %d stack args while stack only contains %d", n+1, len(cx.stack))
+	}
+
+	top := len(cx.stack) - 1
+	matchVal := cx.stack[top]
+	cx.stack = cx.stack[:top]
+
+	top = len(cx.stack) - n
+	matchList := cx.stack[top:]
+	cx.stack = cx.stack[:top]
+
+	// first we must verify that the matchList has the expected length and all types match the type of matchVal
+	if len(matchList) != n {
+		return fmt.Errorf("list of match constants has length %d when length %d was expected", len(matchList), n)
+	}
+
+	matchedIdx := n
+	for i, stackArg := range matchList {
+		if stackArg.argType() != matchVal.argType() {
+			return fmt.Errorf("match constant at position %d type: %s != %s", i, stackArg.argType().String(), matchVal.argType().String())
+		}
+
+		if matchVal.argType() == StackBytes && string(matchVal.Bytes) == string(stackArg.Bytes) {
+			matchedIdx = i
+			break
+		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+			matchedIdx = i
+			break
+		}
+	}
+
+	target, err := switchTarget(cx, uint64(matchedIdx))
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
 const protoByte = 0x8a
 
 func opCallSub(cx *EvalContext) error {
