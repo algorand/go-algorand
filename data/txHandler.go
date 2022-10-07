@@ -270,7 +270,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 		for i := range tx.unverifiedTxGroup {
 			txids[i] = tx.unverifiedTxGroup[i].ID()
 		}
-		logging.Base().Debugf("got a tx group with IDs %v", txids)
+		//logging.Base().Debugf("got a tx group with IDs %v", txids)
 	}
 
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
