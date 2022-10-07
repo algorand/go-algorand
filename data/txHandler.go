@@ -96,8 +96,9 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	var outChan <-chan verify.VerificationResult
 
+	// prepare the transaction stream verifer
+	var outChan <-chan verify.VerificationResult
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
@@ -106,28 +107,30 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 	nbw := verify.MakeNewBlockWatcher(latestHdr)
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	handler.streamVerifierChan, outChan = verify.MakeStream(handler.ctx, handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	handler.streamVerifierChan, outChan = verify.MakeStream(handler.ctx,
+		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	go processTxnStreamVerResults(handler.ctx, outChan, handler.postVerificationQueue)
+	return handler
+}
 
-	// This goroutine will listen to the results of the handled txn verification and pass them to postVerificationQueue
-	go func() {
-		for {
+func processTxnStreamVerResults(ctx context.Context, outChan <-chan verify.VerificationResult,
+	postVerificationQueue chan *txBacklogMsg) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result := <-outChan:
+			txBLMsg := result.Context.(*txBacklogMsg)
+			txBLMsg.verificationErr = result.Err
 			select {
-			case <-handler.ctx.Done():
-				return
-			case result := <-outChan:
-				txBLMsg := result.Context.(*txBacklogMsg)
-				txBLMsg.verificationErr = result.Err
-				select {
-				case handler.postVerificationQueue <- txBLMsg:
-				default:
-					// we failed to write to the output queue, since the queue was full.
-					// adding the metric here allows us to monitor how frequently it happens.
-					transactionMessagesDroppedFromPool.Inc(nil)
-				}
+			case postVerificationQueue <- txBLMsg:
+			default:
+				// we failed to write to the output queue, since the queue was full.
+				// adding the metric here allows us to monitor how frequently it happens.
+				transactionMessagesDroppedFromPool.Inc(nil)
 			}
 		}
-	}()
-	return handler
+	}
 }
 
 // Start enables the processing of incoming messages at the transaction handler
@@ -182,8 +185,6 @@ func (handler *TxHandler) backlogWorker() {
 			}
 
 			handler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
-			//			// enqueue the task to the verification pool.
-			//			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
