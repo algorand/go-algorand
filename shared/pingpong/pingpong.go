@@ -900,11 +900,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee uint64, client *libgoa
 	}
 	target -= pps.cfg.WeightAsset
 	if target < pps.cfg.WeightApp && pps.cfg.NumApp > 0 {
-		var boxRefs []transactions.BoxRef
-		for i := uint32(0); i < pps.getNumBoxes(); i++ {
-			boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
-		}
-		txn, sender, update, err = pps.constructAppTxn(from, to, fee, client, noteField, lease, boxRefs)
+		txn, sender, update, err = pps.constructAppTxn(from, to, fee, client, noteField, lease)
 		if err != errNotOptedIn {
 			goto weightdone
 		}
@@ -1106,7 +1102,7 @@ func (au *assetUpdate) apply(pps *WorkerState) {
 	to.holdings[au.aidx] += au.amt
 }
 
-func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte, boxRefs []transactions.BoxRef) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select opted-in accounts for Txn.Accounts field
 	var accounts []string
 	aidx := pps.randAppID()
@@ -1114,6 +1110,13 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		err = fmt.Errorf("no known apps")
 		return
 	}
+
+	// construct box ref array
+	var boxRefs []transactions.BoxRef
+	for i := uint32(0); i < pps.getNumBoxes(); i++ {
+		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+	}
+
 	appOptIns := pps.cinfo.OptIns[aidx]
 	sender = from
 	if len(appOptIns) > 0 {
