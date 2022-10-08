@@ -535,8 +535,9 @@ func makeBatchLoad() batchLoad {
 // [validation time added to the group by one more txn] = [validation time of a single txn] / 2
 // This gives us:
 // [wait time] <= [validation time of a single txn] / 2
-const singelTxnValidationTime = 100 * time.Millisecond
-const numberOfExecPoolSeats = 8
+const waitForNextTxnDuration = 50 * time.Millisecond
+const waitForFirstTxnDuration = 2000 * time.Millisecond
+const numberOfExecPoolSeats = 64
 
 // internalBufferSize is the size of the chan that will hold the arriving stxns before they get pre-processed
 const internalBufferSize = 25000
@@ -566,39 +567,74 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBl
 		}
 
 		bl := makeBatchLoad()
-		timer := time.NewTicker(singelTxnValidationTime / 2)
+		timer := time.NewTicker(waitForFirstTxnDuration)
 		var added bool
 		for {
 			select {
 			case stx := <-stxnChan:
-				timer = time.NewTicker(singelTxnValidationTime / 2)
+				isFirstInBatch := bl.batchVerifier.GetNumberOfEnqueuedSignatures() == 0
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
 				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
 				//TODO: report the error ctx.Err()
 
 				if err != nil {
+					// verification failed. can return here
+					vr := VerificationResult{
+						TxnGroup: stx.TxnGroup,
+						Context:  stx.Context,
+						Err:      err,
+					}
+					sm.sendOut(vr)
 					continue
 				}
+
+				numEnqueued := bl.batchVerifier.GetNumberOfEnqueuedSignatures()
+				// if nothing is added to the batch, then the txngroup can be returned here
+				if numEnqueued == 0 ||
+					(len(bl.messagesForTxn) > 0 && numEnqueued == bl.messagesForTxn[len(bl.messagesForTxn)-1]) {
+					vr := VerificationResult{
+						TxnGroup: stx.TxnGroup,
+						Context:  stx.Context,
+						Err:      err,
+					}
+					sm.sendOut(vr)
+					continue
+				}
+
 				bl.groupCtxs = append(bl.groupCtxs, groupCtx)
 				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
 				bl.elementContext = append(bl.elementContext, stx.Context)
-				bl.messagesForTxn = append(bl.messagesForTxn, bl.batchVerifier.GetNumberOfEnqueuedSignatures())
+				bl.messagesForTxn = append(bl.messagesForTxn, numEnqueued)
 				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
 					// TODO: the limit of 32 should not pass
-					timer, added = sm.processBatch(bl)
-					if added {
-						bl = makeBatchLoad()
+					err := sm.processFullBatch(bl)
+					if err != nil {
+						fmt.Println(err)
+					}
+					bl = makeBatchLoad()
+					// starting a new batch. Can wait long, since nothing is blocked
+					timer.Reset(waitForFirstTxnDuration)
+				} else {
+					// the batch is not full, can wait for some more
+					if isFirstInBatch {
+						// reset the timer only when a new batch started
+						timer.Reset(waitForNextTxnDuration)
 					}
 				}
 			case <-timer.C:
+				// timer ticked. it is time to send the batch even if it is not full
 				if len(bl.groupCtxs) == 0 {
-					// nothing yet... wait some more
-					timer = time.NewTicker(singelTxnValidationTime / 2)
+					// nothing batched yet... wait some more
+					timer.Reset(waitForFirstTxnDuration)
 					continue
 				}
-				timer, added = sm.processBatch(bl)
+				added = sm.processBatch(bl)
 				if added {
 					bl = makeBatchLoad()
+					timer.Reset(waitForFirstTxnDuration)
+				} else {
+					// was not added because no available seats. wait for some more txns
+					timer.Reset(waitForNextTxnDuration)
 				}
 			case <-ctx.Done():
 				return //TODO: report the error ctx.Err()
@@ -608,37 +644,29 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBl
 	return stxnChan, resultChan
 }
 
-func (sm *streamManager) processBatch(bl batchLoad) (timer *time.Ticker, added bool) {
-	if bl.batchVerifier.GetNumberOfEnqueuedSignatures() >= txnPerWorksetThreshold {
-		// Should not allow addition of more txns to the batch
-		// the varifier might be saturated.
-		// block and wait for a free seat
-		<-sm.seatReturnChan
-		err := sm.addVerificationTaskToThePool(bl)
-		if err != nil {
-			// TODO: report the error
-			fmt.Println(err)
-		}
-		timer = time.NewTicker(singelTxnValidationTime / 2)
-		added = true
-		return
-	}
-	// Otherwise, if cannot find a seat, can go back and collect
+func (sm *streamManager) processFullBatch(bl batchLoad) (err error) {
+	// This is a full batch, no additions are allowed
+	// block and wait for a free seat
+	<-sm.seatReturnChan
+	err = sm.addVerificationTaskToThePool(bl)
+	return
+}
+
+func (sm *streamManager) processBatch(bl batchLoad) (added bool) {
+	// if cannot find a seat, can go back and collect
 	// more signatures instead of waiting here
 	select {
 	case <-sm.seatReturnChan:
 		err := sm.addVerificationTaskToThePool(bl)
-		timer = time.NewTicker(singelTxnValidationTime / 2)
-		added = true
 		if err != nil {
 			// TODO: report the error
 			fmt.Println(err)
 		}
+		added = true
 		// TODO: queue to the pool.
 		//				fmt.Println(err)
 	default:
 		// if no free seats, wait some more for more txns
-		timer = time.NewTicker(singelTxnValidationTime / 2)
 	}
 	return
 }
