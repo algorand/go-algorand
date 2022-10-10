@@ -400,7 +400,7 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 
 func errOnMismatch(x string, y string) error {
 	if len(x) != len(y) {
-		return fmt.Errorf("new box size mismatch %d %d", len(x), len(y))
+		return fmt.Errorf("box size mismatch %d %d", len(x), len(y))
 	}
 	return nil
 }

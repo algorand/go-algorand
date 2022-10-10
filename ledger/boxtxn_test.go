@@ -196,9 +196,9 @@ func TestBoxRecreate(t *testing.T) {
 		// a recreate does not change the value
 		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after recreate"))
 		// recreating with a smaller size fails
-		dl.txn(call.Args("recreate", "adam", "\x03"), "new box size mismatch 4 3")
+		dl.txn(call.Args("recreate", "adam", "\x03"), "box size mismatch 4 3")
 		// recreating with a larger size fails
-		dl.txn(call.Args("recreate", "adam", "\x05"), "new box size mismatch 4 5")
+		dl.txn(call.Args("recreate", "adam", "\x05"), "box size mismatch 4 5")
 		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after failed recreates"))
 
 		// delete and actually create again
@@ -207,7 +207,7 @@ func TestBoxRecreate(t *testing.T) {
 
 		dl.txn(call.Args("set", "adam", "\x03\x02\x01"))
 		dl.txn(call.Args("check", "adam", "\x03\x02\x01"))
-		dl.txn(recreate.Noted("after delete"), "new box size mismatch 3 4")
+		dl.txn(recreate.Noted("after delete"), "box size mismatch 3 4")
 		dl.txn(call.Args("recreate", "adam", "\x03"))
 		dl.txn(call.Args("check", "adam", "\x03\x02\x01").Noted("after delete and recreate"))
 	})
@@ -464,5 +464,59 @@ assert
 
 		// Data gets removed after boxes are deleted
 		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance), "\x00", "\x00"))
+	})
+}
+
+func TestBoxIOBudgets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (1024) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (2048) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (3072) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+			"below min") // big box would need more balance
+		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
+			"write budget (4096) exceeded")
+
+		var needed uint64 = 100_000 + 2500 + 400*(4096+1) // remember key len!
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: appIndex.Address(),
+			Amount:   needed - 1_000_000,
+		})
+		dl.txn(call.Args("create", "x", "\x10\x00"))
+
+		// Now that we've created a 4,096 byte box, test READ budget
+		// It works at the start, because call still has 4 brs.
+		dl.txn(call.Args("check", "x", "\x00"))
+		call.Boxes = call.Boxes[:3]
+		dl.txn(call.Args("check", "x", "\x00"),
+			"box read budget (3072) exceeded")
+
+		// Give a budget over 32768, confirm failure anyway
+		empties := [32]transactions.BoxRef{}
+		// These tests skip WellFormed, so the huge Boxes is ok
+		call.Boxes = append(call.Boxes, empties[:]...)
+		dl.txn(call.Args("create", "x", "\x80\x01"), "box size too large") // 32769
 	})
 }

@@ -38,8 +38,10 @@ func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
 }
 
 // Inefficient (hashing), just a testing convenience
-func (l *Ledger) DeleteBox(app basics.AppIndex, name string) {
-	l.DelBox(app, name, app.Address())
+func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
+	for _, n := range names {
+		l.DelBox(app, n, app.Address())
+	}
 }
 
 var MakeSampleEnv = makeSampleEnv

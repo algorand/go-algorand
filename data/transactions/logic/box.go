@@ -31,43 +31,62 @@ const (
 	boxDelete
 )
 
-func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) error {
+func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) (string, bool, error) {
 	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
-		return fmt.Errorf("boxes may not be accessed from ClearState program")
+		return "", false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
-	bt, ok := cx.available.boxes[boxRef{cx.appID, name}]
+	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
 	if !ok {
-		return fmt.Errorf("invalid Box reference %v", name)
+		return "", false, fmt.Errorf("invalid Box reference %v", name)
 	}
+
+	// Since the box is in cx.available, we know this GetBox call is cheap. It
+	// will go (at most) to the cowRoundBase. Knowledge about existence
+	// simplifies write budget tracking, then we return the info to avoid yet
+	// another call to GetBox which most ops need anyway.
+	content, exists, err := cx.Ledger.GetBox(cx.appID, name)
+	if err != nil {
+		return "", false, err
+	}
+
 	switch operation {
 	case boxCreate:
-		if !bt.dirty {
+		if exists {
+			if createSize != uint64(len(content)) {
+				return "", false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
+			}
+		} else {
+			// Since it does not exist, this creation will be dirtying
+			dirty = true
 			cx.available.dirtyBytes += createSize
 		}
-		bt.dirty = true
-		bt.size = createSize
 	case boxWrite:
-		if !bt.dirty {
-			cx.available.dirtyBytes += bt.size
+		writeSize := createSize
+		if exists {
+			writeSize = uint64(len(content))
 		}
-		bt.dirty = true
+		if !dirty {
+			cx.available.dirtyBytes += writeSize
+		}
+		dirty = true
 	case boxDelete:
-		if bt.dirty {
-			cx.available.dirtyBytes -= bt.size
+		if dirty {
+			cx.available.dirtyBytes -= uint64(len(content))
 		}
-		bt.size = 0
+		dirty = false
 	case boxRead:
 		/* nothing to do */
 	}
+	cx.available.boxes[boxRef{cx.appID, name}] = dirty
+
 	if cx.available.dirtyBytes > cx.ioBudget {
-		return fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
+		return "", false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
 	}
-	cx.available.boxes[boxRef{cx.appID, name}] = bt
-	return nil
+	return content, exists, nil
 }
 
-func createBox(cx *EvalContext, name string, value string, appAddr basics.Address) (bool, error) {
+func createCheck(cx *EvalContext, name string, size uint64) (bool, error) {
 	// Enforce length rules. Currently these are the same as enforced by
 	// ledger. If these were ever to change in proto, we would need to isolate
 	// changes to different program versions. (so a v7 app could not see a
@@ -78,17 +97,12 @@ func createBox(cx *EvalContext, name string, value string, appAddr basics.Addres
 	if len(name) > cx.Proto.MaxAppKeyLen {
 		return false, fmt.Errorf("name too long: length was %d, maximum is %d", len(name), cx.Proto.MaxAppKeyLen)
 	}
-	size := uint64(len(value))
 	if size > cx.Proto.MaxBoxSize {
 		return false, fmt.Errorf("box size too large: %d, maximum is %d", size, cx.Proto.MaxBoxSize)
 	}
 
-	err := cx.availableBox(name, boxCreate, size) // annotate size for write budget check
-	if err != nil {
-		return false, err
-	}
-
-	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
+	_, exists, err := cx.availableBox(name, boxCreate, size)
+	return exists, err
 }
 
 func opBoxCreate(cx *EvalContext) error {
@@ -97,12 +111,21 @@ func opBoxCreate(cx *EvalContext) error {
 
 	name := string(cx.stack[prev].Bytes)
 	size := cx.stack[last].Uint
-	appAddr := cx.getApplicationAddress(cx.appID)
 
 	cx.stack = cx.stack[:last]
-	created, err := createBox(cx, name, string(make([]byte, size)), appAddr)
-	cx.stack[prev].Bytes = nil
-	cx.stack[prev].Uint = boolToUint(created)
+	exists, err := createCheck(cx, name, size)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		appAddr := cx.getApplicationAddress(cx.appID)
+		_, err = cx.Ledger.NewBox(cx.appID, name, string(make([]byte, size)), appAddr)
+		if err != nil {
+			return err
+		}
+	}
+
+	cx.stack[prev] = boolToSV(!exists)
 	return err
 
 }
@@ -116,19 +139,15 @@ func opBoxExtract(cx *EvalContext) error {
 	start := cx.stack[prev].Uint
 	length := cx.stack[last].Uint
 
-	err := cx.availableBox(name, boxRead, 0)
+	contents, exists, err := cx.availableBox(name, boxRead, 0)
 	if err != nil {
 		return err
 	}
-	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	if !exists {
 		return fmt.Errorf("no such box %#v", name)
 	}
 
-	bytes, err := extractCarefully([]byte(box), start, length)
+	bytes, err := extractCarefully([]byte(contents), start, length)
 	cx.stack[pprev].Bytes = bytes
 	cx.stack = cx.stack[:prev]
 	return err
@@ -143,19 +162,15 @@ func opBoxReplace(cx *EvalContext) error {
 	start := cx.stack[prev].Uint
 	name := string(cx.stack[pprev].Bytes)
 
-	err := cx.availableBox(name, boxWrite, 0 /* size is already known */)
+	contents, exists, err := cx.availableBox(name, boxWrite, 0 /* size is already known */)
 	if err != nil {
 		return err
 	}
-	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	if !exists {
 		return fmt.Errorf("no such box %#v", name)
 	}
 
-	bytes, err := replaceCarefully([]byte(box), replacement, start)
+	bytes, err := replaceCarefully([]byte(contents), replacement, start)
 	if err != nil {
 		return err
 	}
@@ -167,17 +182,18 @@ func opBoxDel(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // name
 	name := string(cx.stack[last].Bytes)
 
-	err := cx.availableBox(name, boxDelete, 0)
+	_, exists, err := cx.availableBox(name, boxDelete, 0)
 	if err != nil {
 		return err
 	}
-	appAddr := cx.getApplicationAddress(cx.appID)
-	existed, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
-	if err != nil {
-		return err
+	if exists {
+		appAddr := cx.getApplicationAddress(cx.appID)
+		_, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
+		if err != nil {
+			return err
+		}
 	}
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = boolToUint(existed)
+	cx.stack[last] = boolToSV(exists)
 	return nil
 }
 
@@ -185,17 +201,13 @@ func opBoxLen(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // name
 	name := string(cx.stack[last].Bytes)
 
-	err := cx.availableBox(name, boxRead, 0)
-	if err != nil {
-		return err
-	}
-	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
+	contents, exists, err := cx.availableBox(name, boxRead, 0)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = stackValue{Uint: uint64(len(box))}
-	cx.stack = append(cx.stack, stackValue{Uint: boolToUint(ok)})
+	cx.stack[last] = stackValue{Uint: uint64(len(contents))}
+	cx.stack = append(cx.stack, boolToSV(exists))
 	return nil
 }
 
@@ -203,17 +215,12 @@ func opBoxGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // name
 	name := string(cx.stack[last].Bytes)
 
-	err := cx.availableBox(name, boxRead, 0)
+	contents, exists, err := cx.availableBox(name, boxRead, 0)
 	if err != nil {
 		return err
 	}
-	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
-	if err != nil {
-		return err
-	}
-
-	cx.stack[last].Bytes = []byte(box) // Will rightly panic if too big
-	cx.stack = append(cx.stack, stackValue{Uint: boolToUint(ok)})
+	cx.stack[last].Bytes = []byte(contents) // Will rightly panic if too big
+	cx.stack = append(cx.stack, boolToSV(exists))
 	return nil
 }
 
@@ -224,28 +231,31 @@ func opBoxPut(cx *EvalContext) error {
 	value := string(cx.stack[last].Bytes)
 	name := string(cx.stack[prev].Bytes)
 
-	err := cx.availableBox(name, boxWrite, 0 /* unused for write */)
-	if err != nil {
-		return err
-	}
-	box, ok, err := cx.Ledger.GetBox(cx.appID, name)
+	contents, exists, err := cx.availableBox(name, boxWrite, uint64(len(value)))
 	if err != nil {
 		return err
 	}
 
 	cx.stack = cx.stack[:prev]
 
-	if ok {
-		/* the box exists, so the replacement must match size */
-		if len(box) != len(value) {
-			return fmt.Errorf("attempt to box_put wrong size %d != %d", len(box), len(value))
+	if exists {
+		/* the replacement must match existing size */
+		if len(contents) != len(value) {
+			return fmt.Errorf("attempt to box_put wrong size %d != %d", len(contents), len(value))
 		}
 		return cx.Ledger.SetBox(cx.appID, name, value)
 	}
-	/* The box did not exist, so create it. */
-	appAddr := cx.getApplicationAddress(cx.appID)
 
-	_, err = createBox(cx, name, value, appAddr)
+	/* The box did not exist, so create it. */
+	_, err = createCheck(cx, name, uint64(len(contents)))
+	if err != nil {
+		return err
+	}
+	appAddr := cx.getApplicationAddress(cx.appID)
+	created, err := cx.Ledger.NewBox(cx.appID, name, value, appAddr)
+	if !created {
+		panic(name)
+	}
 	return err
 }
 

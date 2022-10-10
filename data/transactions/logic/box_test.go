@@ -38,13 +38,13 @@ func TestBoxNewDel(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	logic.TestApp(t, `byte "self"; int 24; box_create`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 24; box_create`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "self"; int 24; box_create; !`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "other"; int 24; box_create`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 
 	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "self"; box_del`, ep)
 	logic.TestApp(t, `byte "self"; box_del; !`, ep)
@@ -61,15 +61,15 @@ func TestBoxNewBad(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	logic.TestApp(t, `byte "self"; int 999; box_create`, ep, "write budget")
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 
 	// In test proto, you get 100 I/O budget per boxref
 	ten := [10]transactions.BoxRef{}
 	txn.Boxes = append(txn.Boxes, ten[:]...) // write budget is now 11*100 = 1100
 	logic.TestApp(t, `byte "self"; int 999; box_create`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 1000; box_create`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 1001; box_create`, ep, "box size too large")
 
 	logic.TestApp(t, `byte "unknown"; int 1000; box_create`, ep, "invalid Box reference")
@@ -120,7 +120,7 @@ func TestBoxReadWrite(t *testing.T) {
                       byte 0x44443132; ==`, ep)
 
 	// All bow down to the God of code coverage!
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3031; box_replace`, ep,
 		"no such box")
 	logic.TestApp(t, `byte "junk"; int 1; byte 0x3031; box_replace`, ep,
@@ -144,6 +144,53 @@ func TestBoxAcrossTxns(t *testing.T) {
 		`byte "self"; int 2; byte "hi"; box_replace; int 1`,
 		`byte "self"; int 1; int 4; box_extract; byte 0x00686900; ==`, // "\0hi\0"
 	}, nil, 8, ledger)
+}
+
+// TestDirtyTracking gives confidence that the number of dirty bytes to be
+// written is tracked properly, despite repeated creates/deletes of the same
+// thing, touches in different txns, etc.
+func TestDirtyTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := logic.MakeSampleEnv()
+
+	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+	logic.TestApp(t, `byte "self"; int 200; box_create`, ep)
+	logic.TestApp(t, `byte "other"; int 201; box_create`, ep, "write budget")
+	// deleting "self" doesn't give extra write budget to create big "other"
+	ledger.DelBoxes(888, "other")
+	logic.TestApp(t, `byte "self"; box_del; !; byte "other"; int 201; box_create`, ep,
+		"write budget")
+
+	ledger.DelBoxes(888, "other") // creation happens in our fake ledger despite failure
+	// though it cancels out a creation that happened here
+	logic.TestApp(t, `byte "self"; int 200; box_create; assert
+                      byte "self"; box_del; assert
+                      byte "self"; int 200; box_create;
+                     `, ep)
+
+	ledger.DelBoxes(888, "self", "other")
+	// same, but create a different box than deleted
+	logic.TestApp(t, `byte "self"; int 200; box_create; assert
+                      byte "self"; box_del; assert
+                      byte "other"; int 200; box_create;
+                     `, ep)
+
+	// no funny business by trying to del twice!  this case is also interested
+	// because the read budget is spent on "other", which is 200, while the
+	// write budget is spent on "self"
+	logic.TestApp(t, `byte "other"; box_len; assert`, ep) // reminder, "other" exists!
+	logic.TestApp(t, `byte "self"; int 200; box_create; assert
+                      byte "self"; box_del; assert
+                      byte "self"; box_del; !; assert
+                      byte "self"; int 201; box_create;
+                     `, ep, "write budget")
+	logic.TestApp(t, `byte "self"; box_len; !; assert; !`, ep) // "self" was not made
+	logic.TestApp(t, `byte "self"; int 200; box_create`, ep)   // make it
+	// Now that both exist with size 200, naming both in Boxes causes failure
+	logic.TestApp(t, `int 1`, ep, "read budget")
+
 }
 
 func TestBoxUnavailableWithClearState(t *testing.T) {
@@ -267,7 +314,7 @@ func TestBoxWriteBudget(t *testing.T) {
                       byte "self"; int 200; box_create`, ep)
 	logic.TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 201; box_create`, ep, "write budget (200) exceeded")
-	ledger.DeleteBox(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
+	ledger.DelBoxes(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
 
 	// Test interplay of two different boxes being created
 	logic.TestApp(t, `byte "self"; int 4; box_create; assert
@@ -281,15 +328,17 @@ func TestBoxWriteBudget(t *testing.T) {
                       byte "self"; int 6; box_create; assert
                       byte "other"; int 196; box_create`, ep,
 		"write budget (200) exceeded")
-	ledger.DeleteBox(888, "other")
+	ledger.DelBoxes(888, "other")
 
 	logic.TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 6; box_create; assert
-                      byte "other"; int 196; box_create; assert // fails in create, never gets a chance to del
+                      byte "other"; int 196; box_create; assert // fails to create
                       byte "self"; box_del;`, ep, "write budget (200) exceeded")
 
-	logic.TestApp(t, `byte "self"; box_del`, ep)     // since last failed, the deletion did not happen
-	logic.TestApp(t, `byte "other"; box_del; !`, ep) // since last failed, del should return 0
+	logic.TestApp(t, `byte "other"; int 196; box_create`, ep)
+	logic.TestApp(t, `byte "self"; box_del`, ep, "read budget") // 6 + 196 > 200
+	logic.TestApp(t, `byte "junk"; box_del`, ep, "read budget") // fails before invalid "junk" is noticed
+	ledger.DelBoxes(888, "self", "other")
 	logic.TestApp(t, `byte "junk"; box_del`, ep, "invalid Box reference")
 
 	// Create two boxes, that sum to over budget, then test trying to use them together
@@ -297,11 +346,12 @@ func TestBoxWriteBudget(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 101; box_create`, ep, "write budget (200) exceeded")
 
-	logic.TestApp(t, `byte "other"; int 101; box_create`, ep) // didn't happen b/c of failure
+	ledger.DelBoxes(888, "other")
+	logic.TestApp(t, `byte "other"; int 101; box_create`, ep)
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep, "read budget (200) exceeded")
-	ledger.DeleteBox(888, "other")
+	ledger.DelBoxes(888, "other")
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 10; box_create`, ep)
 	// They're now small enough to read and write
@@ -315,6 +365,57 @@ func TestBoxWriteBudget(t *testing.T) {
                       int 1`, ep)
 
 	logic.TestApp(t, `byte "self"; box_del; assert; byte "other"; box_del`, ep) // cleanup
+
+}
+
+// TestWriteBudgetPut ensures we get write budget right for box_put
+func TestWriteBudgetPut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+
+	// Sample tx[0] has two box refs, so write budget is 2*100
+
+	// Test simple use of one box, less than, equal, or over budget
+	logic.TestApp(t, `byte "self"; int 150; box_create`, ep)
+	logic.TestApp(t, `byte "self"; int 150; bzero; box_put; int 1`, ep)
+	logic.TestApp(t, `byte "self"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep)
+	// puts to same name, doesn't go over budget (although we don't optimize
+	// away puts with the same content, this test uses different contents just
+	// to be sure).
+	logic.TestApp(t, `byte "self"; int 150; bzero; box_put;
+	                  byte "self"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep)
+	// puts to different names do
+	logic.TestApp(t, `byte "self"; int 150; bzero; box_put;
+	                  byte "other"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep,
+		"write budget")
+
+}
+
+// TestBoxRepeatedCreate ensures that app is not charged write budget for
+// creates that don't do anything.
+func TestBoxRepeatedCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+
+	// Sample tx[0] has two box refs, so write budget is 2*100
+	logic.TestApp(t, `byte "self"; int 201; box_create`, ep,
+		"write budget")
+	ledger.DelBoxes(888, "self")
+	logic.TestApp(t, `byte "self"; int 200; box_create`, ep)
+	logic.TestApp(t, `byte "self"; int 200; box_create; !; assert // does not actually create
+                      byte "other"; int 200; box_create; assert // does create, and budget should be enough
+                      int 1`, ep)
+
+	ledger.DelBoxes(888, "self", "other")
+	logic.TestApp(t, `byte "other"; int 200; box_create; assert
+                      byte "other"; box_del; assert
+                      byte "other"; int 200; box_create`, ep)
 
 }
 
@@ -370,7 +471,7 @@ func TestConveniences(t *testing.T) {
 	// box_put fails if box exists and is wrong size (self exists from last test)
 	logic.TestApp(t, `byte "self"; byte 0x313233; box_put; int 1`, ep,
 		"box_put wrong size")
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 
 	// put and get can interact with created boxes
 	logic.TestApp(t, `byte "self"; int 3; box_create`, ep)
@@ -378,7 +479,7 @@ func TestConveniences(t *testing.T) {
 	logic.TestApp(t, `byte "self"; byte 0xAABBCC; box_put; int 1`, ep)
 	logic.TestApp(t, `byte "self"; int 1; byte 0xDDEE; box_replace; int 1`, ep)
 	logic.TestApp(t, `byte "self"; box_get; assert; byte 0xAADDEE; ==`, ep)
-	ledger.DeleteBox(888, "self")
+	ledger.DelBoxes(888, "self")
 
 	// box_get panics if the box is too big
 	ep.Proto.MaxBoxSize = 5000
