@@ -23,6 +23,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/DataDog/zstd"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -124,4 +125,22 @@ func TestTagCounterFiltering(t *testing.T) {
 			require.NotContains(t, result, "TEST_TAG")
 		})
 	}
+}
+
+func TestDecompressMsg(t *testing.T) {
+	// happy case - small message
+	msg := []byte(strings.Repeat("1", 2048))
+	compressed, err := zstd.Compress(nil, msg)
+	require.NoError(t, err)
+	decompressed, err := decompressMsg(compressed)
+	require.NoError(t, err)
+	require.Equal(t, msg, decompressed)
+
+	// error case - small message
+	msg = []byte(strings.Repeat("1", MaxDecompressedMessageSize+10))
+	compressed, err = zstd.Compress(nil, msg)
+	require.NoError(t, err)
+	decompressed, err = decompressMsg(compressed)
+	require.Error(t, err)
+	require.Nil(t, decompressed)
 }

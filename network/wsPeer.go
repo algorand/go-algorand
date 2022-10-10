@@ -433,6 +433,33 @@ func dedupSafeTag(t protocol.Tag) bool {
 	return t == protocol.AgreementVoteTag || t == protocol.TxnTag
 }
 
+// MaxDecompressedMessageSize defines a maximum decompressed data size
+// to prevent zip bombs
+const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
+
+func decompressMsg(data []byte) ([]byte, error) {
+	r := zstd.NewReader(bytes.NewReader(data))
+	b := make([]byte, 0, 1024)
+	for {
+		if len(b) == cap(b) {
+			b = append(b, 0)[:len(b)]
+		}
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err != nil {
+			r.Close()
+			if err == io.EOF {
+				return b, nil
+			}
+			return nil, err
+		}
+		if len(b) >= MaxDecompressedMessageSize {
+			r.Close()
+			return nil, fmt.Errorf("proposal data is too large: %d", len(b))
+		}
+	}
+}
+
 func (wp *wsPeer) readLoop() {
 	// the cleanupCloseError sets the default error to disconnectReadError; depending on the exit reason, the error might get changed.
 	cleanupCloseError := disconnectReadError
@@ -484,7 +511,7 @@ func (wp *wsPeer) readLoop() {
 			wp.features&vfCompressedProposal != 0 &&
 			len(msg.Data) > 4 &&
 			bytes.Equal(msg.Data[:4], zstdCompressionMagic[:]) {
-			msg.Data, err = zstd.Decompress(nil, msg.Data)
+			msg.Data, err = decompressMsg(msg.Data)
 			if err != nil {
 				wp.reportReadErr(err)
 				return
