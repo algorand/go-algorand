@@ -439,6 +439,7 @@ const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
 
 func decompressMsg(data []byte) ([]byte, error) {
 	r := zstd.NewReader(bytes.NewReader(data))
+	defer r.Close()
 	b := make([]byte, 0, 1024)
 	for {
 		if len(b) == cap(b) {
@@ -447,14 +448,12 @@ func decompressMsg(data []byte) ([]byte, error) {
 		n, err := r.Read(b[len(b):cap(b)])
 		b = b[:len(b)+n]
 		if err != nil {
-			r.Close()
 			if err == io.EOF {
 				return b, nil
 			}
 			return nil, err
 		}
-		if len(b) >= MaxDecompressedMessageSize {
-			r.Close()
+		if len(b) > MaxDecompressedMessageSize {
 			return nil, fmt.Errorf("proposal data is too large: %d", len(b))
 		}
 	}
