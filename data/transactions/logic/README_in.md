@@ -187,12 +187,13 @@ _available_.
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
 
- * A Box is _available_ if _any_ transaction in the same group
-   contains a box reference that denotes the box. The index `i` in the
-   box reference refers to the `ith` application in the containing
-   transaction's ForeignApplications array, with the usual convention
-   that 0 indicates the application ID of the app called by that
-   transaction.
+ * A Box is _available_ to an Approval Program if _any_ transaction in
+   the same group contains a box reference that denotes the box. The
+   index `i` in the box reference refers to the `ith` application in
+   the containing transaction's ForeignApplications array, with the
+   usual convention that 0 indicates the application ID of the app
+   called by that transaction. No box is ever _available_ to a
+   ClearStateProgram.
 
 ## Constants
 
