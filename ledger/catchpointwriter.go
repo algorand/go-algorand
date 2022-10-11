@@ -148,7 +148,8 @@ func (cw *catchpointWriter) Abort() error {
 
 // TODO: This flow should be combined with the normal WriteStep
 
-func (cw *catchpointWriter) WritePreamble(stepCtx context.Context) (crypto.Digest, error) {
+func (cw *catchpointWriter) WritePreamble() (crypto.Digest, error) {
+	// TODO: Cancellation?
 	rawData, err := stateProofVerificationData(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
@@ -160,7 +161,20 @@ func (cw *catchpointWriter) WritePreamble(stepCtx context.Context) (crypto.Diges
 	// TODO: Add domain separator.
 	dataHash := sha512.Sum512_256(encodedData)
 
-	// TODO: Write data.
+	err = cw.tar.WriteHeader(&tar.Header{
+		Name: "stateProofVerificationData.msgpack",
+		Mode: 0600,
+		Size: int64(len(encodedData)),
+	})
+
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	_, err = cw.tar.Write(encodedData)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
 
 	return dataHash, nil
 }

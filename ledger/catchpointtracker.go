@@ -1056,6 +1056,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	}
 
 	var catchpointWriter *catchpointWriter
+	var stateProofVerificationDataHash crypto.Digest
+
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
@@ -1063,6 +1065,12 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		if err != nil {
 			return
 		}
+
+		stateProofVerificationDataHash, err = catchpointWriter.WritePreamble()
+		if err != nil {
+			return
+		}
+
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(ctx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
@@ -1120,6 +1128,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
+	// TODO: Statistics about state proof verification?
 	ct.log.With("accountsRound", accountsRound).
 		With("writingDuration", catchpointGenerationStats.WritingDuration).
 		With("CPUTime", catchpointGenerationStats.CPUTime).
@@ -1130,7 +1139,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		Infof("Catchpoint data file was generated")
 
 	// TODO: Return actual state proof digest here
-	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), crypto.Digest{}, nil
+	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), stateProofVerificationDataHash, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round,
