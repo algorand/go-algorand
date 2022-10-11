@@ -54,7 +54,7 @@ import (
 // max compiled teal program is currently 8k
 // but we allow for comments, spacing, and repeated consts
 // in the source teal, allow up to 200kb
-const maxTealSourceBytes = 2e5
+const maxTealSourceBytes = 200_000
 
 // With the ability to hold unlimited assets DryrunRequests can
 // become quite large, allow up to 1mb
