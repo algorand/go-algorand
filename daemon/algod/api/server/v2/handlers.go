@@ -58,7 +58,7 @@ const maxTealSourceBytes = 200_000
 
 // With the ability to hold unlimited assets DryrunRequests can
 // become quite large, allow up to 1mb
-const maxTealDryrunBytes = 1e6
+const maxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
