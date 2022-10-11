@@ -89,6 +89,7 @@ func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.Signatur
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
+	close(out)
 }
 
 func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
@@ -102,6 +103,7 @@ func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureS
 		copy(seed[:], seedbytes)
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
+	close(out)
 }
 
 // load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey
