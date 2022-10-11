@@ -51,8 +51,14 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
-const maxTealSourceBytes = 1e5
-const maxTealDryrunBytes = 1e5
+// max compiled teal program is currently 8k
+// but we allow for comments, spacing, and repeated consts
+// in the source teal, allow up to 200kb
+const maxTealSourceBytes = 2e5
+
+// With the ability to hold unlimited assets DryrunRequests can
+// become quite large, allow up to 1mb
+const maxTealDryrunBytes = 1e6
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
