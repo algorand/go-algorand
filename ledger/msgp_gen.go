@@ -85,6 +85,14 @@ import (
 //        |-----> Msgsize
 //        |-----> MsgIsZero
 //
+// catchpointStateProofVerificationData
+//                   |-----> (*) MarshalMsg
+//                   |-----> (*) CanMarshalMsg
+//                   |-----> (*) UnmarshalMsg
+//                   |-----> (*) CanUnmarshalMsg
+//                   |-----> (*) Msgsize
+//                   |-----> (*) MsgIsZero
+//
 // encodedBalanceRecordV5
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
@@ -1925,8 +1933,8 @@ func (z *catchpointFileBalancesChunkV6) MsgIsZero() bool {
 func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -1943,9 +1951,13 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).TrieBalancesHash.MsgIsZero() {
+	if (*z).StateProofVerificationHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -1971,6 +1983,11 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalChunks)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "stateProofVerificationHash"
+			o = append(o, 0xba, 0x73, 0x74, 0x61, 0x74, 0x65, 0x50, 0x72, 0x6f, 0x6f, 0x66, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x73, 0x68)
+			o = (*z).StateProofVerificationHash.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "trieBalancesHash"
 			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
 			o = (*z).TrieBalancesHash.MarshalMsg(o)
@@ -2031,6 +2048,14 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
+			bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StateProofVerificationHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
 			(*z).BiggestChunkLen, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BiggestChunkLen")
@@ -2084,6 +2109,12 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "TotalChunks")
 					return
 				}
+			case "stateProofVerificationHash":
+				bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StateProofVerificationHash")
+					return
+				}
 			case "biggestChunk":
 				(*z).BiggestChunkLen, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -2110,13 +2141,13 @@ func (_ *catchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *catchpointFirstStageInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 27 + (*z).StateProofVerificationHash.Msgsize() + 13 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFirstStageInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).StateProofVerificationHash.MsgIsZero()) && ((*z).BiggestChunkLen == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2163,6 +2194,88 @@ func (z catchpointState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z catchpointState) MsgIsZero() bool {
 	return z == ""
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *catchpointStateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(0)
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+	}
+	return
+}
+
+func (_ *catchpointStateProofVerificationData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationData)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = catchpointStateProofVerificationData{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *catchpointStateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationData)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *catchpointStateProofVerificationData) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *catchpointStateProofVerificationData) MsgIsZero() bool {
+	return true
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -36,19 +36,22 @@ var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
 // CatchpointLabel represent a single catchpoint label. It will "assemble" a label based on the components
 type CatchpointLabel struct {
-	ledgerRound          basics.Round
-	ledgerRoundBlockHash crypto.Digest
-	balancesMerkleRoot   crypto.Digest
-	totals               AccountTotals
+	ledgerRound                    basics.Round
+	ledgerRoundBlockHash           crypto.Digest
+	balancesMerkleRoot             crypto.Digest
+	stateProofVerificationDataHash crypto.Digest
+	totals                         AccountTotals
 }
 
 // MakeCatchpointLabel creates a catchpoint label given the catchpoint label parameters.
-func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabel {
+func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest,
+	stateProofVerificationDataHash crypto.Digest, totals AccountTotals) CatchpointLabel {
 	return CatchpointLabel{
-		ledgerRound:          ledgerRound,
-		ledgerRoundBlockHash: ledgerRoundBlockHash,
-		balancesMerkleRoot:   balancesMerkleRoot,
-		totals:               totals,
+		ledgerRound:                    ledgerRound,
+		ledgerRoundBlockHash:           ledgerRoundBlockHash,
+		balancesMerkleRoot:             balancesMerkleRoot,
+		stateProofVerificationDataHash: stateProofVerificationDataHash,
+		totals:                         totals,
 	}
 }
 

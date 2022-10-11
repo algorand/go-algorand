@@ -4902,6 +4902,10 @@ type catchpointFirstStageInfo struct {
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`
+	// TODO: Make sure that this is only set when data files are generated.
+	// StateProofVerificationHash is the hash of the state proof verification data contained in the catchpoint data file.
+	// Only set when catchpoint data files are generated.
+	StateProofVerificationHash crypto.Digest `codec:"stateProofVerificationHash"`
 	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }

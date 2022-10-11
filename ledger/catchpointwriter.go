@@ -19,16 +19,18 @@ package ledger
 import (
 	"archive/tar"
 	"context"
+	"crypto/sha512"
 	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/msgp/msgp"
-
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/msgp/msgp"
 )
 
 const (
@@ -96,6 +98,12 @@ type catchpointFileBalancesChunkV6 struct {
 	numAccounts uint64
 }
 
+type catchpointStateProofVerificationData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	// TODO: allocbound?
+	data []ledgercore.StateProofVerificationData `codec:"spd"`
+}
+
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	totalAccounts, err := totalAccounts(ctx, tx)
 	if err != nil {
@@ -136,6 +144,25 @@ func (cw *catchpointWriter) Abort() error {
 	cw.compressor.Close()
 	cw.file.Close()
 	return os.Remove(cw.filePath)
+}
+
+// TODO: This flow should be combined with the normal WriteStep
+
+func (cw *catchpointWriter) WritePreamble(stepCtx context.Context) (crypto.Digest, error) {
+	rawData, err := stateProofVerificationData(cw.ctx, cw.tx)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	wrappedData := catchpointStateProofVerificationData{data: *rawData}
+	encodedData := protocol.Encode(&wrappedData)
+
+	// TODO: Add domain separator.
+	dataHash := sha512.Sum512_256(encodedData)
+
+	// TODO: Write data.
+
+	return dataHash, nil
 }
 
 func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
