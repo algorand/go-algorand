@@ -101,6 +101,21 @@ var boxAppSource = main(`
         err
 `)
 
+// Call the app in txn.Applications[1] the same way I was called.
+var passThruSource = main(`
+  itxn_begin
+  txn Applications 1; itxn_field ApplicationID
+  txn TypeEnum; itxn_field TypeEnum
+  // copy my app args into itxn app args (too lazy to write a loop), these are
+  // always called with 2 or 3 args.
+  txn ApplicationArgs 0; itxn_field ApplicationArgs
+  txn ApplicationArgs 1; itxn_field ApplicationArgs
+  txn NumAppArgs; int 2; ==; bnz skip
+    txn ApplicationArgs 2; itxn_field ApplicationArgs
+  skip:
+  itxn_submit
+`)
+
 const boxVersion = 35
 
 // TestBoxCreate tests MBR changes around allocation, deallocation
@@ -518,5 +533,82 @@ func TestBoxIOBudgets(t *testing.T) {
 		// These tests skip WellFormed, so the huge Boxes is ok
 		call.Boxes = append(call.Boxes, empties[:]...)
 		dl.txn(call.Args("create", "x", "\x80\x01"), "box size too large") // 32769
+	})
+}
+
+// TestBoxInners trys various box manipulations through inner transactions
+func TestBoxInners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		// Advance the creatable counter, so we don't have very low app ids that
+		// could be mistaken for indices into ForeignApps.
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+
+		boxIndex := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
+		passIndex := dl.fundedApp(addrs[0], 110_000, passThruSource) // lowish, show it's not paying for boxes
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: passIndex,
+			ForeignApps:   []basics.AppIndex{boxIndex},
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
+		}
+		// The current Boxes gives top-level access to "x", not the inner app
+		dl.txn(call.Args("create", "x", "\x10"), // 8
+			"invalid Box reference x")
+
+		// This isn't right: Index should be index into ForeignApps
+		call.Boxes = []transactions.BoxRef{{Index: uint64(boxIndex), Name: []byte("x")}}
+		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
+
+		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (1024) exceeded")
+		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+
+		require.Len(t, call.Boxes, 2)
+		setX := call.Args("set", "x", "A")
+		dl.txn(setX, "read budget") // Boxes has x and y, their combined length is too big
+		setX.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
+		dl.txn(setX)
+
+		setY := call.Args("set", "y", "B")
+		dl.txn(setY, "read budget") // Boxes has x and y, their combined length is too big
+		setY.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("y")}}
+		dl.txn(setY, "read budget") // Y is bigger needs more than 1 br
+		// We recommend "empty" br, but a duplicate is also ok
+		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
+
+		// non-existant box also works
+		setY.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("y")}, {Index: 0, Name: []byte("nope")}}
+		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
+
+		// now show can read both boxes based on brs in tx1
+		checkX := call.Args("check", "x", "A")
+		checkX.Boxes = nil
+		checkY := call.Args("check", "y", "B")
+		require.Len(t, checkY.Boxes, 2)
+		// can't see x and y because read budget is only 2*1024
+		dl.txgroup("box read budget", checkX, checkY)
+		checkY.Boxes = append(checkY.Boxes, transactions.BoxRef{})
+		dl.txgroup("", checkX, checkY)
+
+		require.Len(t, setY.Boxes, 2) // recall that setY has ("y", "nope") right now. no "x"
+		dl.txgroup("invalid Box reference x", checkX, setY)
+
+		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("x")})
+		dl.txgroup("", checkX, setY)
 	})
 }
