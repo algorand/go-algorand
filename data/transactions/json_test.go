@@ -18,7 +18,7 @@ package transactions_test
 
 /* These tests are pretty low-value now.  They test something very basic about
    our codec for encoding []byte as base64 strings in json. The test were
-   written we BoxRef contained a string instead of []byte.  When that was true,
+   written when BoxRef contained a string instead of []byte.  When that was true,
    these tests were more important because there was work that had to be done to
    make it happen (implement MarshalJSON and UnmarshalJSON) */
 
