@@ -5042,6 +5042,10 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 }
 
 func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
 
 	if err != nil {
