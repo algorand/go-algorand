@@ -136,7 +136,7 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	err = insertStateProofVerificationData(ctx, tx, &dcc.stateProofVerificationCommitData)
+	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
 	if err != nil {
 		return err
 	}
