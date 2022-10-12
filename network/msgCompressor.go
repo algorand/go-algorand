@@ -109,9 +109,8 @@ func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte,
 		// in this case it sends non-compressed payload - the receiver decompress only if it is compressed.
 		if len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:]) {
 			return c.zstdDecompress(data)
-		} else {
-			c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
 		}
+		c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
 	}
 	return data, nil
 }
