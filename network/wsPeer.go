@@ -17,7 +17,6 @@
 package network
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -31,7 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DataDog/zstd"
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
@@ -53,6 +51,45 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
+type versionFeatureFlag int
+
+const vfCompressedProposal versionFeatureFlag = 1
+
+// versionCompressedProposal defines protocol version when compressed proposal enabled
+const versionCompressedProposal = "2.2"
+
+// versionCompressedProposalNum is a parsed numeric representation of versionCompressedProposal
+var versionCompressedProposalNum [2]int64
+
+func versionToMajorMinor(version string) (int64, int64, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("version %s does not have two components", version)
+	}
+	major, err := strconv.ParseInt(parts[0], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	minor, err := strconv.ParseInt(parts[1], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	return major, minor, nil
+}
+
+func versionToFeatures(version string) versionFeatureFlag {
+	major, minor, err := versionToMajorMinor(version)
+	if err != nil {
+		return 0
+	}
+	if major >= versionCompressedProposalNum[0] {
+		if minor >= versionCompressedProposalNum[1] {
+			return vfCompressedProposal
+		}
+	}
+	return 0
+}
+
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -62,6 +99,22 @@ func init() {
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+
+	matched := false
+	for _, version := range SupportedProtocolVersions {
+		if version == versionCompressedProposal {
+			matched = true
+		}
+	}
+	if !matched {
+		panic(fmt.Sprintf("proposal compression %s version is not supported %v", versionCompressedProposal, SupportedProtocolVersions))
+	}
+
+	var err error
+	versionCompressedProposalNum[0], versionCompressedProposalNum[1], err = versionToMajorMinor(versionCompressedProposal)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse version %v: %s", versionCompressedProposal, err.Error()))
+	}
 }
 
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
@@ -150,35 +203,6 @@ type Response struct {
 
 type sendMessages struct {
 	msgs []sendMessage
-}
-
-type versionFeatureFlag int
-
-const vfCompressedProposal versionFeatureFlag = 1
-
-var versionCompressedProposal = [2]int64{2, 2}
-
-var zstdCompressionMagic = [4]byte{0x28, 0xb5, 0x2f, 0xfd}
-
-func versionToFeatures(version string) versionFeatureFlag {
-	parts := strings.Split(version, ".")
-	if len(parts) != 2 {
-		return 0
-	}
-	major, err := strconv.ParseInt(parts[0], 10, 8)
-	if err != nil {
-		return 0
-	}
-	minor, err := strconv.ParseInt(parts[1], 10, 8)
-	if err != nil {
-		return 0
-	}
-	if major >= versionCompressedProposal[0] {
-		if minor >= versionCompressedProposal[1] {
-			return vfCompressedProposal
-		}
-	}
-	return 0
 }
 
 type wsPeer struct {
@@ -433,32 +457,6 @@ func dedupSafeTag(t protocol.Tag) bool {
 	return t == protocol.AgreementVoteTag || t == protocol.TxnTag
 }
 
-// MaxDecompressedMessageSize defines a maximum decompressed data size
-// to prevent zip bombs
-const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
-
-func decompressMsg(data []byte) ([]byte, error) {
-	r := zstd.NewReader(bytes.NewReader(data))
-	defer r.Close()
-	b := make([]byte, 0, 1024)
-	for {
-		if len(b) == cap(b) {
-			b = append(b, 0)[:len(b)]
-		}
-		n, err := r.Read(b[len(b):cap(b)])
-		b = b[:len(b)+n]
-		if err != nil {
-			if err == io.EOF {
-				return b, nil
-			}
-			return nil, err
-		}
-		if len(b) > MaxDecompressedMessageSize {
-			return nil, fmt.Errorf("proposal data is too large: %d", len(b))
-		}
-	}
-}
-
 func (wp *wsPeer) readLoop() {
 	// the cleanupCloseError sets the default error to disconnectReadError; depending on the exit reason, the error might get changed.
 	cleanupCloseError := disconnectReadError
@@ -467,6 +465,8 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	dataConverter := makeWsPeerMsgDataConverter(wp)
+
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
@@ -506,15 +506,10 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
-		if msg.Tag == protocol.ProposalPayloadTag &&
-			wp.features&vfCompressedProposal != 0 &&
-			len(msg.Data) > 4 &&
-			bytes.Equal(msg.Data[:4], zstdCompressionMagic[:]) {
-			msg.Data, err = decompressMsg(msg.Data)
-			if err != nil {
-				wp.reportReadErr(err)
-				return
-			}
+		msg.Data, err = dataConverter.convert(msg.Tag, msg.Data)
+		if err != nil {
+			wp.reportReadErr(err)
+			return
 		}
 		msg.Net = wp.net
 		atomic.StoreInt64(&wp.lastPacketTime, msg.Received)
@@ -984,4 +979,8 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	} else {
 		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
+}
+
+func (wp *wsPeer) vfCompressedProposalSupported() bool {
+	return wp.features&vfCompressedProposal != 0
 }

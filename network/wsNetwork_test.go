@@ -2686,3 +2686,56 @@ func TestParseHostOrURL(t *testing.T) {
 		})
 	}
 }
+
+func TestPreparePeerData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// no comression
+	req := broadcastRequest{
+		tags: []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag},
+		data: [][]byte{[]byte("test"), []byte("data")},
+	}
+
+	peers := []*wsPeer{}
+	wn := WebsocketNetwork{}
+	data, comp, digests := wn.preparePeerData(req, false, peers)
+	require.NotEmpty(t, data)
+	require.Empty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	// compression
+	peer1 := wsPeer{
+		features: 0,
+	}
+	peer2 := wsPeer{
+		features: vfCompressedProposal,
+	}
+	peers = []*wsPeer{&peer1, &peer2}
+	data, comp, digests = wn.preparePeerData(req, true, peers)
+	require.NotEmpty(t, data)
+	require.NotEmpty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+	require.Equal(t, len(comp), len(digests))
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	for i := range comp {
+		if req.tags[i] != protocol.ProposalPayloadTag {
+			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), comp[i])
+			require.Equal(t, data[i], comp[i])
+		} else {
+			require.NotEqual(t, data[i], comp[i])
+			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+		}
+	}
+}

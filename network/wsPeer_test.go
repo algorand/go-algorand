@@ -23,7 +23,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/DataDog/zstd"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -127,20 +126,48 @@ func TestTagCounterFiltering(t *testing.T) {
 	}
 }
 
-func TestDecompressMsg(t *testing.T) {
-	// happy case - small message
-	msg := []byte(strings.Repeat("1", 2048))
-	compressed, err := zstd.Compress(nil, msg)
-	require.NoError(t, err)
-	decompressed, err := decompressMsg(compressed)
-	require.NoError(t, err)
-	require.Equal(t, msg, decompressed)
+func TestVersionToMajorMinor(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	// error case - small message
-	msg = []byte(strings.Repeat("1", MaxDecompressedMessageSize+10))
-	compressed, err = zstd.Compress(nil, msg)
+	ma, mi, err := versionToMajorMinor("1.2")
 	require.NoError(t, err)
-	decompressed, err = decompressMsg(compressed)
+	require.Equal(t, int64(1), ma)
+	require.Equal(t, int64(2), mi)
+
+	ma, mi, err = versionToMajorMinor("1.2.3")
 	require.Error(t, err)
-	require.Nil(t, decompressed)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+
+	ma, mi, err = versionToMajorMinor("1")
+	require.Error(t, err)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+
+	ma, mi, err = versionToMajorMinor("a.b")
+	require.Error(t, err)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+}
+
+func TestVersionToFeature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	f := versionToFeatures("1.2")
+	require.Equal(t, versionFeatureFlag(0), f)
+
+	f = versionToFeatures("1.2.3")
+	require.Equal(t, versionFeatureFlag(0), f)
+
+	f = versionToFeatures("a.b")
+	require.Equal(t, versionFeatureFlag(0), f)
+
+	f = versionToFeatures("2.1")
+	require.Equal(t, versionFeatureFlag(0), f)
+
+	f = versionToFeatures("2.2")
+	require.Equal(t, vfCompressedProposal, f)
+
+	f = versionToFeatures("2.3")
+	require.Equal(t, vfCompressedProposal, f)
 }

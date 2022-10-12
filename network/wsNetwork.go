@@ -36,7 +36,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DataDog/zstd"
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
@@ -1433,43 +1432,42 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 	return dest, peerChangeCounter
 }
 
-// checkCanCompress checks if there is an proposal payload message and peers supporting compression
-func checkCanCompress(request broadcastRequest, prio bool, peers []*wsPeer) bool {
-	canCompress := false
-	if prio {
-		hasPP := false
-		for _, tag := range request.tags {
-			if tag == protocol.ProposalPayloadTag {
-				hasPP = true
-				break
-			}
-		}
-		// if have proposal payload check if there are any peers supporting compression
-		if hasPP {
-			for _, peer := range peers {
-				if peer.features&vfCompressedProposal != 0 {
-					canCompress = true
-				}
-			}
-		}
-	}
-	return canCompress
-}
+// preparePeerData prepares batches of data for sending.
+// It performs optional zstd compression for proposal massages
+func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest) {
+	// determine if there is a payload proposal and peers supporting compressed payloads
+	wantCompression := checkCanCompress(request, prio, peers)
 
-// compressMsgTag returns a message with tag and compressed data
-func compressMsgTag(tbytes []byte, d []byte, log logging.Logger) []byte {
-	bound := zstd.CompressBound(len(d))
-	mbytesComp := make([]byte, len(tbytes)+bound)
-	copy(mbytesComp, tbytes)
-	comp, err := zstd.Compress(mbytesComp[len(tbytes):], d)
-	if err != nil {
-		log.Errorf("Failed to compress into buffer of len %d", len(d))
-		// fallback and reuse non-compressed
-		copied := copy(mbytesComp[len(tbytes):], d)
-		return mbytesComp[:len(tbytes)+copied]
+	digests := make([]crypto.Digest, len(request.data))
+	data := make([][]byte, len(request.data))
+	var dataCompressed [][]byte
+	if wantCompression {
+		dataCompressed = make([][]byte, len(request.data))
 	}
-	mbytesComp = mbytesComp[:len(tbytes)+len(comp)]
-	return mbytesComp
+	for i, d := range request.data {
+		tbytes := []byte(request.tags[i])
+		mbytes := make([]byte, len(tbytes)+len(d))
+		copy(mbytes, tbytes)
+		copy(mbytes[len(tbytes):], d)
+		data[i] = mbytes
+		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
+			digests[i] = crypto.Hash(mbytes)
+		}
+
+		if wantCompression {
+			if request.tags[i] == protocol.ProposalPayloadTag {
+				compressed, logMsg := zstdCompressMsg(tbytes, d)
+				if len(logMsg) > 0 {
+					wn.log.Warn(logMsg)
+				}
+				dataCompressed[i] = compressed
+			} else {
+				// otherwise reuse non-compressed from above
+				dataCompressed[i] = mbytes
+			}
+		}
+	}
+	return data, dataCompressed, digests
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1485,36 +1483,8 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		return
 	}
 
-	// determine if there is a payload proposal and peers supporting compressed payloads
-	needCompressedData := checkCanCompress(request, prio, peers)
-
 	start := time.Now()
-	digests := make([]crypto.Digest, len(request.data))
-	data := make([][]byte, len(request.data))
-	var dataCompressed [][]byte
-	if needCompressedData {
-		dataCompressed = make([][]byte, len(request.data))
-	}
-	for i, d := range request.data {
-		tbytes := []byte(request.tags[i])
-		mbytes := make([]byte, len(tbytes)+len(d))
-		copy(mbytes, tbytes)
-		copy(mbytes[len(tbytes):], d)
-		data[i] = mbytes
-		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
-			digests[i] = crypto.Hash(mbytes)
-		}
-
-		if needCompressedData {
-			if request.tags[i] == protocol.ProposalPayloadTag {
-				compressed := compressMsgTag(tbytes, d, wn.log)
-				dataCompressed[i] = compressed
-			} else {
-				// otherwise reuse non-compressed from above
-				dataCompressed[i] = mbytes
-			}
-		}
-	}
+	data, dataWithCompression, digests := wn.preparePeerData(request, prio, peers)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1526,8 +1496,9 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 			continue
 		}
 		var ok bool
-		if peer.features&vfCompressedProposal != 0 && needCompressedData {
-			ok = peer.writeNonBlockMsgs(request.ctx, dataCompressed, prio, digests, request.enqueueTime)
+		if peer.vfCompressedProposalSupported() && len(dataWithCompression) > 0 {
+			// if this peer supports compressed proposals and compressed data batch is filled out, use it
+			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
 		} else {
 			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		}
