@@ -224,7 +224,7 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
 	verificationData := ledgercore.StateProofVerificationData{
 		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		ProvenWeight:          blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
 	}
 
