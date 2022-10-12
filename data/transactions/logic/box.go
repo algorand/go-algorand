@@ -119,7 +119,7 @@ func opBoxCreate(cx *EvalContext) error {
 	}
 	if !exists {
 		appAddr := cx.getApplicationAddress(cx.appID)
-		_, err = cx.Ledger.NewBox(cx.appID, name, string(make([]byte, size)), appAddr)
+		err = cx.Ledger.NewBox(cx.appID, name, string(make([]byte, size)), appAddr)
 		if err != nil {
 			return err
 		}
@@ -252,11 +252,7 @@ func opBoxPut(cx *EvalContext) error {
 		return err
 	}
 	appAddr := cx.getApplicationAddress(cx.appID)
-	created, err := cx.Ledger.NewBox(cx.appID, name, value, appAddr)
-	if !created {
-		panic(name)
-	}
-	return err
+	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
 }
 
 const boxPrefix = "bx:"

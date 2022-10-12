@@ -398,35 +398,28 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return nil
 }
 
-func errOnMismatch(x string, y string) error {
-	if len(x) != len(y) {
-		return fmt.Errorf("box size mismatch %d %d", len(x), len(y))
-	}
-	return nil
-}
-
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) (bool, error) {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return false, fmt.Errorf("no such app %d", appIdx)
+		return fmt.Errorf("no such app %d", appIdx)
 	}
 	if params.boxMods == nil {
 		params.boxMods = make(map[string]*string)
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
-			return false, errOnMismatch(value, *current)
+			return fmt.Errorf("attempt to recreate %s", key)
 		}
-	} else if current, ok := params.boxes[key]; ok {
-		return false, errOnMismatch(value, current)
+	} else if _, ok := params.boxes[key]; ok {
+		return fmt.Errorf("attempt to recreate %s", key)
 	}
 	params.boxMods[key] = &value
 	l.applications[appIdx] = params
-	return true, nil
+	return nil
 }
 
 func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
