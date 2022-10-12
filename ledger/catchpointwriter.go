@@ -158,9 +158,6 @@ func (cw *catchpointWriter) WritePreamble() (crypto.Digest, error) {
 	wrappedData := catchpointStateProofVerificationData{data: *rawData}
 	encodedData := protocol.Encode(&wrappedData)
 
-	// TODO: Add domain separator.
-	dataHash := sha512.Sum512_256(encodedData)
-
 	err = cw.tar.WriteHeader(&tar.Header{
 		Name: "stateProofVerificationData.msgpack",
 		Mode: 0600,
@@ -175,6 +172,9 @@ func (cw *catchpointWriter) WritePreamble() (crypto.Digest, error) {
 	if err != nil {
 		return crypto.Digest{}, err
 	}
+
+	// TODO: Add domain separator.
+	dataHash := sha512.Sum512_256(encodedData)
 
 	return dataHash, nil
 }
