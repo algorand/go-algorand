@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -530,18 +531,22 @@ var pendingTxnsCmd = &cobra.Command{
 				reportErrorf(errorNodeStatus, err)
 			}
 
-			pendingTxns := statusTxnPool.TruncatedTxns
+			pendingTxns := statusTxnPool.TopTransactions
 
 			// do this inline for now, break it out when we need to reuse a Txn->String function
-			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTxns)
-			if pendingTxns.Transactions == nil || len(pendingTxns.Transactions) == 0 {
+			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTransactions)
+			if len(statusTxnPool.TopTransactions) == 0 {
 				reportInfof(infoNodeNoPendingTxnsDescription)
 			} else {
-				for _, pendingTxn := range pendingTxns.Transactions {
+				for _, pendingTxn := range pendingTxns {
 					pendingTxnStr, err := json.MarshalIndent(pendingTxn, "", "    ")
 					if err != nil {
 						// json parsing of the txn failed, so let's just skip printing it
-						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.TxID)
+						pendingTxnObj := transactions.SignedTxn{}
+						if err = json.Unmarshal(pendingTxnStr, &pendingTxnObj); err != nil {
+							reportErrorf(errorNodeStatus, err)
+						}
+						fmt.Printf("Unparseable Transaction %s\n", pendingTxnObj.Txn.ID().String())
 						continue
 					}
 					fmt.Printf("%s\n", string(pendingTxnStr))

@@ -19,6 +19,7 @@ package restapi
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 
@@ -849,10 +850,15 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 	statusResponse, err := testClient.GetPendingTransactions(0)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	a.True(statusResponse.TotalTxns == 1)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == 1)
-	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == tx.ID().String())
+	a.True(statusResponse.TotalTransactions == 1)
+	a.True(len(statusResponse.TopTransactions) == 1)
 
+	pendingTxn := transactions.SignedTxn{}
+	txnBody, err := json.Marshal(statusResponse.TopTransactions[0])
+	a.NoError(err)
+	err = json.Unmarshal(txnBody, &pendingTxn)
+	a.NoError(err)
+	a.True(pendingTxn.Txn.ID().String() == tx.ID().String())
 }
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
@@ -885,13 +891,17 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		txIDsSeen[tx2.ID().String()] = true
 	}
 	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
-	a.NoError(err)
-	a.NotEmpty(statusResponse)
-	a.True(int(statusResponse.TotalTxns) == NumTxns)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
-	for _, tx := range statusResponse.TruncatedTxns.Transactions {
-		a.True(txIDsSeen[tx.TxID])
-		delete(txIDsSeen, tx.TxID)
+	a.True(int(statusResponse.TotalTransactions) == NumTxns)
+	a.True(len(statusResponse.TopTransactions) == MaxTxns)
+	for _, tx := range statusResponse.TopTransactions {
+		pendingTxn := transactions.SignedTxn{}
+		txnBody, err := json.Marshal(tx)
+		a.NoError(err)
+		err = json.Unmarshal(txnBody, &pendingTxn)
+		a.NoError(err)
+
+		a.True(txIDsSeen[pendingTxn.Txn.ID().String()])
+		delete(txIDsSeen, pendingTxn.Txn.ID().String())
 	}
 	a.True(len(txIDsSeen) == NumTxns-MaxTxns)
 }
@@ -934,9 +944,15 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	a.True(int(statusResponse.TotalTxns) == NumTxns+1)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
-	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
+	a.True(int(statusResponse.TotalTransactions) == NumTxns+1)
+	a.True(len(statusResponse.TopTransactions) == MaxTxns)
+
+	pendingTxn := transactions.SignedTxn{}
+	txnBody, err := json.Marshal(statusResponse.TopTransactions[0])
+	a.NoError(err)
+	err = json.Unmarshal(txnBody, &pendingTxn)
+	a.NoError(err)
+	a.True(pendingTxn.Txn.ID().String() == txHigh.ID().String())
 }
 
 func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {

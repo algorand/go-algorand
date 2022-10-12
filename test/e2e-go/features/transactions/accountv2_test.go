@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -231,7 +232,7 @@ int 1
 	// Ensure the txn committed
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTxns)
+	a.Equal(uint64(0), resp.TotalTransactions)
 	txinfo, err := client.TransactionInformation(signedTxn.Txn.Sender.String(), txid)
 	a.NoError(err)
 	a.True(txinfo.ConfirmedRound != 0)
@@ -309,11 +310,16 @@ int 1
 		// Ensure the txn committed
 		resp, err = client.GetPendingTransactions(2)
 		a.NoError(err)
-		if resp.TotalTxns == 1 {
-			a.Equal(resp.TruncatedTxns.Transactions[0].TxID, txid)
+		if resp.TotalTransactions == 1 {
+			pendingTxn := transactions.SignedTxn{}
+			txnBody, err := json.Marshal(resp.TopTransactions[0])
+			a.NoError(err)
+			err = json.Unmarshal(txnBody, &pendingTxn)
+			a.NoError(err)
+			a.Equal(pendingTxn.Txn.ID().String(), txid)
 			continue
 		}
-		a.Equal(uint64(0), resp.TotalTxns)
+		a.Equal(uint64(0), resp.TotalTransactions)
 		break
 	}
 

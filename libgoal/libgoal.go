@@ -877,7 +877,7 @@ func (c Client) AlgodVersions() (resp common.Version, err error) {
 }
 
 // LedgerSupply returns the total number of algos in the system
-func (c Client) LedgerSupply() (resp v1.Supply, err error) {
+func (c Client) LedgerSupply() (resp generatedV2.SupplyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.LedgerSupply()
@@ -938,7 +938,7 @@ func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error
 
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactions(maxTxns uint64) (resp generatedV2.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)

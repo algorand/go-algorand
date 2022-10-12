@@ -37,7 +37,6 @@ import (
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -1209,7 +1208,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoalClient := fixture.LibGoalClient
 
-	var totalSupplyAtRound [100]v1.Supply
+	var totalSupplyAtRound [100]generatedV2.SupplyResponse
 	var accountSnapshotAtRound [100][]generatedV2.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
@@ -1237,7 +1236,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			totalSupply, err := libgoalClient.LedgerSupply()
 			r.NoError(err)
 
-			r.Equal(rnd, totalSupply.Round, "could not capture total stake at the target round. The machine might be too slow for this test")
+			r.Equal(rnd, totalSupply.CurrentRound, "could not capture total stake at the target round. The machine might be too slow for this test")
 			totalSupplyAtRound[rnd] = totalSupply
 
 			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)

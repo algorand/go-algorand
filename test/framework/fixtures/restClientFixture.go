@@ -17,11 +17,14 @@
 package fixtures
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"sort"
 	"time"
 	"unicode"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/stretchr/testify/require"
 
@@ -269,9 +272,14 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 			f.t.Logf("txn failed to confirm: ", addr, txid)
 			pendingTxns, err := f.AlgodClient.GetPendingTransactions(0)
 			if err == nil {
-				pendingTxids := make([]string, 0, pendingTxns.TotalTxns)
-				for _, txn := range pendingTxns.TruncatedTxns.Transactions {
-					pendingTxids = append(pendingTxids, txn.TxID)
+				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
+				for _, txn := range pendingTxns.TopTransactions {
+					pendingTxn := transactions.SignedTxn{}
+					txnBody, err := json.Marshal(txn)
+					require.NoError(f.t, err)
+					err = json.Unmarshal(txnBody, &pendingTxn)
+					require.NoError(f.t, err)
+					pendingTxids = append(pendingTxids, pendingTxn.Txn.ID().String())
 				}
 				f.t.Logf("pending txids: ", pendingTxids)
 			} else {
