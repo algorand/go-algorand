@@ -61,7 +61,6 @@ type Client struct {
 	cacheDir             string
 	consensus            config.ConsensusProtocols
 	algodVersionAffinity algodclient.APIVersion
-	kmdVersionAffinity   kmdclient.APIVersion
 
 	suggestedParamsCache  v1.TransactionParams
 	suggestedParamsExpire time.Time
@@ -149,7 +148,6 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
 	c.algodVersionAffinity = algodclient.APIVersionV1
-	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -1054,9 +1052,8 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 }
 
 // SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
-func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
+func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion) {
 	c.algodVersionAffinity = algodVersionAffinity
-	c.kmdVersionAffinity = kmdVersionAffinity
 }
 
 // AbortCatchup aborts the currently running catchup
