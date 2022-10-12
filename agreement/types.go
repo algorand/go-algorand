@@ -38,6 +38,7 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 	return config.Consensus[v].AgreementFilterTimeout
 }
 
+// SpeculativeBlockAsmTime is the time at which we would like to begin speculative assembly
 func SpeculativeBlockAsmTime(p period, v protocol.ConsensusVersion, speculativeAsmTimeDuration time.Duration) time.Duration {
 	hardwait := FilterTimeout(p, v)
 	if hardwait > speculativeAsmTimeDuration {

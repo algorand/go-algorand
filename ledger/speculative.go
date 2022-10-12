@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
+// LedgerForEvaluator defines the ledger interface needed by the evaluator.
 type LedgerForEvaluator interface {
 	// Needed for cow.go
 	Block(basics.Round) (bookkeeping.Block, error)

@@ -53,6 +53,7 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 	}
 }
 
+// CheckDup checks whether a txn is a duplicate
 func (vb ValidatedBlock) CheckDup(currentProto config.ConsensusParams, firstValid, lastValid basics.Round, txid transactions.Txid, txl Txlease) error {
 	_, present := vb.delta.Txids[txid]
 	if present {
@@ -68,6 +69,7 @@ func (vb ValidatedBlock) CheckDup(currentProto config.ConsensusParams, firstVali
 	return nil
 }
 
+// Hash returns the hash of the block
 func (vb ValidatedBlock) Hash() bookkeeping.BlockHash {
 	return vb.blk.Hash()
 }
