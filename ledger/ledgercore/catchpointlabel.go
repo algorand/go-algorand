@@ -74,7 +74,7 @@ func (l CatchpointLabel) Hash() crypto.Digest {
 	return crypto.Hash(buffer[:crypto.DigestSize*2+len(encodedTotals)])
 }
 
-// ParseCatchpointLabel parse the given label and breaks it into the round and hash components. In case of a parsing failuire,
+// ParseCatchpointLabel parse the given label and breaks it into the round and hash components. In case of a parsing failure,
 // the returned err is non-nil.
 func ParseCatchpointLabel(label string) (round basics.Round, hash crypto.Digest, err error) {
 	err = ErrCatchpointParsingFailed
