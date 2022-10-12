@@ -67,11 +67,12 @@ func (l CatchpointLabel) String() string {
 // Hash return the hash portion of this catchpoint label
 func (l CatchpointLabel) Hash() crypto.Digest {
 	encodedTotals := protocol.EncodeReflect(&l.totals)
-	buffer := make([]byte, 2*crypto.DigestSize+len(encodedTotals))
+	buffer := make([]byte, 3*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
 	copy(buffer[crypto.DigestSize:], l.balancesMerkleRoot[:])
 	copy(buffer[crypto.DigestSize*2:], encodedTotals)
-	return crypto.Hash(buffer[:crypto.DigestSize*2+len(encodedTotals)])
+	copy(buffer[crypto.DigestSize*3:], l.stateProofVerificationDataHash[:])
+	return crypto.Hash(buffer[:crypto.DigestSize*3+len(encodedTotals)])
 }
 
 // ParseCatchpointLabel parse the given label and breaks it into the round and hash components. In case of a parsing failure,
