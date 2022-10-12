@@ -70,8 +70,8 @@ func (l CatchpointLabel) Hash() crypto.Digest {
 	buffer := make([]byte, 3*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
 	copy(buffer[crypto.DigestSize:], l.balancesMerkleRoot[:])
-	copy(buffer[crypto.DigestSize*2:], encodedTotals)
-	copy(buffer[crypto.DigestSize*3:], l.stateProofVerificationDataHash[:])
+	copy(buffer[crypto.DigestSize*2:], l.stateProofVerificationDataHash[:])
+	copy(buffer[crypto.DigestSize*3:], encodedTotals)
 	return crypto.Hash(buffer[:crypto.DigestSize*3+len(encodedTotals)])
 }
 
