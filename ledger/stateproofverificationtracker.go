@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -65,7 +65,7 @@ type stateProofVerificationTracker struct {
 	stateProofVerificationMu deadlock.RWMutex
 }
 
-func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	preparedDbQueries, err := stateProofVerificationInitDbQueries(l.trackerDB().Rdb.Handle)
 	if err != nil {
 		return err
@@ -73,8 +73,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	spt.dbQueries = *preparedDbQueries
 
-	latestRoundInLedger := l.Latest()
-	latestBlockHeader, err := l.BlockHdr(latestRoundInLedger)
+	latestBlockHeader, err := l.BlockHdr(dbRound)
 
 	if err != nil {
 		return err
