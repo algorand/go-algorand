@@ -193,6 +193,8 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(
 	for index, data := range spt.trackedCommitData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
+		} else {
+			break
 		}
 	}
 
@@ -205,6 +207,8 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	for index, data := range spt.trackedDeleteData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
+		} else {
+			break
 		}
 	}
 
