@@ -3088,7 +3088,6 @@ func TestStateProofVerificationTracker(t *testing.T) {
 	// to the ledger.
 	delta, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	delta.StateProofNext = stateProofReceived.StateProofNextRound
-	delta.OptimizeAllocatedMemory(l.cfg.MaxAcctLookback)
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	err = l.AddValidatedBlock(vb, agreement.Certificate{})
 
