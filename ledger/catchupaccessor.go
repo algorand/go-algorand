@@ -791,6 +791,17 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
+
+		rawStateVerificationProofData, err := stateProofVerificationData(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("unable to get state proof verification data: %v", err)
+		}
+
+		wrappedData := catchpointStateProofVerificationData{data: *rawStateVerificationProofData}
+		encodedData := protocol.Encode(&wrappedData)
+		// TODO: Domain separator
+		stateProofVerificationDataHash = sha512.Sum512_256(encodedData)
+
 		return
 	})
 	ledgerVerifycatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -801,7 +812,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
+	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, stateProofVerificationDataHash, totals)
 
 	if catchpointLabel != catchpointLabelMaker.String() {
 		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
