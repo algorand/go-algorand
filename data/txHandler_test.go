@@ -250,7 +250,6 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
-
 func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
