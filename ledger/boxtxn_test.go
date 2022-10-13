@@ -65,28 +65,37 @@ var boxAppSource = main(`
         assert
         b end
      del:						// delete box arg[1]
-		txn ApplicationArgs 0
-        byte "delete"
-        ==
+		txn ApplicationArgs 0; byte "delete"; ==
         bz set
 		txn ApplicationArgs 1
 		box_del
         assert
         b end
-     set:						// put arg[1] at start of box arg[0]
-		txn ApplicationArgs 0
-        byte "set"
-        ==
-        bz test
+     set:						// put arg[2] at start of box arg[1]
+		txn ApplicationArgs 0; byte "set"; ==
+        bz put
 		txn ApplicationArgs 1
         int 0
 		txn ApplicationArgs 2
 		box_replace
         b end
-     test:						// fail unless arg[2] is the prefix of box arg[1]
-		txn ApplicationArgs 0
-        byte "check"
-        ==
+     put:						// box_put arg[2] as replacement for box arg[1]
+		txn ApplicationArgs 0; byte "put"; ==
+        bz get
+		txn ApplicationArgs 1
+		txn ApplicationArgs 2
+		box_put
+        b end
+     get:						// log box arg[1], after getting it with box_get
+		txn ApplicationArgs 0; byte "get"; ==
+        bz check
+		txn ApplicationArgs 1
+		box_get
+        assert
+        log
+        b end
+     check:						// fail unless arg[2] is the prefix of box arg[1]
+		txn ApplicationArgs 0; byte "check"; ==
         bz bad
 		txn ApplicationArgs 1
         int 0
@@ -554,7 +563,7 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
 		boxIndex := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
-		passIndex := dl.fundedApp(addrs[0], 110_000, passThruSource) // lowish, show it's not paying for boxes
+		passIndex := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
@@ -591,7 +600,7 @@ func TestBoxInners(t *testing.T) {
 		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
 		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
 
-		// non-existant box also works
+		// non-existent box also works
 		setY.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("y")}, {Index: 0, Name: []byte("nope")}}
 		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
 
@@ -610,5 +619,28 @@ func TestBoxInners(t *testing.T) {
 
 		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("x")})
 		dl.txgroup("", checkX, setY)
+
+		// Cleanup
+		dl.txn(call.Args("del", "x"), "read budget")
+		dl.txn(call.Args("del", "y"), "read budget")
+		// suprising but correct: they work when combined, because both txns
+		// have both box refs, so the read budget goes up.
+		dl.txgroup("", call.Args("delete", "x"), call.Args("delete", "y"))
+
+		// Try some get/put action
+		dl.txn(call.Args("put", "x", "john doe"))
+		vb := dl.fullBlock(call.Args("get", "x"))
+		// we are passing this thru to the underlying box app which logs the get
+		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		dl.txn(call.Args("check", "x", "john"))
+
+		// bad change because of length
+		dl.txn(call.Args("put", "x", "steve doe"), "box_put wrong size")
+		vb = dl.fullBlock(call.Args("get", "x"))
+		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+
+		// good change
+		dl.txn(call.Args("put", "x", "mark doe"))
+		dl.txn(call.Args("check", "x", "mark d"))
 	})
 }
