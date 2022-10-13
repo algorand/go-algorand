@@ -391,7 +391,10 @@ func TestWriteBudgetPut(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 150; bzero; box_put;
 	                  byte "other"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep,
 		"write budget")
+	ledger.DelBoxes(888, "self", "other")
 
+	// testing a regression: ensure box_put does not double debit when creating
+	logic.TestApp(t, `byte "self"; int 150; bzero; box_put; int 1`, ep)
 }
 
 // TestBoxRepeatedCreate ensures that app is not charged write budget for

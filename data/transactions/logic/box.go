@@ -57,9 +57,11 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 				return "", false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
 			}
 		} else {
-			// Since it does not exist, this creation will be dirtying
-			dirty = true
-			cx.available.dirtyBytes += createSize
+			// Although we know it didn't exist, box_put may have already marked it dirty
+			if !dirty {
+				dirty = true
+				cx.available.dirtyBytes += createSize
+			}
 		}
 	case boxWrite:
 		writeSize := createSize
@@ -247,7 +249,7 @@ func opBoxPut(cx *EvalContext) error {
 	}
 
 	/* The box did not exist, so create it. */
-	_, err = createCheck(cx, name, uint64(len(contents)))
+	_, err = createCheck(cx, name, uint64(len(value)))
 	if err != nil {
 		return err
 	}
