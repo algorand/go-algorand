@@ -1,7 +1,7 @@
 {
   "network": {
-    "wallets": 6,
-    "nodes": 3,
+    "wallets": 3,
+    "nodes": 1,
     "ConsensusProtocol": "future"
   },
   "instances": {
@@ -13,12 +13,12 @@
     "participatingNodes": {
       "config": "./configs/node.json",
       "type": "m5d.2xl",
-      "count": 3
+      "count": 1
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
       "type": "m5d.2xl",
-      "count": 5
+      "count": 1
     }
   },
   "groups": [
