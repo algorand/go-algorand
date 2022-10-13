@@ -184,7 +184,7 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
 	}
 
-	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("lookup failed for round %d: %w", stateProofLastAttestedRound, errStateProofVerificationDataNotYetGenerated
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
