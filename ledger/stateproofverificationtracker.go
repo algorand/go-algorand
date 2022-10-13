@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -69,7 +68,7 @@ type stateProofVerificationTracker struct {
 	log logging.Logger
 }
 
-func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	preparedDbQueries, err := stateProofVerificationInitDbQueries(l.trackerDB().Rdb.Handle)
 	if err != nil {
 		return err
@@ -77,23 +76,18 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, dbRou
 
 	spt.dbQueries = *preparedDbQueries
 
-	latestBlockHeader, err := l.BlockHdr(dbRound)
-
 	if err != nil {
 		return err
 	}
-
-	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
 
 	spt.log = l.trackerLog()
 
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for expected state proof chain delay,
-	// and is thus a good size to start from.
-	spt.trackedCommitData = make([]verificationCommitData, 0, proto.StateProofMaxRecoveryIntervals)
-	spt.trackedDeleteData = make([]verificationDeleteData, 0, proto.StateProofMaxRecoveryIntervals)
+	const initialDataArraySize = 10
+	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
+	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
 
 	return nil
 }
