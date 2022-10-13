@@ -7,18 +7,18 @@
   "instances": {
     "relays": {
       "config": "./configs/relay.json",
-      "type": "m5d.4xl",
+      "type": "m5d.2xl",
       "count": 1
     },
     "participatingNodes": {
       "config": "./configs/node.json",
-      "type": "m5d.4xl",
-      "count": 3
+      "type": "m5d.2xl",
+      "count": 1
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
-      "type": "m5d.4xl",
-      "count": 5
+      "type": "m5d.2xl",
+      "count": 1
     }
   },
   "groups": [
