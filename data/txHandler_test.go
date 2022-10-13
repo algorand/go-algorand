@@ -17,6 +17,7 @@
 package data
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -247,4 +248,178 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 		}
 		require.Equal(b, benchTxnNum, idx)
 	}
+}
+
+func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
+	const numUsers = 100
+	log := logging.TestingLog(b)
+	log.SetLevel(logging.Warn)
+	secrets := make([]*crypto.SignatureSecrets, numUsers)
+	addresses := make([]basics.Address, numUsers)
+
+	genesis := make(map[basics.Address]basics.AccountData)
+	for i := 0; i < numUsers; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+		genesis[addr] = basics.AccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
+		}
+	}
+
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(b, len(genesis), numUsers+1)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(b, err)
+
+	l := ledger
+
+	cfg.TxPoolSize = 75000
+	cfg.EnableProcessBlockStats = false
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+
+	outChan := make(chan *txBacklogMsg, 10)
+
+	// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
+	// through the outChan instead of passing it to postprocessCheckedTxn
+	go func() {
+		for {
+			// prioritize the postVerificationQueue
+			select {
+			case wi, ok := <-txHandler.postVerificationQueue:
+				if !ok {
+					return
+				}
+				outChan <- wi
+				// restart the loop so that we could empty out the post verification queue.
+				continue
+			default:
+			}
+
+			// we have no more post verification items. wait for either backlog queue item or post verification item.
+			select {
+			case wi, ok := <-txHandler.backlogQueue:
+				if !ok {
+					return
+				}
+				if txHandler.checkAlreadyCommitted(wi) {
+					continue
+				}
+
+			// enqueue the task to the verification pool.
+			txHandler.txVerificationPool.EnqueueBacklog(txHandler.ctx, txHandler.asyncVerifySignature, wi, nil)
+
+			case wi, ok := <-txHandler.postVerificationQueue:
+				if !ok {
+					return
+				}
+				outChan <- wi
+
+			case <-txHandler.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	goodTxnGroups := make(map[uint64]interface{})
+	badTxnGroups := make(map[uint64]interface{})
+	makeSignedTxnGroups := func(N int) [][]transactions.SignedTxn {
+		maxGrpSize := proto.MaxTxGroupSize
+		ret := make([][]transactions.SignedTxn, 0, N)
+		for u := 0; u < N; u++ {
+			grpSize := rand.Intn(maxGrpSize-1) + 1
+			var txGroup transactions.TxGroup
+			txns := make([]transactions.Transaction, 0, grpSize)
+			for g := 0; g < grpSize; g++ {
+				// generate transactions
+				noteField := make([]byte, binary.MaxVarintLen64)
+				binary.PutUvarint(noteField, uint64(u))
+				tx := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      addresses[(u+g)%numUsers],
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+						FirstValid:  0,
+						LastValid:   basics.Round(proto.MaxTxnLife),
+						GenesisHash: genesisHash,
+						Note:        noteField,
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addresses[(u+g+1)%numUsers],
+						Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+					},
+				}
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
+				txns = append(txns, tx)
+			}
+			groupHash := crypto.HashObj(txGroup)
+			signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
+			for g, txn := range txns {
+				txn.Group = groupHash
+				signedTx := txn.Sign(secrets[(u+g)%numUsers])
+				signedTx.Txn = txn
+				signedTxGroup = append(signedTxGroup, signedTx)
+			}
+			// randomly make bad signatures
+			if rand.Float32() < 0.3 {
+				tinGrp := rand.Intn(grpSize)
+				signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
+				badTxnGroups[uint64(u)] = struct{}{}
+			} else {
+				goodTxnGroups[uint64(u)] = struct{}{}
+			}
+			ret = append(ret, signedTxGroup)
+		}
+		return ret
+	}
+
+	signedTransactionGroups := makeSignedTxnGroups(b.N)
+	encodedSignedTransactionGroups := make([]network.IncomingMessage, 0, b.N)
+	for _, stxngrp := range signedTransactionGroups {
+		data := make([]byte, 0)
+		for _, stxn := range stxngrp {
+			data = append(data, protocol.Encode(&stxn)...)
+		}
+		encodedSignedTransactionGroups =
+			append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data})
+	}
+
+	for _, tg := range encodedSignedTransactionGroups {
+		txHandler.processIncomingTxn(tg)
+	}
+
+	go func() {
+		defer close(txHandler.postVerificationQueue)
+		counter := 0
+		b.ResetTimer()
+		for wi := range outChan {
+			counter++
+			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
+			if wi.verificationErr == nil {
+				if _, found := goodTxnGroups[u]; !found {
+					fmt.Printf("wrong!")
+				}
+			} else {
+				if _, found := badTxnGroups[u]; !found {
+					fmt.Printf("wrong!")
+				}
+			}
+			if counter == b.N {
+				break
+			}
+		}
+	}()
 }
