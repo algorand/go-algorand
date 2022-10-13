@@ -29,6 +29,8 @@ import (
 
 var zstdCompressionMagic = [4]byte{0x28, 0xb5, 0x2f, 0xfd}
 
+const zstdCompressionLevel = zstd.BestSpeed
+
 // checkCanCompress checks if there is an proposal payload message and peers supporting compression
 func checkCanCompress(request broadcastRequest, prio bool, peers []*wsPeer) bool {
 	canCompress := false
@@ -56,9 +58,14 @@ func checkCanCompress(request broadcastRequest, prio bool, peers []*wsPeer) bool
 // zstdCompressMsg returns a concatenation of a tag and compressed data
 func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
 	bound := zstd.CompressBound(len(d))
+	if bound < len(d) {
+		// although CompressBound allocated more than the src size, this is an implementation detail.
+		// increase the buffer size to always have enough space for the raw data if compression fails.
+		bound = len(d)
+	}
 	mbytesComp := make([]byte, len(tbytes)+bound)
 	copy(mbytesComp, tbytes)
-	comp, err := zstd.Compress(mbytesComp[len(tbytes):], d)
+	comp, err := zstd.CompressLevel(mbytesComp[len(tbytes):], d, zstdCompressionLevel)
 	if err != nil {
 		// fallback and reuse non-compressed original data
 		logMsg := fmt.Sprintf("failed to compress into buffer of len %d: %v", len(d), err)
