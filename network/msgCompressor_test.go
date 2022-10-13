@@ -51,36 +51,31 @@ func TestZstdDecompress(t *testing.T) {
 func TestCheckCanCompress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	prio := false
 	req := broadcastRequest{}
 	peers := []*wsPeer{}
-	r := checkCanCompress(req, prio, peers)
-	require.False(t, r)
-
-	prio = true
-	r = checkCanCompress(req, prio, peers)
+	r := checkCanCompress(req, peers)
 	require.False(t, r)
 
 	req.tags = []protocol.Tag{protocol.AgreementVoteTag}
-	r = checkCanCompress(req, prio, peers)
+	r = checkCanCompress(req, peers)
 	require.False(t, r)
 
 	req.tags = []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}
-	r = checkCanCompress(req, prio, peers)
+	r = checkCanCompress(req, peers)
 	require.False(t, r)
 
 	peer1 := wsPeer{
 		features: 0,
 	}
 	peers = []*wsPeer{&peer1}
-	r = checkCanCompress(req, prio, peers)
+	r = checkCanCompress(req, peers)
 	require.False(t, r)
 
 	peer2 := wsPeer{
 		features: vfCompressedProposal,
 	}
 	peers = []*wsPeer{&peer1, &peer2}
-	r = checkCanCompress(req, prio, peers)
+	r = checkCanCompress(req, peers)
 	require.True(t, r)
 }
 

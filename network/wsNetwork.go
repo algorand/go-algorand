@@ -1436,7 +1436,10 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 // It performs optional zstd compression for proposal massages
 func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest) {
 	// determine if there is a payload proposal and peers supporting compressed payloads
-	wantCompression := checkCanCompress(request, prio, peers)
+	wantCompression := false
+	if prio {
+		wantCompression = checkCanCompress(request, peers)
+	}
 
 	digests := make([]crypto.Digest, len(request.data))
 	data := make([][]byte, len(request.data))

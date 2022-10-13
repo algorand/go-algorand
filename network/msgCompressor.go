@@ -32,23 +32,21 @@ var zstdCompressionMagic = [4]byte{0x28, 0xb5, 0x2f, 0xfd}
 const zstdCompressionLevel = zstd.BestSpeed
 
 // checkCanCompress checks if there is an proposal payload message and peers supporting compression
-func checkCanCompress(request broadcastRequest, prio bool, peers []*wsPeer) bool {
+func checkCanCompress(request broadcastRequest, peers []*wsPeer) bool {
 	canCompress := false
-	if prio {
-		hasPP := false
-		for _, tag := range request.tags {
-			if tag == protocol.ProposalPayloadTag {
-				hasPP = true
-				break
-			}
+	hasPP := false
+	for _, tag := range request.tags {
+		if tag == protocol.ProposalPayloadTag {
+			hasPP = true
+			break
 		}
-		// if have proposal payload check if there are any peers supporting compression
-		if hasPP {
-			for _, peer := range peers {
-				if peer.vfCompressedProposalSupported() {
-					canCompress = true
-					break
-				}
+	}
+	// if have proposal payload check if there are any peers supporting compression
+	if hasPP {
+		for _, peer := range peers {
+			if peer.vfCompressedProposalSupported() {
+				canCompress = true
+				break
 			}
 		}
 	}
@@ -108,6 +106,7 @@ func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
 	b := make([]byte, 0, 1024)
 	for {
 		if len(b) == cap(b) {
+			// grow capacity, retain length
 			b = append(b, 0)[:len(b)]
 		}
 		n, err := r.Read(b[len(b):cap(b)])
