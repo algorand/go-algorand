@@ -176,22 +176,33 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
-	var verificationData *ledgercore.StateProofVerificationData
-	var err error
-
 	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
-		verificationData, err = spt.dbQueries.lookupData(stateProofLastAttestedRound)
-		if err != nil {
-			err = fmt.Errorf("db lookup failed for round %d: %w", stateProofLastAttestedRound, err)
+		return spt.lookupDataInDB(stateProofLastAttestedRound)
+	}
+
+	if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
+		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+	}
+
+	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+}
+
+func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	for _, commitData := range spt.trackedCommitData {
+		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
+			verificationDataCopy := commitData.verificationData
+			return &verificationDataCopy, nil
 		}
-	} else if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		verificationDataValue, memoryErr := spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
-		if memoryErr != nil {
-			err = fmt.Errorf("memory lookup failed for round %d: %w", stateProofLastAttestedRound, memoryErr)
-		}
-		verificationData = &verificationDataValue
-	} else {
-		err = errStateProofVerificationDataNotYetGenerated
+	}
+
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("memory lookup failed for round %d: %w",
+		stateProofLastAttestedRound, errStateProofVerificationDataNotFoundInMemory)
+}
+
+func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
+	if err != nil {
+		err = fmt.Errorf("db lookup failed for round %d: %w", stateProofLastAttestedRound, err)
 	}
 
 	return verificationData, err
@@ -223,16 +234,6 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	}
 
 	return latestCommittedDataIndex
-}
-
-func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (ledgercore.StateProofVerificationData, error) {
-	for _, commitData := range spt.trackedCommitData {
-		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
-			return commitData.verificationData, nil
-		}
-	}
-
-	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFoundInMemory
 }
 
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {

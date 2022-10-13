@@ -162,7 +162,7 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 			_, err = spt.LookupVerificationData(targetStateProofRound)
 			expectedNotFoundErr = sql.ErrNoRows
 		case trackerDB:
-			_, err = spt.dbQueries.lookupData(targetStateProofRound)
+			_, err = spt.lookupDataInDB(targetStateProofRound)
 			expectedNotFoundErr = sql.ErrNoRows
 		case trackerMemory:
 			_, err = spt.lookupDataInTrackedMemory(targetStateProofRound)
