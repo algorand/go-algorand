@@ -540,9 +540,9 @@ func TestBoxIOBudgets(t *testing.T) {
 		create := call.Args("create", "x", "\x10\x00")
 
 		// Slight detour - Prove insufficient funding fails creation.
-		fundApp.Amount -= 1
+		fundApp.Amount--
 		dl.txgroup("below min", &fundApp, create)
-		fundApp.Amount += 1
+		fundApp.Amount++
 
 		// Confirm desired creation happens.
 		dl.txgroup("", &fundApp, create)
