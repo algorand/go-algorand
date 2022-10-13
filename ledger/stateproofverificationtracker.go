@@ -33,7 +33,7 @@ import (
 
 var (
 	errStateProofVerificationDataNotFoundInMemory = errors.New("requested state proof verification data not found in memory")
-	errStateProofVerificationDataNotYetGenerated  = errors.New("requested state proof verification data later than latest data available")
+	errStateProofVerificationDataOutOfBounds      = errors.New("requested round is not in DB or memory tracked bounds")
 )
 
 type verificationDeleteData struct {
@@ -176,15 +176,16 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
+	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
+		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
+		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+	}
+
 	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
 		return spt.lookupDataInDB(stateProofLastAttestedRound)
 	}
 
-	if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
-	}
-
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("lookup failed for round %d: %w", stateProofLastAttestedRound, errStateProofVerificationDataNotYetGenerated)
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("lookup failed for round %d: %w", stateProofLastAttestedRound, errStateProofVerificationDataOutOfBounds)
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {

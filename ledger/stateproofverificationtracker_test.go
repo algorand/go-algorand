@@ -430,7 +430,7 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 
 	lastStateProofRound := basics.Round(defaultStateProofInterval + dataToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationData(lastStateProofRound + basics.Round(defaultStateProofInterval))
-	a.ErrorIs(err, errStateProofVerificationDataNotYetGenerated)
+	a.ErrorIs(err, errStateProofVerificationDataOutOfBounds)
 
 	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
