@@ -51,45 +51,6 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
-type versionFeatureFlag int
-
-const vfCompressedProposal versionFeatureFlag = 1
-
-// versionCompressedProposal defines protocol version when compressed proposal enabled
-const versionCompressedProposal = "2.2"
-
-// versionCompressedProposalNum is a parsed numeric representation of versionCompressedProposal
-var versionCompressedProposalNum [2]int64
-
-func versionToMajorMinor(version string) (int64, int64, error) {
-	parts := strings.Split(version, ".")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("version %s does not have two components", version)
-	}
-	major, err := strconv.ParseInt(parts[0], 10, 8)
-	if err != nil {
-		return 0, 0, err
-	}
-	minor, err := strconv.ParseInt(parts[1], 10, 8)
-	if err != nil {
-		return 0, 0, err
-	}
-	return major, minor, nil
-}
-
-func versionToFeatures(version string) versionFeatureFlag {
-	major, minor, err := versionToMajorMinor(version)
-	if err != nil {
-		return 0
-	}
-	if major >= versionCompressedProposalNum[0] {
-		if minor >= versionCompressedProposalNum[1] {
-			return vfCompressedProposal
-		}
-	}
-	return 0
-}
-
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -102,18 +63,18 @@ func init() {
 
 	matched := false
 	for _, version := range SupportedProtocolVersions {
-		if version == versionCompressedProposal {
+		if version == versionPeerFeatures {
 			matched = true
 		}
 	}
 	if !matched {
-		panic(fmt.Sprintf("proposal compression %s version is not supported %v", versionCompressedProposal, SupportedProtocolVersions))
+		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
 	}
 
 	var err error
-	versionCompressedProposalNum[0], versionCompressedProposalNum[1], err = versionToMajorMinor(versionCompressedProposal)
+	versionPeerFeaturesNum[0], versionPeerFeaturesNum[1], err = versionToMajorMinor(versionPeerFeatures)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse version %v: %s", versionCompressedProposal, err.Error()))
+		panic(fmt.Sprintf("failed to parse version %v: %s", versionPeerFeatures, err.Error()))
 	}
 }
 
@@ -271,7 +232,7 @@ type wsPeer struct {
 	version string
 
 	// peer features derived from the peer version
-	features versionFeatureFlag
+	features peerFeatureFlag
 
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
@@ -982,5 +943,55 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 }
 
 func (wp *wsPeer) vfCompressedProposalSupported() bool {
-	return wp.features&vfCompressedProposal != 0
+	return wp.features&pfCompressedProposal != 0
+}
+
+type peerFeatureFlag int
+
+const pfCompressedProposal peerFeatureFlag = 1
+
+// versionPeerFeatures defines protocol version when peer features were introduced
+const versionPeerFeatures = "2.2"
+
+// versionPeerFeaturesNum is a parsed numeric representation of versionPeerFeatures
+var versionPeerFeaturesNum [2]int64
+
+func versionToMajorMinor(version string) (int64, int64, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("version %s does not have two components", version)
+	}
+	major, err := strconv.ParseInt(parts[0], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	minor, err := strconv.ParseInt(parts[1], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	return major, minor, nil
+}
+
+func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFlag {
+	major, minor, err := versionToMajorMinor(version)
+	if err != nil {
+		return 0
+	}
+
+	if major < versionPeerFeaturesNum[0] {
+		return 0
+	}
+	if minor < versionPeerFeaturesNum[1] {
+		return 0
+	}
+
+	var features peerFeatureFlag
+	parts := strings.Split(announcedFeatures, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == PeerFeatureProposalCompression {
+			features |= pfCompressedProposal
+		}
+	}
+	return features
 }

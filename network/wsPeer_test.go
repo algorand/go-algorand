@@ -18,6 +18,7 @@ package network
 
 import (
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -153,21 +154,28 @@ func TestVersionToMajorMinor(t *testing.T) {
 func TestVersionToFeature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	f := versionToFeatures("1.2")
-	require.Equal(t, versionFeatureFlag(0), f)
-
-	f = versionToFeatures("1.2.3")
-	require.Equal(t, versionFeatureFlag(0), f)
-
-	f = versionToFeatures("a.b")
-	require.Equal(t, versionFeatureFlag(0), f)
-
-	f = versionToFeatures("2.1")
-	require.Equal(t, versionFeatureFlag(0), f)
-
-	f = versionToFeatures("2.2")
-	require.Equal(t, vfCompressedProposal, f)
-
-	f = versionToFeatures("2.3")
-	require.Equal(t, vfCompressedProposal, f)
+	tests := []struct {
+		ver      string
+		hdr      string
+		expected peerFeatureFlag
+	}{
+		{"1.2", "", peerFeatureFlag(0)},
+		{"1.2.3", "", peerFeatureFlag(0)},
+		{"a.b", "", peerFeatureFlag(0)},
+		{"2.1", "", peerFeatureFlag(0)},
+		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.2", "", peerFeatureFlag(0)},
+		{"2.2", "test", peerFeatureFlag(0)},
+		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
+		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
+		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			f := decodePeerFeatures(test.ver, test.hdr)
+			require.Equal(t, test.expected, f)
+		})
+	}
 }

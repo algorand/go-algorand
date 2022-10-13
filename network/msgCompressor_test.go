@@ -72,7 +72,7 @@ func TestCheckCanCompress(t *testing.T) {
 	require.False(t, r)
 
 	peer2 := wsPeer{
-		features: vfCompressedProposal,
+		features: pfCompressedProposal,
 	}
 	peers = []*wsPeer{&peer1, &peer2}
 	r = checkCanCompress(req, peers)

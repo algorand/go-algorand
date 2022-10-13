@@ -2714,7 +2714,7 @@ func TestPreparePeerData(t *testing.T) {
 		features: 0,
 	}
 	peer2 := wsPeer{
-		features: vfCompressedProposal,
+		features: pfCompressedProposal,
 	}
 	peers = []*wsPeer{&peer1, &peer2}
 	data, comp, digests = wn.preparePeerData(req, true, peers)

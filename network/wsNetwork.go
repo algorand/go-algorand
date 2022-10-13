@@ -1133,6 +1133,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.setHeaders(responseHeader)
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
+	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
@@ -1159,7 +1160,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
-		features:          versionToFeatures(matchingVersion),
+		features:          decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1893,7 +1894,7 @@ var SupportedProtocolVersions = []string{"2.2", "2.1"}
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  2.2 Compressed proposal payload
+ *  2.2 Peer features
  */
 const ProtocolVersion = "2.2"
 
@@ -1920,6 +1921,13 @@ const TooManyRequestsRetryAfterHeader = "Retry-After"
 
 // UserAgentHeader is the HTTP header identify the user agent.
 const UserAgentHeader = "User-Agent"
+
+// PeerFeaturesHeader is the HTTP header listing features
+const PeerFeaturesHeader = "X-Algorand-Peer-Features"
+
+// PeerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
+// supports proposal payload compression with zstd
+const PeerFeatureProposalCompression = "ppzstd"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
@@ -2066,6 +2074,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
+	// set the features header (comma-separated list)
+	requestHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
@@ -2137,7 +2147,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
-		features:                    versionToFeatures(matchingVersion),
+		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
