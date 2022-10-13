@@ -512,7 +512,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 // upgradeDatabaseSchema7 upgrades the database schema from version 7 to version 8,
 // adding a new stateproofverification table
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsCreateStateProofVerificationTable(ctx, tx)
+	err = createStateProofVerificationTable(ctx, tx)
 	if err != nil {
 		return err
 	}

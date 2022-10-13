@@ -168,7 +168,7 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
-const createStateProofVerificationTable = `
+const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
 	targetstateproofround integer primary key NOT NULL,
 	verificationdata blob NOT NULL)`
@@ -1376,8 +1376,8 @@ func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Execu
 	return err
 }
 
-func accountsCreateStateProofVerificationTable(ctx context.Context, e db.Executable) error {
-	_, err := e.ExecContext(ctx, createStateProofVerificationTable)
+func createStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTableQuery)
 	return err
 }
 

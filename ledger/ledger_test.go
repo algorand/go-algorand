@@ -2253,7 +2253,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
 			return err0
 		}
-		if err0 := accountsCreateStateProofVerificationTable(ctx, tx); err0 != nil {
+		if err0 := createStateProofVerificationTable(ctx, tx); err0 != nil {
 			return err0
 		}
 
@@ -2426,7 +2426,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
 			return err
 		}
-		if err := accountsCreateStateProofVerificationTable(ctx, tx); err != nil {
+		if err := createStateProofVerificationTable(ctx, tx); err != nil {
 			return err
 		}
 		return nil
