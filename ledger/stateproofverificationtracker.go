@@ -235,9 +235,8 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 	if len(spt.trackedCommitData) > 0 {
 		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
 		if blk.Round() <= lastCommitConfirmedRound {
-			spt.log.Errorf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
+			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
 				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
-			return
 		}
 	}
 
@@ -259,9 +258,8 @@ func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Bloc
 	if len(spt.trackedDeleteData) > 0 {
 		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
 		if blk.Round() <= lastDeleteConfirmedRound {
-			spt.log.Errorf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
+			spt.log.Panicf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
 				"delete data, round: %d, last confirmed delete data round: %d", blk.Round(), lastDeleteConfirmedRound)
-			return
 		}
 	}
 
