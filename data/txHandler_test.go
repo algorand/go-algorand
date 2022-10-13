@@ -341,6 +341,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		ret := make([][]transactions.SignedTxn, 0, N)
 		for u := 0; u < N; u++ {
 			grpSize := rand.Intn(maxGrpSize-1) + 1
+			grpSize = 1
 			var txGroup transactions.TxGroup
 			txns := make([]transactions.Transaction, 0, grpSize)
 			for g := 0; g < grpSize; g++ {
