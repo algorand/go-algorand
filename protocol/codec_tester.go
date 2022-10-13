@@ -35,7 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const debugCodecTester = false
+const debugCodecTester = true
 
 type msgpMarshalUnmarshal interface {
 	msgp.Marshaler

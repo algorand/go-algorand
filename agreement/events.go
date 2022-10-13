@@ -43,9 +43,9 @@ type event interface {
 // A ConsensusVersionView is a view of the consensus version as read from a
 // LedgerReader, associated with some round.
 type ConsensusVersionView struct {
-	_struct struct{} `codec:""`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Err     serializableError `codec:"-"`
+	Err     serializableError
 	Version protocol.ConsensusVersion
 }
 

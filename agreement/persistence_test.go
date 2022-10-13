@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
@@ -83,6 +84,17 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		decode(encodedBytes, t0, log)
 	}
+}
+
+func TestErrorSerializable(t *testing.T) {
+	ca := checkpointAction{
+		Round:  round(1),
+		Period: period(1),
+		Step:   step(1),
+	}
+	rca := protocol.EncodeReflect(ca)
+	mca := protocol.Encode(&ca)
+	require.Equalf(t, rca, mca, "Reflection and msgp not the same")
 }
 
 func TestAgreementPersistence(t *testing.T) {

@@ -110,9 +110,9 @@ type (
 
 	cryptoResult struct {
 		message
-		Err       serializableError `codec:"-"`
-		TaskIndex uint64            // the TaskIndex that was passed to the cryptoVerifier during the Verify call on the cryptoRequest.TaskIndex
-		Cancelled bool              // whether the corresponding request was cancelled before verification completed
+		Err       serializableError
+		TaskIndex uint64 // the TaskIndex that was passed to the cryptoVerifier during the Verify call on the cryptoRequest.TaskIndex
+		Cancelled bool   // whether the corresponding request was cancelled before verification completed
 	}
 
 	// A poolCryptoVerifier uses asynchronous goroutines to implement cryptoVerifier.
@@ -149,8 +149,8 @@ type (
 	bundleFuture struct {
 		message
 		index uint64
-		wait  func() (bundle, error) `codec:"-"`
-		ctx   context.Context        `codec:"-"`
+		wait  func() (bundle, error)
+		ctx   context.Context
 	}
 )
 
