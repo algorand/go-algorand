@@ -76,12 +76,26 @@ const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
 // wsPeerMsgDataConverter performs optional incoming messages conversion.
 // At the moment it only supports zstd decompression for payload proposal
 type wsPeerMsgDataConverter struct {
-	log                             logging.Logger
-	origin                          string
-	shouldDecompressProposalPayload bool
+	log    logging.Logger
+	origin string
+
+	// actual converter(s)
+	ppdec zstdProposalDecompressor
 }
 
-func (c *wsPeerMsgDataConverter) zstdDecompress(data []byte) ([]byte, error) {
+type zstdProposalDecompressor struct {
+	active bool
+}
+
+func (dec zstdProposalDecompressor) enabled() bool {
+	return dec.active
+}
+
+func (dec zstdProposalDecompressor) accept(data []byte) bool {
+	return len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:])
+}
+
+func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
 	r := zstd.NewReader(bytes.NewReader(data))
 	defer r.Close()
 	b := make([]byte, 0, 1024)
@@ -98,27 +112,40 @@ func (c *wsPeerMsgDataConverter) zstdDecompress(data []byte) ([]byte, error) {
 			return nil, err
 		}
 		if len(b) > MaxDecompressedMessageSize {
-			return nil, fmt.Errorf("proposal from peer %s data is too large: %d", c.origin, len(b))
+			return nil, fmt.Errorf("proposal data is too large: %d", len(b))
 		}
 	}
 }
 
 func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte, error) {
-	if tag == protocol.ProposalPayloadTag && c.shouldDecompressProposalPayload {
-		// sender might support compressed payload but fail to compress for whatever reason,
-		// in this case it sends non-compressed payload - the receiver decompress only if it is compressed.
-		if len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:]) {
-			return c.zstdDecompress(data)
+	if tag == protocol.ProposalPayloadTag {
+		if c.ppdec.enabled() {
+			// sender might support compressed payload but fail to compress for whatever reason,
+			// in this case it sends non-compressed payload - the receiver decompress only if it is compressed.
+			if c.ppdec.accept(data) {
+				res, err := c.ppdec.convert(data)
+				if err != nil {
+					return nil, fmt.Errorf("peer %s: %w", c.origin, err)
+				}
+				return res, nil
+			}
+			c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
 		}
-		c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
 	}
 	return data, nil
 }
 
 func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataConverter {
-	return &wsPeerMsgDataConverter{
-		log:                             wp.net.log,
-		origin:                          wp.originAddress,
-		shouldDecompressProposalPayload: wp.vfCompressedProposalSupported(),
+	c := wsPeerMsgDataConverter{
+		log:    wp.net.log,
+		origin: wp.originAddress,
 	}
+
+	if wp.vfCompressedProposalSupported() {
+		c.ppdec = zstdProposalDecompressor{
+			active: true,
+		}
+	}
+
+	return &c
 }

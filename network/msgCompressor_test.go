@@ -34,8 +34,8 @@ func TestZstdDecompress(t *testing.T) {
 	msg := []byte(strings.Repeat("1", 2048))
 	compressed, err := zstd.Compress(nil, msg)
 	require.NoError(t, err)
-	c := wsPeerMsgDataConverter{}
-	decompressed, err := c.zstdDecompress(compressed)
+	d := zstdProposalDecompressor{}
+	decompressed, err := d.convert(compressed)
 	require.NoError(t, err)
 	require.Equal(t, msg, decompressed)
 
@@ -43,7 +43,7 @@ func TestZstdDecompress(t *testing.T) {
 	msg = []byte(strings.Repeat("1", MaxDecompressedMessageSize+10))
 	compressed, err = zstd.Compress(nil, msg)
 	require.NoError(t, err)
-	decompressed, err = c.zstdDecompress(compressed)
+	decompressed, err = d.convert(compressed)
 	require.Error(t, err)
 	require.Nil(t, decompressed)
 }
@@ -93,8 +93,8 @@ func TestZstdCompressMsg(t *testing.T) {
 	require.Empty(t, msg)
 	require.Equal(t, []byte(protocol.ProposalPayloadTag), comp[:ppt])
 	require.Equal(t, zstdCompressionMagic[:], comp[ppt:ppt+len(zstdCompressionMagic)])
-	c := wsPeerMsgDataConverter{}
-	decompressed, err := c.zstdDecompress(comp[ppt:])
+	d := zstdProposalDecompressor{}
+	decompressed, err := d.convert(comp[ppt:])
 	require.NoError(t, err)
 	require.Equal(t, data, decompressed)
 }
@@ -113,6 +113,7 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := wsPeerMsgDataConverter{}
+	c.ppdec = zstdProposalDecompressor{active: false}
 	tag := protocol.AgreementVoteTag
 	data := []byte("data")
 
@@ -127,7 +128,7 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 
 	l := converterTestLogger{}
 	c.log = &l
-	c.shouldDecompressProposalPayload = true
+	c.ppdec = zstdProposalDecompressor{active: true}
 	r, err = c.convert(tag, data)
 	require.NoError(t, err)
 	require.Equal(t, data, r)
