@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-deadlock"
 
@@ -31,8 +32,8 @@ import (
 )
 
 var (
-	errStateProofVerificationDataNotFound        = errors.New("requested state proof verification data not found in memory")
-	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data later than latest data available")
+	errStateProofVerificationDataNotFoundInMemory = errors.New("requested state proof verification data not found in memory")
+	errStateProofVerificationDataNotYetGenerated  = errors.New("requested state proof verification data later than latest data available")
 )
 
 type verificationDeleteData struct {
@@ -175,16 +176,25 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
+	var verificationData *ledgercore.StateProofVerificationData
+	var err error
+
 	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
-		return spt.dbQueries.lookupData(stateProofLastAttestedRound)
+		verificationData, err = spt.dbQueries.lookupData(stateProofLastAttestedRound)
+		if err != nil {
+			err = fmt.Errorf("db lookup failed for round %d: %w", stateProofLastAttestedRound, err)
+		}
+	} else if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
+		verificationDataValue, memoryErr := spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+		if memoryErr != nil {
+			err = fmt.Errorf("memory lookup failed for round %d: %w", stateProofLastAttestedRound, memoryErr)
+		}
+		verificationData = &verificationDataValue
+	} else {
+		err = errStateProofVerificationDataNotYetGenerated
 	}
 
-	if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		verificationData, err := spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
-		return &verificationData, err
-	}
-
-	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+	return verificationData, err
 }
 
 func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
@@ -222,7 +232,7 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 		}
 	}
 
-	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFound
+	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFoundInMemory
 }
 
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {

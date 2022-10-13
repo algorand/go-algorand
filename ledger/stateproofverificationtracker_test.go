@@ -166,7 +166,7 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 			expectedNotFoundErr = sql.ErrNoRows
 		case trackerMemory:
 			_, err = spt.lookupDataInTrackedMemory(targetStateProofRound)
-			expectedNotFoundErr = errStateProofVerificationDataNotFound
+			expectedNotFoundErr = errStateProofVerificationDataNotFoundInMemory
 		}
 
 		if dataPresenceExpected {
@@ -446,5 +446,5 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
-	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorIs(err, errStateProofVerificationDataNotFoundInMemory)
 }
