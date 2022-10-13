@@ -22,10 +22,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	mrand "math/rand"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -243,7 +246,7 @@ func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
 	tx := createPaymentTransaction(uint64(bc.txnCount), bc.round, from, to, amt)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
-	stxn.Sig = crypto.Signature{1}
+	crypto.RandBytes(stxn.Sig[:])
 	addTransaction(bc, stxn)
 	bc.numPay++
 }
@@ -640,8 +643,12 @@ func callAppTransaction(
 // BenchmarkBlockEncoding builds a full block of pay transactions and benchmarks the time it takes to encode b.N of them.
 func BenchmarkBlockEncoding(b *testing.B) {
 	numAccts := 100
-	newAcctProb := 0.0
+	//newAcctProb := 0.0
+	//newAcctProb := 1.0
 	bc := setupEnv(b, numAccts)
+	zstdLevel, err := strconv.Atoi(os.Getenv("ZSTD_LEVEL"))
+	require.NoError(b, err, "bad ZSTD_LEVEL: %s", os.Getenv("ZSTD_LEVEL"))
+	b.Logf("ZSTD_LEVEL: %d", zstdLevel)
 
 	numBlocks := uint64(b.N)
 	fmt.Printf("Preparing... /%d: ", numBlocks)
@@ -651,7 +658,8 @@ func BenchmarkBlockEncoding(b *testing.B) {
 		currentRound := bc.round
 		for bc.round == currentRound {
 			// add pay transaction
-			payEvent(bc, mrand.Float64() < newAcctProb)
+			//payEvent(bc, mrand.Float64() < newAcctProb)
+			payEvent(bc, false)
 		}
 		if (currentRound+1)*10%(2*numBlocks) == 0 {
 			fmt.Printf("%d%% %.1fs ", (currentRound+1)*100/numBlocks, time.Since(s3).Seconds())
@@ -662,9 +670,21 @@ func BenchmarkBlockEncoding(b *testing.B) {
 	fmt.Printf("\nSummary %d blocks and %d txns: pay %d/blk (%d%%) assets %d/blk (%d%%) apps %d/blk (%d%%)\n",
 		numBlocks, bc.txnCount, bc.numPay/numBlocks, bc.numPay*100/bc.txnCount, bc.numAst/numBlocks, bc.numAst*100/bc.txnCount, bc.numApp/numBlocks, bc.numApp*100/bc.txnCount)
 
-	b.ResetTimer()
 	encs := make([][]byte, len(bc.blocks))
 	for i, blk := range bc.blocks {
 		encs[i] = protocol.Encode(&blk)
+	}
+	zstdbufs := make([][]byte, len(bc.blocks))
+	b.ResetTimer()
+	for i := range encs {
+		zstdbufs[i], err = zstd.CompressLevel(nil, encs[i], zstdLevel)
+		b.Logf("zstd compress size: %d orig: %d", len(zstdbufs[i]), len(encs[i]))
+		require.NoError(b, err)
+	}
+	b.StopTimer()
+	for i := range encs {
+		buf, err := zstd.Decompress(nil, zstdbufs[i])
+		b.Logf("zstd decompress size: %d orig: %d", len(buf), len(zstdbufs[i]))
+		require.NoError(b, err)
 	}
 }
