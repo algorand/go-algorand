@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -63,6 +64,9 @@ type stateProofVerificationTracker struct {
 
 	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
 	stateProofVerificationMu deadlock.RWMutex
+
+	// log copied from ledger
+	log logging.Logger
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
@@ -80,6 +84,8 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, dbRou
 	}
 
 	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
+
+	spt.log = l.trackerLog()
 
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
@@ -226,6 +232,15 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 }
 
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
+	if len(spt.trackedCommitData) > 0 {
+		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
+		if blk.Round() <= lastCommitConfirmedRound {
+			spt.log.Errorf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
+				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
+			return
+		}
+	}
+
 	verificationData := ledgercore.StateProofVerificationData{
 		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
@@ -236,13 +251,24 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 		confirmedRound:   blk.Round(),
 		verificationData: verificationData,
 	}
+
 	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
 }
 
 func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
+	if len(spt.trackedDeleteData) > 0 {
+		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
+		if blk.Round() <= lastDeleteConfirmedRound {
+			spt.log.Errorf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
+				"delete data, round: %d, last confirmed delete data round: %d", blk.Round(), lastDeleteConfirmedRound)
+			return
+		}
+	}
+
 	deletionData := verificationDeleteData{
 		confirmedRound:      blk.Round(),
 		stateProofNextRound: delta.StateProofNext,
 	}
+
 	spt.trackedDeleteData = append(spt.trackedDeleteData, deletionData)
 }
