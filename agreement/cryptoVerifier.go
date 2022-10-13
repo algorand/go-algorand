@@ -110,7 +110,7 @@ type (
 
 	cryptoResult struct {
 		message
-		Err       serializableError
+		Err       *serializableError
 		TaskIndex uint64 // the TaskIndex that was passed to the cryptoVerifier during the Verify call on the cryptoRequest.TaskIndex
 		Cancelled bool   // whether the corresponding request was cancelled before verification completed
 	}

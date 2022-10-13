@@ -104,7 +104,7 @@ type networkAction struct {
 
 	UnauthenticatedVotes []unauthenticatedVote `codec:"UnauthenticatedVotes,allocbound=-"`
 
-	Err serializableError
+	Err *serializableError
 }
 
 func (a networkAction) t() actionType {
@@ -409,11 +409,11 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 	}
 }
 
-func ignoreAction(e messageEvent, err serializableError) action {
+func ignoreAction(e messageEvent, err *serializableError) action {
 	return networkAction{T: ignore, Err: err, h: e.Input.MessageHandle}
 }
 
-func disconnectAction(e messageEvent, err serializableError) action {
+func disconnectAction(e messageEvent, err *serializableError) action {
 	return networkAction{T: disconnect, Err: err, h: e.Input.MessageHandle}
 }
 
@@ -487,7 +487,7 @@ type checkpointAction struct {
 	Round  round
 	Period period
 	Step   step
-	Err    serializableError
+	Err    *serializableError
 	done   chan error // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy
 }
 

@@ -45,7 +45,7 @@ type event interface {
 type ConsensusVersionView struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Err     serializableError
+	Err     *serializableError
 	Version protocol.ConsensusVersion
 }
 
@@ -265,7 +265,7 @@ type messageEvent struct {
 
 	// Err is set if cryptographic verification was attempted and failed for
 	// Input.
-	Err serializableError
+	Err *serializableError
 	// TaskIndex is optionally set to track a message as it is processed
 	// through cryptographic verification.
 	TaskIndex uint64
@@ -538,7 +538,7 @@ type payloadProcessedEvent struct {
 
 	// Err is set to be the reason the proposal payload was rejected in
 	// payloadRejected.
-	Err serializableError
+	Err *serializableError
 }
 
 func (e payloadProcessedEvent) t() eventType {
@@ -562,7 +562,7 @@ type filteredEvent struct {
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.
-	Err serializableError
+	Err *serializableError
 }
 
 func (e filteredEvent) t() eventType {
@@ -916,8 +916,8 @@ type checkpointEvent struct {
 	Round  round
 	Period period
 	Step   step
-	Err    serializableError // the error that was generated while storing the state to disk; nil on success.
-	done   chan error        // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy.
+	Err    *serializableError // the error that was generated while storing the state to disk; nil on success.
+	done   chan error         // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy.
 }
 
 func (e checkpointEvent) t() eventType {
