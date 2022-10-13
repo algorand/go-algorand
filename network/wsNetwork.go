@@ -126,10 +126,15 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
-// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
+var networkPrioBatchesPPWithCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_batches_wpp_comp_sent_total", Description: "number of prio compressed batches with PP"})
+var networkPrioBatchesPPWithoutCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_pp_prio_batches_wpp_non_comp_sent_total", Description: "number of prio non-compressed batches with PP"})
+var networkPrioPPCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_compressed_size_total", Description: "cumulative size of all compressed PP"})
+var networkPrioPPNonCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_non_compressed_size_total", Description: "cumulative size of all non-compressed PP"})
+
+// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete.
 const peerDisconnectionAckDuration = 5 * time.Second
 
-// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
+// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete during shutdown.
 const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
@@ -1458,11 +1463,17 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 			digests[i] = crypto.Hash(mbytes)
 		}
 
+		if prio && request.tags[i] == protocol.ProposalPayloadTag {
+			networkPrioPPNonCompressedSize.Add(float64(len(d)), nil)
+		}
+
 		if wantCompression {
 			if request.tags[i] == protocol.ProposalPayloadTag {
 				compressed, logMsg := zstdCompressMsg(tbytes, d)
 				if len(logMsg) > 0 {
 					wn.log.Warn(logMsg)
+				} else {
+					networkPrioPPCompressedSize.Add(float64(len(compressed)), nil)
 				}
 				dataCompressed[i] = compressed
 			} else {
@@ -1503,8 +1514,14 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer.vfCompressedProposalSupported() && len(dataWithCompression) > 0 {
 			// if this peer supports compressed proposals and compressed data batch is filled out, use it
 			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
+			if prio {
+				networkPrioBatchesPPWithCompression.Inc(nil)
+			}
 		} else {
 			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
+			if prio {
+				networkPrioBatchesPPWithoutCompression.Inc(nil)
+			}
 		}
 		if ok {
 			sentMessageCount++
