@@ -5070,9 +5070,9 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	return nil
 }
 
-func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, stateProofNextRound basics.Round) error {
+func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
 	f := func() error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", stateProofNextRound)
+		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
 		return err
 	}
 	return db.Retry(f)
