@@ -3029,7 +3029,7 @@ func verifyStateProofTrackingLedger(t *testing.T, l *Ledger, startRound basics.R
 		if dataPresenceExpected {
 			a.NoError(err)
 		} else {
-			a.True(errors.Is(err, sql.ErrNoRows) || errors.Is(err, errStateProofVerificationDataNotFound))
+			a.True(errors.Is(err, sql.ErrNoRows) || errors.Is(err, errStateProofVerificationDataNotFoundInMemory))
 		}
 	}
 }
