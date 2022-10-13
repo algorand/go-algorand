@@ -36,21 +36,35 @@ func TestBoxNewDel(t *testing.T) {
 
 	ep, txn, ledger := logic.MakeSampleEnv()
 
-	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
-	logic.TestApp(t, `byte "self"; int 24; box_create`, ep)
-	ledger.DelBoxes(888, "self")
-	logic.TestApp(t, `byte "self"; int 24; box_create`, ep)
-	ledger.DelBoxes(888, "self")
-	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "self"; int 24; box_create; !`, ep)
-	ledger.DelBoxes(888, "self")
-	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "other"; int 24; box_create`, ep)
-	ledger.DelBoxes(888, "self")
+	for _, size := range []int{24, 0} {
+		t.Run(fmt.Sprintf("box size=%d", size), func(t *testing.T) {
 
-	logic.TestApp(t, `byte "self"; int 24; box_create; assert; byte "self"; box_del`, ep)
-	logic.TestApp(t, `byte "self"; box_del; !`, ep)
-	logic.TestApp(t, `byte "self"; int 24; box_create; assert
-                     byte "self"; box_del; assert
-                     byte "self"; box_del; !`, ep)
+			createSelf := fmt.Sprintf(`byte "self"; int %d; box_create;`, size)
+			createOther := fmt.Sprintf(`byte "other"; int %d; box_create;`, size)
+
+			ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+
+			logic.TestApp(t, createSelf, ep)
+			ledger.DelBoxes(888, "self")
+
+			logic.TestApp(t, createSelf+`assert;`+createSelf+`!`, ep)
+			ledger.DelBoxes(888, "self")
+			logic.TestApp(t, createSelf+`assert;`+createOther, ep)
+			ledger.DelBoxes(888, "self")
+
+			logic.TestApp(t, createSelf+`assert; byte "self"; box_del`, ep)
+			logic.TestApp(t, `byte "self"; box_del; !`, ep)
+			logic.TestApp(t, createSelf+`assert
+                                        byte "self"; box_del; assert
+                                        byte "self"; box_del; !`, ep)
+			ledger.DelBoxes(888, "self")
+
+			logic.TestApp(t, fmt.Sprintf(
+				`byte "self"; box_get; !; assert; pop
+                 byte "self"; int %d; bzero; box_put; int 1`, size), ep)
+		})
+	}
+
 }
 
 func TestBoxNewBad(t *testing.T) {

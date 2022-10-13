@@ -127,6 +127,10 @@ var passThruSource = main(`
 
 const boxVersion = 35
 
+func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
+	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
+}
+
 // TestBoxCreate tests MBR changes around allocation, deallocation
 func TestBoxCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -138,9 +142,10 @@ func TestBoxCreate(t *testing.T) {
 		defer dl.Close()
 
 		// increment for a size 24 box with 4 letter name
-		const mbr = 2500 + 28*400
+		proto := config.Consensus[cv]
+		mbr := boxFee(proto, 28)
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, boxAppSource)
+		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -197,9 +202,10 @@ func TestBoxRecreate(t *testing.T) {
 		defer dl.Close()
 
 		// increment for a size 4 box with 4 letter name
-		const mbr = 2500 + 8*400
+		proto := config.Consensus[cv]
+		mbr := boxFee(proto, 8)
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+mbr, boxAppSource)
+		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -265,11 +271,13 @@ func TestBoxCreateAvailability(t *testing.T) {
 		// the app address that we know the app will get. So this is a nice
 		// test, but unrealistic way to actual create a box.
 		psychic := basics.AppIndex(2)
+
+		proto := config.Consensus[cv]
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: psychic.Address(),
-			Amount:   100_000 + 2500 + 15*400,
+			Amount:   proto.MinBalance + boxFee(proto, 15),
 		})
 		dl.txn(&accessInCreate)
 
@@ -500,7 +508,7 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		appIndex := dl.fundedApp(addrs[0], 0, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
@@ -521,14 +529,23 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
 			"write budget (4096) exceeded")
 
-		var needed uint64 = 100_000 + 2500 + 400*(4096+1) // remember key len!
-		dl.txn(&txntest.Txn{
+		// Create 4,096 byte box
+		proto := config.Consensus[cv]
+		fundApp := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: appIndex.Address(),
-			Amount:   needed - 1_000_000,
-		})
-		dl.txn(call.Args("create", "x", "\x10\x00"))
+			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
+		}
+		create := call.Args("create", "x", "\x10\x00")
+
+		// Slight detour - Prove insufficient funding fails creation.
+		fundApp.Amount -= 1
+		dl.txgroup("below min", &fundApp, create)
+		fundApp.Amount += 1
+
+		// Confirm desired creation happens.
+		dl.txgroup("", &fundApp, create)
 
 		// Now that we've created a 4,096 byte box, test READ budget
 		// It works at the start, because call still has 4 brs.
