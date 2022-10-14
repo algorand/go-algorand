@@ -540,17 +540,17 @@ const waitForFirstTxnDuration = 2000 * time.Millisecond
 const numberOfExecPoolSeats = 64
 
 // internalBufferSize is the size of the chan that will hold the arriving stxns before they get pre-processed
-const internalBufferSize = 25000
+const internalBufferSize = 0
 
 //const txnPerWorksetThreshold = 32
 
 // MakeStream creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
-func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBlockWatcher,
+func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
+	ledger logic.LedgerForSignature, nbw *NewBlockWatcher,
 	verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
-	stxnInput chan<- VerificationElement, resultOtput <-chan VerificationResult) {
+	resultOtput <-chan VerificationResult) {
 
-	stxnChan := make(chan VerificationElement, internalBufferSize)
 	resultChan := make(chan VerificationResult)
 
 	sm := streamManager{
@@ -571,7 +571,7 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBl
 		var added bool
 		for {
 			select {
-			case stx := <-stxnChan:
+			case stx, ok := <-stxnChan:
 				isFirstInBatch := bl.batchVerifier.GetNumberOfEnqueuedSignatures() == 0
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
 				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
@@ -605,7 +605,8 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBl
 				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
 				bl.elementContext = append(bl.elementContext, stx.Context)
 				bl.messagesForTxn = append(bl.messagesForTxn, numEnqueued)
-				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
+				// if not expecting any more transactions (!ok) or if the batch is full
+				if !ok || len(bl.groupCtxs) >= txnPerWorksetThreshold {
 					// TODO: the limit of 32 should not pass
 					err := sm.processFullBatch(bl)
 					if err != nil {
@@ -641,7 +642,7 @@ func MakeStream(ctx context.Context, ledger logic.LedgerForSignature, nbw *NewBl
 			}
 		}
 	}()
-	return stxnChan, resultChan
+	return resultChan
 }
 
 func (sm *streamManager) processFullBatch(bl batchLoad) (err error) {

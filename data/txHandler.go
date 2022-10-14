@@ -67,7 +67,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	streamVerifierChan    chan<- verify.VerificationElement
+	streamVerifierChan    chan verify.VerificationElement
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -107,23 +107,26 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 	nbw := verify.MakeNewBlockWatcher(latestHdr)
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	handler.streamVerifierChan, outChan = verify.MakeStream(handler.ctx,
+	outChan = verify.MakeStream(handler.ctx, handler.streamVerifierChan,
 		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
-	go processTxnStreamVerResults(handler.ctx, outChan, handler.postVerificationQueue)
+	go handler.processTxnStreamVerResults(outChan)
 	return handler
 }
 
-func processTxnStreamVerResults(ctx context.Context, outChan <-chan verify.VerificationResult,
-	postVerificationQueue chan *txBacklogMsg) {
+func (handler *TxHandler) processTxnStreamVerResults(outChan <-chan verify.VerificationResult) {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-handler.ctx.Done():
 			return
-		case result := <-outChan:
+		case result, ok := <-outChan:
+			if !ok {
+				close(handler.postVerificationQueue)
+				return
+			}
 			txBLMsg := result.Context.(*txBacklogMsg)
 			txBLMsg.verificationErr = result.Err
 			select {
-			case postVerificationQueue <- txBLMsg:
+			case handler.postVerificationQueue <- txBLMsg:
 			default:
 				// we failed to write to the output queue, since the queue was full.
 				// adding the metric here allows us to monitor how frequently it happens.
@@ -178,6 +181,7 @@ func (handler *TxHandler) backlogWorker() {
 		select {
 		case wi, ok := <-handler.backlogQueue:
 			if !ok {
+				close(handler.streamVerifierChan)
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {
@@ -227,31 +231,6 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
-}
-
-// asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
-func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
-	tx := arg.(*txBacklogMsg)
-
-	// build the transaction verification context
-	latest := handler.ledger.Latest()
-	latestHdr, err := handler.ledger.BlockHdr(latest)
-	if err != nil {
-		tx.verificationErr = fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
-		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
-	} else {
-		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
-	}
-
-	select {
-	case handler.postVerificationQueue <- tx:
-	default:
-		// we failed to write to the output queue, since the queue was full.
-		// adding the metric here allows us to monitor how frequently it happens.
-		transactionMessagesDroppedFromPool.Inc(nil)
-	}
-	return nil
 }
 
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
