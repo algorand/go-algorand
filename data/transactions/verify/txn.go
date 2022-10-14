@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -479,6 +480,7 @@ type streamManager struct {
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	cache            VerifiedTransactionCache
+	execPoolWg       sync.WaitGroup
 }
 
 type batchLoad struct {
@@ -572,6 +574,22 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 		for {
 			select {
 			case stx, ok := <-stxnChan:
+				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
+				if !ok {
+					err := sm.processFullBatch(bl)
+					if err != nil {
+						vr := VerificationResult{
+							TxnGroup: stx.TxnGroup,
+							Context:  stx.Context,
+							Err:      err,// TODO: maybe this error in internal, and should not go out
+						}
+						sm.sendOut(vr)
+					}
+					// for for all pending tasks out, then close the result chan
+					sm.execPoolWg.Wait()
+					close(resultChan)
+					return
+				}
 				isFirstInBatch := bl.batchVerifier.GetNumberOfEnqueuedSignatures() == 0
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
 				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
@@ -605,12 +623,17 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
 				bl.elementContext = append(bl.elementContext, stx.Context)
 				bl.messagesForTxn = append(bl.messagesForTxn, numEnqueued)
-				// if not expecting any more transactions (!ok) or if the batch is full
-				if !ok || len(bl.groupCtxs) >= txnPerWorksetThreshold {
+				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
 					// TODO: the limit of 32 should not pass
 					err := sm.processFullBatch(bl)
 					if err != nil {
-						fmt.Println(err)
+						vr := VerificationResult{
+							TxnGroup: stx.TxnGroup,
+							Context:  stx.Context,
+							Err:      err,// TODO: maybe this error in internal, and should not go out
+						}
+						sm.sendOut(vr)
+						continue
 					}
 					bl = makeBatchLoad()
 					// starting a new batch. Can wait long, since nothing is blocked
@@ -691,8 +714,9 @@ func (sm *streamManager) sendOut(vr VerificationResult) {
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
-
+	sm.execPoolWg.Add(1)
 	function := func(arg interface{}) interface{} {
+		defer sm.execPoolWg.Done()
 		bl = arg.(batchLoad)
 		//		var grpErr error
 		// check if we've canceled the request while this was in the queue.

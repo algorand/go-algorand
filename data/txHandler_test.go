@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 func BenchmarkTxHandlerProcessing(b *testing.B) {
@@ -292,8 +294,8 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	cfg.EnableProcessBlockStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-	defer txHandler.ctxCancel()
+	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
 
@@ -308,7 +310,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		for {
 			// prioritize the postVerificationQueue
 			select {
-			case wi, ok := <-txHandler.postVerificationQueue:
+			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
 					return
 				}
@@ -320,27 +322,29 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 
 			// we have no more post verification items. wait for either backlog queue item or post verification item.
 			select {
-			case wi, ok := <-txHandler.backlogQueue:
+			case wi, ok := <-handler.backlogQueue:
 				if !ok {
-					close(txHandler.streamVerifierChan)
-					// unlike the production backlog, do not return here, so that all pending txns getting verified
-					// will get the chance to get pushed out
-					// return
-					continue
+					close(handler.streamVerifierChan)
+					// wait until all the pending responses are obtained.
+					// this is not in backlogWorker, maybe should be
+					for wi := range handler.postVerificationQueue {
+						outChan <- wi
+					}
+					return
 				}
-				if txHandler.checkAlreadyCommitted(wi) {
+				if handler.checkAlreadyCommitted(wi) {
 					// this is not expected during the test
 					continue
 				}
-				txHandler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
+				handler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
 
-			case wi, ok := <-txHandler.postVerificationQueue:
+			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
 					return
 				}
 				outChan <- wi
 
-			case <-txHandler.ctx.Done():
+			case <-handler.ctx.Done():
 				return
 			}
 		}
@@ -366,7 +370,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		defer func() {
 			fmt.Printf("processed %d txns\n", counter)
 		}()
-		defer close(txHandler.postVerificationQueue)
 		b.ResetTimer()
 		for wi := range outChan {
 			counter++
@@ -387,13 +390,20 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	// Send the transactions
 	for _, tg := range encodedSignedTransactionGroups {
 		// time the streaming of the txns to at most 6000 tps
-		txHandler.processIncomingTxn(tg)
-		time.Sleep(160*time.Microsecond)
+		handler.processIncomingTxn(tg)
 		time.Sleep(160*time.Microsecond)
 	}
-	//	time.Sleep(3*time.Second)
-	close(txHandler.backlogQueue)
+	close(handler.backlogQueue)
 	wg.Wait()
+
+	var buf strings.Builder
+	metrics.DefaultRegistry().WriteMetrics(&buf, "")
+	str := buf.String()	
+	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
+	str = str[x+44:x+44+strings.Index(str[x+44:], "\n")]
+	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
+	fmt.Printf("Dropped from backlog: %s\n", str)
+
 }
 
 func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
