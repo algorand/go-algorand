@@ -75,7 +75,8 @@ func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
 }
 
 // MaxDecompressedMessageSize defines a maximum decompressed data size
-// to prevent zip bombs
+// to prevent zip bombs. This depends on MaxTxnBytesPerBlock consensus parameter
+// and should be larger.
 const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
 
 // wsPeerMsgDataConverter performs optional incoming messages conversion.

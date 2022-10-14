@@ -1464,7 +1464,7 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 		}
 
 		if prio && request.tags[i] == protocol.ProposalPayloadTag {
-			networkPrioPPNonCompressedSize.Add(float64(len(d)), nil)
+			networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
 		}
 
 		if wantCompression {
@@ -1473,7 +1473,7 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 				if len(logMsg) > 0 {
 					wn.log.Warn(logMsg)
 				} else {
-					networkPrioPPCompressedSize.Add(float64(len(compressed)), nil)
+					networkPrioPPCompressedSize.AddUint64(uint64(len(compressed)), nil)
 				}
 				dataCompressed[i] = compressed
 			} else {
