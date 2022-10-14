@@ -414,7 +414,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required minfee.  It can make assumptions about overflow because the group
-// is known OK according to TxnGroupBatchVerify. (The group is "WellFormed")
+// is known OK according to txnGroupBatchPrep. (The group is "WellFormed")
 func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
@@ -424,7 +424,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 	}
-	// Overflow is impossible, because TxnGroupBatchVerify checked.
+	// Overflow is impossible, because txnGroupBatchPrep checked.
 	feeNeeded := minFee * minFeeCount
 	return basics.SubSaturate(feesPaid, feeNeeded)
 }
