@@ -61,7 +61,6 @@ func TestBoxNewBad(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	logic.TestApp(t, `byte "self"; int 999; box_create`, ep, "write budget")
-	ledger.DelBoxes(888, "self")
 
 	// In test proto, you get 100 I/O budget per boxref
 	ten := [10]transactions.BoxRef{}
@@ -159,11 +158,9 @@ func TestDirtyTracking(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 200; box_create`, ep)
 	logic.TestApp(t, `byte "other"; int 201; box_create`, ep, "write budget")
 	// deleting "self" doesn't give extra write budget to create big "other"
-	ledger.DelBoxes(888, "other")
 	logic.TestApp(t, `byte "self"; box_del; !; byte "other"; int 201; box_create`, ep,
 		"write budget")
 
-	ledger.DelBoxes(888, "other") // creation happens in our fake ledger despite failure
 	// though it cancels out a creation that happened here
 	logic.TestApp(t, `byte "self"; int 200; box_create; assert
                       byte "self"; box_del; assert
@@ -314,7 +311,6 @@ func TestBoxWriteBudget(t *testing.T) {
                       byte "self"; int 200; box_create`, ep)
 	logic.TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 201; box_create`, ep, "write budget (200) exceeded")
-	ledger.DelBoxes(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
 
 	// Test interplay of two different boxes being created
 	logic.TestApp(t, `byte "self"; int 4; box_create; assert
@@ -346,12 +342,12 @@ func TestBoxWriteBudget(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 101; box_create`, ep, "write budget (200) exceeded")
 
-	ledger.DelBoxes(888, "other")
 	logic.TestApp(t, `byte "other"; int 101; box_create`, ep)
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep, "read budget (200) exceeded")
 	ledger.DelBoxes(888, "other")
+
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 10; box_create`, ep)
 	// They're now small enough to read and write
@@ -397,7 +393,6 @@ func TestWriteBudgetPut(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 150; bzero; box_put;
 	                  byte "other"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep,
 		"write budget")
-	ledger.DelBoxes(888, "self", "other")
 
 	// testing a regression: ensure box_put does not double debit when creating
 	logic.TestApp(t, `byte "self"; int 150; bzero; box_put; int 1`, ep)
@@ -415,7 +410,6 @@ func TestBoxRepeatedCreate(t *testing.T) {
 	// Sample tx[0] has two box refs, so write budget is 2*100
 	logic.TestApp(t, `byte "self"; int 201; box_create`, ep,
 		"write budget")
-	ledger.DelBoxes(888, "self")
 	logic.TestApp(t, `byte "self"; int 200; box_create`, ep)
 	logic.TestApp(t, `byte "self"; int 200; box_create; !; assert // does not actually create
                       byte "other"; int 200; box_create; assert // does create, and budget should be enough
