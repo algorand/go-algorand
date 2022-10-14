@@ -253,6 +253,8 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
+// BenchmarkIncomingTxHandlerProcessing sends singed transactions to be handled and verified
+// It reports the number of dropped transactions
 func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
@@ -288,9 +290,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	require.NoError(b, err)
 
 	l := ledger
-
-	cfg.TxPoolSize = 75000
-	cfg.EnableProcessBlockStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
@@ -387,7 +386,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		}
 	}()
 
-	// Send the transactions
+	// Send the transactions to the verifier
 	for _, tg := range encodedSignedTransactionGroups {
 		// time the streaming of the txns to at most 6000 tps
 		handler.processIncomingTxn(tg)
@@ -397,6 +396,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	close(handler.backlogQueue)
 	wg.Wait()
 
+	// Report the number of transactions dropped because the backlog was busy
 	var buf strings.Builder
 	metrics.DefaultRegistry().WriteMetrics(&buf, "")
 	str := buf.String()
@@ -404,9 +404,9 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
 	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
 	fmt.Printf("Dropped from backlog: %s\n", str)
-
 }
 
+// Prepare N transaction groups of random sizes with randomly invalid signatures
 func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
 	badTxnGroups map[uint64]interface{}) {
@@ -417,7 +417,6 @@ func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 	ret = make([][]transactions.SignedTxn, 0, N)
 	for u := 0; u < N; u++ {
 		grpSize := rand.Intn(maxGrpSize-1) + 1
-		grpSize = 1
 		var txGroup transactions.TxGroup
 		txns := make([]transactions.Transaction, 0, grpSize)
 		for g := 0; g < grpSize; g++ {
