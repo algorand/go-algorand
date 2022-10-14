@@ -66,7 +66,7 @@ func init() {
 	generateCmd.Flags().IntVarP(&nodeHostsToGenerate, "node-hosts", "N", -1, "Node-hosts to generate, default=nodes")
 	generateCmd.Flags().IntVarP(&nodesToGenerate, "nodes", "n", -1, "Nodes to generate")
 	generateCmd.Flags().IntVarP(&nonPartnodesToGenerate, "non-participating-nodes", "X", 0, "Non participating nodes to generate")
-	generateCmd.Flags().IntVarP(&nonPartnodesHostsToGenerate, "non-participating-nodes-hosts", "H", -1, "Non participating nodes hosts to generate")
+	generateCmd.Flags().IntVarP(&nonPartnodesHostsToGenerate, "non-participating-nodes-hosts", "H", 0, "Non participating nodes hosts to generate")
 	generateCmd.Flags().StringVarP(&nodeTemplatePath, "node-template", "", "", "json for one node")
 	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
@@ -160,8 +160,8 @@ template modes for -t:`,
 			if nodeHostsToGenerate < 0 {
 				nodeHostsToGenerate = nodesToGenerate
 			}
-			if nonPartnodesHostsToGenerate < 0 {
-				nonPartnodesHostsToGenerate = nonPartnodesHostsToGenerate
+			if (nonPartnodesToGenerate >= 0) && (nonPartnodesHostsToGenerate == 0) {
+				nonPartnodesHostsToGenerate = nonPartnodesToGenerate
 			}
 			if relaysToGenerate < 0 {
 				reportErrorf("must specify number of relays with -R")
