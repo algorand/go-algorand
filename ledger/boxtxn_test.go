@@ -623,7 +623,7 @@ func TestBoxInners(t *testing.T) {
 		// Cleanup
 		dl.txn(call.Args("del", "x"), "read budget")
 		dl.txn(call.Args("del", "y"), "read budget")
-		// suprising but correct: they work when combined, because both txns
+		// surprising but correct: they work when combined, because both txns
 		// have both box refs, so the read budget goes up.
 		dl.txgroup("", call.Args("delete", "x"), call.Args("delete", "y"))
 

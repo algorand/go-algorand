@@ -455,7 +455,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		logger:                  caller.logger,
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
-		Debugger:                caller.Debugger,
+		Debugger:                nil, // See #4438, where this becomes caller.Debugger
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -465,7 +465,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
-		// read comment in EvalParams declarion about txid caches
+		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}
 	return ep
