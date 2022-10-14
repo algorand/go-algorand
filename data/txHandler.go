@@ -39,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
 )
 
 // The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
@@ -51,6 +50,7 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+var txAdvertiseDrops = metrics.NewCounter("algod_tx_advertise_drops", "Number of Ta messages dropped")
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -69,6 +69,8 @@ type TxHandler struct {
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
 	postVerificationQueue chan *txBacklogMsg
+	txAdvertiseQueue      chan network.IncomingMessage
+	txidCommitted         chan []transactions.Txid
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
 	ctx                   context.Context
@@ -79,8 +81,8 @@ type TxHandler struct {
 	// prevRound atomic set by OnNewBlock
 	prevRound uint64
 
-	txRequests   requestedTxnSet
-	txRequestsMu deadlock.Mutex
+	txRequests requestedTxnSet
+	//txRequestsMu deadlock.Mutex
 
 	// prevTxns contains the stxns from the previous block.
 	// The value is map[transactions.Txid]SignedTxn
@@ -199,6 +201,8 @@ func MakeTxHandler(txPool *pools.TransactionPool, dledger *Ledger, net network.G
 		txVerificationPool:    executionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
+		txAdvertiseQueue:      make(chan network.IncomingMessage, txBacklogSize),
+		txidCommitted:         make(chan []transactions.Txid, txBacklogSize),
 		net:                   net,
 		relayMessages:         cfg.NetAddress != "" || cfg.ForceRelayMessages,
 	}
@@ -223,13 +227,14 @@ func (handler *TxHandler) OnNewBlock(block bookkeeping.Block, delta ledgercore.S
 		prevTxns[txid] = stxn.SignedTxn
 		txidList[i] = txid
 	}
-	handler.txRequestsMu.Lock()
-	for _, txid := range txidList {
-		handler.txRequests.popByTxid(txid)
-	}
+	handler.txidCommitted <- txidList
+	// handler.txRequestsMu.Lock()
+	// for _, txid := range txidList {
+	// 	handler.txRequests.popByTxid(txid)
+	// }
 	handler.prevTxns.Store(prevTxns)
 	atomic.StoreUint64(&handler.prevRound, uint64(block.BlockHeader.Round))
-	handler.txRequestsMu.Unlock()
+	// handler.txRequestsMu.Unlock()
 }
 
 // Start enables the processing of incoming messages at the transaction handler
@@ -481,11 +486,17 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		rawmsg:            &rawmsg,
 		unverifiedTxGroup: unverifiedTxGroup,
 	}:
-		handler.txRequestsMu.Lock()
-		for _, stxn := range unverifiedTxGroup {
-			handler.txRequests.popByTxid(stxn.ID())
+		txidList := make([]transactions.Txid, len(unverifiedTxGroup))
+		for i, stxn := range unverifiedTxGroup {
+			txidList[i] = stxn.ID()
 		}
-		handler.txRequestsMu.Unlock()
+		handler.txidCommitted <- txidList
+
+		// handler.txRequestsMu.Lock()
+		// for _, stxn := range unverifiedTxGroup {
+		// 	handler.txRequests.popByTxid(stxn.ID())
+		// }
+		// handler.txRequestsMu.Unlock()
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.
@@ -500,19 +511,28 @@ const requestExpiration = time.Millisecond * 900
 
 // processIncomingTxnAdvertise is the handler for protocol.TxnAdvertiseTag "Ta"
 func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	select {
+	case handler.txAdvertiseQueue <- rawmsg:
+	// yay
+	default:
+		txAdvertiseDrops.Inc(nil)
+	}
+	return network.OutgoingMessage{}
+}
+
+func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.IncomingMessage) {
 	var request []byte
 	var txid transactions.Txid
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
 	if !ok {
 		handler.log.Errorf("Ta Sender not UnicastPeer")
-		return network.OutgoingMessage{}
+		return
 	}
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
 		handler.log.Warnf("got txid advertisement len %d", len(rawmsg.Data))
-		return network.OutgoingMessage{Action: network.Disconnect}
+		return
 	}
-	handler.txRequestsMu.Lock()
 	now := time.Now()
 	for i := 0; i < numids; i++ {
 		copy(txid[:], rawmsg.Data[len(txid)*i:])
@@ -543,14 +563,12 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
 		request = append(request, (txid[:])...)
 	}
-	handler.txRequestsMu.Unlock()
 	if len(request) != 0 {
 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
 		if err != nil {
 			handler.log.Errorf("Ta req err, %v", err)
 		}
 	}
-	return network.OutgoingMessage{}
 }
 
 // retryHandler thread retries txn requests that waited too long
@@ -563,6 +581,12 @@ func (handler *TxHandler) retryHandler() {
 		select {
 		case <-handler.ctx.Done():
 			return
+		case rawmsg := <-handler.txAdvertiseQueue:
+			handler.processIncomingTxnAdvertiseInner(rawmsg)
+		case txidList := <-handler.txidCommitted:
+			for _, txid := range txidList {
+				handler.txRequests.popByTxid(txid)
+			}
 		case now := <-ticker.C:
 			handler.retryHandlerTick(now)
 		}
@@ -590,8 +614,8 @@ func (handler *TxHandler) retryHandlerTick(now time.Time) {
 
 // retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
 func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
-	handler.txRequestsMu.Lock()
-	defer handler.txRequestsMu.Unlock()
+	// handler.txRequestsMu.Lock()
+	// defer handler.txRequestsMu.Unlock()
 	if len(handler.txRequests.ar) == 0 {
 		return
 	}
