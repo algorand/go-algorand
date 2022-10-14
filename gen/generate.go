@@ -338,7 +338,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 
 	rewardBalance := defaultIncentivePoolBalanceAtInception
 	if devmode {
-		rewardBalance = 0
+		rewardBalance = protoParams.MinBalance
 	}
 
 	records["RewardsPool"] = basics.AccountData{
