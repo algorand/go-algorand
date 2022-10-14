@@ -4422,3 +4422,25 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		}
 	}
 }
+
+// Adapted from https://github.com/golang/go/blob/go1.17.9/src/database/sql/convert_test.go#L287-L303.
+func TestNullString(t *testing.T) {
+	var ns sql.NullString
+	err := ns.Scan([]byte("foo"))
+	require.NoError(t, err)
+	if !ns.Valid {
+		t.Errorf("expecting not null")
+	}
+	if ns.String != "foo" {
+		t.Errorf("expecting foo; got %q", ns.String)
+	}
+
+	err = ns.Scan(nil)
+	require.NoError(t, err)
+	if ns.Valid {
+		t.Errorf("expecting null on nil")
+	}
+	if ns.String != "" {
+		t.Errorf("expecting blank on nil; got %q", ns.String)
+	}
+}
