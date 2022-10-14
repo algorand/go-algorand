@@ -1855,7 +1855,7 @@ func opBytesZero(cx *EvalContext) error {
 
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc+1)
+	cx.intc, cx.nextpc, err = parseIntImmArgs(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1895,9 +1895,29 @@ func opPushInt(cx *EvalContext) error {
 	return nil
 }
 
+func opPushInts(cx *EvalContext) error {
+	intc, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return err
+	}
+	finalLen := len(cx.stack) + len(intc)
+	if cap(cx.stack) < finalLen {
+		// Let's grow all at once, plus a little slack.
+		newStack := make([]stackValue, len(cx.stack), finalLen+4)
+		copy(newStack, cx.stack)
+		cx.stack = newStack
+	}
+	for _, cint := range intc {
+		sv := stackValue{Uint: cint}
+		cx.stack = append(cx.stack, sv)
+	}
+	cx.nextpc = nextpc
+	return nil
+}
+
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc+1)
+	cx.bytec, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1939,6 +1959,26 @@ func opPushBytes(cx *EvalContext) error {
 	sv := stackValue{Bytes: cx.program[pos:end]}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = int(end)
+	return nil
+}
+
+func opPushBytess(cx *EvalContext) error {
+	cbytess, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return err
+	}
+	finalLen := len(cx.stack) + len(cbytess)
+	if cap(cx.stack) < finalLen {
+		// Let's grow all at once, plus a little slack.
+		newStack := make([]stackValue, len(cx.stack), finalLen+4)
+		copy(newStack, cx.stack)
+		cx.stack = newStack
+	}
+	for _, cbytes := range cbytess {
+		sv := stackValue{Bytes: cbytes}
+		cx.stack = append(cx.stack, sv)
+	}
+	cx.nextpc = nextpc
 	return nil
 }
 

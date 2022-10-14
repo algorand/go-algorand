@@ -409,12 +409,10 @@ pushint 1
 
 const matchNonsense = `
 match_label0:
-pushint 1
-pushint 2
-pushint 1
+pushints 1 2 1
 match match_label0 match_label1
 match_label1:
-pushint 1
+pushbytess "1" "2" "1"
 `
 
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense
@@ -429,7 +427,7 @@ const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988
 	randomnessCompiled + "800243218001775c0280018881015d"
 
 const switchCompiled = "81018d02fff800008101"
-const matchCompiled = "8101810281018e02fff400008101"
+const matchCompiled = "83030102018e02fff500008203013101320131"
 
 const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled
 
@@ -2358,13 +2356,13 @@ func TestErrShortBytecblock(t *testing.T) {
 
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops := testProg(t, text, 1)
-	_, _, err := parseIntcblock(ops.Program, 1)
-	require.Equal(t, err, errShortIntcblock)
+	_, _, err := parseIntImmArgs(ops.Program, 1)
+	require.Equal(t, err, errShortIntImmArgs)
 
 	var cx EvalContext
 	cx.program = ops.Program
-	err = checkIntConstBlock(&cx)
-	require.Equal(t, err, errShortIntcblock)
+	err = checkIntImmArgs(&cx)
+	require.Equal(t, err, errShortIntImmArgs)
 }
 
 func TestMethodWarning(t *testing.T) {
@@ -2908,13 +2906,11 @@ func TestAssembleMatch(t *testing.T) {
 
 	// fail when target doesn't correspond to existing label
 	source := `
-	pushint 1
-	pushint 1
-	pushint 1
+	pushints 1 1 1
 	match label1 label2
 	label1:
 	`
-	testProg(t, source, AssemblerMaxVersion, NewExpect(5, "reference to undefined label \"label2\""))
+	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
 
 	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
 	testProg(t, `
@@ -2925,21 +2921,17 @@ int 1
 
 	// confirm arg limit
 	source = `
-	pushint 1
-	pushint 2
-	pushint 1
+	pushints 1 2 1
 	match label1 label2
 	label1:
 	label2:
 	`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 13) // ver (1) + pushints (6) + opcode (1) + length (1) + labels (2*2)
+	require.Len(t, ops.Program, 12) // ver (1) + pushints (5) + opcode (1) + length (1) + labels (2*2)
 
 	// confirm byte array args are assembled successfully
 	source = `
-	pushbytes "1"
-	pushbytes "2"
-	pushbytes "1"
+	pushbytess "1" "2" "1"
 	match label1 label2
 	label1:
 	label2:
@@ -2966,7 +2958,7 @@ int 1
 	match %s extra
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
-	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "match cannot take more than 255 labels"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "match cannot take more than 255 labels"})
 
 	// allow duplicate label reference
 	source = `
@@ -2975,4 +2967,47 @@ int 1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
+}
+
+func TestAssemblePushConsts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// allow empty const int list
+	source := `pushints`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty const bytes list
+	source = `pushbytess`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// basic test
+	source = `pushints 1 2 3`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 6) // ver (1) + pushints (5)
+	source = `pushbytess "1" "2" "33"`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 10) // ver (1) + pushbytess (9)
+
+	// 256 increases size of encoded length to two bytes
+	valsStr := make([]string, 256)
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("%d", 1)
+	}
+	source = fmt.Sprintf(`pushints %s`, strings.Join(valsStr, " "))
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 260) // ver (1) + opcode (1) + len (2) + ints (256)
+
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("\"%d\"", 1)
+	}
+	source = fmt.Sprintf(`pushbytess %s`, strings.Join(valsStr, " "))
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 516) // ver (1) + opcode (1) + len (2) + bytess (512)
+
+	// enforce correct types
+	source = `pushints "1" "2" "3"`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, `strconv.ParseUint: parsing "\"1\"": invalid syntax`})
+	source = `pushbytess 1 2 3`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "byte arg did not parse: 1"})
 }
