@@ -942,7 +942,7 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	}
 }
 
-func (wp *wsPeer) vfCompressedProposalSupported() bool {
+func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
 }
 

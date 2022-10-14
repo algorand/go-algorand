@@ -1511,7 +1511,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 			continue
 		}
 		var ok bool
-		if peer.vfCompressedProposalSupported() && len(dataWithCompression) > 0 {
+		if peer.pfProposalCompressionSupported() && len(dataWithCompression) > 0 {
 			// if this peer supports compressed proposals and compressed data batch is filled out, use it
 			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
 			if prio {

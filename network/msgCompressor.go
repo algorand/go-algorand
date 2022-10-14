@@ -44,7 +44,7 @@ func checkCanCompress(request broadcastRequest, peers []*wsPeer) bool {
 	// if have proposal payload check if there are any peers supporting compression
 	if hasPP {
 		for _, peer := range peers {
-			if peer.vfCompressedProposalSupported() {
+			if peer.pfProposalCompressionSupported() {
 				canCompress = true
 				break
 			}
@@ -147,7 +147,7 @@ func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataConverter {
 		origin: wp.originAddress,
 	}
 
-	if wp.vfCompressedProposalSupported() {
+	if wp.pfProposalCompressionSupported() {
 		c.ppdec = zstdProposalDecompressor{
 			active: true,
 		}
