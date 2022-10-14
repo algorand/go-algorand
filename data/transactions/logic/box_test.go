@@ -378,7 +378,13 @@ func TestWriteBudgetPut(t *testing.T) {
 
 	// Sample tx[0] has two box refs, so write budget is 2*100
 
-	// Test simple use of one box, less than, equal, or over budget
+	// Test simple use of one box
+	logic.TestApp(t, `byte "self"; int 200; box_create`, ep) // equal to budget
+	logic.TestApp(t, `byte "self"; box_del`, ep)
+	logic.TestApp(t, `byte "self"; int 201; box_create`, ep, // 1 over budget
+		"write budget")
+
+	// More complicated versions that use 1 or more 150 byte boxes, so one is ok, two is over
 	logic.TestApp(t, `byte "self"; int 150; box_create`, ep)
 	logic.TestApp(t, `byte "self"; int 150; bzero; box_put; int 1`, ep)
 	logic.TestApp(t, `byte "self"; int 149; bzero; byte "x"; concat; box_put; int 1`, ep)
