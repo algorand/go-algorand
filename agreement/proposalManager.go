@@ -28,9 +28,9 @@ import (
 // payload{Present,Verified}, roundInterruption, {soft,cert,next}Threshold.
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // payload{Pipelined,Rejected,Accepted}, and proposal{Accepted,Committable}.
-type proposalManager struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-}
+
+// msgp:ignore proposalManager
+type proposalManager struct{}
 
 func (m *proposalManager) T() stateMachineTag {
 	return proposalMachine

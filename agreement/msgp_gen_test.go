@@ -1574,66 +1574,6 @@ func BenchmarkUnmarshalproposal(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalproposalManager(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := proposalManager{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingproposalManager(t *testing.T) {
-	protocol.RunEncodingTest(t, &proposalManager{})
-}
-
-func BenchmarkMarshalMsgproposalManager(b *testing.B) {
-	v := proposalManager{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgproposalManager(b *testing.B) {
-	v := proposalManager{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalproposalManager(b *testing.B) {
-	v := proposalManager{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalproposalSeeker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := proposalSeeker{}
@@ -3062,66 +3002,6 @@ func BenchmarkAppendMsgvote(b *testing.B) {
 
 func BenchmarkUnmarshalvote(b *testing.B) {
 	v := vote{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalvoteAggregator(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := voteAggregator{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingvoteAggregator(t *testing.T) {
-	protocol.RunEncodingTest(t, &voteAggregator{})
-}
-
-func BenchmarkMarshalMsgvoteAggregator(b *testing.B) {
-	v := voteAggregator{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgvoteAggregator(b *testing.B) {
-	v := voteAggregator{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalvoteAggregator(b *testing.B) {
-	v := voteAggregator{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

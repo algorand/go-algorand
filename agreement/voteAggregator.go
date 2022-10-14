@@ -29,9 +29,8 @@ import (
 // bundlePresent, and bundleVerified.
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // bundle{Filtered,Malformed}, and {soft,cert,next}Threshold.
-type voteAggregator struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-}
+//msgp:ignore voteAggregator
+type voteAggregator struct{}
 
 func (agg *voteAggregator) T() stateMachineTag {
 	return voteMachine

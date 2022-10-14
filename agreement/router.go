@@ -72,8 +72,8 @@ type rootRouter struct {
 	proposalRoot listener // proposalMachine
 	voteRoot     listener // voteMachine
 
-	ProposalManager proposalManager
-	VoteAggregator  voteAggregator
+	ProposalManager proposalManager `codec:"-"`
+	VoteAggregator  voteAggregator  `codec:"-"`
 
 	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
