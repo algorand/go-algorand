@@ -519,7 +519,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 		_, _, found := handler.txPool.Lookup(txid)
 		if found {
 			// we already have it, nothing to do
-			handler.log.Infof("Ta already have %s", txid.String())
+			//handler.log.Infof("Ta already have %s", txid.String())
 			continue
 		}
 		req, ok := handler.txRequests.getByTxid(txid)
@@ -533,13 +533,13 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 			if now.Sub(req.requestedAt) < requestExpiration {
 				// no new request
-				handler.log.Infof("Ta already req %s", txid.String())
+				//handler.log.Infof("Ta already req %s", txid.String())
 				continue
 			}
 			req.requestedAt = now
 			heap.Fix(&handler.txRequests, req.heapPos)
 		}
-		handler.log.Infof("Ta req %s", txid.String())
+		//handler.log.Infof("Ta req %s", txid.String())
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
 		request = append(request, (txid[:])...)
 	}
