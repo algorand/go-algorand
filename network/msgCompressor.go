@@ -103,7 +103,7 @@ func (dec zstdProposalDecompressor) accept(data []byte) bool {
 func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
 	r := zstd.NewReader(bytes.NewReader(data))
 	defer r.Close()
-	b := make([]byte, 0, 1024)
+	b := make([]byte, 0, 3*len(data))
 	for {
 		if len(b) == cap(b) {
 			// grow capacity, retain length
