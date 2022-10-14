@@ -146,10 +146,6 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	return ep
 }
 
-func (ep *EvalParams) isFull() bool {
-	return ep.available != nil
-}
-
 // reset puts an ep back into its original state.  This is in *_test.go because
 // no real code should ever need this. EvalParams should be created to evaluate
 // a group, and then thrown away.
@@ -4090,18 +4086,14 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
 				ops := testProg(t, source, v)
-				if ep.isFull() {
-					testAppBytes(t, ops.Program, ep, expected, expected)
-				}
+				testAppBytes(t, ops.Program, ep, expected, expected)
 				testLogicBytes(t, ops.Program, ep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops := testProg(t, source, v)
-				if ep.isFull() {
-					testAppBytes(t, ops.Program, ep)
-				}
+				testAppBytes(t, ops.Program, ep)
 				testLogicBytes(t, ops.Program, ep)
 			}
 		})

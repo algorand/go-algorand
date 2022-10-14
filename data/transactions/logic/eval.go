@@ -375,9 +375,10 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
 	if apps == 0 {
 		return &EvalParams{
-			TxnGroup: txgroup,
-			Proto:    proto,
-			Specials: specials,
+			TxnGroup:  txgroup,
+			Proto:     proto,
+			Specials:  specials,
+			available: &resources{},
 		}
 	}
 
