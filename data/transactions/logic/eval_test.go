@@ -3020,7 +3020,7 @@ func TestShortBytecblock(t *testing.T) {
 				program := fullops.Program[:i]
 				t.Run(hex.EncodeToString(program), func(t *testing.T) {
 					testLogicBytes(t, program, defaultEvalParams(nil),
-						"bytecblock", "bytecblock")
+						"bytes list", "bytes list")
 				})
 			}
 		})
