@@ -3041,7 +3041,7 @@ func TestShortBytecblock2(t *testing.T) {
 		t.Run(src, func(t *testing.T) {
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
-			testLogicBytes(t, program, defaultEvalParams(nil), "bytecblock", "bytecblock")
+			testLogicBytes(t, program, defaultEvalParams(nil), "const bytes list", "const bytes list")
 		})
 	}
 }
