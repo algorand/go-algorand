@@ -335,9 +335,15 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 	}
+
+	rewardBalance := defaultIncentivePoolBalanceAtInception
+	if devmode {
+		rewardBalance = 0
+	}
+
 	records["RewardsPool"] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: defaultIncentivePoolBalanceAtInception},
+		MicroAlgos: basics.MicroAlgos{Raw: rewardBalance},
 	}
 
 	sinkAcct := genesisAllocation{
