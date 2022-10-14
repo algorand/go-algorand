@@ -47,11 +47,13 @@ func TestMetricGauge(t *testing.T) {
 			"session_id": "AFX-229"},
 	})
 	metricService.Start(context.Background())
-
-	gauge := MakeGauge(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
-
-	for i := 0; i < 20; i++ {
-		gauge.Set(float64(i*10), map[string]string{"pid": "123", "data_host": fmt.Sprintf("host%d", i%5)})
+	gauges := make([]*Gauge, 3)
+	for i := 0; i < 3; i++ {
+		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
+	}
+	for i := 0; i < 9; i++ {
+		gauges[i%3].Set(float64(i * 100))
+		gauges[i%3].Add(float64(i))
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
 	}
@@ -60,32 +62,27 @@ func TestMetricGauge(t *testing.T) {
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()
-	gauge.Deregister(nil)
+	for _, gauge := range gauges {
+		gauge.Deregister(nil)
+	}
 	// test the metrics values.
 
 	test.Lock()
 	defer test.Unlock()
-
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
-	// let's see if we received all the 5 different labels.
-	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
+	// the the loop above we've created 3 separate gauges
+	// let's see if we received all 3 metrics
+	require.Equal(t, 3, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	// iterate through the metrics and check the each of the metrics reached it's correct count.
 	for k, v := range test.metrics {
-		if strings.Contains(k, "host0") {
-			require.Equal(t, "150", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
+		if strings.Contains(k, "gauge_0") {
+			require.Equal(t, "606", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 		}
-		if strings.Contains(k, "host1") {
-			require.Equal(t, "160", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
+		if strings.Contains(k, "gauge_1") {
+			require.Equal(t, "707", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 		}
-		if strings.Contains(k, "host2") {
-			require.Equal(t, "170", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
-		}
-		if strings.Contains(k, "host3") {
-			require.Equal(t, "180", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
-		}
-		if strings.Contains(k, "host4") {
-			require.Equal(t, "190", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
+		if strings.Contains(k, "gauge_2") {
+			require.Equal(t, "808", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 		}
 	}
 }
