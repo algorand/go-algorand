@@ -1577,6 +1577,28 @@
       ]
     },
     {
+      "Opcode": 130,
+      "Name": "pushbytess",
+      "Size": 0,
+      "Doc": "push sequences of immediate bytes to stack",
+      "DocExtra": "pushbytess args are not added to the bytecblock during assembly processes",
+      "ImmediateNote": "{varuint length} [({varuint value length} bytes), ...]",
+      "Groups": [
+        "Loading Values"
+      ]
+    },
+    {
+      "Opcode": 131,
+      "Name": "pushints",
+      "Size": 0,
+      "Doc": "push sequence of immediate uints to stack",
+      "DocExtra": "pushints args are not added to the intcblock during assembly processes",
+      "ImmediateNote": "{varuint length} [{varuint value}, ...]",
+      "Groups": [
+        "Loading Values"
+      ]
+    },
+    {
       "Opcode": 132,
       "Name": "ed25519verify_bare",
       "Args": "BBB",

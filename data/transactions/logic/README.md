@@ -383,6 +383,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `intc_2` | constant 2 from intcblock |
 | `intc_3` | constant 3 from intcblock |
 | `pushint uint` | immediate UINT |
+| `pushints uint ...` | push sequence of immediate uints to stack |
 | `bytecblock bytes ...` | prepare block of byte-array constants for use by bytec |
 | `bytec i` | Ith constant from bytecblock |
 | `bytec_0` | constant 0 from bytecblock |
@@ -390,6 +391,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | constant 2 from bytecblock |
 | `bytec_3` | constant 3 from bytecblock |
 | `pushbytes bytes` | immediate BYTES |
+| `pushbytess bytes ...` | push sequences of immediate bytes to stack |
 | `bzero` | zero filled byte-array of length A |
 | `arg n` | Nth LogicSig argument |
 | `arg_0` | LogicSig argument 0 |

@@ -1048,6 +1048,24 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## pushbytess bytes ...
+
+- Opcode: 0x82 {varuint length} [({varuint value length} bytes), ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequences of immediate bytes to stack
+- Availability: v8
+
+pushbytess args are not added to the bytecblock during assembly processes
+
+## pushints uint ...
+
+- Opcode: 0x83 {varuint length} [{varuint value}, ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequence of immediate uints to stack
+- Availability: v8
+
+pushints args are not added to the intcblock during assembly processes
+
 ## ed25519verify_bare
 
 - Opcode: 0x84
