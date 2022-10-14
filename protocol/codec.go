@@ -278,7 +278,7 @@ func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {
-		return []byte{}
+		return &[]byte{}
 	},
 }
 
@@ -287,12 +287,12 @@ var encodingPool = sync.Pool{
 // non-zero capacity.  The caller gets full ownership of the byte slice,
 // but is encouraged to return it using PutEncodingBuf().
 func GetEncodingBuf() []byte {
-	return encodingPool.Get().([]byte)[:0]
+	return (*encodingPool.Get().(*[]byte))[:0]
 }
 
 // PutEncodingBuf places a byte slice into the pool of temporary buffers
 // for encoding.  The caller gives up ownership of the byte slice when
 // passing it to PutEncodingBuf().
 func PutEncodingBuf(s []byte) {
-	encodingPool.Put(s)
+	encodingPool.Put(&s)
 }
