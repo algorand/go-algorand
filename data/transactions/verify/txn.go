@@ -539,7 +539,6 @@ func makeBatchLoad() batchLoad {
 // [wait time] <= [validation time of a single txn] / 2
 const waitForNextTxnDuration = 50 * time.Millisecond
 const waitForFirstTxnDuration = 2000 * time.Millisecond
-const numberOfExecPoolSeats = 64
 
 // internalBufferSize is the size of the chan that will hold the arriving stxns before they get pre-processed
 const internalBufferSize = 0
@@ -554,6 +553,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 	resultOtput <-chan VerificationResult) {
 
 	resultChan := make(chan VerificationResult)
+	numberOfExecPoolSeats := verificationPool.GetParallelism()
 
 	sm := streamManager{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
@@ -581,7 +581,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 						vr := VerificationResult{
 							TxnGroup: stx.TxnGroup,
 							Context:  stx.Context,
-							Err:      err,// TODO: maybe this error in internal, and should not go out
+							Err:      err, // TODO: maybe this error in internal, and should not go out
 						}
 						sm.sendOut(vr)
 					}
@@ -623,14 +623,14 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
 				bl.elementContext = append(bl.elementContext, stx.Context)
 				bl.messagesForTxn = append(bl.messagesForTxn, numEnqueued)
-				if len(bl.groupCtxs) >= txnPerWorksetThreshold {
+				if len(bl.groupCtxs) >= txnPerWorksetThreshold/4 {
 					// TODO: the limit of 32 should not pass
 					err := sm.processFullBatch(bl)
 					if err != nil {
 						vr := VerificationResult{
 							TxnGroup: stx.TxnGroup,
 							Context:  stx.Context,
-							Err:      err,// TODO: maybe this error in internal, and should not go out
+							Err:      err, // TODO: maybe this error in internal, and should not go out
 						}
 						sm.sendOut(vr)
 						continue

@@ -259,7 +259,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	log.SetLevel(logging.Warn)
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
-	
+
 	// prepare the accounts
 	genesis := make(map[basics.Address]basics.AccountData)
 	for i := 0; i < numUsers; i++ {
@@ -272,7 +272,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-
 
 	genesis[poolAddr] = basics.AccountData{
 		Status:     basics.NotParticipating,
@@ -351,7 +350,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	}()
 
 	// Prepare the transactions
-	signedTransactionGroups, goodTxnGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, addresses, secrets)
+	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, addresses, secrets)
 	encodedSignedTransactionGroups := make([]network.IncomingMessage, 0, b.N)
 	for _, stxngrp := range signedTransactionGroups {
 		data := make([]byte, 0)
@@ -375,14 +374,11 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			counter++
 
 			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
+			_, inBad := badTxnGroups[u]
 			if wi.verificationErr == nil {
-				if _, found := goodTxnGroups[u]; !found {
-					fmt.Printf("wrong!")
-				}
+				require.False(b, inBad, "No error for bad signature")
 			} else {
-				if _, found := badTxnGroups[u]; !found {
-					fmt.Printf("wrong!")
-				}
+				require.True(b, inBad, "Error for good signature")
 			}
 		}
 	}()
@@ -391,16 +387,17 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	for _, tg := range encodedSignedTransactionGroups {
 		// time the streaming of the txns to at most 6000 tps
 		handler.processIncomingTxn(tg)
-		time.Sleep(160*time.Microsecond)
+		randduration := time.Duration(uint64(((1 + rand.Float32()) * 3)))
+		time.Sleep(randduration * time.Microsecond)
 	}
 	close(handler.backlogQueue)
 	wg.Wait()
 
 	var buf strings.Builder
 	metrics.DefaultRegistry().WriteMetrics(&buf, "")
-	str := buf.String()	
+	str := buf.String()
 	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
-	str = str[x+44:x+44+strings.Index(str[x+44:], "\n")]
+	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
 	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
 	fmt.Printf("Dropped from backlog: %s\n", str)
 
@@ -408,9 +405,8 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 
 func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
-	goodTxnGroups, badTxnGroups map[uint64]interface{}) {
+	badTxnGroups map[uint64]interface{}) {
 
-	goodTxnGroups = make(map[uint64]interface{})
 	badTxnGroups = make(map[uint64]interface{})
 
 	maxGrpSize := proto.MaxTxGroupSize
@@ -451,12 +447,10 @@ func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures
-		if rand.Float32() < 0.3 {
+		if rand.Float32() < 0.1 {
 			tinGrp := rand.Intn(grpSize)
 			signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
 			badTxnGroups[uint64(u)] = struct{}{}
-		} else {
-			goodTxnGroups[uint64(u)] = struct{}{}
 		}
 		ret = append(ret, signedTxGroup)
 	}

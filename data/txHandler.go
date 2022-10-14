@@ -46,6 +46,8 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+// verifierStreamBufferSize is the number of txn that coult be accumulated before the verifier stream consumes them
+var verifierStreamBufferSize = 1000
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -92,7 +94,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		streamVerifierChan:    make(chan verify.VerificationElement),
+		streamVerifierChan:    make(chan verify.VerificationElement, verifierStreamBufferSize),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
