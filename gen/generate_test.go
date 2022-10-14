@@ -114,3 +114,18 @@ func TestGenesisRoundoff(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, strings.Contains(verbosity.String(), "roundoff"))
 }
+
+func TestGenesisDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	verbosity := strings.Builder{}
+	genesisData := DefaultGenesis
+	genesisData.DevMode = true
+	genesisData.NetworkName = "wat"
+	genesisData.ConsensusProtocol = protocol.ConsensusCurrentVersion // TODO: also check ConsensusFuture ?
+	genesisData.Wallets = []WalletData{
+		{Name: "Wallet1", Stake: 100},
+	}
+	_, _, alloc, err := setupGenerateGenesisFiles(&genesisData, config.Consensus, &verbosity)
+	require.NoError(t, err)
+	t.Logf("%+v", alloc)
+}

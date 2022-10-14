@@ -353,7 +353,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	}
 	poolAcct := genesisAllocation{
 		Name:   "RewardsPool",
-		Stake:  defaultIncentivePoolBalanceAtInception,
+		Stake:  rewardBalance,
 		Online: basics.NotParticipating,
 	}
 
