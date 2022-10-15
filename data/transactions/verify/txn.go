@@ -547,9 +547,8 @@ const internalBufferSize = 0
 
 // MakeStream creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
-func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
-	ledger logic.LedgerForSignature, nbw *NewBlockWatcher,
-	verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
+func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement, ledger logic.LedgerForSignature,
+	nbw *NewBlockWatcher, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
 	resultOtput <-chan VerificationResult) {
 
 	resultChan := make(chan VerificationResult)
@@ -578,31 +577,22 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 				if !ok {
 					err := sm.processFullBatch(bl)
 					if err != nil {
-						vr := VerificationResult{
-							TxnGroup: stx.TxnGroup,
-							Context:  stx.Context,
-							Err:      err, // TODO: maybe this error in internal, and should not go out
-						}
-						sm.sendOut(vr)
+						sm.sendResult(stx.TxnGroup, stx.Context, err)// TODO: maybe this error in internal, and should not go out
 					}
 					// for for all pending tasks out, then close the result chan
 					sm.execPoolWg.Wait()
 					close(resultChan)
 					return
 				}
+
 				isFirstInBatch := bl.batchVerifier.GetNumberOfEnqueuedSignatures() == 0
+
 				// TODO: separate operations here, and get the sig verification inside LogicSig outside
 				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
 				//TODO: report the error ctx.Err()
-
 				if err != nil {
 					// verification failed. can return here
-					vr := VerificationResult{
-						TxnGroup: stx.TxnGroup,
-						Context:  stx.Context,
-						Err:      err,
-					}
-					sm.sendOut(vr)
+					sm.sendResult(stx.TxnGroup, stx.Context, err)
 					continue
 				}
 
@@ -610,12 +600,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 				// if nothing is added to the batch, then the txngroup can be returned here
 				if numEnqueued == 0 ||
 					(len(bl.messagesForTxn) > 0 && numEnqueued == bl.messagesForTxn[len(bl.messagesForTxn)-1]) {
-					vr := VerificationResult{
-						TxnGroup: stx.TxnGroup,
-						Context:  stx.Context,
-						Err:      err,
-					}
-					sm.sendOut(vr)
+					sm.sendResult(stx.TxnGroup, stx.Context, err)
 					continue
 				}
 
@@ -627,12 +612,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 					// TODO: the limit of 32 should not pass
 					err := sm.processFullBatch(bl)
 					if err != nil {
-						vr := VerificationResult{
-							TxnGroup: stx.TxnGroup,
-							Context:  stx.Context,
-							Err:      err, // TODO: maybe this error in internal, and should not go out
-						}
-						sm.sendOut(vr)
+						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
 						continue
 					}
 					bl = makeBatchLoad()
@@ -668,6 +648,28 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement,
 	return resultChan
 }
 
+func (sm *streamManager) sendResult(veTxnGroup []transactions.SignedTxn, veContext interface{}, err error) {
+	vr := VerificationResult{
+		TxnGroup: veTxnGroup,
+		Context:  veContext,
+		Err:      err,
+	}
+	// send the txn result out the pipe
+	sm.resultChan <- vr
+	/*
+		select {
+		case sm.resultChan <- vr:
+
+				// if the channel is not accepting, should not block here
+				// report dropped txn. caching is fine, if it comes back in the block
+				default:
+					fmt.Println("skipped!!")
+					//TODO: report this
+
+		}
+	*/
+}
+
 func (sm *streamManager) processFullBatch(bl batchLoad) (err error) {
 	// This is a full batch, no additions are allowed
 	// block and wait for a free seat
@@ -693,24 +695,6 @@ func (sm *streamManager) processBatch(bl batchLoad) (added bool) {
 		// if no free seats, wait some more for more txns
 	}
 	return
-}
-
-// send the result out the chan
-func (sm *streamManager) sendOut(vr VerificationResult) {
-	// send the txn result out the pipe
-	sm.resultChan <- vr
-	/*
-		select {
-		case sm.resultChan <- vr:
-
-				// if the channel is not accepting, should not block here
-				// report dropped txn. caching is fine, if it comes back in the block
-				default:
-					fmt.Println("skipped!!")
-					//TODO: report this
-
-		}
-	*/
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
@@ -754,12 +738,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 			} else {
 				result = ErrInvalidSignature
 			}
-			vr := VerificationResult{
-				TxnGroup: bl.txnGroups[txgIdx],
-				Context:  bl.elementContext[txgIdx],
-				Err:      result,
-			}
-			sm.sendOut(vr)
+			sm.sendResult(bl.txnGroups[txgIdx], bl.elementContext[txgIdx], result)
 		}
 		// loading them all at once to lock the cache once
 		err = sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)

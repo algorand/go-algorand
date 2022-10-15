@@ -274,7 +274,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-
 	genesis[poolAddr] = basics.AccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
@@ -296,9 +295,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
-
 	wg := sync.WaitGroup{}
-
 	wg.Add(1)
 	// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
 	// through the outChan instead of passing it to postprocessCheckedTxn
@@ -369,9 +366,9 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			fmt.Printf("processed %d txns\n", counter)
 		}()
 		b.ResetTimer()
+		tt := time.Now()
 		for wi := range outChan {
 			counter++
-
 			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
 			_, inBad := badTxnGroups[u]
 			if wi.verificationErr == nil {
@@ -380,6 +377,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 				require.True(b, inBad, "Error for good signature")
 			}
 		}
+		fmt.Printf("TPS: %d\n", uint64(counter)*1000000000/uint64(time.Since(tt)))
 	}()
 
 	// Send the transactions to the verifier
@@ -406,7 +404,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
 	badTxnGroups map[uint64]interface{}) {
-
 	badTxnGroups = make(map[uint64]interface{})
 
 	maxGrpSize := proto.MaxTxGroupSize

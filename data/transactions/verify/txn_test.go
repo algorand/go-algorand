@@ -915,8 +915,8 @@ func TestStreamVerifier(t *testing.T) {
 	defer cancel()
 
 	nbw := MakeNewBlockWatcher(blkHdr)
-
-	stxnChan, resultChan := MakeStream(ctx, nil, nbw, verificationPool, cache)
+	stxnChan := make(chan VerificationElement)
+	resultChan := MakeStream(ctx, stxnChan, nil, nbw, verificationPool, cache)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
 
