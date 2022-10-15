@@ -577,7 +577,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement, ledger
 				if !ok {
 					err := sm.processFullBatch(bl)
 					if err != nil {
-						sm.sendResult(stx.TxnGroup, stx.Context, err)// TODO: maybe this error in internal, and should not go out
+						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
 					}
 					// for for all pending tasks out, then close the result chan
 					sm.execPoolWg.Wait()
