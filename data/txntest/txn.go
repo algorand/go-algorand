@@ -115,14 +115,13 @@ func (tx *Txn) Noted(note string) *Txn {
 }
 
 // Args returns a new Txn with the given strings as app args
-func (tx *Txn) Args(strings ...string) *Txn {
-	copy := *tx
+func (tx Txn) Args(strings ...string) *Txn {
 	bytes := make([][]byte, len(strings))
 	for i, s := range strings {
 		bytes[i] = []byte(s)
 	}
-	copy.ApplicationArgs = bytes
-	return &copy
+	tx.ApplicationArgs = bytes
+	return &tx
 }
 
 // FillDefaults populates some obvious defaults from config params,

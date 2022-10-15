@@ -2413,6 +2413,9 @@ func TestReturnTypes(t *testing.T) {
 
 		"proto": "callsub p; p: proto 0 3",
 		"bury":  ": int 1; int 2; int 3; bury 2; pop; pop;",
+
+		"box_create": "int 9; +; box_create",                 // make the size match the 10 in CreateBox
+		"box_put":    "byte 0x010203040506; concat; box_put", // make the 4 byte arg into a 10
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2437,13 +2440,6 @@ func TestReturnTypes(t *testing.T) {
 
 		"frame_dig":  true, // would need a "proto" subroutine
 		"frame_bury": true, // would need a "proto" subroutine
-
-		// It's too annoying to set things up for them to work in this context.
-		// Tested in box_test.go
-		"box_create":  true,
-		"box_extract": true,
-		"box_replace": true,
-		"box_del":     true,
 
 		"bn256_add":        true,
 		"bn256_scalar_mul": true,
@@ -2505,6 +2501,9 @@ func TestReturnTypes(t *testing.T) {
 
 				ep.reset()                          // for Trace and budget isolation
 				ep.pastScratch[0] = &scratchSpace{} // for gload
+				// these allows the box_* opcodes that to work
+				ledger.CreateBox(1, "3456", 10)
+				ep.ioBudget = 50
 
 				cx := EvalContext{
 					EvalParams:   ep,

@@ -233,7 +233,7 @@ type LedgerForLogic interface {
 	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
-	NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) (bool, error)
+	NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error
 	GetBox(appIdx basics.AppIndex, key string) (string, bool, error)
 	SetBox(appIdx basics.AppIndex, key string, value string) error
 	DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error)
@@ -251,22 +251,20 @@ type resources struct {
 
 	// boxes are all of the top-level box refs from the txgroup. Most are added
 	// during NewEvalParams(). refs using 0 on an appl create are resolved and
-	// added when the appl executes.
-	boxes map[boxRef]boxTouch
+	// added when the appl executes. The boolean value indicates the "dirtiness"
+	// of the box - has it been modified in this txngroup? If yes, the size of
+	// the box counts against the group writeBudget. So delete is NOT a dirtying
+	// operation.
+	boxes map[boxRef]bool
+
+	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
+	dirtyBytes uint64
 }
 
 // boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
 type boxRef struct {
 	app  basics.AppIndex
 	name string
-}
-
-// boxTouch tracks whether how many write bytes must be charged for the
-// box. touches are marked dirty if they are written to, or created.  size is
-// set during the initial read I/O check, or at create time.
-type boxTouch struct {
-	dirty bool
-	size  uint64
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -345,12 +343,12 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 // NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
 func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
-	var allBoxes map[boxRef]boxTouch
+	var allBoxes map[boxRef]bool
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
 			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
-				allBoxes = make(map[boxRef]boxTouch)
+				allBoxes = make(map[boxRef]bool)
 			}
 			for _, br := range tx.Txn.Boxes {
 				var app basics.AppIndex
@@ -367,7 +365,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 					// now than after returning a nil.
 					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
 				}
-				allBoxes[boxRef{app, string(br.Name)}] = boxTouch{}
+				allBoxes[boxRef{app, string(br.Name)}] = false
 			}
 		}
 	}
@@ -454,16 +452,21 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
 		pastScratch:             make([]*scratchSpace, len(txg)),
+		logger:                  caller.logger,
+		SigLedger:               caller.SigLedger,
+		Ledger:                  caller.Ledger,
+		Debugger:                nil, // See #4438, where this becomes caller.Debugger
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
-		SigLedger:               caller.SigLedger,
-		Ledger:                  caller.Ledger,
 		available:               caller.available,
+		ioBudget:                caller.ioBudget,
+		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
-		caller:                  caller,
+		// read comment in EvalParams declaration about txid caches
+		caller: caller,
 	}
 	return ep
 }
@@ -714,7 +717,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if cx.txn.Txn.ApplicationID == 0 {
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = boxTouch{}
+				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
 			}
 		}
 	}
@@ -731,7 +734,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		for br := range cx.available.boxes {
 			if len(br.name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
-				// may have bene used to add I/O budget.
+				// may have been used to add I/O budget.
 				continue
 			}
 			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
@@ -742,7 +745,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				continue
 			}
 			size := uint64(len(box))
-			cx.available.boxes[br] = boxTouch{false, size}
+			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
 			if used > cx.ioBudget {
@@ -756,20 +759,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
-
-	// Check the I/O budget for writing. TODO: Only need to do this once if we
-	// figure out we're the last app call in the group.
-	if cx.caller == nil {
-		used := uint64(0)
-		for _, bt := range cx.available.boxes {
-			if bt.dirty {
-				used = basics.AddSaturate(used, bt.size)
-			}
-			if used > cx.ioBudget {
-				return false, nil, fmt.Errorf("box write budget (%d) exceeded", cx.ioBudget)
-			}
-		}
-	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
@@ -4027,7 +4016,7 @@ func opAppLocalGetEx(cx *EvalContext) error {
 	}
 
 	cx.stack[pprev] = result
-	cx.stack[prev] = stackValue{Uint: boolToUint(ok)}
+	cx.stack[prev] = boolToSV(ok)
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -4097,7 +4086,7 @@ func opAppGlobalGetEx(cx *EvalContext) error {
 	}
 
 	cx.stack[prev] = result
-	cx.stack[last] = stackValue{Uint: boolToUint(ok)}
+	cx.stack[last] = boolToSV(ok)
 	return nil
 }
 

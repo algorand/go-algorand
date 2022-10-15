@@ -174,6 +174,7 @@ func (ep *EvalParams) reset() {
 		if available != nil {
 			ep.available.boxes = available.boxes
 		}
+		ep.available.dirtyBytes = 0
 	}
 	ep.readBudgetChecked = false
 	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)

@@ -219,10 +219,18 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 	for _, field := range fields {
 		// Need to use intc so we can "backversion" the
 		// program and not have it fail because of pushint.
-		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; pop; pop; intc_1", field.field.String())
+		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
+		switch field.ftype {
+		case StackUint64: // ensure the return type is uint64 by adding
+			text += " intc_1; +"
+		case StackBytes: // ensure the return type is bytes by using len
+			text += " len" // also happens to ensure that we get non empty - the params fields are fixed width
+		}
 		// check assembler fails if version before introduction
 		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
-			ep, _, _ := makeSampleEnv()
+			ep, txn, ledger := makeSampleEnv()
+			// Create app 55, since txn.ForeignApps[0] == 55
+			ledger.NewAsset(txn.Sender, 55, basics.AssetParams{})
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
 				testProg(t, text, v, Expect{1, "...was introduced in..."})
@@ -242,7 +250,7 @@ func TestFieldVersions(t *testing.T) {
 	// This test is weird, it confirms that we don't need to
 	// bother with a "good" test for AssetHolding and AppParams
 	// fields.  It will fail if we add a field that has a
-	// different teal debut version, and then we'll need a test
+	// different debut version, and then we'll need a test
 	// like TestAssetParamsFieldsVersions that checks the field is
 	// unavailable before its debut.
 
@@ -255,5 +263,45 @@ func TestFieldVersions(t *testing.T) {
 
 	for _, fs := range appParamsFieldSpecs {
 		require.Equal(t, uint64(5), fs.version)
+	}
+}
+
+func TestAcctParamsFieldsVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var fields []acctParamsFieldSpec
+	for _, fs := range acctParamsFieldSpecs {
+		if fs.version > 6 {
+			fields = append(fields, fs)
+		}
+	}
+	require.Greater(t, len(fields), 0)
+
+	for _, field := range fields {
+		// Need to use intc so we can "backversion" the program and not have it
+		// fail because of pushint.
+		// Use of '+' confirms the type, which is uint64 for all fields
+		text := fmt.Sprintf("intcblock 0 1; intc_0; acct_params_get %s; assert; intc_1; +", field.field.String())
+		// check assembler fails if version before introduction
+		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+			ep, txn, ledger := makeSampleEnv()
+			ledger.NewAccount(txn.Sender, 200_000)
+			ep.Proto.LogicSigVersion = v
+			if field.version > v {
+				testProg(t, text, v, Expect{1, "...was introduced in..."})
+				ops := testProg(t, text, field.version) // assemble in the future
+				ops.Program[0] = byte(v)                // but set version back to before intro
+				if v < 6 {
+					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				} else {
+					testAppBytes(t, ops.Program, ep, "invalid acct_params_get field")
+				}
+			} else {
+				testProg(t, text, v)
+				testApp(t, text, ep)
+			}
+		}
+
 	}
 }

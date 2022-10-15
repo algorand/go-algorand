@@ -65,28 +65,37 @@ var boxAppSource = main(`
         assert
         b end
      del:						// delete box arg[1]
-		txn ApplicationArgs 0
-        byte "delete"
-        ==
+		txn ApplicationArgs 0; byte "delete"; ==
         bz set
 		txn ApplicationArgs 1
 		box_del
         assert
         b end
-     set:						// put arg[1] at start of box arg[0]
-		txn ApplicationArgs 0
-        byte "set"
-        ==
-        bz test
+     set:						// put arg[2] at start of box arg[1]
+		txn ApplicationArgs 0; byte "set"; ==
+        bz put
 		txn ApplicationArgs 1
         int 0
 		txn ApplicationArgs 2
 		box_replace
         b end
-     test:						// fail unless arg[2] is the prefix of box arg[1]
-		txn ApplicationArgs 0
-        byte "check"
-        ==
+     put:						// box_put arg[2] as replacement for box arg[1]
+		txn ApplicationArgs 0; byte "put"; ==
+        bz get
+		txn ApplicationArgs 1
+		txn ApplicationArgs 2
+		box_put
+        b end
+     get:						// log box arg[1], after getting it with box_get
+		txn ApplicationArgs 0; byte "get"; ==
+        bz check
+		txn ApplicationArgs 1
+		box_get
+        assert
+        log
+        b end
+     check:						// fail unless arg[2] is the prefix of box arg[1]
+		txn ApplicationArgs 0; byte "check"; ==
         bz bad
 		txn ApplicationArgs 1
         int 0
@@ -101,7 +110,26 @@ var boxAppSource = main(`
         err
 `)
 
+// Call the app in txn.Applications[1] the same way I was called.
+var passThruSource = main(`
+  itxn_begin
+  txn Applications 1; itxn_field ApplicationID
+  txn TypeEnum; itxn_field TypeEnum
+  // copy my app args into itxn app args (too lazy to write a loop), these are
+  // always called with 2 or 3 args.
+  txn ApplicationArgs 0; itxn_field ApplicationArgs
+  txn ApplicationArgs 1; itxn_field ApplicationArgs
+  txn NumAppArgs; int 2; ==; bnz skip
+    txn ApplicationArgs 2; itxn_field ApplicationArgs
+  skip:
+  itxn_submit
+`)
+
 const boxVersion = 35
+
+func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
+	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
+}
 
 // TestBoxCreate tests MBR changes around allocation, deallocation
 func TestBoxCreate(t *testing.T) {
@@ -114,9 +142,10 @@ func TestBoxCreate(t *testing.T) {
 		defer dl.Close()
 
 		// increment for a size 24 box with 4 letter name
-		const mbr = 2500 + 28*400
+		proto := config.Consensus[cv]
+		mbr := boxFee(proto, 28)
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+3*mbr, boxAppSource)
+		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -173,9 +202,10 @@ func TestBoxRecreate(t *testing.T) {
 		defer dl.Close()
 
 		// increment for a size 4 box with 4 letter name
-		const mbr = 2500 + 8*400
+		proto := config.Consensus[cv]
+		mbr := boxFee(proto, 8)
 
-		appIndex := dl.fundedApp(addrs[0], 100_000+mbr, boxAppSource)
+		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -196,9 +226,9 @@ func TestBoxRecreate(t *testing.T) {
 		// a recreate does not change the value
 		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after recreate"))
 		// recreating with a smaller size fails
-		dl.txn(call.Args("recreate", "adam", "\x03"), "new box size mismatch 4 3")
+		dl.txn(call.Args("recreate", "adam", "\x03"), "box size mismatch 4 3")
 		// recreating with a larger size fails
-		dl.txn(call.Args("recreate", "adam", "\x05"), "new box size mismatch 4 5")
+		dl.txn(call.Args("recreate", "adam", "\x05"), "box size mismatch 4 5")
 		dl.txn(call.Args("check", "adam", "\x01\x02\x03\x04").Noted("after failed recreates"))
 
 		// delete and actually create again
@@ -207,7 +237,7 @@ func TestBoxRecreate(t *testing.T) {
 
 		dl.txn(call.Args("set", "adam", "\x03\x02\x01"))
 		dl.txn(call.Args("check", "adam", "\x03\x02\x01"))
-		dl.txn(recreate.Noted("after delete"), "new box size mismatch 3 4")
+		dl.txn(recreate.Noted("after delete"), "box size mismatch 3 4")
 		dl.txn(call.Args("recreate", "adam", "\x03"))
 		dl.txn(call.Args("check", "adam", "\x03\x02\x01").Noted("after delete and recreate"))
 	})
@@ -241,11 +271,13 @@ func TestBoxCreateAvailability(t *testing.T) {
 		// the app address that we know the app will get. So this is a nice
 		// test, but unrealistic way to actual create a box.
 		psychic := basics.AppIndex(2)
+
+		proto := config.Consensus[cv]
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: psychic.Address(),
-			Amount:   100_000 + 2500 + 15*400,
+			Amount:   proto.MinBalance + boxFee(proto, 15),
 		})
 		dl.txn(&accessInCreate)
 
@@ -464,5 +496,168 @@ assert
 
 		// Data gets removed after boxes are deleted
 		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance), "\x00", "\x00"))
+	})
+}
+
+func TestBoxIOBudgets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		appIndex := dl.fundedApp(addrs[0], 0, boxAppSource)
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (1024) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (2048) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (3072) exceeded")
+		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+			"below min") // big box would need more balance
+		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
+			"write budget (4096) exceeded")
+
+		// Create 4,096 byte box
+		proto := config.Consensus[cv]
+		fundApp := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: appIndex.Address(),
+			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
+		}
+		create := call.Args("create", "x", "\x10\x00")
+
+		// Slight detour - Prove insufficient funding fails creation.
+		fundApp.Amount--
+		dl.txgroup("below min", &fundApp, create)
+		fundApp.Amount++
+
+		// Confirm desired creation happens.
+		dl.txgroup("", &fundApp, create)
+
+		// Now that we've created a 4,096 byte box, test READ budget
+		// It works at the start, because call still has 4 brs.
+		dl.txn(call.Args("check", "x", "\x00"))
+		call.Boxes = call.Boxes[:3]
+		dl.txn(call.Args("check", "x", "\x00"),
+			"box read budget (3072) exceeded")
+
+		// Give a budget over 32768, confirm failure anyway
+		empties := [32]transactions.BoxRef{}
+		// These tests skip WellFormed, so the huge Boxes is ok
+		call.Boxes = append(call.Boxes, empties[:]...)
+		dl.txn(call.Args("create", "x", "\x80\x01"), "box size too large") // 32769
+	})
+}
+
+// TestBoxInners trys various box manipulations through inner transactions
+func TestBoxInners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		// Advance the creatable counter, so we don't have very low app ids that
+		// could be mistaken for indices into ForeignApps.
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+
+		boxIndex := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
+		passIndex := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: passIndex,
+			ForeignApps:   []basics.AppIndex{boxIndex},
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
+		}
+		// The current Boxes gives top-level access to "x", not the inner app
+		dl.txn(call.Args("create", "x", "\x10"), // 8
+			"invalid Box reference x")
+
+		// This isn't right: Index should be index into ForeignApps
+		call.Boxes = []transactions.BoxRef{{Index: uint64(boxIndex), Name: []byte("x")}}
+		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
+
+		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+			"write budget (1024) exceeded")
+		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+
+		require.Len(t, call.Boxes, 2)
+		setX := call.Args("set", "x", "A")
+		dl.txn(setX, "read budget") // Boxes has x and y, their combined length is too big
+		setX.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
+		dl.txn(setX)
+
+		setY := call.Args("set", "y", "B")
+		dl.txn(setY, "read budget") // Boxes has x and y, their combined length is too big
+		setY.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("y")}}
+		dl.txn(setY, "read budget") // Y is bigger needs more than 1 br
+		// We recommend "empty" br, but a duplicate is also ok
+		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
+
+		// non-existent box also works
+		setY.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("y")}, {Index: 0, Name: []byte("nope")}}
+		dl.txn(setY) // len(y) = 2048, io budget is 2*1024 right now
+
+		// now show can read both boxes based on brs in tx1
+		checkX := call.Args("check", "x", "A")
+		checkX.Boxes = nil
+		checkY := call.Args("check", "y", "B")
+		require.Len(t, checkY.Boxes, 2)
+		// can't see x and y because read budget is only 2*1024
+		dl.txgroup("box read budget", checkX, checkY)
+		checkY.Boxes = append(checkY.Boxes, transactions.BoxRef{})
+		dl.txgroup("", checkX, checkY)
+
+		require.Len(t, setY.Boxes, 2) // recall that setY has ("y", "nope") right now. no "x"
+		dl.txgroup("invalid Box reference x", checkX, setY)
+
+		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("x")})
+		dl.txgroup("", checkX, setY)
+
+		// Cleanup
+		dl.txn(call.Args("del", "x"), "read budget")
+		dl.txn(call.Args("del", "y"), "read budget")
+		// surprising but correct: they work when combined, because both txns
+		// have both box refs, so the read budget goes up.
+		dl.txgroup("", call.Args("delete", "x"), call.Args("delete", "y"))
+
+		// Try some get/put action
+		dl.txn(call.Args("put", "x", "john doe"))
+		vb := dl.fullBlock(call.Args("get", "x"))
+		// we are passing this thru to the underlying box app which logs the get
+		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		dl.txn(call.Args("check", "x", "john"))
+
+		// bad change because of length
+		dl.txn(call.Args("put", "x", "steve doe"), "box_put wrong size")
+		vb = dl.fullBlock(call.Args("get", "x"))
+		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+
+		// good change
+		dl.txn(call.Args("put", "x", "mark doe"))
+		dl.txn(call.Args("check", "x", "mark d"))
 	})
 }

@@ -834,7 +834,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 
 - Opcode: 0x60
 - Stack: ..., A &rarr; ..., uint64
-- get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
+- balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
 - Availability: v2
 - Mode: Application
 
@@ -1033,7 +1033,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 - Opcode: 0x78
 - Stack: ..., A &rarr; ..., uint64
-- get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
+- minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
 - Availability: v3
 - Mode: Application
 
