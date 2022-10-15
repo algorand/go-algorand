@@ -373,9 +373,9 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			fmt.Printf("processed %d txns\n", counter)
 		}()
 		b.ResetTimer()
+		tt := time.Now()
 		for wi := range outChan {
 			counter++
-
 			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
 			_, inBad := badTxnGroups[u]
 			if wi.verificationErr == nil {
@@ -384,6 +384,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 				require.True(b, inBad, "Error for good signature")
 			}
 		}
+		fmt.Printf("TPS: %d\n", uint64(counter)*1000000000/uint64(time.Since(tt)))
 	}()
 
 	// Send the transactions to the verifier
