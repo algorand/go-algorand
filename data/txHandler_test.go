@@ -274,7 +274,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-
 	genesis[poolAddr] = basics.AccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
@@ -296,9 +295,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
-
 	wg := sync.WaitGroup{}
-
 	wg.Add(1)
 	// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
 	// through the outChan instead of passing it to postprocessCheckedTxn
@@ -411,7 +408,6 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
 	badTxnGroups map[uint64]interface{}) {
-
 	badTxnGroups = make(map[uint64]interface{})
 
 	maxGrpSize := proto.MaxTxGroupSize
