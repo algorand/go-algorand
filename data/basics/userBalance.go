@@ -230,10 +230,10 @@ type AccountData struct {
 	TotalExtraAppPages uint32 `codec:"teap"`
 
 	// Total number of boxes associated with this account, which implies it is an app account.
-	TotalBoxes uint64
+	TotalBoxes uint64 `codec:"tbx"`
 
 	// TotalBoxBytes stores the sum of all len(keys) and len(values) of Boxes
-	TotalBoxBytes uint64
+	TotalBoxBytes uint64 `codec:"tbxb"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also

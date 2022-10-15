@@ -1480,6 +1480,8 @@ type baseAccountData struct {
 	TotalAssets                uint64            `codec:"j"`
 	TotalAppParams             uint64            `codec:"k"`
 	TotalAppLocalStates        uint64            `codec:"l"`
+	TotalBoxes                 uint64            `codec:"m"`
+	TotalBoxBytes              uint64            `codec:"n"`
 
 	baseVotingData
 
@@ -1504,6 +1506,8 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAssets == 0 &&
 		ba.TotalAppParams == 0 &&
 		ba.TotalAppLocalStates == 0 &&
+		ba.TotalBoxes == 0 &&
+		ba.TotalBoxBytes == 0 &&
 		ba.baseVotingData.IsEmpty()
 }
 
@@ -1524,6 +1528,8 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalAssets = ad.TotalAssets
 	ba.TotalAppParams = ad.TotalAppParams
 	ba.TotalAppLocalStates = ad.TotalAppLocalStates
+	ba.TotalBoxes = ad.TotalBoxes
+	ba.TotalBoxBytes = ad.TotalBoxBytes
 
 	ba.baseVotingData.SetCoreAccountData(ad)
 }
@@ -1541,6 +1547,8 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAssets = uint64(len(ad.Assets))
 	ba.TotalAppParams = uint64(len(ad.AppParams))
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
+	ba.TotalBoxes = ad.TotalBoxes
+	ba.TotalBoxBytes = ad.TotalBoxBytes
 
 	ba.baseVotingData.VoteID = ad.VoteID
 	ba.baseVotingData.SelectionID = ad.SelectionID
@@ -1573,6 +1581,8 @@ func (ba *baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 		TotalAppLocalStates: ba.TotalAppLocalStates,
 		TotalAssetParams:    ba.TotalAssetParams,
 		TotalAssets:         ba.TotalAssets,
+		TotalBoxes:          ba.TotalBoxes,
+		TotalBoxBytes:       ba.TotalBoxBytes,
 	}
 }
 
@@ -1599,6 +1609,8 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
 		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
+		TotalBoxes:         ba.TotalBoxes,
+		TotalBoxBytes:      ba.TotalBoxBytes,
 
 		VoteID:          ba.VoteID,
 		SelectionID:     ba.SelectionID,

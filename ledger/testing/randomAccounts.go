@@ -131,6 +131,7 @@ func RandomAppParams() basics.AppParams {
 				NumByteSlice: crypto.RandUint64() % 5,
 			},
 		},
+		ExtraProgramPages: uint32(crypto.RandUint64() % 4),
 	}
 	if len(ap.ApprovalProgram) > 0 {
 		crypto.RandBytes(ap.ApprovalProgram[:])
@@ -282,6 +283,12 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 			NumUint:      crypto.RandUint64() % 50,
 			NumByteSlice: crypto.RandUint64() % 50,
 		}
+		data.TotalExtraAppPages = uint32(crypto.RandUint64() % 50)
+	}
+
+	if (crypto.RandUint64() % 3) == 1 {
+		data.TotalBoxes = crypto.RandUint64() % 100
+		data.TotalBoxBytes = crypto.RandUint64() % 10000
 	}
 
 	return data
