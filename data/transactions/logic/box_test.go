@@ -38,7 +38,6 @@ func TestBoxNewDel(t *testing.T) {
 
 	for _, size := range []int{24, 0} {
 		t.Run(fmt.Sprintf("box size=%d", size), func(t *testing.T) {
-
 			createSelf := fmt.Sprintf(`byte "self"; int %d; box_create;`, size)
 			createOther := fmt.Sprintf(`byte "other"; int %d; box_create;`, size)
 
@@ -498,12 +497,45 @@ func TestConveniences(t *testing.T) {
 	logic.TestApp(t, `byte "self"; box_get; assert; byte 0xAADDEE; ==`, ep)
 	ledger.DelBoxes(888, "self")
 
-	// box_get panics if the box is too big
+	// box_get panics if the box is too big (for TEAL, or for proto)
 	ep.Proto.MaxBoxSize = 5000
 	ep.Proto.BytesPerBoxReference = 5000 // avoid write budget error
 	logic.TestApp(t, `byte "self"; int 4098; box_create; assert; // bigger than maxStringSize
                       byte "self"; box_get; assert; len`, ep,
 		"box_get produced a too big")
+}
+
+// TestEarlyPanics ensures that all of the box opcodes die early if they are
+// given an empty or too long name.
+func TestEarlyPanics(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := map[string]string{
+		"box_create":  `byte "%s"; int 10; box_create`,
+		"box_del":     `byte "%s"; box_del`,
+		"box_extract": `byte "%s"; int 1; int 2; box_extract`,
+		"box_get":     `byte "%s"; box_get`,
+		"box_len":     `byte "%s"; box_len`,
+		"box_put":     `byte "%s"; byte "hello"; box_put`,
+		"box_replace": `byte "%s"; int 0; byte "new"; box_replace`,
+	}
+
+	ep, _, l := logic.MakeSampleEnv()
+	l.NewApp(basics.Address{}, 888, basics.AppParams{})
+
+	for name, program := range tests {
+		t.Run(name+"/zero", func(t *testing.T) {
+			logic.TestApp(t, fmt.Sprintf(program, ""), ep, "zero length")
+		})
+	}
+
+	big := strings.Repeat("x", 65)
+	for name, program := range tests {
+		t.Run(name+"/long", func(t *testing.T) {
+			logic.TestApp(t, fmt.Sprintf(program, big), ep, "name too long")
+		})
+	}
 
 }
 
