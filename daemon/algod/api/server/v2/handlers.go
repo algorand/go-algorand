@@ -463,6 +463,8 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
 		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+		TotalBoxes:          numOrNil(record.TotalBoxes),
+		TotalBoxBytes:       numOrNil(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
 	}
 	response := generated.AccountResponse(account)

@@ -63,6 +63,15 @@ do
   [ "$VALUE" = "$B64_BOX_VALUE" ]
 done
 
+# Confirm that the account data representation knows about all the boxes
+APP_ACCOUNT_JSON_DUMP=$(${gcmd} account dump --address "$APP_ACCOUNT")
+ACTUAL_APP_ACCOUNT_NUM_BOXES=$(printf "$APP_ACCOUNT_JSON_DUMP" | jq '.tbx')
+EXPECTED_APP_ACCOUNT_NUM_BOXES=4
+ACTUAL_APP_ACCOUNT_BOX_BYTES=$(printf "$APP_ACCOUNT_JSON_DUMP" | jq '.tbxb')
+EXPECTED_APP_ACCOUNT_BOX_BYTES=121
+[ "$ACTUAL_APP_ACCOUNT_NUM_BOXES" -eq "$EXPECTED_APP_ACCOUNT_NUM_BOXES" ]
+[ "$ACTUAL_APP_ACCOUNT_BOX_BYTES" -eq "$EXPECTED_APP_ACCOUNT_BOX_BYTES" ]
+
 # Confirm that we can get a list of boxes belonging to a particular application
 BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
 EXPECTED="str:box1
@@ -114,5 +123,13 @@ str:great box"
 # shellcheck disable=SC2059
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
+# Confirm that the account data representation still knows about all the boxes
+APP_ACCOUNT_JSON_DUMP=$(${gcmd} account dump --address "$APP_ACCOUNT")
+ACTUAL_APP_ACCOUNT_NUM_BOXES=$(printf "$APP_ACCOUNT_JSON_DUMP" | jq '.tbx')
+EXPECTED_APP_ACCOUNT_NUM_BOXES=5
+ACTUAL_APP_ACCOUNT_BOX_BYTES=$(printf "$APP_ACCOUNT_JSON_DUMP" | jq '.tbxb')
+EXPECTED_APP_ACCOUNT_BOX_BYTES=154
+[ "$ACTUAL_APP_ACCOUNT_NUM_BOXES" -eq "$EXPECTED_APP_ACCOUNT_NUM_BOXES" ]
+[ "$ACTUAL_APP_ACCOUNT_BOX_BYTES" -eq "$EXPECTED_APP_ACCOUNT_BOX_BYTES" ]
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"

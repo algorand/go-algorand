@@ -18,9 +18,11 @@ package ledger
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -367,5 +369,100 @@ func TestBoxRW(t *testing.T) {
 		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
 		withBr.Boxes[1].Index = 0
 		dl.txn(withBr)
+	})
+}
+
+// TestBoxAccountData tests that an account's data changes when boxes are created
+func TestBoxAccountData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	uint64ToArgStr := func(i uint64) string {
+		encoded := make([]byte, 8)
+		binary.BigEndian.PutUint64(encoded, i)
+		return string(encoded)
+	}
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		var bufNewLogger bytes.Buffer
+		log := logging.NewLogger()
+		log.SetOutput(&bufNewLogger)
+
+		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		call := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}, {Index: 0, Name: []byte("y")}},
+		}
+
+		verifyAppSrc := main(`
+txn ApplicationArgs 0
+btoi
+txn Accounts 1
+acct_params_get AcctMinBalance
+assert
+==
+assert
+
+txn ApplicationArgs 1
+btoi
+txn Accounts 1
+acct_params_get AcctTotalBoxes
+assert
+==
+assert
+
+txn ApplicationArgs 2
+btoi
+txn Accounts 1
+acct_params_get AcctTotalBoxBytes
+assert
+==
+assert
+`)
+		verifyAppIndex := dl.fundedApp(addrs[0], 0, verifyAppSrc)
+		verifyAppCall := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: verifyAppIndex,
+			Accounts:      []basics.Address{appIndex.Address()},
+		}
+
+		// The app account has no box data initially
+		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance), "\x00", "\x00"))
+
+		dl.txn(call.Args("create", "x", "\x10")) // 16
+
+		// It gets updated when a new box is created
+		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance+proto.BoxFlatMinBalance+17*proto.BoxByteMinBalance), "\x01", "\x11"))
+
+		dl.txn(call.Args("create", "y", "\x05"))
+
+		// And again
+		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance+2*proto.BoxFlatMinBalance+23*proto.BoxByteMinBalance), "\x02", "\x17"))
+
+		// Advance more than 320 rounds, ensure box is still there
+		for i := 0; i < 330; i++ {
+			dl.fullBlock()
+		}
+		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens
+		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
+		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
+		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
+
+		// Still the same after caches are flushed
+		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance+2*proto.BoxFlatMinBalance+23*proto.BoxByteMinBalance), "\x02", "\x17"))
+
+		dl.txns(call.Args("delete", "x"), call.Args("delete", "y"))
+
+		// Data gets removed after boxes are deleted
+		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance), "\x00", "\x00"))
 	})
 }

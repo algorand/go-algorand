@@ -1560,6 +1560,11 @@ end:
 	a.NoError(err)
 	a.Len(resp.Boxes, numberOfBoxesRemaining)
 
+	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
+	a.NoError(err)
+	a.Equal(uint64(numberOfBoxesRemaining), appAccountData.TotalBoxes)
+	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
+
 	// delete the app
 	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil)
 	a.NoError(err)

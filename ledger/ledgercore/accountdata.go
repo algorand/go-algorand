@@ -84,6 +84,8 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			TotalAssets:         uint64(len(acct.Assets)),
 			TotalAppParams:      uint64(len(acct.AppParams)),
 			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
+			TotalBoxes:          acct.TotalBoxes,
+			TotalBoxBytes:       acct.TotalBoxBytes,
 		},
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,

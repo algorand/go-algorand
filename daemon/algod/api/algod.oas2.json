@@ -2073,6 +2073,14 @@
           "description": "The count of all assets (AssetParams objects) created by this account.",
           "type": "integer"
         },
+        "total-boxes": {
+          "description": "\\[tbx\\] The number of existing boxes created by this account's app.",
+          "type": "integer"
+        },
+        "total-box-bytes": {
+          "description": "\\[tbxb\\] The total number of bytes used by this account's app's box keys and values.",
+          "type": "integer"
+        },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
         },

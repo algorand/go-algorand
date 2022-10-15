@@ -87,6 +87,12 @@ type Account struct {
 	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
 	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
+	// \[tbxb\] The total number of bytes used by this account's app's box keys and values.
+	TotalBoxBytes *uint64 `json:"total-box-bytes,omitempty"`
+
+	// \[tbx\] The number of existing boxes created by this account's app.
+	TotalBoxes *uint64 `json:"total-boxes,omitempty"`
+
 	// The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
 
