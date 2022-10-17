@@ -76,6 +76,10 @@ type Service struct {
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
+	// Set when a user specifies a syncRound
+	syncRoundSet bool
+	// SyncRound, provided externally, which the ledger must keep in cache
+	syncRound basics.Round
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -144,6 +148,27 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	synchronizing = atomic.LoadInt64(&s.syncStartNS) != 0
 	initialSync = atomic.LoadUint32(&s.initialSyncNotified) == 0
 	return
+}
+
+func (s *Service) SetSyncRound(rnd basics.Round) error {
+	if !s.cfg.EnableSyncMode {
+		return fmt.Errorf("attempted to set sync round for catchup service when EnableSyncMode was disabled")
+	}
+	if rnd < s.ledger.LastRound() {
+		return fmt.Errorf("requested sync round %d cannot be higher than the latest round %d", rnd, s.ledger.LastRound())
+	}
+	s.syncRoundSet = true
+	s.syncRound = rnd
+	return nil
+}
+
+// TODO not sure if we need this?
+func (s *Service) UnsetSyncRound() error {
+	if !s.cfg.EnableSyncMode {
+		return fmt.Errorf("attempted to modify sync round status for catchup service when EnableSyncMode was disabled")
+	}
+	s.syncRoundSet = false
+	return nil
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)

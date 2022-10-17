@@ -77,6 +77,7 @@ type LedgerForAPI interface {
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	LookupAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -97,6 +98,7 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
+	SetSyncRound(rnd basics.Round) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {

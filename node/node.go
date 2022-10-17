@@ -1377,3 +1377,7 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
 }
+
+func (node *AlgorandFullNode) SetSyncRound(rnd basics.Round) error {
+	return node.catchupService.SetSyncRound(rnd)
+}
