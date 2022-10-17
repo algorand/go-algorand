@@ -26,41 +26,14 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	type example struct {
-		requestedMax uint64
-		algodMax     uint64
-	}
-
-	equals := func(expected uint64, e example) {
-		require.Equal(t, expected, applicationBoxesMaxKeys(e.requestedMax, e.algodMax), "failing example = %+v", e)
-	}
-
 	// Response size limited by request supplied value.
-	{
-		requestedMax := uint64(5)
-		algodMax := uint64(7)
-		equals(requestedMax, example{requestedMax, algodMax})
-
-		requestedMax = uint64(5)
-		algodMax = uint64(0)
-		equals(requestedMax, example{requestedMax, algodMax})
-	}
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 7))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 0))
 
 	// Response size limited by algod max.
-	{
-		requestedMax := uint64(5)
-		algodMax := uint64(1)
-		equals(algodMax+1, example{requestedMax, algodMax})
-
-		requestedMax = uint64(0)
-		algodMax = uint64(1)
-		equals(algodMax+1, example{requestedMax, algodMax})
-	}
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(5, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(0, 1))
 
 	// Response size _not_ limited
-	{
-		requestedMax := uint64(0)
-		algodMax := uint64(0)
-		equals(algodMax, example{requestedMax, algodMax})
-	}
+	require.Equal(t, uint64(0), applicationBoxesMaxKeys(0, 0))
 }
