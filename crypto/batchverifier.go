@@ -109,26 +109,34 @@ func (b *BatchVerifier) getNumberOfEnqueuedSignatures() int {
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
-// if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
-	if b.getNumberOfEnqueuedSignatures() == 0 {
-		return nil
-	}
+	_, err := b.VerifyWithFeedback()
+	return err
+}
 
+// VerifyWithFeedback verifies that all the signatures are valid.
+// if all sigs are valid, nil will be returned for err (failed will have all false)
+// if some signatures are invalid, true will be set in failed at the corresponding indexes, and
+// ErrBatchVerificationFailed for err
+func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
+	if b.getNumberOfEnqueuedSignatures() == 0 {
+		return nil, nil
+	}
 	var messages = make([][]byte, b.getNumberOfEnqueuedSignatures())
 	for i, m := range b.messages {
 		messages[i] = HashRep(m)
 	}
-	if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
-		return nil
+	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
+	if allValid {
+		return failed, nil
 	}
-	return ErrBatchVerificationFailed
-
+	return failed, ErrBatchVerificationFailed
 }
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) bool {
+// otherwise, returns false, and sets the indexes of the failed sigs in failed
+func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
 	numberOfSignatures := len(messages)
 
@@ -164,5 +172,10 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
 
-	return allValid == 0
+	failed = make([]bool, numberOfSignatures)
+	for i := 0; i < numberOfSignatures; i++ {
+		cint := *(*C.int)(unsafe.Pointer(uintptr(valid) + uintptr(i*C.sizeof_int)))
+		failed[i] = (cint == 0)
+	}
+	return allValid == 0, failed
 }

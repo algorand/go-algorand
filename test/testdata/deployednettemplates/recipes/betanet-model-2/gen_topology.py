@@ -1,7 +1,7 @@
 import json
 import os
 
-node_types = {"R":5, "N":20, "NPN":50}
+node_types = {"R":5, "N":20, "NPN":20}
 node_size = {"R":"-c5d.4xl", "N":"-c5d.2xl", "NPN":"-Small"}
 regions = [
     "AWS-US-EAST-1",
