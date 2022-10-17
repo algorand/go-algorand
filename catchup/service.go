@@ -570,6 +570,10 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-time.After(sleepDuration):
+			// If sync-ing the next round would break our cache invariant, stop sync-ing
+			if s.syncRoundSet && currBlock+1 >= s.syncRound+basics.Round(s.cfg.MaxAcctLookback) {
+				continue
+			}
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout
 				continue
