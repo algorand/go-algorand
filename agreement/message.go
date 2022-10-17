@@ -27,7 +27,8 @@ import (
 type message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	MessageHandle `codec:"-"`
+	// explicitly unexport this field since both msgp serialization and reflection randomized testing will fail since MessageHandle is interface{} type
+	messageHandle MessageHandle `codec:"-"`
 
 	Tag protocol.Tag
 

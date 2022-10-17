@@ -410,11 +410,11 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 }
 
 func ignoreAction(e messageEvent, err *serializableError) action {
-	return networkAction{T: ignore, Err: err, h: e.Input.MessageHandle}
+	return networkAction{T: ignore, Err: err, h: e.Input.messageHandle}
 }
 
 func disconnectAction(e messageEvent, err *serializableError) action {
-	return networkAction{T: disconnect, Err: err, h: e.Input.MessageHandle}
+	return networkAction{T: disconnect, Err: err, h: e.Input.messageHandle}
 }
 
 func broadcastAction(tag protocol.Tag, o interface{}) action {
@@ -433,7 +433,7 @@ func broadcastAction(tag protocol.Tag, o interface{}) action {
 }
 
 func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
-	a := networkAction{T: relay, h: e.Input.MessageHandle, Tag: tag}
+	a := networkAction{T: relay, h: e.Input.messageHandle, Tag: tag}
 	// TODO would be good to have compiler check this (and related) type switch
 	// by specializing one method per type
 	switch tag {
