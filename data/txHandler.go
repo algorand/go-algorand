@@ -70,7 +70,7 @@ type TxHandler struct {
 	backlogQueue          chan *txBacklogMsg
 	postVerificationQueue chan *txBacklogMsg
 	txAdvertiseQueue      chan network.IncomingMessage
-	txidCommitted         chan []transactions.Txid
+	txidRequestDone       chan []transactions.Txid
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
 	ctx                   context.Context
@@ -202,7 +202,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, dledger *Ledger, net network.G
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		txAdvertiseQueue:      make(chan network.IncomingMessage, txBacklogSize),
-		txidCommitted:         make(chan []transactions.Txid, txBacklogSize),
+		txidRequestDone:       make(chan []transactions.Txid, txBacklogSize),
 		net:                   net,
 		relayMessages:         cfg.NetAddress != "" || cfg.ForceRelayMessages,
 	}
@@ -227,7 +227,7 @@ func (handler *TxHandler) OnNewBlock(block bookkeeping.Block, delta ledgercore.S
 		prevTxns[txid] = stxn.SignedTxn
 		txidList[i] = txid
 	}
-	handler.txidCommitted <- txidList
+	handler.txidRequestDone <- txidList
 	// handler.txRequestsMu.Lock()
 	// for _, txid := range txidList {
 	// 	handler.txRequests.popByTxid(txid)
@@ -490,7 +490,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		for i, stxn := range unverifiedTxGroup {
 			txidList[i] = stxn.ID()
 		}
-		handler.txidCommitted <- txidList
+		handler.txidRequestDone <- txidList
 
 		// handler.txRequestsMu.Lock()
 		// for _, stxn := range unverifiedTxGroup {
@@ -520,7 +520,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 	return network.OutgoingMessage{}
 }
 
-func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.IncomingMessage) {
+func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.IncomingMessage, txidPCache map[transactions.Txid]bool) {
 	var request []byte
 	var txid transactions.Txid
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
@@ -536,30 +536,34 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 	now := time.Now()
 	for i := 0; i < numids; i++ {
 		copy(txid[:], rawmsg.Data[len(txid)*i:])
-		_, _, found := handler.txPool.Lookup(txid)
-		if found {
-			// we already have it, nothing to do
-			//handler.log.Infof("Ta already have %s", txid.String())
-			continue
-		}
 		req, ok := handler.txRequests.getByTxid(txid)
-		if !ok {
+		if ok {
+			// already have it in active requests
+			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
+			if now.Sub(req.requestedAt) < requestExpiration {
+				// no new request
+				continue
+			}
+			req.requestedAt = now
+			heap.Fix(&handler.txRequests, req.heapPos)
+		} else {
+			found := txidPCache[txid]
+			if found {
+				// we already have it, nothing to do
+				continue
+			}
+			_, _, found = handler.txPool.Lookup(txid)
+			if found {
+				// we already have it, nothing to do
+				txidPCache[txid] = true
+				continue
+			}
 			req = new(requestedTxn)
 			req.txid = txid
 			req.requestedAt = now
 			handler.txRequests.add(req)
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
-		} else {
-			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
-			if now.Sub(req.requestedAt) < requestExpiration {
-				// no new request
-				//handler.log.Infof("Ta already req %s", txid.String())
-				continue
-			}
-			req.requestedAt = now
-			heap.Fix(&handler.txRequests, req.heapPos)
 		}
-		//handler.log.Infof("Ta req %s", txid.String())
 		req.requestedFrom = append(req.requestedFrom, rawmsg.Sender)
 		request = append(request, (txid[:])...)
 	}
@@ -575,6 +579,9 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 // watches heap of requstedTxn inside TxHandler.txRequests heap sorted on (requestedAt time.Time)
 func (handler *TxHandler) retryHandler() {
 	ticker := time.NewTicker(200 * time.Millisecond)
+	var prevRound uint64
+	// txidPresenceCache is a local unlocked cache of whether we've seen a txid in txPool (which takes two mutexes to check); replace on block rollover because lots of txPool changes then
+	var txidPresenceCache map[transactions.Txid]bool
 	defer handler.backlogWg.Done()
 	defer ticker.Stop()
 	for {
@@ -582,8 +589,13 @@ func (handler *TxHandler) retryHandler() {
 		case <-handler.ctx.Done():
 			return
 		case rawmsg := <-handler.txAdvertiseQueue:
-			handler.processIncomingTxnAdvertiseInner(rawmsg)
-		case txidList := <-handler.txidCommitted:
+			opr := atomic.LoadUint64(&handler.prevRound)
+			if opr != prevRound {
+				prevRound = opr
+				txidPresenceCache = make(map[transactions.Txid]bool)
+			}
+			handler.processIncomingTxnAdvertiseInner(rawmsg, txidPresenceCache)
+		case txidList := <-handler.txidRequestDone:
 			for _, txid := range txidList {
 				handler.txRequests.popByTxid(txid)
 			}
