@@ -74,7 +74,7 @@ def build_genesis(template_path, netgoal_params, template_dict):
     ]
     args.extend(netgoal_params)
     netgoal(args, template_path)
-    if template_dict['network']['ConsensusProtocol']:
+    if 'ConsensusProtocol' in template_dict['network']:
         updateProtocol(f"{template_path}/generated/genesis.json", template_dict['network']['ConsensusProtocol'])
 
 def updateProtocol(genesis_path, consensus_protocol):
