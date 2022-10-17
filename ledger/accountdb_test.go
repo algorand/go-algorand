@@ -1096,6 +1096,9 @@ func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
 		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
 		{input: []byte{}, outputPrefix: []byte{}, outputPrefixIncr: nil},
 		{input: nil, outputPrefix: []byte{}, outputPrefixIncr: nil},
+		{input: []byte{0x1E, 0xFF, 0xFF}, outputPrefix: []byte{0x1E, 0xFF, 0xFF}, outputPrefixIncr: []byte{0x1F}},
+		{input: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefixIncr: []byte{0xFF, 0xFF}},
+		{input: []byte{0x00, 0xFF}, outputPrefix: []byte{0x00, 0xFF}, outputPrefixIncr: []byte{0x01}},
 	}
 	for _, tc := range testCases {
 		actualOutputPrefix, actualOutputPrefixIncr := keyPrefixIntervalPreprocessing(tc.input)

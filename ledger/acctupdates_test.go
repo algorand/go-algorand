@@ -1321,8 +1321,8 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		appIDset[appID] = struct{}{}
 		boxNameToAppID[boxName] = appID
 
-		boxChange := ledgercore.ValueDelta{Data: &boxName}
-		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.ValueDelta{
+		boxChange := ledgercore.KvValueDelta{Data: &boxName}
+		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
 			logic.MakeBoxKey(appID, boxName): boxChange,
 		})
 		auCommitSync(t, currentRound, au, ml)
@@ -1351,8 +1351,8 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
-		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.ValueDelta{
-			logic.MakeBoxKey(appID, boxName): ledgercore.ValueDelta{},
+		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
+			logic.MakeBoxKey(appID, boxName): ledgercore.KvValueDelta{},
 		})
 		auCommitSync(t, currentRound, au, ml)
 
@@ -1400,13 +1400,13 @@ func TestKVCache(t *testing.T) {
 	// are correct after every kv containing block has been committed.
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
-		kvMods := make(map[string]ledgercore.ValueDelta)
+		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
 				curKV++
 				val := kvMap[name]
-				kvMods[name] = ledgercore.ValueDelta{Data: &val, OldData: nil}
+				kvMods[name] = ledgercore.KvValueDelta{Data: &val, OldData: nil}
 			}
 		}
 
@@ -1445,12 +1445,12 @@ func TestKVCache(t *testing.T) {
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
-		kvMods := make(map[string]ledgercore.ValueDelta)
+		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
 				val := fmt.Sprintf("modified value%d", curKV)
-				kvMods[name] = ledgercore.ValueDelta{Data: &val}
+				kvMods[name] = ledgercore.KvValueDelta{Data: &val}
 				curKV++
 			}
 		}
@@ -1495,11 +1495,11 @@ func TestKVCache(t *testing.T) {
 	for i := 0; i < kvCnt/kvsPerBlock+int(conf.MaxAcctLookback); i++ {
 		currentRound = currentRound + 1
 
-		kvMods := make(map[string]ledgercore.ValueDelta)
+		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
-				kvMods[name] = ledgercore.ValueDelta{Data: nil}
+				kvMods[name] = ledgercore.KvValueDelta{Data: nil}
 				curKV++
 			}
 		}
@@ -2751,7 +2751,7 @@ type auNewBlockOpts struct {
 	knownCreatables map[basics.CreatableIndex]bool
 }
 
-func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]ledgercore.ValueDelta) {
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]ledgercore.KvValueDelta) {
 	rewardLevel := uint64(0)
 	prevRound, prevTotals, err := au.LatestTotals()
 	require.Equal(t, rnd-1, prevRound)

@@ -34,7 +34,7 @@ type AppCallBytes struct {
 	Value    string `codec:"value"`
 }
 
-// NewAppCallBytes parses an argument of "form encoding:value" to AppCallBytes.
+// NewAppCallBytes parses an argument of the form "encoding:value" to AppCallBytes.
 func NewAppCallBytes(arg string) (AppCallBytes, error) {
 	parts := strings.SplitN(arg, ":", 2)
 	if len(parts) != 2 {
