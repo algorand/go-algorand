@@ -75,7 +75,7 @@ var opDocByName = map[string]string{
 	"intc_2":     "constant 2 from intcblock",
 	"intc_3":     "constant 3 from intcblock",
 	"pushint":    "immediate UINT",
-	"pushints":   "push sequence of immediate uints to stack",
+	"pushints":   "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
 	"bytecblock": "prepare block of byte-array constants for use by bytec",
 	"bytec":      "Ith constant from bytecblock",
 	"bytec_0":    "constant 0 from bytecblock",
@@ -199,7 +199,7 @@ var opDocByName = map[string]string{
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
-	"match":  "construct a list of match cases from B[0] to B[N] and branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found.",
+	"match":  "given match cases from B[0] to B[N-1], branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found.",
 
 	"proto":      "Prepare top call frame for a retsub that will assume A args and R return values.",
 	"frame_dig":  "Nth (signed) value from the frame pointer.",
@@ -213,14 +213,14 @@ func OpDoc(opName string) string {
 }
 
 var opcodeImmediateNotes = map[string]string{
-	"intcblock":  "{varuint length} [{varuint value}, ...]",
+	"intcblock":  "{varuint count} [{varuint value}, ...]",
 	"intc":       "{uint8 int constant index}",
 	"pushint":    "{varuint int}",
-	"pushints":   "{varuint length} [{varuint value}, ...]",
-	"bytecblock": "{varuint length} [({varuint value length} bytes), ...]",
+	"pushints":   "{varuint count} [{varuint value}, ...]",
+	"bytecblock": "{varuint count} [({varuint value length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
-	"pushbytes":  "{varuint length} {bytes}",
-	"pushbytess": "{varuint length} [({varuint value length} bytes), ...]",
+	"pushbytes":  "{varuint count} {bytes}",
+	"pushbytess": "{varuint count} [({varuint value length} bytes), ...]",
 
 	"arg":    "{uint8 arg index N}",
 	"global": "{uint8 global field index}",

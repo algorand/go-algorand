@@ -242,7 +242,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intcblock uint ...
 
-- Opcode: 0x20 {varuint length} [{varuint value}, ...]
+- Opcode: 0x20 {varuint count} [{varuint value}, ...]
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
 
@@ -280,7 +280,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint length} [({varuint value length} bytes), ...]
+- Opcode: 0x26 {varuint count} [({varuint value length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -1032,7 +1032,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## pushbytes bytes
 
-- Opcode: 0x80 {varuint length} {bytes}
+- Opcode: 0x80 {varuint count} {bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
 - Availability: v3
@@ -1050,7 +1050,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## pushbytess bytes ...
 
-- Opcode: 0x82 {varuint length} [({varuint value length} bytes), ...]
+- Opcode: 0x82 {varuint count} [({varuint value length} bytes), ...]
 - Stack: ... &rarr; ..., [N items]
 - push sequences of immediate bytes to stack
 - Availability: v8
@@ -1059,9 +1059,9 @@ pushbytess args are not added to the bytecblock during assembly processes
 
 ## pushints uint ...
 
-- Opcode: 0x83 {varuint length} [{varuint value}, ...]
+- Opcode: 0x83 {varuint count} [{varuint value}, ...]
 - Stack: ... &rarr; ..., [N items]
-- push sequence of immediate uints to stack
+- push sequence of immediate uints to stack in the order they appear (first uint being deepest)
 - Availability: v8
 
 pushints args are not added to the intcblock during assembly processes
@@ -1125,8 +1125,8 @@ Fails unless the last instruction executed was a `callsub`.
 ## match target ...
 
 - Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
-- Stack: ..., [N items] &rarr; ...
-- construct a list of match cases from B[0] to B[N] and branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found.
+- Stack: ..., [N items], A &rarr; ...
+- given match cases from B[0] to B[N-1], branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found.
 - Availability: v8
 
 `match` consumes N+1 values from the stack. Let the top stack value be A. The following N values represent an ordered list of match cases/constants (B), where the first value (B[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (L). `match` will branch to the L[I], where B[I] = A. If there are no matches then execution continues on to the next instruction.

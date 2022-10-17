@@ -1126,6 +1126,15 @@ func (cx *EvalContext) checkStep() (int, error) {
 	return opcost, nil
 }
 
+func (cx *EvalContext) ensureStackCap(targetCap int) {
+	if cap(cx.stack) < targetCap {
+		// Let's grow all at once, plus a little slack.
+		newStack := make([]stackValue, len(cx.stack), targetCap+4)
+		copy(newStack, cx.stack)
+		cx.stack = newStack
+	}
+}
+
 func opErr(cx *EvalContext) error {
 	return errors.New("err opcode executed")
 }
@@ -1901,12 +1910,7 @@ func opPushInts(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.stack) + len(intc)
-	if cap(cx.stack) < finalLen {
-		// Let's grow all at once, plus a little slack.
-		newStack := make([]stackValue, len(cx.stack), finalLen+4)
-		copy(newStack, cx.stack)
-		cx.stack = newStack
-	}
+	cx.ensureStackCap(finalLen)
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
 		cx.stack = append(cx.stack, sv)
@@ -1968,12 +1972,7 @@ func opPushBytess(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.stack) + len(cbytess)
-	if cap(cx.stack) < finalLen {
-		// Let's grow all at once, plus a little slack.
-		newStack := make([]stackValue, len(cx.stack), finalLen+4)
-		copy(newStack, cx.stack)
-		cx.stack = newStack
-	}
+	cx.ensureStackCap(finalLen)
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
 		cx.stack = append(cx.stack, sv)
@@ -2173,11 +2172,6 @@ func opMatch(cx *EvalContext) error {
 	argBase := len(cx.stack) - n
 	matchList := cx.stack[argBase:]
 	cx.stack = cx.stack[:argBase]
-
-	// first we must verify that the matchList has the expected length and all types match the type of matchVal
-	if len(matchList) != n {
-		return fmt.Errorf("list of match constants has length %d when length %d was expected", len(matchList), n)
-	}
 
 	matchedIdx := n
 	for i, stackArg := range matchList {

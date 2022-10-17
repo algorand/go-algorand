@@ -383,7 +383,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `intc_2` | constant 2 from intcblock |
 | `intc_3` | constant 3 from intcblock |
 | `pushint uint` | immediate UINT |
-| `pushints uint ...` | push sequence of immediate uints to stack |
+| `pushints uint ...` | push sequence of immediate uints to stack in the order they appear (first uint being deepest) |
 | `bytecblock bytes ...` | prepare block of byte-array constants for use by bytec |
 | `bytec i` | Ith constant from bytecblock |
 | `bytec_0` | constant 0 from bytecblock |
@@ -603,7 +603,7 @@ Account fields used in the `acct_params_get` opcode.
 | `proto a r` | Prepare top call frame for a retsub that will assume A args and R return values. |
 | `retsub` | pop the top instruction from the call stack and branch to it |
 | `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
-| `match target ...` | construct a list of match cases from B[0] to B[N] and branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found. |
+| `match target ...` | given match cases from B[0] to B[N-1], branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found. |
 
 ### State Access
 
