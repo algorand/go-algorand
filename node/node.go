@@ -1378,6 +1378,7 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 	return node.accountManager.HasLiveKeys(round, round+10)
 }
 
+// SetSyncRound sets the minimum sync round on the catchup service
 func (node *AlgorandFullNode) SetSyncRound(rnd basics.Round) error {
 	return node.catchupService.SetSyncRound(rnd)
 }

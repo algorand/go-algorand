@@ -150,6 +150,7 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	return
 }
 
+// SetSyncRound attempts to set the minimum sync round to keep in the cache
 func (s *Service) SetSyncRound(rnd basics.Round) error {
 	if !s.cfg.EnableSyncMode {
 		return fmt.Errorf("attempted to set sync round for catchup service when EnableSyncMode was disabled")
@@ -162,7 +163,7 @@ func (s *Service) SetSyncRound(rnd basics.Round) error {
 	return nil
 }
 
-// TODO not sure if we need this?
+// UnsetSyncRound removes any previously set sync round TODO do we need this?
 func (s *Service) UnsetSyncRound() error {
 	if !s.cfg.EnableSyncMode {
 		return fmt.Errorf("attempted to modify sync round status for catchup service when EnableSyncMode was disabled")

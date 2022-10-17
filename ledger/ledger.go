@@ -443,6 +443,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
+// GetAccountDeltasForRound retrieves the AccountDeltas object from the accountUpdates cache
 func (l *Ledger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
