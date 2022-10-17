@@ -35,17 +35,17 @@ import (
 func TestAgreementSerialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// todo : we need to deserialize some more meaningfull state.
+	// todo : we need to deserialize some more meaningful state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
 	router := makeRootRouter(status)
 	a := []action{}
 
-	encodedBytes := encode(clock, router, status, a)
+	encodedBytes := encode(clock, router, status, a, false)
 
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
 	log := makeServiceLogger(logging.Base())
-	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log)
+	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log, false)
 	require.NoError(t, err)
 	require.Equalf(t, clock, clock2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
@@ -54,7 +54,7 @@ func TestAgreementSerialization(t *testing.T) {
 }
 
 func BenchmarkAgreementSerialization(b *testing.B) {
-	// todo : we need to deserialize some more meaningfull state.
+	// todo : we need to deserialize some more meaningful state.
 	b.SkipNow()
 
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
@@ -64,12 +64,12 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encode(clock, router, status, a)
+		encode(clock, router, status, a, false)
 	}
 }
 
 func BenchmarkAgreementDeserialization(b *testing.B) {
-	// todo : we need to deserialize some more meaningfull state.
+	// todo : we need to deserialize some more meaningful state.
 	b.SkipNow()
 
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
@@ -77,12 +77,12 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	router := makeRootRouter(status)
 	a := []action{}
 
-	encodedBytes := encode(clock, router, status, a)
+	encodedBytes := encode(clock, router, status, a, false)
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
 	log := makeServiceLogger(logging.Base())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		decode(encodedBytes, t0, log)
+		decode(encodedBytes, t0, log, false)
 	}
 }
 
@@ -173,5 +173,41 @@ func BenchmarkAgreementPersistenceRecovery(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		restore(serviceLogger{Logger: logging.Base()}, accessor)
+	}
+}
+
+func randomizeDiskState() (rr rootRouter, p player) {
+	p2, err := protocol.RandomizeObject(&player{})
+	if err != nil {
+		return
+	}
+	rr2, err := protocol.RandomizeObject(&rootRouter{})
+	if err != nil {
+		return
+	}
+	p = *(p2.(*player))
+	rr = *(rr2.(*rootRouter))
+	return
+}
+
+func BenchmarkRandomizedEncode(b *testing.B) {
+	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	router, player := randomizeDiskState()
+	a := []action{}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		encode(clock, router, player, a, false)
+	}
+}
+
+func BenchmarkRandomizedDecode(b *testing.B) {
+	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	router, player := randomizeDiskState()
+	a := []action{}
+	ds := encode(clock, router, player, a, false)
+	log := makeServiceLogger(logging.Base())
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		decode(ds, clock, log, false)
 	}
 }
