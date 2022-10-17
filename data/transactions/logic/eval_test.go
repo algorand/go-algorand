@@ -5698,9 +5698,9 @@ func TestMatch(t *testing.T) {
 
 	// take the 0th label with int cases
 	testAccepts(t, `
-int 0
-int 1
-int 0
+int 99
+int 100
+int 99
 match zero one
 err
 zero: int 1; return
@@ -5720,9 +5720,9 @@ one:  int 0;
 
 	// take the 1th label with int cases
 	testRejects(t, `
-int 0
-int 1
-int 1
+int 99
+int 100
+int 100
 match zero one
 err
 zero: int 1; return
@@ -5742,7 +5742,7 @@ one:  int 0;
 
 	// same, but jumping to end of program
 	testAccepts(t, `
-int 1; int 0; int 1; int 1
+int 1; int 99; int 100; int 100
 match zero one
 zero: err
 one:
@@ -5750,9 +5750,9 @@ one:
 
 	// no match
 	testAccepts(t, `
-int 0
-int 1
-int 2
+int 99
+int 100
+int 101
 match zero one
 int 1; return // falls through to here
 zero: int 0; return
@@ -5761,17 +5761,17 @@ one:  int 0; return
 
 	// jump forward and backward
 	testAccepts(t, `
-int 0
+int 99
 start:
 int 1
 +
-int 1
-int 2
+int 100
+int 101
 dig 2
 match start end
 err
 end:
-int 2
+int 101
 ==
 assert
 int 1
@@ -5789,9 +5789,9 @@ int 1
 	// make the match the final instruction
 	testAccepts(t, `
 int 1
-int 1
-int 0
-int 1
+int 100
+int 99
+int 100
 match done1 done2; done1: ; done2: ;
 `, 8)
 

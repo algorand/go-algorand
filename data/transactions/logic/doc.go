@@ -199,7 +199,7 @@ var opDocByName = map[string]string{
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
-	"match":  "construct a list of match cases from B_1 to B_N and branch to the Ith label where B_I = A. Continue to the following instruction if no matches are found.",
+	"match":  "construct a list of match cases from B[0] to B[N] and branch to the Ith label where B[I] = A. Continue to the following instruction if no matches are found.",
 
 	"proto":      "Prepare top call frame for a retsub that will assume A args and R return values.",
 	"frame_dig":  "Nth (signed) value from the frame pointer.",

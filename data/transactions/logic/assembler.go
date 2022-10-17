@@ -837,9 +837,7 @@ func asmIntImmArgs(ops *OpStream, args []string) ([]uint64, error) {
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
-		if !ops.known.deadcode { // this conditional doesn't seem necessary
-			ivals[i] = cu
-		}
+		ivals[i] = cu
 	}
 
 	return ivals, nil

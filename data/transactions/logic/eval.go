@@ -2166,13 +2166,13 @@ func opMatch(cx *EvalContext) error {
 		return fmt.Errorf("match expects %d stack args while stack only contains %d", n+1, len(cx.stack))
 	}
 
-	top := len(cx.stack) - 1
-	matchVal := cx.stack[top]
-	cx.stack = cx.stack[:top]
+	last := len(cx.stack) - 1
+	matchVal := cx.stack[last]
+	cx.stack = cx.stack[:last]
 
-	top = len(cx.stack) - n
-	matchList := cx.stack[top:]
-	cx.stack = cx.stack[:top]
+	argBase := len(cx.stack) - n
+	matchList := cx.stack[argBase:]
+	cx.stack = cx.stack[:argBase]
 
 	// first we must verify that the matchList has the expected length and all types match the type of matchVal
 	if len(matchList) != n {
@@ -2182,7 +2182,7 @@ func opMatch(cx *EvalContext) error {
 	matchedIdx := n
 	for i, stackArg := range matchList {
 		if stackArg.argType() != matchVal.argType() {
-			return fmt.Errorf("match constant at position %d type: %s != %s", i, stackArg.argType().String(), matchVal.argType().String())
+			continue
 		}
 
 		if matchVal.argType() == StackBytes && string(matchVal.Bytes) == string(stackArg.Bytes) {
