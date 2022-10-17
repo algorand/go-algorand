@@ -915,7 +915,7 @@ func TestStreamVerifier(t *testing.T) {
 	defer cancel()
 
 	nbw := MakeNewBlockWatcher(blkHdr)
-	stxnChan := make(chan VerificationElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := MakeStream(ctx, stxnChan, nil, nbw, verificationPool, cache)
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
@@ -962,7 +962,7 @@ func TestStreamVerifier(t *testing.T) {
 			case <-ctx.Done():
 				break
 			default:
-				stxnChan <- VerificationElement{TxnGroup: tg, Context: nil}
+				stxnChan <- UnverifiedElement{TxnGroup: tg, Context: nil}
 			}
 		}
 	}()

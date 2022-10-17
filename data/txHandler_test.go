@@ -331,7 +331,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 					// this is not expected during the test
 					continue
 				}
-				handler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
+				handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
 
 			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
@@ -443,7 +443,7 @@ func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures
-		if rand.Float32() < 0.1 {
+		if rand.Float32() < 20.1 {
 			tinGrp := rand.Intn(grpSize)
 			signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
 			badTxnGroups[uint64(u)] = struct{}{}

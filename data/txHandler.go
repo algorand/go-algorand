@@ -69,7 +69,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	streamVerifierChan    chan verify.VerificationElement
+	streamVerifierChan    chan verify.UnverifiedElement
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -94,7 +94,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		streamVerifierChan:    make(chan verify.VerificationElement, verifierStreamBufferSize),
+		streamVerifierChan:    make(chan verify.UnverifiedElement, verifierStreamBufferSize),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -190,7 +190,7 @@ func (handler *TxHandler) backlogWorker() {
 				continue
 			}
 
-			handler.streamVerifierChan <- verify.VerificationElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
+			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {

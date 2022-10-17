@@ -457,10 +457,10 @@ func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
 
-// VerificationElement is the element passed the Stream verifier
+// UnverifiedElement is the element passed the Stream verifier
 // Context is a reference associated with the txn group which is passed
 // with the result
-type VerificationElement struct {
+type UnverifiedElement struct {
 	TxnGroup []transactions.SignedTxn
 	Context  interface{}
 }
@@ -481,14 +481,6 @@ type streamManager struct {
 	ctx              context.Context
 	cache            VerifiedTransactionCache
 	execPoolWg       sync.WaitGroup
-}
-
-type batchLoad struct {
-	batchVerifier  *crypto.BatchVerifier
-	txnGroups      [][]transactions.SignedTxn
-	groupCtxs      []*GroupContext
-	elementContext []interface{}
-	messagesForTxn []int
 }
 
 // NewBlockWatcher is a struct used to provide a new block header to the
@@ -522,13 +514,47 @@ func (nbw *NewBlockWatcher) getBlockHeader() (bh bookkeeping.BlockHeader) {
 	return nbw.blkHeader
 }
 
-func makeBatchLoad() batchLoad {
-	bl := batchLoad{}
-	bl.batchVerifier = crypto.MakeBatchVerifier()
-	bl.groupCtxs = make([]*GroupContext, 0)
+type unverifiedElementList struct {
+	elementList []UnverifiedElement
+	nbw         *NewBlockWatcher
+	ledger      logic.LedgerForSignature
+}
+
+func makeUnverifiedElementList(nbw *NewBlockWatcher, ledger logic.LedgerForSignature) (uel unverifiedElementList) {
+	uel.nbw = nbw
+	uel.ledger = ledger
+	uel.elementList = make([]UnverifiedElement, 0)
+	return
+}
+
+func makeSingleUnverifiedElement(nbw *NewBlockWatcher, ledger logic.LedgerForSignature, ue UnverifiedElement) (uel unverifiedElementList) {
+	uel.nbw = nbw
+	uel.ledger = ledger
+	uel.elementList = []UnverifiedElement{ue}
+	return
+}
+
+type batchLoad struct {
+	txnGroups      [][]transactions.SignedTxn
+	groupCtxs      []*GroupContext
+	elementContext []interface{}
+	messagesForTxn []int
+}
+
+func makeBatchLoad() (bl batchLoad) {
 	bl.txnGroups = make([][]transactions.SignedTxn, 0)
+	bl.groupCtxs = make([]*GroupContext, 0)
+	bl.elementContext = make([]interface{}, 0)
 	bl.messagesForTxn = make([]int, 0)
 	return bl
+}
+
+func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, eltctx interface{}, numBatchableSigs int) {
+	bl.txnGroups = append(bl.txnGroups, txngrp)
+	bl.groupCtxs = append(bl.groupCtxs, gctx)
+	bl.elementContext = append(bl.elementContext, eltctx)
+	bl.messagesForTxn = append(bl.messagesForTxn, numBatchableSigs)
+
 }
 
 // wait time for another txn should satisfy the following inequality:
@@ -547,7 +573,7 @@ const internalBufferSize = 0
 
 // MakeStream creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
-func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement, ledger logic.LedgerForSignature,
+func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger logic.LedgerForSignature,
 	nbw *NewBlockWatcher, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (
 	resultOtput <-chan VerificationResult) {
 
@@ -567,17 +593,20 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement, ledger
 			sm.seatReturnChan <- struct{}{}
 		}
 
-		bl := makeBatchLoad()
 		timer := time.NewTicker(waitForFirstTxnDuration)
 		var added bool
+		var numberOfSigsInCurrent uint64
+		uel := makeUnverifiedElementList(nbw, ledger)
 		for {
 			select {
 			case stx, ok := <-stxnChan:
 				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
 				if !ok {
-					err := sm.processFullBatch(bl)
-					if err != nil {
-						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
+					if numberOfSigsInCurrent > 0 {
+						err := sm.processFullBatch(uel)
+						if err != nil {
+							sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
+						}
 					}
 					// for for all pending tasks out, then close the result chan
 					sm.execPoolWg.Wait()
@@ -585,59 +614,54 @@ func MakeStream(ctx context.Context, stxnChan <-chan VerificationElement, ledger
 					return
 				}
 
-				isFirstInBatch := bl.batchVerifier.GetNumberOfEnqueuedSignatures() == 0
-
-				// TODO: separate operations here, and get the sig verification inside LogicSig outside
-				groupCtx, err := txnGroupBatchPrep(stx.TxnGroup, nbw.getBlockHeader(), ledger, bl.batchVerifier)
-				//TODO: report the error ctx.Err()
+				isFirstInBatch := numberOfSigsInCurrent == 0
+				numberOfBatchableSigsInGroup, err := getNumberOfBatchableSigsInGroup(stx.TxnGroup)
 				if err != nil {
-					// verification failed. can return here
 					sm.sendResult(stx.TxnGroup, stx.Context, err)
 					continue
 				}
 
-				numEnqueued := bl.batchVerifier.GetNumberOfEnqueuedSignatures()
-				// if nothing is added to the batch, then the txngroup can be returned here
-				if numEnqueued == 0 ||
-					(len(bl.messagesForTxn) > 0 && numEnqueued == bl.messagesForTxn[len(bl.messagesForTxn)-1]) {
-					sm.sendResult(stx.TxnGroup, stx.Context, err)
+				// if no batchable signatures here, send this as a task of its own
+				if numberOfBatchableSigsInGroup == 0 {
+					err := sm.processFullBatch(makeSingleUnverifiedElement(nbw, ledger, stx))
+					if err != nil {
+						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
+					}
 					continue
 				}
 
-				bl.groupCtxs = append(bl.groupCtxs, groupCtx)
-				bl.txnGroups = append(bl.txnGroups, stx.TxnGroup)
-				bl.elementContext = append(bl.elementContext, stx.Context)
-				bl.messagesForTxn = append(bl.messagesForTxn, numEnqueued)
-				if len(bl.groupCtxs) >= txnPerWorksetThreshold/4 {
-					// TODO: the limit of 32 should not pass
-					err := sm.processFullBatch(bl)
+				// add this txngrp to the list of batchable txn groups
+				numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
+				uel.elementList = append(uel.elementList, stx)
+				if numberOfSigsInCurrent >= txnPerWorksetThreshold {
+					err := sm.processFullBatch(uel)
 					if err != nil {
 						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
 						continue
 					}
-					bl = makeBatchLoad()
+					uel = makeUnverifiedElementList(nbw, ledger)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 				} else {
-					// the batch is not full, can wait for some more
 					if isFirstInBatch {
-						// reset the timer only when a new batch started
+						// an element is added and is waiting. shorten the waiting time
 						timer.Reset(waitForNextTxnDuration)
 					}
 				}
 			case <-timer.C:
 				// timer ticked. it is time to send the batch even if it is not full
-				if len(bl.groupCtxs) == 0 {
+				if numberOfSigsInCurrent == 0 {
 					// nothing batched yet... wait some more
 					timer.Reset(waitForFirstTxnDuration)
 					continue
 				}
-				added = sm.processBatch(bl)
+				added = sm.processBatch(uel)
 				if added {
-					bl = makeBatchLoad()
+					uel = makeUnverifiedElementList(nbw, ledger)
+					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 				} else {
-					// was not added because no available seats. wait for some more txns
+					// was not added because no-available-seats. wait for some more txns
 					timer.Reset(waitForNextTxnDuration)
 				}
 			case <-ctx.Done():
@@ -670,20 +694,20 @@ func (sm *streamManager) sendResult(veTxnGroup []transactions.SignedTxn, veConte
 	*/
 }
 
-func (sm *streamManager) processFullBatch(bl batchLoad) (err error) {
+func (sm *streamManager) processFullBatch(uel unverifiedElementList) (err error) {
 	// This is a full batch, no additions are allowed
 	// block and wait for a free seat
 	<-sm.seatReturnChan
-	err = sm.addVerificationTaskToThePool(bl)
+	err = sm.addVerificationTaskToThePool(uel)
 	return
 }
 
-func (sm *streamManager) processBatch(bl batchLoad) (added bool) {
+func (sm *streamManager) processBatch(uel unverifiedElementList) (added bool) {
 	// if cannot find a seat, can go back and collect
 	// more signatures instead of waiting here
 	select {
 	case <-sm.seatReturnChan:
-		err := sm.addVerificationTaskToThePool(bl)
+		err := sm.addVerificationTaskToThePool(uel)
 		if err != nil {
 			// TODO: report the error
 			fmt.Println(err)
@@ -697,17 +721,35 @@ func (sm *streamManager) processBatch(bl batchLoad) (added bool) {
 	return
 }
 
-func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
+func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList) error {
 	sm.execPoolWg.Add(1)
 	function := func(arg interface{}) interface{} {
 		defer sm.execPoolWg.Done()
-		bl = arg.(batchLoad)
-		//		var grpErr error
-		// check if we've canceled the request while this was in the queue.
+
 		if sm.ctx.Err() != nil {
 			return sm.ctx.Err()
 		}
-		failed, err := bl.batchVerifier.VerifyWithFeedback()
+
+		uel := arg.(*unverifiedElementList)
+		batchVerifier := crypto.MakeBatchVerifier()
+
+		bl := makeBatchLoad()
+		previousTotal := 0
+		// TODO: separate operations here, and get the sig verification inside LogicSig outside
+		for _, ue := range uel.elementList {
+			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, uel.nbw.getBlockHeader(), uel.ledger, batchVerifier)
+			if err != nil {
+				// verification failed, cannot go to the batch. return here.
+				sm.sendResult(ue.TxnGroup, ue.Context, err)
+				continue
+			}
+			totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
+			currentCount := totalBatchCount - previousTotal
+			previousTotal = totalBatchCount
+			bl.addLoad(ue.TxnGroup, groupCtx, ue.Context, currentCount)
+		}
+
+		failed, err := batchVerifier.VerifyWithFeedback()
 		if err != nil && err != crypto.ErrBatchHasFailedSigs {
 			fmt.Println(err)
 			// something bad happened
@@ -719,7 +761,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 		failedSigIdx := 0
 		for txgIdx := range bl.txnGroups {
 			txGroupSigFailed := false
-			// if err == nil, means all sigs are verified, no need to check for the failed
+			// if err == nil, then all sigs are verified, no need to check for the failed
 			for err != nil && failedSigIdx < bl.messagesForTxn[txgIdx] {
 				if failed[failedSigIdx] {
 					// if there is a failed sig check, then no need to check the rest of the
@@ -740,7 +782,7 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 			}
 			sm.sendResult(bl.txnGroups[txgIdx], bl.elementContext[txgIdx], result)
 		}
-		// loading them all at once to lock the cache once
+		// loading them all at once by locking the cache once
 		err = sm.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
 		if err != nil {
 			// TODO: handle the error
@@ -748,6 +790,53 @@ func (sm *streamManager) addVerificationTaskToThePool(bl batchLoad) error {
 		}
 		return struct{}{}
 	}
-	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, bl, sm.seatReturnChan)
+	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, &uel, sm.seatReturnChan)
 	return err
+}
+
+func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs uint64, err error) {
+	batchSigs = 0
+	for _, stx := range stxs {
+		count, err := getNumberOfBatchableSigsInTxn(stx)
+		if err != nil {
+			return 0, err
+		}
+		batchSigs = batchSigs + count
+	}
+	return
+}
+
+func getNumberOfBatchableSigsInTxn(stx transactions.SignedTxn) (batchSigs uint64, err error) {
+	var hasSig, hasMsig bool
+	numSigs := 0
+	if stx.Sig != (crypto.Signature{}) {
+		numSigs++
+		hasSig = true
+	}
+	if !stx.Msig.Blank() {
+		numSigs++
+		hasMsig = true
+	}
+	if !stx.Lsig.Blank() {
+		numSigs++
+	}
+
+	if numSigs == 0 {
+		return 0, errors.New("signedtxn has no sig")
+	}
+	if numSigs != 1 {
+		return 0, errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+	}
+	if hasSig {
+		return 1, nil
+	}
+	if hasMsig {
+		sig := stx.Msig
+		for _, subsigi := range sig.Subsigs {
+			if (subsigi.Sig != crypto.Signature{}) {
+				batchSigs++
+			}
+		}
+	}
+	return
 }
