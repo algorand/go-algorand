@@ -51,6 +51,12 @@ var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessages
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 var txAdvertiseDrops = metrics.NewCounter("algod_tx_advertise_drops", "Number of Ta messages dropped")
+var txAdvertiseErr = metrics.NewCounter("algod_tx_advertise_err", "Number of Ta messages errored")
+var txAdvertiseProg = metrics.NewCounter("algod_tx_advertise_prog", "Number of Ta messages in progress")
+var txAdvertisePCache = metrics.NewCounter("algod_tx_advertise_pcache", "Number of Ta messages found in pcache")
+var txAdvertisePool = metrics.NewCounter("algod_tx_advertise_pool", "Number of Ta messages found in pool")
+var txRequest = metrics.NewCounter("algod_tx_request", "Number of Tr messages sent first pass")
+var txRequestRetry = metrics.NewCounter("algod_tx_request_retry", "Number of Tr messages sent to a second peer")
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -526,11 +532,13 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
 	if !ok {
 		handler.log.Errorf("Ta Sender not UnicastPeer")
+		txAdvertiseErr.Inc(nil)
 		return
 	}
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
 		handler.log.Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		txAdvertiseErr.Inc(nil)
 		return
 	}
 	now := time.Now()
@@ -542,6 +550,7 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 			req.advertisedBy = append(req.advertisedBy, rawmsg.Sender)
 			if now.Sub(req.requestedAt) < requestExpiration {
 				// no new request
+				txAdvertiseProg.Inc(nil)
 				continue
 			}
 			req.requestedAt = now
@@ -550,11 +559,13 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 			found := txidPCache[txid]
 			if found {
 				// we already have it, nothing to do
+				txAdvertisePCache.Inc(nil)
 				continue
 			}
 			_, _, found = handler.txPool.Lookup(txid)
 			if found {
 				// we already have it, nothing to do
+				txAdvertisePool.Inc(nil)
 				txidPCache[txid] = true
 				continue
 			}
@@ -568,6 +579,7 @@ func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.Incomi
 		request = append(request, (txid[:])...)
 	}
 	if len(request) != 0 {
+		txRequest.Inc(nil)
 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
 		if err != nil {
 			handler.log.Errorf("Ta req err, %v", err)
@@ -581,7 +593,7 @@ func (handler *TxHandler) retryHandler() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	var prevRound uint64
 	// txidPresenceCache is a local unlocked cache of whether we've seen a txid in txPool (which takes two mutexes to check); replace on block rollover because lots of txPool changes then
-	var txidPresenceCache map[transactions.Txid]bool
+	txidPresenceCache := make(map[transactions.Txid]bool)
 	defer handler.backlogWg.Done()
 	defer ticker.Stop()
 	for {
@@ -617,6 +629,7 @@ func (handler *TxHandler) retryHandlerTick(now time.Time) {
 			handler.log.Errorf("Ta Sender not UnicastPeer")
 			continue
 		}
+		txRequestRetry.Inc(nil)
 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
 		if err != nil {
 			handler.log.Errorf("Ta req err, %v", err)
