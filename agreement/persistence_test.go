@@ -86,17 +86,6 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	}
 }
 
-func TestErrorSerializable(t *testing.T) {
-	ca := checkpointAction{
-		Round:  round(1),
-		Period: period(1),
-		Step:   step(1),
-	}
-	rca := protocol.EncodeReflect(ca)
-	mca := protocol.Encode(&ca)
-	require.Equalf(t, rca, mca, "Reflection and msgp not the same")
-}
-
 func TestAgreementPersistence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
