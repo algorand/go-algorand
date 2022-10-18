@@ -32,15 +32,12 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// StateProofTopVoters used for allocbound of msgpacked map
-const StateProofTopVoters = stateproof.StateProofTopVoters
-
 type builder struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	*stateproof.Builder `codec:"bldr"`
 
-	AddrToPos map[Address]uint64      `codec:"addr,allocbound=StateProofTopVoters"`
+	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.VotersAllocBound"`
 	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
 	Message   stateproofmsg.Message   `codec:"msg"`
 }

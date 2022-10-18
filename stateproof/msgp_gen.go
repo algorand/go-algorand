@@ -142,8 +142,8 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 				return
 			}
-			if zb0005 > StateProofTopVoters {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(StateProofTopVoters))
+			if zb0005 > stateproof.VotersAllocBound {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(stateproof.VotersAllocBound))
 				err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 				return
 			}
@@ -233,8 +233,8 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AddrToPos")
 					return
 				}
-				if zb0007 > StateProofTopVoters {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(StateProofTopVoters))
+				if zb0007 > stateproof.VotersAllocBound {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(stateproof.VotersAllocBound))
 					err = msgp.WrapError(err, "AddrToPos")
 					return
 				}

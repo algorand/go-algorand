@@ -183,8 +183,8 @@ func (z *Builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Participants")
 				return
 			}
-			if zb0006 > StateProofTopVoters {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofTopVoters))
+			if zb0006 > VotersAllocBound {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(VotersAllocBound))
 				err = msgp.WrapError(err, "struct-from-array", "Participants")
 				return
 			}
@@ -289,8 +289,8 @@ func (z *Builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Participants")
 					return
 				}
-				if zb0008 > StateProofTopVoters {
-					err = msgp.ErrOverflow(uint64(zb0008), uint64(StateProofTopVoters))
+				if zb0008 > VotersAllocBound {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(VotersAllocBound))
 					err = msgp.WrapError(err, "Participants")
 					return
 				}

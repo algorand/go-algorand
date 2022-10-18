@@ -19,6 +19,7 @@ package stateproof
 import (
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -33,8 +34,8 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
-// StateProofTopVoters should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
-const StateProofTopVoters = 1024
+// VotersAllocBound should be equal to config.Consensus[protocol.ConsensusCurrentVersion].VotersAllocBound
+const VotersAllocBound = 1024
 
 // Builder keeps track of signatures on a message and eventually produces
 // a state proof for that message.
@@ -45,7 +46,7 @@ type Builder struct {
 	Round          uint64               `codec:"rnd"`
 	sigs           []sigslot            // Indexed by pos in Participants
 	signedWeight   uint64               // Total weight of signatures so far
-	Participants   []basics.Participant `codec:"parts,allocbound=StateProofTopVoters"`
+	Participants   []basics.Participant `codec:"parts,allocbound=VotersAllocBound"`
 	Parttree       *merklearray.Tree    `codec:"parttree"`
 	LnProvenWeight uint64               `codec:"lnprv"`
 	ProvenWeight   uint64               `codec:"prv"`
