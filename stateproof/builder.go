@@ -237,6 +237,12 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 				sfa.Round, proto.StateProofInterval)
 		}
 
+		if sfa.Round > latest {
+			// avoiding an inspection in DB in case we haven't reached the round.
+			// Avoiding disconnecting the peer, since it might've been sent to this node while it recovers.
+			return network.Ignore, fmt.Errorf("handleSig: signature sent for round %d that is higher than latest", sfa.Round)
+		}
+
 		builderForRound, err = spw.fetchBuilderForRound(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
