@@ -1044,6 +1044,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
+	w.persistBuilders = false
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1052,12 +1053,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	expected := ledgercore.ErrNoEntry{
-		Round:     msg.Round,
-		Latest:    w.ledger.Latest(),
-		Committed: w.ledger.Latest(),
-	}
-	require.Equal(t, expected, err)
+	require.ErrorIs(t, err, errGivenRndGreaterThanLatestRound)
 }
 
 // relays reject signatures for wrong message (sig verification fails)
@@ -1067,6 +1063,7 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
+	w.persistBuilders = false
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1102,6 +1099,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
+	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
@@ -1174,8 +1172,13 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
+	defer w.db.Close()
+	// don't want the worker to access the builder db and fail due to the lack of said db.
+	w.persistBuilders = false
+
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
 	require.NoError(t, err)
+
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
@@ -1215,6 +1218,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
+	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(512))
