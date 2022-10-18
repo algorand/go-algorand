@@ -107,7 +107,7 @@ func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func (m mockNode) SetSyncRound(rnd basics.Round) error {
+func (m mockNode) SetSyncRound(rnd uint64) error {
 	panic("implement me")
 }
 
