@@ -174,7 +174,7 @@ type accountUpdates struct {
 	resources resourcesUpdates
 
 	// kvDeltas stores kvPair updates for every round after dbRound.
-	kvDeltas []map[string]ledgercore.ValueDelta
+	kvDeltas []map[string]ledgercore.KvValueDelta
 
 	// kvStore has the most recent kv pairs for every write/del that appears in
 	// deltas.
@@ -1840,7 +1840,7 @@ func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredC
 // changes per round by specifying it in the ndeltas field of the
 // modifiedKv. The modifiedValues in the returned map have the earliest
 // mv.oldData, and the newest mv.data.
-func compactKvDeltas(kvDeltas []map[string]ledgercore.ValueDelta) map[string]modifiedKvValue {
+func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]modifiedKvValue {
 	if len(kvDeltas) == 0 {
 		return nil
 	}

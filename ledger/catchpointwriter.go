@@ -184,14 +184,14 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		// writerResponse is drained, ensuring any problems from asyncWriter are
 		// noted (and that the writing is done).
 		close(writerRequest)
-	DRAIN:
+	drain:
 		for {
 			select {
 			case writerError, open := <-writerResponse:
 				if open {
 					err = writerError
 				} else {
-					break DRAIN
+					break drain
 				}
 			}
 		}

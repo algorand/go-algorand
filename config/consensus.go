@@ -334,7 +334,8 @@ type ConsensusParams struct {
 	// Maximum length of a box (Does not include name/key length. That is capped by MaxAppKeyLen)
 	MaxBoxSize uint64
 
-	// MBR per box created (this accounts for a bit of overhead used to store the box bytes)
+	// Minimum Balance Requirement (MBR) per box created (this accounts for a
+	// bit of overhead used to store the box bytes)
 	BoxFlatMinBalance uint64
 
 	// MBR per byte of box storage. MBR is incremented by BoxByteMinBalance * (len(name)+len(value))
