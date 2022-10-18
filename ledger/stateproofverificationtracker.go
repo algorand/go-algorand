@@ -99,9 +99,6 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 		return
 	}
 
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
-
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
 	}
@@ -240,6 +237,9 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 }
 
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
 	if len(spt.trackedCommitData) > 0 {
 		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
 		if blk.Round() <= lastCommitConfirmedRound {
@@ -263,6 +263,9 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 }
 
 func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
 	if len(spt.trackedDeleteData) > 0 {
 		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
 		if blk.Round() <= lastDeleteConfirmedRound {
