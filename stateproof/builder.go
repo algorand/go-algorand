@@ -439,13 +439,15 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 		}
 	}
 
-	if spw.persistBuilders {
-		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return deleteBuilders(tx, oldestRoundToRemove)
-		})
-		if err != nil {
-			spw.log.Errorf("deleteOldBuilders: failed to delete builders from database: %w", err)
-		}
+	if !spw.persistBuilders {
+		return
+	}
+
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deleteBuilders(tx, oldestRoundToRemove)
+	})
+	if err != nil {
+		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 	}
 }
 
