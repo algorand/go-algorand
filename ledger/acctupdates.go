@@ -374,9 +374,9 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			}
 
 			// the key is in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check. Walk deltas
+			// delta range of [0..offset-1], so we'll need to check. Walk deltas
 			// backwards so later updates take priority.
-			for i := offset - 1; i >= 0; i-- {
+			for i := int(offset - 1); i >= 0; i-- {
 				mval, ok := au.kvDeltas[i][key]
 				if ok {
 					return mval.Data, nil
@@ -1300,9 +1300,8 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 				return macct.resource, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check :
-			// Traverse the deltas backwards to ensure that later updates take
-			// priority if present.
+			// delta range of [0..offset-1], so we'll need to check. Walk deltas
+			// backwards to ensure that later updates take priority if present.
 			for offset > 0 {
 				offset--
 				r, ok := au.deltas[offset].GetResource(addr, aidx, ctype)
@@ -1402,9 +1401,8 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				return macct.data, rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check :
-			// Traverse the deltas backwards to ensure that later updates take
-			// priority if present.
+			// delta range of [0..offset-1], so we'll need to check. Walk deltas
+			// backwards to ensure that later updates take priority if present.
 			for offset > 0 {
 				offset--
 				d, ok := au.deltas[offset].GetData(addr)
