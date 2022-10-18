@@ -186,21 +186,22 @@ func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	return err
 }
 
-func getBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
+func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	row := tx.QueryRow(selectBuilderForRound, rnd)
 	var rawBuilder []byte
 	err := row.Scan(&rawBuilder)
 	if err != nil {
-		return fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
+		return builder{}, fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
 	}
-	err = protocol.Decode(rawBuilder, b)
+	var b builder
+	err = protocol.Decode(rawBuilder, &b)
 	if err != nil {
-		return fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
+		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
 	}
 
 	b.Builder.AllocSigs() // make a slice for sigs
 
-	return nil
+	return b, nil
 }
 
 // deleteBuilders deletes all builders up to rnd

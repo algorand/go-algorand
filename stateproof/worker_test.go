@@ -1352,7 +1352,8 @@ func TestWorker_BuildersPersistence_StateProofChainStalled(t *testing.T) {
 	for i := 0; i < 9; i++ {
 		a.NoError(
 			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-				return getBuilder(tx, r, &builder{})
+				_, err := getBuilder(tx, r)
+				return err
 			}))
 		r += 256
 	}

@@ -43,8 +43,9 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	var b builder
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return getBuilder(tx, rnd, &b)
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
+		b, err2 = getBuilder(tx, rnd)
+		return err2
 	})
 	if err == nil {
 		return b, nil

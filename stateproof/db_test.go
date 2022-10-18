@@ -201,12 +201,14 @@ func TestBuildersDB(t *testing.T) {
 
 	var b builder
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return getBuilder(tx, basics.Round(34), &b)
+		b, err = getBuilder(tx, basics.Round(34))
+		return err
 	})
 	a.ErrorIs(err, sql.ErrNoRows)
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return getBuilder(tx, basics.Round(35), &b)
+		b, err = getBuilder(tx, basics.Round(35))
+		return err
 	})
 	a.NoError(err)
 	a.Equal(uint64(35), b.Round)
