@@ -46,6 +46,10 @@ type mockLedger struct {
 	blocks   []bookkeeping.Block
 }
 
+func (l *mockLedger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
+	panic("implement me")
+}
+
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
 	ad, ok := l.accounts[addr]
 	if !ok { // return empty / not found
