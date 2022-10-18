@@ -76,10 +76,6 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	spt.dbQueries = *preparedDbQueries
 
-	if err != nil {
-		return err
-	}
-
 	spt.log = l.trackerLog()
 
 	spt.stateProofVerificationMu.Lock()
