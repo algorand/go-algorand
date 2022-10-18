@@ -29,8 +29,9 @@ import (
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // payload{Pipelined,Rejected,Accepted}, and proposal{Accepted,Committable}.
 
-// msgp:ignore proposalManager
-type proposalManager struct{}
+type proposalManager struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+}
 
 func (m *proposalManager) T() stateMachineTag {
 	return proposalMachine
