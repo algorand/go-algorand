@@ -61,7 +61,7 @@ type Client struct {
 	cacheDir     string
 	consensus    config.ConsensusProtocols
 
-	suggestedParamsCache  v1.TransactionParams
+	suggestedParamsCache  generatedV2.TransactionParametersResponse
 	suggestedParamsExpire time.Time
 	suggestedParamsMaxAge time.Duration
 }
@@ -617,7 +617,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		tx.PaymentTxnFields.CloseRemainderTo = closeToAddr
 	}
 
-	tx.Header.GenesisID = params.GenesisID
+	tx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if cp.SupportGenesisHash {
@@ -902,19 +902,19 @@ func (c Client) CurrentRound() (lastRound uint64, err error) {
 func (c *Client) SuggestedFee() (fee uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err := algod.SuggestedFee()
+		params, err := algod.SuggestedParamsV2()
 		if err == nil {
-			fee = resp.Fee
+			fee = params.Fee
 		}
 	}
 	return
 }
 
 // SuggestedParams returns the suggested parameters for a new transaction
-func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
+func (c *Client) SuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		params, err = algod.SuggestedParams()
+		params, err = algod.SuggestedParamsV2()
 	}
 	return
 }
@@ -924,7 +924,7 @@ func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
 	c.suggestedParamsMaxAge = maxAge
 }
 
-func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error) {
+func (c *Client) cachedSuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
 	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
 		params, err = c.SuggestedParams()
 		if err == nil && c.suggestedParamsMaxAge != 0 {

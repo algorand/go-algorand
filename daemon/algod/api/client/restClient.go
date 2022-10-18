@@ -339,7 +339,7 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 }
 
 // PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
-// Deprecated
+// Deprecated: Use v2 API
 func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
@@ -352,14 +352,14 @@ func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (r
 }
 
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
-// Deprecated
+// Deprecated: Use v2 API
 func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
 	return
 }
 
 // Assets gets up to max assets with maximum asset index assetIdx
-// Deprecated
+// Deprecated: Use v2 API
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
 	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
@@ -379,7 +379,7 @@ func (client RestClient) ApplicationInformation(index uint64) (response generate
 }
 
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
-// Deprecated
+// Deprecated: Use v2 API
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
 	return
@@ -414,6 +414,7 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
+// TODO: Deprecate this function
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
@@ -473,15 +474,23 @@ func (client RestClient) RawAccountAssetInformation(accountAddress string, asset
 }
 
 // SuggestedFee gets the recommended transaction fee from the node
-
+// Deprecated
 func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
 	err = client.get(&response, "/v1/transactions/fee", nil)
 	return
 }
 
 // SuggestedParams gets the suggested transaction parameters
+// Deprecated
 func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
 	err = client.get(&response, "/v1/transactions/params", nil)
+	return
+}
+
+// SuggestedParamsV2 gets the suggested transaction parameters
+// Deprecated
+func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
+	err = client.get(&response, "/v2/transactions/params", nil)
 	return
 }
 

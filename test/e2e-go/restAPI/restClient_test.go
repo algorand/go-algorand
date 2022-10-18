@@ -303,7 +303,7 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 	testClient := fixture.LibGoalClient
 	suggestedParamsRes, err := testClient.SuggestedParams()
 	a.NoError(err)
-	a.Truef(suggestedParamsRes.MinTxnFee > 0, "min txn fee not supplied")
+	a.Truef(suggestedParamsRes.MinFee > 0, "min txn fee not supplied")
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {

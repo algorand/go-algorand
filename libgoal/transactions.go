@@ -273,7 +273,7 @@ func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participa
 		basics.Round(txnLastValid),
 		leaseBytes, includeStateProofKeys)
 
-	goOnlineTx.Header.GenesisID = params.GenesisID
+	goOnlineTx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {

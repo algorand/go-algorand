@@ -239,7 +239,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	// get the wallet account
 	wAcct := accountList[0].Address
 
-	suggestedParams, err := fixture.AlgodClient.SuggestedParams()
+	suggestedParams, err := fixture.AlgodClient.SuggestedParamsV2()
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
@@ -249,6 +249,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	require.NoError(t, err)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
