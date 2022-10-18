@@ -1032,7 +1032,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## pushbytes bytes
 
-- Opcode: 0x80 {varuint count} {bytes}
+- Opcode: 0x80 {varuint length} {bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
 - Availability: v3
@@ -1052,7 +1052,7 @@ pushint args are not added to the intcblock during assembly processes
 
 - Opcode: 0x82 {varuint count} [({varuint value length} bytes), ...]
 - Stack: ... &rarr; ..., [N items]
-- push sequences of immediate bytes to stack
+- push sequences of immediate byte arrays to stack (first byte array being deepest)
 - Availability: v8
 
 pushbytess args are not added to the bytecblock during assembly processes
@@ -1126,7 +1126,7 @@ Fails unless the last instruction executed was a `callsub`.
 
 - Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
-- given match cases from A[0] to A[N-1], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
+- given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
 - Availability: v8
 
 `match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to the T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.

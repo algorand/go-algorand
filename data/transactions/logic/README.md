@@ -391,7 +391,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | constant 2 from bytecblock |
 | `bytec_3` | constant 3 from bytecblock |
 | `pushbytes bytes` | immediate BYTES |
-| `pushbytess bytes ...` | push sequences of immediate bytes to stack |
+| `pushbytess bytes ...` | push sequences of immediate byte arrays to stack (first byte array being deepest) |
 | `bzero` | zero filled byte-array of length A |
 | `arg n` | Nth LogicSig argument |
 | `arg_0` | LogicSig argument 0 |
@@ -603,7 +603,7 @@ Account fields used in the `acct_params_get` opcode.
 | `proto a r` | Prepare top call frame for a retsub that will assume A args and R return values. |
 | `retsub` | pop the top instruction from the call stack and branch to it |
 | `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
-| `match target ...` | given match cases from A[0] to A[N-1], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found. |
+| `match target ...` | given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found. |
 
 ### State Access
 

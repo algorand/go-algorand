@@ -83,7 +83,7 @@ var opDocByName = map[string]string{
 	"bytec_2":    "constant 2 from bytecblock",
 	"bytec_3":    "constant 3 from bytecblock",
 	"pushbytes":  "immediate BYTES",
-	"pushbytess": "push sequences of immediate bytes to stack",
+	"pushbytess": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
 
 	"bzero":   "zero filled byte-array of length A",
 	"arg":     "Nth LogicSig argument",
@@ -199,7 +199,7 @@ var opDocByName = map[string]string{
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
-	"match":  "given match cases from A[0] to A[N-1], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
+	"match":  "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
 
 	"proto":      "Prepare top call frame for a retsub that will assume A args and R return values.",
 	"frame_dig":  "Nth (signed) value from the frame pointer.",
@@ -219,7 +219,7 @@ var opcodeImmediateNotes = map[string]string{
 	"pushints":   "{varuint count} [{varuint value}, ...]",
 	"bytecblock": "{varuint count} [({varuint value length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
-	"pushbytes":  "{varuint count} {bytes}",
+	"pushbytes":  "{varuint length} {bytes}",
 	"pushbytess": "{varuint count} [({varuint value length} bytes), ...]",
 
 	"arg":    "{uint8 arg index N}",

@@ -2179,7 +2179,7 @@ func opMatch(cx *EvalContext) error {
 			continue
 		}
 
-		if matchVal.argType() == StackBytes && string(matchVal.Bytes) == string(stackArg.Bytes) {
+		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
 		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
