@@ -202,7 +202,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 
 		rv := rawVote{Sender: auth.Sender, Round: b.Round, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
 		uv := unauthenticatedVote{R: rv, Cred: auth.Cred, Sig: auth.Sig}
-		avv.verifyVote(ctx, l, uv, uint64(i), message{}, results)
+		_ = avv.verifyVote(ctx, l, uv, uint64(i), message{}, results)
 	}
 
 	// create verification requests for equivocation votes
@@ -222,7 +222,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 			Proposals: auth.Proposals,
 			Sigs:      auth.Sigs,
 		}
-		avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results)
+		_ = avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results)
 	}
 
 	return func() (bundle, error) {

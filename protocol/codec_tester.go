@@ -278,7 +278,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 				continue
 			}
 			if st.Name() == "messageEvent" && f.Name == "Tail" {
-				// Don't try and set the Tail field since
+				// Don't try and set the Tail field since it's recursive
 				continue
 			}
 			if rawMsgpType == f.Type {
@@ -357,12 +357,6 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 				break
 			}
 		}
-	case reflect.Interface:
-		if strings.HasPrefix(tag, "codec:\"-\"") {
-			// don't do anything for interface fields that are skipped during msgp serialization
-			break
-		}
-		fallthrough // if the field is not ignored fallthrough to default case since we can't meaningfully randomize it
 	default:
 		return fmt.Errorf("unsupported object kind %v", v.Kind())
 	}
@@ -401,19 +395,19 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 		}
 	}
 
-	// if !reflect.DeepEqual(e1, e2) {
-	// 	return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
-	// }
+	if !reflect.DeepEqual(e1, e2) {
+		return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
+	}
 
 	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)
 	v2 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)
 
-	err = DecodeReflect(e1, v2)
+	err = DecodeMsgp(e1, v1)
 	if err != nil {
 		return err
 	}
 
-	err = DecodeMsgp(e1, v1)
+	err = DecodeReflect(e1, v2)
 	if err != nil {
 		return err
 	}

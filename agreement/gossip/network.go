@@ -45,12 +45,6 @@ const (
 )
 
 type messageMetadata struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	// although none of the fields here are exported we explicitly make it satisfy msgp.Marshaler interface so that we guarantee at compile time that MessageHandle will
-	// never be unserializable
-	agreement.MessageHandle `codec:"-"` // Don't try to serialize this since it's explicitly included only to ensure that interface is implemented
-
 	raw network.IncomingMessage
 }
 
