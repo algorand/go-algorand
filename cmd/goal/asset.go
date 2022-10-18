@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -175,16 +176,19 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 			"creator account is unknown.")
 	}
 
-	response, err := client.AccountInformation(creator)
+	response, err := client.AccountInformationV2(creator, false)
 	if err != nil {
 		reportErrorf(errorRequestFail, err)
 	}
 
 	nmatch := 0
-	for id, params := range response.AssetParams {
-		if params.UnitName == assetUnitName {
-			assetID = id
-			nmatch++
+	if response.CreatedAssets != nil {
+		for _, asset := range *response.CreatedAssets {
+			params := asset.Params
+			if params.UnitName != nil && *params.UnitName == assetUnitName {
+				assetID = asset.Index
+				nmatch++
+			}
 		}
 	}
 
@@ -654,7 +658,7 @@ var freezeAssetCmd = &cobra.Command{
 	},
 }
 
-func assetDecimalsFmt(amount uint64, decimals uint32) string {
+func assetDecimalsFmt(amount uint64, decimals uint64) string {
 	// Just return the raw amount with no decimal if decimals is 0
 	if decimals == 0 {
 		return fmt.Sprintf("%d", amount)
@@ -662,7 +666,7 @@ func assetDecimalsFmt(amount uint64, decimals uint32) string {
 
 	// Otherwise, ensure there are decimals digits to the right of the decimal point
 	pow := uint64(1)
-	for i := uint32(0); i < decimals; i++ {
+	for i := uint64(0); i < decimals; i++ {
 		pow *= 10
 	}
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)
@@ -756,40 +760,67 @@ var infoAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		params, err := client.AssetInformation(assetID)
+		asset, err := client.AssetInformationV2(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
 		reserveEmpty := false
-		if params.ReserveAddr == "" {
+		if asset.Params.Reserve != nil && *asset.Params.Reserve == "" {
 			reserveEmpty = true
-			params.ReserveAddr = params.Creator
+			*asset.Params.Reserve = asset.Params.Creator
 		}
 
-		reserve, err := client.AccountInformation(params.ReserveAddr)
+		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		res := reserve.Assets[assetID]
+		var res *generated.AssetHolding
+		if reserve.Assets != nil {
+			for _, asset := range *reserve.Assets {
+				if assetID == asset.AssetId {
+					*res = asset
+					break
+				}
+			}
+			// Asset ID was not found in account
+			if res == nil {
+				reportErrorf(errorRequestFail, "cannot find asset ID in account")
+			}
+		} else {
+			reportErrorf(errorRequestFail, "cannot find asset ID in account")
+		}
+
+		derefString := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+		derefBool := func(b *bool) bool {
+			if b == nil {
+				return false
+			}
+			return *b
+		}
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
-		fmt.Printf("Creator:          %s\n", params.Creator)
-		reportInfof("Asset name:       %s\n", params.AssetName)
-		reportInfof("Unit name:        %s\n", params.UnitName)
-		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)
-		fmt.Printf("Decimals:         %d\n", params.Decimals)
-		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
-		fmt.Printf("Manager address:  %s\n", params.ManagerAddr)
+		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
+		reportInfof("Asset name:       %s\n", derefString(asset.Params.Name))
+		reportInfof("Unit name:        %s\n", derefString(asset.Params.UnitName))
+		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
+		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
+		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
 		if reserveEmpty {
-			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))
 		} else {
-			fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s\n", derefString(asset.Params.Reserve))
 		}
-		fmt.Printf("Freeze address:   %s\n", params.FreezeAddr)
-		fmt.Printf("Clawback address: %s\n", params.ClawbackAddr)
+		fmt.Printf("Freeze address:   %s\n", derefString(asset.Params.Freeze))
+		fmt.Printf("Clawback address: %s\n", derefString(asset.Params.Clawback))
 	},
 }

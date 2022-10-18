@@ -860,7 +860,7 @@ func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
 func (c *Client) GetBalance(address string) (uint64, error) {
-	resp, err := c.AccountInformation(address)
+	resp, err := c.AccountInformationV2(address, false)
 	if err != nil {
 		return 0, err
 	}

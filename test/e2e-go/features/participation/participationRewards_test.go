@@ -254,8 +254,8 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.NoError(err)
 	// newAccount should NOT be rewarded
 	// poorAccount should be rewarded
-	updatedBalancePoorAccount, _ := client.AccountInformation(poorAccount)
-	updatedBalanceNewAccount, _ := client.AccountInformation(newAccount)
+	updatedBalancePoorAccount, _ := client.AccountInformationV2(poorAccount, false)
+	updatedBalanceNewAccount, _ := client.AccountInformationV2(newAccount, false)
 	poorAccountDelta := updatedBalancePoorAccount.Amount - initialBalancePoorAccount
 	r.Truef(initialBalancePoorAccount/rewardUnit <= poorAccountDelta, "non-empty account with balance > rewardunit (%d) should accrue rewards. started with %d, given %d, now has %d. Expected %d", rewardUnit, initialBalancePoorAccount, amountRichAccountPokesWith, updatedBalancePoorAccount.Amount, amountRichAccountPokesWith+initialBalancePoorAccount/rewardUnit)
 	r.Truef(initialBalancePoorAccount/rewardUnit <= updatedBalancePoorAccount.Rewards, "non-empty account with balance > rewardunit (%d) should accrue rewards. started with %d, given %d, now has %d, actual rewards %d", rewardUnit, initialBalancePoorAccount, amountRichAccountPokesWith, updatedBalancePoorAccount.Amount, updatedBalancePoorAccount.Rewards)
@@ -288,7 +288,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	client.WaitForRound(rewardRound2)
 
 	// Ensure that a reward for newAccount's one reward unit is now pending
-	latestBalanceNewAccount, _ := client.AccountInformation(newAccount)
+	latestBalanceNewAccount, _ := client.AccountInformationV2(newAccount, false)
 	r.Truef((initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit >= 1, "new account needs at least one reward unit")
 	r.Truef(latestBalanceNewAccount.Amount >= initialBalanceNewAccount+(initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit,
 		"account sent at least %d should have accrued rewards. started with %d, was bumped to %d, so increase should be more than the %d seen",
@@ -298,7 +298,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.Equal(initialBalanceNewAccount+amountRichAccountPokesWith, latestBalanceNewAccount.AmountWithoutPendingRewards, "rewards should be pending")
 
 	// since we poked, previous rewards should no longer be pending for poor account
-	latestBalancePoorAccount, _ := client.AccountInformation(poorAccount)
+	latestBalancePoorAccount, _ := client.AccountInformationV2(poorAccount, false)
 	r.Truef(latestBalancePoorAccount.AmountWithoutPendingRewards >= updatedBalancePoorAccount.Amount+amountRichAccountPokesWith, "rewards should have been applied")
 
 	// Test e2e REST API convenience computations

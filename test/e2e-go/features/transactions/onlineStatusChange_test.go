@@ -64,17 +64,17 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	becomesNonparticipating := accountList[2].Address // 10% stake
 
 	// assert that initiallyOfflineAccount is offline
-	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err := client.AccountInformationV2(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Offline.String())
 
 	// assert that initiallyOnlineAccount is online
-	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err := client.AccountInformationV2(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Online.String())
 
 	// assert that the account that will become nonparticipating hasn't yet been marked as such
-	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating)
+	unmarkedAccountStatus, err := client.AccountInformationV2(becomesNonparticipating, false)
 	a.NoError(err)
 	a.NotEqual(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 
@@ -132,18 +132,18 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	fixture.WaitForRoundWithTimeout(curRound + uint64(1))
 
 	// assert that initiallyOffline is now online
-	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err = client.AccountInformationV2(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Online.String())
 
 	// assert that initiallyOnline is now offline
-	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err = client.AccountInformationV2(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Offline.String())
 
 	if doNonparticipationTest {
 		// assert that becomesNonparticipating is no longer participating
-		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
+		unmarkedAccountStatus, err = client.AccountInformationV2(becomesNonparticipating, false)
 		a.NoError(err)
 		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 	}
