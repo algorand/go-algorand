@@ -566,11 +566,6 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 const waitForNextTxnDuration = 50 * time.Millisecond
 const waitForFirstTxnDuration = 2000 * time.Millisecond
 
-// internalBufferSize is the size of the chan that will hold the arriving stxns before they get pre-processed
-const internalBufferSize = 0
-
-//const txnPerWorksetThreshold = 32
-
 // MakeStream creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
 func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger logic.LedgerForSignature,
@@ -734,7 +729,6 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 		batchVerifier := crypto.MakeBatchVerifier()
 
 		bl := makeBatchLoad()
-		previousTotal := 0
 		// TODO: separate operations here, and get the sig verification inside LogicSig outside
 		for _, ue := range uel.elementList {
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, uel.nbw.getBlockHeader(), uel.ledger, batchVerifier)
@@ -744,9 +738,7 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 				continue
 			}
 			totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
-			currentCount := totalBatchCount - previousTotal
-			previousTotal = totalBatchCount
-			bl.addLoad(ue.TxnGroup, groupCtx, ue.Context, currentCount)
+			bl.addLoad(ue.TxnGroup, groupCtx, ue.Context, totalBatchCount)
 		}
 
 		failed, err := batchVerifier.VerifyWithFeedback()
