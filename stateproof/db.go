@@ -170,14 +170,12 @@ func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	return err
 }
 
-var builderDoesNotExist = fmt.Errorf("builder not found")
-
 func getBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	row := tx.QueryRow(selectBuilderForRound, rnd)
 	var rawBuilder []byte
 	err := row.Scan(&rawBuilder)
 	if err != nil {
-		return fmt.Errorf("getBuilder: %w for round %d in the database, error: %s", builderDoesNotExist, rnd, err.Error())
+		return fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
 	}
 	err = protocol.Decode(rawBuilder, b)
 	if err != nil {

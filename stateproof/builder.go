@@ -50,7 +50,7 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 		return b, nil
 	}
 
-	if !errors.Is(err, builderDoesNotExist) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return builder{}, err
 	}
 
