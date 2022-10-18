@@ -276,7 +276,7 @@ type pendingTransactionsParams struct {
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response generatedV2.PendingTransactionsResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending"), pendingTransactionsParams{maxTxns})
+	err = client.get(&response, "/v2/transactions/pending", pendingTransactionsParams{maxTxns})
 	return
 }
 
@@ -342,6 +342,12 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 // Deprecated
 func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
+	return
+}
+
+// PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
+func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }
 

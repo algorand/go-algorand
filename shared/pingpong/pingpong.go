@@ -19,6 +19,7 @@ package pingpong
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -453,8 +454,17 @@ func waitPendingTransactions(accounts []string, client *libgoal.Client) error {
 			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
 			return err
 		}
-		for _, txn := range pendingTxns.TruncatedTxns.Transactions {
-			if txn.From != from {
+		for _, txn := range pendingTxns.TopTransactions {
+			pendingTxn := transactions.SignedTxn{}
+			txnBody, err := json.Marshal(txn)
+			if err != nil {
+				return err
+			}
+			err = json.Unmarshal(txnBody, &pendingTxn)
+			if err != nil {
+				return err
+			}
+			if pendingTxn.Txn.Sender.String() != from {
 				// we found a transaction where the receiver was the given account. We don't
 				// care about these.
 				continue

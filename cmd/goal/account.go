@@ -591,7 +591,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			_, units = unicodePrintable(*createdAsset.Params.UnitName)
 		}
 
-		total := assetDecimalsFmt(createdAsset.Params.Total, uint32(createdAsset.Params.Decimals))
+		total := assetDecimalsFmt(createdAsset.Params.Total, createdAsset.Params.Decimals)
 
 		url := ""
 		if createdAsset.Params.Url != nil {
@@ -618,7 +618,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
 		}
 
-		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
 
 		assetName := "<unnamed>"
 		if assetParams.Params.Name != nil {
