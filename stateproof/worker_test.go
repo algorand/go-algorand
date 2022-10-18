@@ -1045,6 +1045,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
 	w.persistBuilders = false
+	defer w.Shutdown()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1064,6 +1065,7 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 	w.persistBuilders = false
+	defer w.Shutdown()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1099,6 +1101,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
+	defer w.Shutdown()
 	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
@@ -1172,7 +1175,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
-	defer w.db.Close()
+	defer w.Shutdown()
 	// don't want the worker to access the builder db and fail due to the lack of said db.
 	w.persistBuilders = false
 
@@ -1218,6 +1221,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
+	defer w.Shutdown()
 	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
