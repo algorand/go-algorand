@@ -3010,4 +3010,8 @@ func TestAssemblePushConsts(t *testing.T) {
 	testProg(t, source, AssemblerMaxVersion, Expect{1, `strconv.ParseUint: parsing "\"1\"": invalid syntax`})
 	source = `pushbytess 1 2 3`
 	testProg(t, source, AssemblerMaxVersion, Expect{1, "byte arg did not parse: 1"})
+	source = `pushints 6 4; concat`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "concat arg 1 wanted type []byte got uint64"})
+	source = `pushbytess "x" "y"; +`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "+ arg 1 wanted type uint64 got []byte"})
 }
