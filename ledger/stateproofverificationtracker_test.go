@@ -447,3 +447,19 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "memory lookup failed")
 }
+
+func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(1)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+
+	pastBlock := randomBlock(0)
+	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
+}
