@@ -487,7 +487,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		defer wg.Done()
 		errHashes = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			start := time.Now()
-			err := writeCatchpointStagingHashes(ctx, tx, normalizedAccountBalances)
+			err := writeCatchpointStagingHashes(ctx, tx, normalizedAccountBalances, expectingMoreEntries)
 			durHashes = time.Since(start)
 			return err
 		})

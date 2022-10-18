@@ -1033,14 +1033,22 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 }
 
 // writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, expectingMoreEntries []bool) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
 	}
 
-	for _, balance := range bals {
-		for _, hash := range balance.accountHashes {
+	for i, balance := range bals {
+		for j, hash := range balance.accountHashes {
+			if expectingMoreEntries[i] && j == 0 {
+				// There is a single chunk in the catchpoint file with ExpectingMoreEntries
+				// set to false for this account. There may be multiple chunks with
+				// ExpectingMoreEntries set to true. IN this case, we do not have to add the
+				// account's hash, which is the first hash in the accountHashes slice.
+				continue
+			}
+
 			result, err := insertStmt.ExecContext(ctx, hash[:])
 			if err != nil {
 				return err
