@@ -38,7 +38,6 @@ import (
 //  Not threadsafe, should be called in a lock environment
 func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (b builder, err error) {
 	if spw.persistBuilders {
-		// Store the newly built builder into the database
 		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return getBuilder(tx, rnd, &b)
 		})
