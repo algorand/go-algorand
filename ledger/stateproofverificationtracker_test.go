@@ -216,29 +216,6 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
 }
 
-func TestStateProofVerificationTracker_LoadFromDisk(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	ml, spt := initializeLedgerSpt(t)
-	defer ml.Close()
-	defer spt.close()
-
-	expectedDataNum := uint64(10)
-
-	lastBlock := feedBlocksUpToRound(spt, genesisBlock(), basics.Round(expectedDataNum*defaultStateProofInterval),
-		defaultStateProofInterval, true)
-
-	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
-
-	spt.close()
-	err := spt.loadFromDisk(ml, unusedByStateProofTracker)
-	a.NoError(err)
-	
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, false, trackerMemory)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, true, trackerDB)
-}
-
 func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
