@@ -55,8 +55,12 @@ var txAdvertiseErr = metrics.NewCounter("algod_tx_advertise_err", "Number of Ta 
 var txAdvertiseProg = metrics.NewCounter("algod_tx_advertise_prog", "Number of Ta messages in progress")
 var txAdvertisePCache = metrics.NewCounter("algod_tx_advertise_pcache", "Number of Ta messages found in pcache")
 var txAdvertisePool = metrics.NewCounter("algod_tx_advertise_pool", "Number of Ta messages found in pool")
-var txRequest = metrics.NewCounter("algod_tx_request", "Number of Tr messages sent first pass")
-var txRequestRetry = metrics.NewCounter("algod_tx_request_retry", "Number of Tr messages sent to a second peer")
+var txRequest = metrics.NewCounter("algod_tx_request_out", "Number of Tr messages sent first pass")
+var txRequestRetry = metrics.NewCounter("algod_tx_request_out_retry", "Number of Tr messages sent to a second peer")
+var txRequestIn = metrics.NewCounter("algod_tx_request_in", "Number of Tr messages in at handler")
+var txRequestInErr = metrics.NewCounter("algod_tx_request_in_err", "Number of Tr err in handler")
+var txRequestInOk = metrics.NewCounter("algod_tx_request_in_ok", "Number of Tr messages replied at handler")
+var txRequestInMiss = metrics.NewCounter("algod_tx_request_in_miss", "Number of Tr messages missing at handler")
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -708,12 +712,14 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 	peer, ok := rawmsg.Sender.(network.UnicastPeer)
 	if !ok {
 		handler.log.Errorf("Tr Sender not UnicastPeer")
+		txRequestInErr.Inc(nil)
 		return network.OutgoingMessage{}
 	}
 	var txid transactions.Txid
 	numids := len(rawmsg.Data) / len(txid)
 	if numids*len(txid) != len(rawmsg.Data) {
-		handler.log.Warnf("got txid advertisement len %d", len(rawmsg.Data))
+		handler.log.Warnf("got Tr len %d", len(rawmsg.Data))
+		txRequestInErr.Inc(nil)
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	response := make([]transactions.SignedTxn, numids)
@@ -731,10 +737,13 @@ func (handler *TxHandler) processIncomingTxnRequest(rawmsg network.IncomingMessa
 		if err != nil {
 			handler.log.Errorf("Tr res err, %v", err)
 		}
+		txRequestInOk.Inc(nil)
+	} else {
+		// Maybe add NACK message to protocol so they can ask another node?
+		// But really, this should never happen. We advertised it. We should have it.
+		//handler.log.Error("request for txid we don't have: %s", txid.String())
+		txRequestInMiss.Inc(nil)
 	}
-	// Maybe add NACK message to protocol so they can ask another node?
-	// But really, this should never happen. We advertised it. We should have it.
-	handler.log.Error("request for txid we don't have: %s", txid.String())
 	return network.OutgoingMessage{}
 }
 
