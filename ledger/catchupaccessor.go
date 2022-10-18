@@ -752,6 +752,7 @@ func (c *CatchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
+	var stateProofVerificationDataHash crypto.Digest
 	var blockRound basics.Round
 	var totals ledgercore.AccountTotals
 	var catchpointLabel string
