@@ -149,7 +149,7 @@ func TestSigExistQuery(t *testing.T) {
 
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			wrongAddress := accts[r]
-			wrongAddress[0] += 1
+			wrongAddress[0]++
 			exists, err := isPendingSigExist(tx, r, wrongAddress)
 			require.NoError(t, err)
 			require.False(t, exists)
