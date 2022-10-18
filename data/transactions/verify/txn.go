@@ -563,7 +563,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 // [validation time added to the group by one more txn] = [validation time of a single txn] / 2
 // This gives us:
 // [wait time] <= [validation time of a single txn] / 2
-const waitForNextTxnDuration = 50 * time.Millisecond
+const waitForNextTxnDuration = 5 * time.Millisecond
 const waitForFirstTxnDuration = 2000 * time.Millisecond
 
 // MakeStream creates a new stream verifier and returns the chans used to send txn groups
@@ -634,6 +634,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
 						continue
 					}
+					numberOfSigsInCurrent = 0
 					uel = makeUnverifiedElementList(nbw, ledger)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
@@ -652,6 +653,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 				}
 				added = sm.processBatch(uel)
 				if added {
+					numberOfSigsInCurrent = 0
 					uel = makeUnverifiedElementList(nbw, ledger)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
