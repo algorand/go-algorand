@@ -35,8 +35,9 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist
-//  Not threadsafe, should be called in a lock environment
+// fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist.
+// on DB failure should still provide a builder.
+// Not threadsafe, should be called in a lock environment
 func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
 		return spw.makeBuilderForRound(rnd)
@@ -52,7 +53,7 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
-		return builder{}, err
+		spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
 	}
 
 	b, err = spw.makeBuilderForRound(rnd)
@@ -66,7 +67,7 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
-		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %w", err)
+		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %v", err)
 	}
 	return b, nil
 }
