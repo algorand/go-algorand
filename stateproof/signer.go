@@ -85,8 +85,6 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 }
 
 func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
-	// TODO: check if the signature already exists in the database, and if so - return.
-
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
 		return
@@ -136,6 +134,14 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 
 		if key.StateProofSecrets == nil {
 			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", hdr.Round)
+			continue
+		}
+
+		exists, err := spw.sigExistsInDB(hdr.Round, key.Account)
+		if err != nil {
+			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", hdr.Round, err)
+		}
+		if exists {
 			continue
 		}
 

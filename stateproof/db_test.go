@@ -117,6 +117,47 @@ func TestPendingSigDB(t *testing.T) {
 	}
 }
 
+func TestSigExistQuery(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	require.NoError(t, makeStateProofDB(dbs.Wdb))
+
+	n := 5
+	var accts []basics.Address
+	// setup:
+	for r := basics.Round(0); r < basics.Round(n); r++ {
+		var psig pendingSig
+		crypto.RandBytes(psig.signer[:])
+		accts = append(accts, psig.signer)
+
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return addPendingSig(tx, r, psig)
+		}))
+	}
+
+	// test:
+	for r := basics.Round(0); r < basics.Round(n); r++ {
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			exists, err := isPendingSigExist(tx, r, accts[r])
+			require.NoError(t, err)
+			require.True(t, exists)
+			return nil
+		}))
+
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			wrongAddress := accts[r]
+			wrongAddress[0] += 1
+			exists, err := isPendingSigExist(tx, r, wrongAddress)
+			require.NoError(t, err)
+			require.False(t, exists)
+			return nil
+		}))
+	}
+}
+
 func TestBuildersDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

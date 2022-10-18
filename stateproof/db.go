@@ -135,6 +135,21 @@ func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, erro
 
 	return rowsToPendingSigs(rows)
 }
+func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
+	rows, err := tx.Query("SELECT COUNT(1) FROM sigs WHERE signer=? AND sprnd=?", account[:], rnd)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	rows.Next()
+	if err := rows.Scan(&rnd); err != nil {
+		return false, err
+	}
+
+	return rnd != 0, nil
+
+}
 
 func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 	res := make(map[basics.Round][]pendingSig)

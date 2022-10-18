@@ -288,6 +288,19 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
+func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bool, error) {
+	if !spw.persistBuilders {
+		return false, nil
+	}
+	var exists bool
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		res, err := isPendingSigExist(tx, round, account)
+		exists = res
+		return err
+	})
+	return exists, err
+}
+
 func (spw *Worker) builder(latest basics.Round) {
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
