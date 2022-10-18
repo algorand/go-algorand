@@ -98,7 +98,7 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
-	SetSyncRound(rnd basics.Round) error
+	SetSyncRound(rnd uint64) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {

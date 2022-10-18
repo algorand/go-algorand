@@ -1379,6 +1379,6 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 }
 
 // SetSyncRound sets the minimum sync round on the catchup service
-func (node *AlgorandFullNode) SetSyncRound(rnd basics.Round) error {
+func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 	return node.catchupService.SetSyncRound(rnd)
 }
