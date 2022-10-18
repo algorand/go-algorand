@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -36,14 +37,21 @@ import (
 
 // fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist
 //  Not threadsafe, should be called in a lock environment
-func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (b builder, err error) {
-	if spw.persistBuilders {
-		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return getBuilder(tx, rnd, &b)
-		})
-		if err == nil {
-			return b, nil
-		}
+func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
+	if !spw.persistBuilders {
+		return spw.makeBuilderForRound(rnd)
+	}
+
+	var b builder
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return getBuilder(tx, rnd, &b)
+	})
+	if err == nil {
+		return b, nil
+	}
+
+	if !errors.Is(err, builderDoesNotExist) {
+		return builder{}, err
 	}
 
 	b, err = spw.makeBuilderForRound(rnd)
@@ -51,17 +59,14 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (b builder, err error)
 		return builder{}, err
 	}
 
-	if spw.persistBuilders {
-		// Store the newly built builder into the database
-		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return insertBuilder(tx, rnd, &b)
-		})
-		if err != nil {
-			spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %w", err)
-			// No need to return the error, as the builder was already created successfully
-		}
-	}
+	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return insertBuilder(tx, rnd, &b)
+	})
 
+	if err != nil {
+		// builder was successfully created, logging DB issue but returning builder.
+		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %w", err)
+	}
 	return b, nil
 }
 
