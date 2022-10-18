@@ -60,11 +60,6 @@ type Worker struct {
 
 	// builders is indexed by the round of the block being signed.
 	builders map[basics.Round]builder
-	// builder for the nextStateProofRound (as per the current blockheader value)
-	nextStateProofRoundBuilder builder
-	// builder for the latest round StateProof, allowing for later StateProof signatures to be processed,
-	// even if StateProofNextRound is lagging behind,
-	latestRoundBuilder builder
 	// Flag to indicate if builders data should be persisted to the disk (required for recoverability of lagging StateProof chain)
 	persistBuilders bool
 
