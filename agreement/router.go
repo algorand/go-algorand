@@ -66,14 +66,16 @@ type router interface {
 }
 
 type rootRouter struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	// don't omit empty because otherwise code proposalManager and voteAggregator are guaranteed to be empty and
+	// which breaks compatibility with reflection won't be included in rootRouter unmarshall methods
+	_struct struct{} `codec:","`
 
 	root         actor    // playerMachine   (not restored: explicitly set on construction)
 	proposalRoot listener // proposalMachine
 	voteRoot     listener // voteMachine
 
-	ProposalManager proposalManager `codec:"-"`
-	VoteAggregator  voteAggregator  `codec:"-"`
+	ProposalManager proposalManager
+	VoteAggregator  voteAggregator
 
 	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
