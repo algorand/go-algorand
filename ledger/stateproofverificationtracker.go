@@ -32,8 +32,7 @@ import (
 )
 
 var (
-	errStateProofVerificationDataNotFoundInMemory = errors.New("requested state proof verification data not found in memory")
-	errStateProofVerificationDataOutOfBounds      = errors.New("requested round is not in DB or memory tracked bounds")
+	errStateProofVerificationDataNotFound = errors.New("requested state proof verification data not found")
 )
 
 type verificationDeleteData struct {
@@ -185,7 +184,10 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 		return spt.lookupDataInDB(stateProofLastAttestedRound)
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("lookup failed for round %d: %w", stateProofLastAttestedRound, errStateProofVerificationDataOutOfBounds)
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
+		stateProofLastAttestedRound,
+		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound,
+		errStateProofVerificationDataNotFound)
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
@@ -196,14 +198,14 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 		}
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("memory lookup failed for round %d: %w",
-		stateProofLastAttestedRound, errStateProofVerificationDataNotFoundInMemory)
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
+		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
 	if err != nil {
-		err = fmt.Errorf("db lookup failed for round %d: %w", stateProofLastAttestedRound, err)
+		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
 	}
 
 	return verificationData, err
