@@ -179,6 +179,24 @@ func randomizeDiskState() (rr rootRouter, p player) {
 	return
 }
 
+func TestRandomizedEncodingFullDiskState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	router, player := randomizeDiskState()
+	a := []action{}
+	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := makeServiceLogger(logging.Base())
+	e1 := encode(clock, router, player, a, true)
+	e2 := encode(clock, router, player, a, false)
+	require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
+	_, rr1, p1, _, err1 := decode(e1, clock, log, true)
+	_, rr2, p2, _, err2 := decode(e1, clock, log, false)
+	require.NoErrorf(t, err1, "reflect decoding failed")
+	require.NoErrorf(t, err2, "msgp decoding failed")
+	require.Equalf(t, rr1, rr2, "rootRouters decoded differently")
+	require.Equalf(t, p1, p2, "players decoded differently")
+
+}
+
 func BenchmarkRandomizedEncode(b *testing.B) {
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	router, player := randomizeDiskState()
