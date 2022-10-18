@@ -365,23 +365,28 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		counter := 0
+		groupCounter := 0
+		txnCounter := 0
+		invalidCounter := 0
 		defer func() {
-			fmt.Printf("processed %d txns\n", counter)
+			fmt.Printf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
 		}()
 		b.ResetTimer()
 		tt := time.Now()
 		for wi := range outChan {
-			counter++
+			txnCounter = txnCounter + len(wi.unverifiedTxGroup)
+			groupCounter++
 			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
 			_, inBad := badTxnGroups[u]
 			if wi.verificationErr == nil {
-				require.False(b, inBad, "No error for bad signature")
+				require.False(b, inBad, "No error for invalid signature")
 			} else {
+				invalidCounter++
 				require.True(b, inBad, "Error for good signature")
 			}
 		}
-		fmt.Printf("TPS: %d\n", uint64(counter)*1000000000/uint64(time.Since(tt)))
+		fmt.Printf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+		fmt.Printf("Txn groups with invalid sigs: %d\n", invalidCounter)
 	}()
 
 	// Send the transactions to the verifier
@@ -401,7 +406,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
 	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
 	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
-	fmt.Printf("Dropped from backlog: %s\n", str)
+	fmt.Printf("dropped %s txn gropus\n", str)
 }
 
 // Prepare N transaction groups of random sizes with randomly invalid signatures
