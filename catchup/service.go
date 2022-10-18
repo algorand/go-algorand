@@ -227,6 +227,10 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the block is already in the ledger (e.g. if agreement service has already written it)
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
+	// If sync-ing this round would break our cache invariant, don't fetch it
+	if s.syncRoundSet && r >= s.syncRound+basics.Round(s.cfg.MaxAcctLookback) {
+		return false
+	}
 	i := 0
 	hasLookback := false
 	for true {
@@ -571,10 +575,6 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-time.After(sleepDuration):
-			// If sync-ing the next round would break our cache invariant, stop sync-ing
-			if s.syncRoundSet && currBlock+1 >= s.syncRound+basics.Round(s.cfg.MaxAcctLookback) {
-				continue
-			}
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout
 				continue
