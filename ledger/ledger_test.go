@@ -3029,7 +3029,7 @@ func verifyStateProofTrackingLedger(t *testing.T, l *Ledger, startRound basics.R
 		if dataPresenceExpected {
 			a.NoError(err)
 		} else {
-			a.True(errors.Is(err, sql.ErrNoRows) || errors.Is(err, errStateProofVerificationDataNotFoundInMemory))
+			a.True(errors.Is(err, sql.ErrNoRows) || errors.Is(err, errStateProofVerificationDataNotFound))
 		}
 	}
 }
@@ -3051,33 +3051,57 @@ func TestStateProofVerificationTracker(t *testing.T) {
 	defer l.Close()
 
 	numOfStateProofs := uint64(3)
-	firstStateProofDataRound := proto.StateProofInterval * 2
-	lastStateProofDataRound := firstStateProofDataRound + proto.StateProofInterval*(numOfStateProofs-1)
+	firstStateProofDataConfirmedRound := proto.StateProofInterval
+	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
+
+	lastStateProofDataConfirmedRound := firstStateProofDataConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
+	lastStateProofDataTargetRound := lastStateProofDataConfirmedRound + proto.StateProofInterval
 
 	blk := genesisInitState.Block
 	var sp bookkeeping.StateProofTrackingData
-	sp.StateProofNextRound = basics.Round(firstStateProofDataRound)
+	sp.StateProofNextRound = basics.Round(firstStateProofDataTargetRound)
 	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < lastStateProofDataRound; i++ {
+	for i := uint64(0); i < firstStateProofDataConfirmedRound-1; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataRound),
-		numOfStateProofs, proto.StateProofInterval, true)
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, false, any)
+
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += 10
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
+
+	for i := firstStateProofDataConfirmedRound; i < lastStateProofDataConfirmedRound; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
+	// Last one should be in memory as a result of cfg.MaxAcctLookback not being equal to 0.
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 
-	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataRound),
+	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true)
 
 	var stateProofReceived bookkeeping.StateProofTrackingData
-	stateProofReceived.StateProofNextRound = basics.Round(firstStateProofDataRound + proto.StateProofInterval)
+	stateProofReceived.StateProofNextRound = basics.Round(firstStateProofDataTargetRound + proto.StateProofInterval)
 	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
 		protocol.StateProofBasic: stateProofReceived,
 	}
@@ -3102,8 +3126,8 @@ func TestStateProofVerificationTracker(t *testing.T) {
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 
-	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataRound),
+	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataTargetRound),
 		1, proto.StateProofInterval, false)
-	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataRound+proto.StateProofInterval),
+	verifyStateProofTrackingLedger(t, l, basics.Round(firstStateProofDataTargetRound+proto.StateProofInterval),
 		numOfStateProofs-1, proto.StateProofInterval, true)
 }
