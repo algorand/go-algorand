@@ -218,9 +218,15 @@ func TestSyncRound(t *testing.T) {
 	s := MakeService(logging.Base(), localCfg, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
-	// Set sync round
-	s.syncRoundSet = true
-	s.syncRound = initialLocalRound + 2
+
+	// Set sync round failure
+	err = s.SetSyncRound(uint64(initialLocalRound + 2))
+	require.Errorf(t, err, "attempted to set sync round for catchup service when EnableSyncMode was disabled")
+
+	// Set sync round success
+	s.cfg.EnableSyncMode = true
+	err = s.SetSyncRound(uint64(initialLocalRound + 2))
+	require.NoError(t, err)
 
 	s.Start()
 	defer s.Stop()
@@ -239,7 +245,7 @@ func TestSyncRound(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	// Assert that the last block is the one we expect--i.e. syncRound(inclusive)..syncRound+MaxAccountLookback(non-inclusive)
-	rr, lr := s.syncRound+basics.Round(s.cfg.MaxAcctLookback)-1, local.LastRound()
+	rr, lr := basics.Round(s.syncRound+s.cfg.MaxAcctLookback-1), local.LastRound()
 	require.Equal(t, rr, lr)
 
 	for r := basics.Round(1); r < rr; r++ {
@@ -250,7 +256,7 @@ func TestSyncRound(t *testing.T) {
 		require.Equal(t, remoteBlock.Hash(), localBlock.Hash())
 	}
 
-	// unset syncround and make sure we finish catching up
+	// unset syncRound and make sure we finish catching up
 	s.syncRoundSet = false
 	// wait until the catchup is done
 	waitStart = time.Now()

@@ -79,7 +79,7 @@ type Service struct {
 	// Set when a user specifies a syncRound
 	syncRoundSet bool
 	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRound basics.Round
+	syncRound uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -151,14 +151,15 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 }
 
 // SetSyncRound attempts to set the minimum sync round to keep in the cache
-func (s *Service) SetSyncRound(rnd basics.Round) error {
+func (s *Service) SetSyncRound(rnd uint64) error {
 	if !s.cfg.EnableSyncMode {
 		return fmt.Errorf("attempted to set sync round for catchup service when EnableSyncMode was disabled")
 	}
-	if rnd < s.ledger.LastRound() {
+	if basics.Round(rnd) < s.ledger.LastRound() {
 		return fmt.Errorf("requested sync round %d cannot be higher than the latest round %d", rnd, s.ledger.LastRound())
 	}
 	s.syncRoundSet = true
+	atomic.StoreUint64(&s.syncRound, rnd)
 	s.syncRound = rnd
 	return nil
 }
@@ -170,6 +171,10 @@ func (s *Service) UnsetSyncRound() error {
 	}
 	s.syncRoundSet = false
 	return nil
+}
+
+func (s *Service) getSyncRound() uint64 {
+	return atomic.LoadUint64(&s.syncRound)
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -228,7 +233,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if s.syncRoundSet && r >= s.syncRound+basics.Round(s.cfg.MaxAcctLookback) {
+	if s.syncRoundSet && r >= basics.Round(s.syncRound+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0
