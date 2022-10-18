@@ -376,7 +376,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			// the key is in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check. Walk deltas
 			// backwards so later updates take priority.
-			for i := offset - 1; i > 0; i-- {
+			for i := offset - 1; i >= 0; i-- {
 				mval, ok := au.kvDeltas[i][key]
 				if ok {
 					return mval.Data, nil
