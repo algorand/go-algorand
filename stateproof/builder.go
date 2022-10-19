@@ -54,11 +54,11 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return insertBuilder(tx, rnd, &buildr) })
-
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
 		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %v", err)
 	}
+
 	return buildr, nil
 }
 
@@ -73,13 +73,15 @@ func (spw *Worker) fetchBuilderFromDB(rnd basics.Round) (builder, error) {
 		sigs, err2 = getPendingSigs(tx)
 		return err2
 	})
-	if err == nil {
-		spw.fillBuilder(rnd, sigs, buildr)
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
+
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
+		}
+		return builder{}, err
 	}
 
+	spw.fillBuilder(rnd, sigs, buildr)
 	return buildr, err
 }
 
