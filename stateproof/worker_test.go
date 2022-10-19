@@ -1443,11 +1443,72 @@ func TestBuilderFromDiskCreatesMessage(t *testing.T) {
 			break
 		}
 	}
-	// dropping inram builder making:
+	// dropping inRam builder making:
 	w.ledger = nil
 	w.builders = map[basics.Round]builder{}
 
 	bldr, err := w.fetchBuilderForRound(512)
 	a.NoError(err)
 	a.NotEmpty(bldr.Message)
+}
+
+func TestLoadBuilderFromDiskWithSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+
+	// Wait on all signatures
+	for {
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		if err != nil {
+			break
+		}
+	}
+
+	var sigs map[basics.Round][]pendingSig
+	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		tmp, err := getPendingSigsFromThisNode(tx)
+		a.NoError(err)
+		sigs = tmp
+		// deleting the sig ensures we'll be able to add it using the `handleSig` function.
+		_, err = tx.Exec("DELETE FROM sigs where sprnd=512 AND signer=?", sigs[512][0].signer[:])
+		return err
+	}))
+	sig := sigs[512][0]
+	a.NotEmpty(sig)
+
+	// dropping inRam builder making:
+
+	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := getBuilder(tx, 512) // ensuring builder in DB.
+		return err
+	}))
+
+	comparisionBuilder := w.builders[512]
+
+	w.builders = map[basics.Round]builder{}
+
+	_, err := w.handleSig(sigFromAddr{
+		SignerAddress: sig.signer,
+		Round:         512,
+		Sig:           sig.sig,
+	}, nil)
+	a.NoError(err)
+	a.Equal(comparisionBuilder, w.builders[512])
 }
