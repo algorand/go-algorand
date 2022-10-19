@@ -72,14 +72,14 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 
 	b := builder{Builder: &stateproof.Builder{}}
 	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertBuilder(tx, 0, &b)
+		return persistBuilder(tx, 0, &b)
 	}), "no such table: builders")
 
 	// migrating the DB to the next version.
 	a.NoError(makeStateProofDB(dbs.Wdb))
 
 	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertBuilder(tx, 0, &b)
+		return persistBuilder(tx, 0, &b)
 	}))
 
 	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -229,7 +229,7 @@ func TestBuildersDB(t *testing.T) {
 		builders[i] = bldr
 
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return insertBuilder(tx, basics.Round(i), &builders[i])
+			return persistBuilder(tx, basics.Round(i), &builders[i])
 		})
 		a.NoError(err)
 	}

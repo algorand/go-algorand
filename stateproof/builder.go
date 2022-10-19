@@ -63,13 +63,13 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 
 func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	var buildr builder
-	var sigs map[basics.Round][]pendingSig
+	var sigs []pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
 		buildr, err2 = getBuilder(tx, rnd)
 		if err2 != nil {
 			return err2
 		}
-		sigs, err2 = getPendingSigs(tx)
+		sigs, err2 = getPendingSigsForEound(tx, rnd)
 		return err2
 	})
 
@@ -84,8 +84,8 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	return buildr, err
 }
 
-func (spw *Worker) fillBuilder(rnd basics.Round, sigs map[basics.Round][]pendingSig, buildr builder) {
-	for _, sig := range sigs[rnd] {
+func (spw *Worker) fillBuilder(rnd basics.Round, sigs []pendingSig, buildr builder) {
+	for _, sig := range sigs {
 		spw.insertSigToBuilder(buildr, sig, rnd)
 	}
 }
@@ -183,7 +183,7 @@ func (spw *Worker) initBuilders() {
 			continue
 		}
 
-		spw.fillBuilder(rnd, sigs, buildr)
+		spw.fillBuilder(rnd, sigs[rnd], buildr)
 	}
 }
 

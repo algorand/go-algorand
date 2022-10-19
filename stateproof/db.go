@@ -124,6 +124,19 @@ func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 	return rowsToPendingSigs(rows)
 }
 
+func getPendingSigsForEound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) {
+	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE sprnd=?", rnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tmpmap, err := rowsToPendingSigs(rows)
+	if err != nil {
+		return nil, err
+	}
+	return tmpmap[rnd], nil
+}
+
 func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE from_this_node=1")
 	if err != nil {
@@ -133,6 +146,7 @@ func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, erro
 
 	return rowsToPendingSigs(rows)
 }
+
 func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
 	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
 
@@ -142,7 +156,6 @@ func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, err
 	}
 
 	return exists != 0, nil
-
 }
 
 func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
