@@ -36,9 +36,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -201,7 +199,6 @@ func TestClientCanGetStatus(t *testing.T) {
 	statusResponse, err := testClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	statusResponse2, err := testClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse2)
@@ -218,7 +215,6 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	statusResponse, err := testClient.WaitForRound(1)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	statusResponse, err = testClient.WaitForRound(statusResponse.LastRound + 1)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
@@ -954,8 +950,6 @@ func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {
 	testClient := localFixture.LibGoalClient
 
 	testClient.WaitForRound(1)
-
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 
 	wh, err := testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)

@@ -394,6 +394,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	err = accessor.BuildMerkleTrie(context.Background(), nil)
+	require.NoError(t, err)
+
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
@@ -700,6 +703,9 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
 		require.NoError(t, err)
 	}
+
+	err = accessor.BuildMerkleTrie(context.Background(), nil)
+	require.NoError(t, err)
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
