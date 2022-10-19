@@ -1054,7 +1054,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	require.ErrorIs(t, err, errGivenRndGreaterThanLatestRound)
+	require.ErrorContains(t, err, "latest round is smaller than given")
 }
 
 // relays reject signatures for wrong message (sig verification fails)

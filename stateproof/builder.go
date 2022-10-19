@@ -201,8 +201,6 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 	return network.OutgoingMessage{Action: fwd}
 }
 
-var errGivenRndGreaterThanLatestRound = errors.New("latest round is smaller than given round")
-
 // handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
 // also responsible for making sure that the signature is valid, and not duplicated.
 // if a signature passes all verification it is written into the database.
@@ -244,7 +242,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		if sfa.Round > latest {
 			// avoiding an inspection in DB in case we haven't reached the round.
 			// Avoiding disconnecting the peer, since it might've been sent to this node while it recovers.
-			return network.Ignore, fmt.Errorf("handleSig: %w %d", errGivenRndGreaterThanLatestRound, sfa.Round)
+			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
 		}
 
 		builderForRound, err = spw.fetchBuilderForRound(sfa.Round)
