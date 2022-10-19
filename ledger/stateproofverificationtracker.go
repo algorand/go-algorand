@@ -136,11 +136,9 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	for _, commitData := range dcc.stateProofVerificationCommitData {
-		err = insertStateProofVerificationData(ctx, tx, &commitData.verificationData)
-		if err != nil {
-			return err
-		}
+	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
+	if err != nil {
+		return err
 	}
 
 	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
