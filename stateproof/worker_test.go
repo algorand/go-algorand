@@ -1398,9 +1398,10 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 
 	// running through the builder with no ram or ledger:
 	// without the Disk, it isn't possible to fetch the builder correctly.
+	w.mu.Lock()
 	w.builders = map[basics.Round]builder{}
 	w.ledger = nil
-	w.mu.Lock()
+
 	_, err := w.loadOrCreateBuilder(512)
 	w.mu.Unlock()
 	a.NoError(err)
@@ -1455,12 +1456,12 @@ func TestBuilderFromDiskCreatesMessage(t *testing.T) {
 		}
 	}
 	// dropping inRam builder making:
+	w.mu.Lock()
 	w.ledger = nil
 	w.builders = map[basics.Round]builder{}
-
-	w.mu.Lock()
 	bldr, err := w.loadOrCreateBuilder(512)
 	w.mu.Unlock()
+
 	a.NoError(err)
 	a.NotEmpty(bldr.Message)
 }
