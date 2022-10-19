@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"crypto/sha512"
 	"database/sql"
 	"encoding/hex"
 	"errors"
