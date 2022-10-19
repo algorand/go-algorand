@@ -198,6 +198,11 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
 	}
 
+	// Stored Builder is corrupted...
+	if b.Builder == nil {
+		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
+	}
+
 	b.Builder.AllocSigs() // make a slice for sigs
 
 	return b, nil

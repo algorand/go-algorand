@@ -49,6 +49,45 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	return dbOpenTestRand(t, inMemory, crypto.RandUint64())
 }
 
+func TestDbSchemaUpgrade1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	migrations := []db.Migration{
+		dbSchemaUpgrade0,
+		dbSchemaUpgrade1,
+	}
+
+	a.NoError(db.Initialize(dbs.Wdb, migrations[:1]))
+
+	// performing a request on sig db.
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var psig pendingSig
+		crypto.RandBytes(psig.signer[:])
+		return addPendingSig(tx, 0, psig)
+	}))
+
+	b := builder{Builder: &stateproof.Builder{}}
+	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return insertBuilder(tx, 0, &b)
+	}), "no such table: builders")
+
+	// migrating the DB to the next version.
+	a.NoError(makeStateProofDB(dbs.Wdb))
+
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return insertBuilder(tx, 0, &b)
+	}))
+
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := getBuilder(tx, 0)
+		return err
+	}))
+}
+
 func TestPendingSigDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
