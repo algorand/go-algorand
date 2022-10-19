@@ -1392,6 +1392,7 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 		}
 	}
 
+	bldrForComparission := w.builders[512]
 	// running through the builder with no ram or ledger:
 	// without the Disk, it isn't possible to fetch the builder correctly.
 	w.builders = map[basics.Round]builder{}
@@ -1404,4 +1405,49 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 	a.Panics(func() {
 		w.fetchBuilderForRound(512)
 	})
+	a.Panics(func() {
+		w.initBuilders()
+	})
+
+	// Loading the builders from the disk, along with their sigs.
+	w.persistBuilders = true
+	w.initBuilders()
+	a.Equal(bldrForComparission, w.builders[512])
+}
+
+func TestBuilderFromDiskCreatesMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+
+	// Wait on all signatures
+	for {
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		if err != nil {
+			break
+		}
+	}
+	// dropping inram builder making:
+	w.ledger = nil
+	w.builders = map[basics.Round]builder{}
+
+	bldr, err := w.fetchBuilderForRound(512)
+	a.NoError(err)
+	a.NotEmpty(bldr.Message)
 }
