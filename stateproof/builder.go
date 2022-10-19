@@ -289,9 +289,6 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 }
 
 func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bool, error) {
-	if !spw.persistBuilders {
-		return false, nil
-	}
 	var exists bool
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		res, err := isPendingSigExist(tx, round, account)
