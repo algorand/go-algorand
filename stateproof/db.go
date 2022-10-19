@@ -174,7 +174,7 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 //#endregion
 
 //#region Builders Operations
-func insertBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
+func persistBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
 	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
 	return err
 }

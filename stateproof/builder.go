@@ -52,7 +52,7 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	} // fetch Or make. if make, then no need for sigs.
 
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return insertBuilder(tx, rnd, &buildr) })
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return persistBuilder(tx, rnd, &buildr) })
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
 		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
