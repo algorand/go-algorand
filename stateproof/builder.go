@@ -43,17 +43,9 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 		return spw.makeBuilderForRound(rnd)
 	}
 
-	var buildr builder
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
-		buildr, err2 = getBuilder(tx, rnd)
-		return err2
-	})
+	buildr, err := spw.fetchBuilderFromDB(rnd)
 	if err == nil {
 		return buildr, nil
-	}
-
-	if !errors.Is(err, sql.ErrNoRows) {
-		spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
 	}
 
 	buildr, err = spw.makeBuilderForRound(rnd)
@@ -61,15 +53,40 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertBuilder(tx, rnd, &buildr)
-	})
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return insertBuilder(tx, rnd, &buildr) })
 
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
 		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %v", err)
 	}
 	return buildr, nil
+}
+
+func (spw *Worker) fetchBuilderFromDB(rnd basics.Round) (builder, error) {
+	var buildr builder
+	var sigs map[basics.Round][]pendingSig
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
+		buildr, err2 = getBuilder(tx, rnd)
+		if err2 != nil {
+			return err2
+		}
+		sigs, err2 = getPendingSigs(tx)
+		return err2
+	})
+	if err == nil {
+		spw.fillBuilder(rnd, sigs, buildr)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
+	}
+
+	return buildr, err
+}
+
+func (spw *Worker) fillBuilder(rnd basics.Round, sigs map[basics.Round][]pendingSig, buildr builder) {
+	for _, sig := range sigs[rnd] {
+		spw.insertSigToBuilder(buildr, sig, rnd)
+	}
 }
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment
@@ -158,30 +175,34 @@ func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 	spw.builders[rnd] = builderForRound
 
 	for _, sig := range sigs {
-		pos, ok := builderForRound.AddrToPos[sig.signer]
-		if !ok {
-			spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
-			continue
-		}
+		spw.insertSigToBuilder(builderForRound, sig, rnd)
+	}
+}
 
-		isPresent, err := builderForRound.Present(pos)
-		if err != nil {
-			spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
-			continue
-		}
-		if isPresent {
-			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
-			continue
-		}
+func (spw *Worker) insertSigToBuilder(builderForRound builder, sig pendingSig, rnd basics.Round) {
+	pos, ok := builderForRound.AddrToPos[sig.signer]
+	if !ok {
+		spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
+		return
+	}
 
-		if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
-			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
-			continue
-		}
-		if err := builderForRound.Add(pos, sig.sig); err != nil {
-			spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
-			continue
-		}
+	isPresent, err := builderForRound.Present(pos)
+	if err != nil {
+		spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+		return
+	}
+	if isPresent {
+		spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+		return
+	}
+
+	if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
+		spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
+		return
+	}
+	if err := builderForRound.Add(pos, sig.sig); err != nil {
+		spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
+		return
 	}
 }
 
