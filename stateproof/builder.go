@@ -35,8 +35,7 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// loadOrCreateBuilder tries fetching the builder from the DB, and makes a new builder if doesn't exist.
-// on DB failure should still provide a builder.
+// loadOrCreateBuilder either loads a builder from the DB or creates a new builder.
 // Not threadsafe, should be called in a lock environment
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
