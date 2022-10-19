@@ -2209,15 +2209,15 @@ func TestBaseAccountDataRoundtripConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	t.Run("ledercore.AccountData", func(t *testing.T) {
+	t.Run("ledgercore.AccountData", func(t *testing.T) {
 		t.Parallel()
 		for i := 0; i < 1000; i++ {
 			randObj, _ := protocol.RandomizeObject(&baseAccountData{})
 			baseAccount := *randObj.(*baseAccountData)
 
-			ledercoreAccount := baseAccount.GetLedgerCoreAccountData()
+			ledgercoreAccount := baseAccount.GetLedgerCoreAccountData()
 			var roundTripAccount baseAccountData
-			roundTripAccount.SetCoreAccountData(&ledercoreAccount)
+			roundTripAccount.SetCoreAccountData(&ledgercoreAccount)
 
 			// Manually set UpdateRound, since it is lost in GetLedgerCoreAccountData
 			roundTripAccount.UpdateRound = baseAccount.UpdateRound
