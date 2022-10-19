@@ -2163,9 +2163,9 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 			var data resourcesData
 			data.SetAppParams(basicsAppParams, false)
-			roundTripAppLocalState := data.GetAppParams()
+			roundTripAppParams := data.GetAppParams()
 
-			require.Equal(t, basicsAppParams, roundTripAppLocalState)
+			require.Equal(t, basicsAppParams, roundTripAppParams)
 		}
 	})
 
@@ -2177,9 +2177,9 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 			var data resourcesData
 			data.SetAssetHolding(basicsAssetHolding)
-			roundTripAppLocalState := data.GetAssetHolding()
+			roundTripAssetHolding := data.GetAssetHolding()
 
-			require.Equal(t, basicsAssetHolding, roundTripAppLocalState)
+			require.Equal(t, basicsAssetHolding, roundTripAssetHolding)
 		}
 	})
 
@@ -2191,9 +2191,9 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 			var data resourcesData
 			data.SetAssetParams(basicsAssetParams, false)
-			roundTripAppLocalState := data.GetAssetParams()
+			roundTripAssetParams := data.GetAssetParams()
 
-			require.Equal(t, basicsAssetParams, roundTripAppLocalState)
+			require.Equal(t, basicsAssetParams, roundTripAssetParams)
 		}
 	})
 }
