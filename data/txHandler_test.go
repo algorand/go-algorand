@@ -449,7 +449,7 @@ func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures
-		if rand.Float32() < 0.1 {
+		if rand.Float32() < 0.7 {
 			tinGrp := rand.Intn(grpSize)
 			signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
 			badTxnGroups[uint64(u)] = struct{}{}
