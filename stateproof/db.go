@@ -68,21 +68,20 @@ func dbSchemaUpgrade0(_ context.Context, tx *sql.Tx, _ bool) error {
 	}
 
 	_, err = tx.Exec(createSigsIdx)
-	if err != nil {
-		return err
-	}
 
-	_, err = tx.Exec(createBuildersTable)
-	if err != nil {
-		return err
-	}
+	return err
+}
 
-	return nil
+func dbSchemaUpgrade1(_ context.Context, tx *sql.Tx, _ bool) error {
+	_, err := tx.Exec(createBuildersTable)
+
+	return err
 }
 
 func makeStateProofDB(accessor db.Accessor) error {
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
+		dbSchemaUpgrade1,
 	}
 
 	err := db.Initialize(accessor, migrations)
