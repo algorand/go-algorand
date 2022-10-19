@@ -1202,7 +1202,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	require.Contains(t, "no such table: sigs", err.Error())
 }
 
-// relays reject signatures when could not makeBuilderForRound
+// relays reject signatures when could not createBuilder
 func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1400,17 +1400,22 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 	// without the Disk, it isn't possible to fetch the builder correctly.
 	w.builders = map[basics.Round]builder{}
 	w.ledger = nil
-	_, err := w.fetchBuilderForRound(512)
+	w.mu.Lock()
+	_, err := w.loadOrCreateBuilder(512)
+	w.mu.Unlock()
 	a.NoError(err)
 
 	// without accessing the DB and the ledger fetching is not possible:
 	w.persistBuilders = false
 	a.Panics(func() {
-		w.fetchBuilderForRound(512)
+		w.mu.Lock()
+		defer w.mu.Unlock()
+
+		w.loadOrCreateBuilder(512)
 	})
-	a.Panics(func() {
-		w.initBuilders()
-	})
+	//a.Panics(func() {
+	//	w.initBuilders()
+	//})
 
 	// Loading the builders from the disk, along with their sigs.
 	w.persistBuilders = true
@@ -1453,7 +1458,9 @@ func TestBuilderFromDiskCreatesMessage(t *testing.T) {
 	w.ledger = nil
 	w.builders = map[basics.Round]builder{}
 
-	bldr, err := w.fetchBuilderForRound(512)
+	w.mu.Lock()
+	bldr, err := w.loadOrCreateBuilder(512)
+	w.mu.Unlock()
 	a.NoError(err)
 	a.NotEmpty(bldr.Message)
 }

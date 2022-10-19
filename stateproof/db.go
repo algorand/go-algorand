@@ -208,4 +208,21 @@ func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
+func getBuilderRounds(tx *sql.Tx) ([]basics.Round, error) {
+	var rnds []basics.Round
+	rows, err := tx.Query("SELECT DISTINCT round FROM builders")
+	if err != nil {
+		return nil, err
+	}
+	var rnd basics.Round
+	for rows.Next() {
+		err := rows.Scan(&rnd)
+		if err != nil {
+			return nil, err
+		}
+		rnds = append(rnds, rnd)
+	}
+	return rnds, nil
+}
+
 //#endregion

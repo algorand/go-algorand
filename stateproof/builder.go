@@ -35,34 +35,34 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// fetchBuilderForRound tries fetching the builder from the DB, and makes a new builder if doesn't exist.
+// loadOrCreateBuilder tries fetching the builder from the DB, and makes a new builder if doesn't exist.
 // on DB failure should still provide a builder.
 // Not threadsafe, should be called in a lock environment
-func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
+func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
-		return spw.makeBuilderForRound(rnd)
+		return spw.createBuilder(rnd)
 	}
 
-	buildr, err := spw.fetchBuilderFromDB(rnd)
+	buildr, err := spw.loadBuilderFromDB(rnd)
 	if err == nil {
 		return buildr, nil
 	}
 
-	buildr, err = spw.makeBuilderForRound(rnd)
+	buildr, err = spw.createBuilder(rnd)
 	if err != nil {
 		return builder{}, err
-	}
+	} // fetch Or make. if make, then no need for sigs.
 
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return insertBuilder(tx, rnd, &buildr) })
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
-		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %v", err)
+		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
 	}
 
 	return buildr, nil
 }
 
-func (spw *Worker) fetchBuilderFromDB(rnd basics.Round) (builder, error) {
+func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	var buildr builder
 	var sigs map[basics.Round][]pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
@@ -76,7 +76,7 @@ func (spw *Worker) fetchBuilderFromDB(rnd basics.Round) (builder, error) {
 
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
+			spw.log.Errorf("loadBuilderFromDB: could not fetch builder from DB: %v", err)
 		}
 		return builder{}, err
 	}
@@ -91,8 +91,8 @@ func (spw *Worker) fillBuilder(rnd basics.Round, sigs map[basics.Round][]pending
 	}
 }
 
-// makeBuilderForRound not threadsafe, should be called in a lock environment
-func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
+// createBuilder not threadsafe, should be called in a lock environment
+func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -149,35 +149,38 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	var roundSigs map[basics.Round][]pendingSig
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
-		return
-	})
-	if err != nil {
-		spw.log.Warnf("initBuilders: getPendingSigs: %w", err)
-		return
-	}
+	// need to fetch all rounds
+	rnds := spw.getAllBuilderRounds()
 
-	for rnd, sigs := range roundSigs {
+	for _, rnd := range rnds {
 		if _, ok := spw.builders[rnd]; ok {
 			spw.log.Warnf("initBuilders: round %d already present", rnd)
 			continue
 		}
-		spw.addSigsToBuilder(sigs, rnd)
-	}
-}
 
-func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := spw.fetchBuilderForRound(rnd)
-	if err != nil {
-		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
-		return
-	}
-	spw.builders[rnd] = builderForRound
+		buildr, err := spw.loadBuilderFromDB(rnd)
+		if err == nil {
+			spw.builders[rnd] = buildr
+			continue
+		}
 
-	for _, sig := range sigs {
-		spw.insertSigToBuilder(builderForRound, sig, rnd)
+		buildr, err = spw.createBuilder(rnd)
+		if err != nil {
+			spw.log.Warnf("addSigsToBuilder: createBuilder(%d): %v", rnd, err)
+			continue
+		}
+		spw.builders[rnd] = buildr
+
+		var sigs map[basics.Round][]pendingSig
+		if err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			sigs, err = getPendingSigs(tx)
+			return err
+		}); err != nil {
+			spw.log.Errorf("initBuilders: could not fetch pending sigs from DB: %v", err)
+			continue
+		}
+
+		spw.fillBuilder(rnd, sigs, buildr)
 	}
 }
 
@@ -268,7 +271,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
 		}
 
-		builderForRound, err = spw.fetchBuilderForRound(sfa.Round)
+		builderForRound, err = spw.loadOrCreateBuilder(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
