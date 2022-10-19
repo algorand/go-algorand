@@ -80,13 +80,13 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	spw.fillBuilder(rnd, sigs, buildr)
+	spw.fillBuilder(sigs, buildr)
 	return buildr, err
 }
 
-func (spw *Worker) fillBuilder(rnd basics.Round, sigs []pendingSig, buildr builder) {
+func (spw *Worker) fillBuilder(sigs []pendingSig, buildr builder) {
 	for _, sig := range sigs {
-		spw.insertSigToBuilder(buildr, sig, rnd)
+		spw.insertSigToBuilder(buildr, sig)
 	}
 }
 
@@ -183,11 +183,12 @@ func (spw *Worker) initBuilders() {
 			continue
 		}
 
-		spw.fillBuilder(rnd, sigs[rnd], buildr)
+		spw.fillBuilder(sigs[rnd], buildr)
 	}
 }
 
-func (spw *Worker) insertSigToBuilder(builderForRound builder, sig pendingSig, rnd basics.Round) {
+func (spw *Worker) insertSigToBuilder(builderForRound builder, sig pendingSig) {
+	rnd := builderForRound.Round
 	pos, ok := builderForRound.AddrToPos[sig.signer]
 	if !ok {
 		spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
