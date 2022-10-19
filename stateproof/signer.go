@@ -140,8 +140,7 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 		exists, err := spw.sigExistsInDB(hdr.Round, key.Account)
 		if err != nil {
 			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", hdr.Round, err)
-		}
-		if exists {
+		} else if exists {
 			continue
 		}
 
