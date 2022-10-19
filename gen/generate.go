@@ -161,8 +161,9 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		schemaVersionModifier = genData.VersionModifier
 		firstWalletValid      = genData.FirstPartKeyRound
 		lastWalletValid       = genData.LastPartKeyRound
-		partKeyDilution       = genData.LastPartKeyRound
-		feeSink, rewardsPool  = genData.FeeSink, genData.RewardsPool
+		partKeyDilution       = genData.PartKeyDilution
+		feeSink               = genData.FeeSink
+		rewardsPool           = genData.RewardsPool
 		devmode               = genData.DevMode
 		noRewards             = genData.NoRewards
 		comment               = genData.Comment
