@@ -1392,7 +1392,10 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 		}
 	}
 
+	w.mu.Lock()
 	bldrForComparission := w.builders[512]
+	w.mu.Unlock()
+
 	// running through the builder with no ram or ledger:
 	// without the Disk, it isn't possible to fetch the builder correctly.
 	w.builders = map[basics.Round]builder{}
@@ -1412,7 +1415,10 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 	// Loading the builders from the disk, along with their sigs.
 	w.persistBuilders = true
 	w.initBuilders()
+
+	w.mu.Lock()
 	a.Equal(bldrForComparission, w.builders[512])
+	w.mu.Unlock()
 }
 
 func TestBuilderFromDiskCreatesMessage(t *testing.T) {
@@ -1500,7 +1506,9 @@ func TestLoadBuilderFromDiskWithSigs(t *testing.T) {
 		return err
 	}))
 
+	w.mu.Lock()
 	comparisionBuilder := w.builders[512]
+	w.mu.Unlock()
 
 	w.builders = map[basics.Round]builder{}
 
@@ -1510,5 +1518,8 @@ func TestLoadBuilderFromDiskWithSigs(t *testing.T) {
 		Sig:           sig.sig,
 	}, nil)
 	a.NoError(err)
+
+	w.mu.Lock()
 	a.Equal(comparisionBuilder, w.builders[512])
+	w.mu.Unlock()
 }
