@@ -480,7 +480,7 @@ type streamManager struct {
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	cache            VerifiedTransactionCache
-	execPoolWg       sync.WaitGroup
+	pendingTasksWg       sync.WaitGroup
 }
 
 // NewBlockWatcher is a struct used to provide a new block header to the
@@ -598,13 +598,11 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
 				if !ok {
 					if numberOfSigsInCurrent > 0 {
-						err := sm.processFullBatch(uel)
-						if err != nil {
-							sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
-						}
+						sm.addVerificationTaskToThePool(uel)
+						// ignore the error since we are done here
 					}
-					// for for all pending tasks out, then close the result chan
-					sm.execPoolWg.Wait()
+					// wait for the pending tasks, then close the result chan
+					sm.pendingTasksWg.Wait()
 					close(resultChan)
 					return
 				}
@@ -618,9 +616,10 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 
 				// if no batchable signatures here, send this as a task of its own
 				if numberOfBatchableSigsInGroup == 0 {
-					err := sm.processFullBatch(makeSingleUnverifiedElement(nbw, ledger, stx))
+					// no point in blocking and waiting for a seat here, let it wait in the exec pool
+					err := sm.addVerificationTaskToThePool(makeSingleUnverifiedElement(nbw, ledger, stx))
 					if err != nil {
-						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
+						sm.sendResult(stx.TxnGroup, stx.Context, err)
 					}
 					continue
 				}
@@ -628,16 +627,18 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 				// add this txngrp to the list of batchable txn groups
 				numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
 				uel.elementList = append(uel.elementList, stx)
-				if numberOfSigsInCurrent >= txnPerWorksetThreshold {
-					err := sm.processFullBatch(uel)
-					if err != nil {
-						sm.sendResult(stx.TxnGroup, stx.Context, err) // TODO: maybe this error in internal, and should not go out
-						continue
+				if numberOfSigsInCurrent > txnPerWorksetThreshold {
+					// enough transaction in the batch to efficiently verify
+					added = sm.processBatch(uel)
+					if added {
+						numberOfSigsInCurrent = 0
+						uel = makeUnverifiedElementList(nbw, ledger)
+						// starting a new batch. Can wait long, since nothing is blocked
+						timer.Reset(waitForFirstTxnDuration)
+					} else {
+						// was not added because no-available-seats. wait for some more txns
+						timer.Reset(waitForNextTxnDuration)
 					}
-					numberOfSigsInCurrent = 0
-					uel = makeUnverifiedElementList(nbw, ledger)
-					// starting a new batch. Can wait long, since nothing is blocked
-					timer.Reset(waitForFirstTxnDuration)
 				} else {
 					if isFirstInBatch {
 						// an element is added and is waiting. shorten the waiting time
@@ -691,37 +692,29 @@ func (sm *streamManager) sendResult(veTxnGroup []transactions.SignedTxn, veConte
 	*/
 }
 
-func (sm *streamManager) processFullBatch(uel unverifiedElementList) (err error) {
-	// This is a full batch, no additions are allowed
-	// block and wait for a free seat
-	<-sm.seatReturnChan
-	err = sm.addVerificationTaskToThePool(uel)
-	return
-}
-
 func (sm *streamManager) processBatch(uel unverifiedElementList) (added bool) {
 	// if cannot find a seat, can go back and collect
 	// more signatures instead of waiting here
+	// more signatures to the batch do not harm performance (see crypto.BenchmarkBatchVerifierBig)
 	select {
 	case <-sm.seatReturnChan:
 		err := sm.addVerificationTaskToThePool(uel)
 		if err != nil {
-			// TODO: report the error
-			fmt.Println(err)
+			// An error is returned when the context of the pool expires
+			// No need to report this
+			return false
 		}
-		added = true
-		// TODO: queue to the pool.
-		//				fmt.Println(err)
+		return true
 	default:
 		// if no free seats, wait some more for more txns
+		return false
 	}
-	return
 }
 
 func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList) error {
-	sm.execPoolWg.Add(1)
+	sm.pendingTasksWg.Add(1)
 	function := func(arg interface{}) interface{} {
-		defer sm.execPoolWg.Done()
+		defer sm.pendingTasksWg.Done()
 
 		if sm.ctx.Err() != nil {
 			return sm.ctx.Err()
@@ -733,6 +726,9 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 		bl := makeBatchLoad()
 		// TODO: separate operations here, and get the sig verification inside LogicSig outside
 		for _, ue := range uel.elementList {
+			if ue.TxnGroup[len(ue.TxnGroup)-1].Sig[0] == 0 && ue.TxnGroup[len(ue.TxnGroup)-1].Sig[2] == 0 && ue.TxnGroup[len(ue.TxnGroup)-1].Sig[4] == 0 {
+				fmt.Println("boom1")
+			}
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, uel.nbw.getBlockHeader(), uel.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, cannot go to the batch. return here.
@@ -784,6 +780,7 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 		}
 		return struct{}{}
 	}
+	// EnqueueBacklog returns an error when the context is canceled
 	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, &uel, sm.seatReturnChan)
 	return err
 }

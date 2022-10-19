@@ -366,6 +366,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		invalidCounter := 0
 		defer func() {
 			fmt.Printf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
+			fmt.Printf("crypto calls %d avg txn/batch: %d\n", crypto.Counter, txnCounter/crypto.Counter)
 		}()
 		b.ResetTimer()
 		tt := time.Now()
@@ -378,7 +379,7 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 				require.False(b, inBad, "No error for invalid signature")
 			} else {
 				invalidCounter++
-				require.True(b, inBad, "Error for good signature")
+				require.True(b, inBad, fmt.Sprintf("Error for good signature: %s", wi.verificationErr))
 			}
 		}
 		fmt.Printf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))

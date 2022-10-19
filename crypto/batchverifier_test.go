@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -118,6 +119,27 @@ func BenchmarkBatchVerifier(b *testing.B) {
 
 	b.ResetTimer()
 	require.NoError(b, bv.Verify())
+}
+
+func BenchmarkBatchVerifierBig(b *testing.B) {
+	c := makeCurve25519Secret()
+	for batchSize := 1; batchSize <= 48; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count * batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				require.NoError(b, bv.Verify())
+			}
+		})
+	}
 }
 
 func TestEmpty(t *testing.T) {
