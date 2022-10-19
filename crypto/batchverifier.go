@@ -38,6 +38,7 @@ package crypto
 import "C"
 import (
 	"errors"
+	"runtime"
 	"unsafe"
 )
 
@@ -153,6 +154,9 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.free(publicKeysAllocation)
 		C.free(signaturesAllocation)
 		C.free(valid)
+		runtime.KeepAlive(messages)
+		runtime.KeepAlive(publicKeys)
+		runtime.KeepAlive(signatures)
 	}()
 
 	// load all the data pointers into the array pointers.
