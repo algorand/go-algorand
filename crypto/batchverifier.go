@@ -154,9 +154,6 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.free(publicKeysAllocation)
 		C.free(signaturesAllocation)
 		C.free(valid)
-		runtime.KeepAlive(messages)
-		runtime.KeepAlive(publicKeys)
-		runtime.KeepAlive(signatures)
 	}()
 
 	// load all the data pointers into the array pointers.
@@ -175,6 +172,10 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
+
+	runtime.KeepAlive(messages)
+	runtime.KeepAlive(publicKeys)
+	runtime.KeepAlive(signatures)
 
 	failed = make([]bool, numberOfSignatures)
 	for i := 0; i < numberOfSignatures; i++ {
