@@ -202,7 +202,7 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	return bldr, nil
 }
 
-// deleteBuilders deletes all builders up to rnd
+// deleteBuilders deletes all builders before (but not including) the given rnd
 func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	_, err := tx.Exec(deleteBuilderForRound, rnd)
 	return err
