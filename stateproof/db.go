@@ -134,15 +134,10 @@ func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, erro
 	return rowsToPendingSigs(rows)
 }
 func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
-	rows, err := tx.Query("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
+	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
 
-	rows.Next()
 	exists := 0
-	if err := rows.Scan(&exists); err != nil {
+	if err := row.Scan(&exists); err != nil {
 		return false, err
 	}
 

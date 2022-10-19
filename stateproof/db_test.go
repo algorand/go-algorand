@@ -164,7 +164,7 @@ func TestSigExistQuery(t *testing.T) {
 
 	require.NoError(t, makeStateProofDB(dbs.Wdb))
 
-	n := 5
+	n := 8
 	var accts []basics.Address
 	// setup:
 	for r := basics.Round(0); r < basics.Round(n); r++ {
@@ -178,7 +178,7 @@ func TestSigExistQuery(t *testing.T) {
 	}
 
 	// test:
-	for r := basics.Round(0); r < basics.Round(n); r++ {
+	for r := basics.Round(0); r < basics.Round(n/2); r++ {
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			exists, err := isPendingSigExist(tx, r, accts[r])
 			require.NoError(t, err)
@@ -188,8 +188,23 @@ func TestSigExistQuery(t *testing.T) {
 
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			wrongAddress := accts[r]
-			wrongAddress[0]++
-			exists, err := isPendingSigExist(tx, r, wrongAddress)
+			var actCopy basics.Address
+			copy(actCopy[:], wrongAddress[:])
+			actCopy[0]++
+			exists, err := isPendingSigExist(tx, r, actCopy)
+			require.NoError(t, err)
+			require.False(t, exists)
+			return nil
+		}))
+	}
+
+	require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deletePendingSigsBeforeRound(tx, basics.Round(n))
+	}))
+
+	for r := basics.Round(n / 2); r < basics.Round(n); r++ {
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			exists, err := isPendingSigExist(tx, r, accts[r])
 			require.NoError(t, err)
 			require.False(t, exists)
 			return nil
