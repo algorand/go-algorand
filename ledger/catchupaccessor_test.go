@@ -427,6 +427,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 }
 
 type testStagingWriter struct {
+	t      *testing.T
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
@@ -442,6 +443,7 @@ func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normaliz
 	for _, bal := range balances {
 		for _, hash := range bal.accountHashes {
 			var key [4 + crypto.DigestSize]byte
+			require.Len(w.t, hash, 4+crypto.DigestSize)
 			copy(key[:], hash)
 			w.hashes[key] = w.hashes[key] + 1
 		}
@@ -466,7 +468,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
-	writer := &testStagingWriter{hashes: make(map[[4 + crypto.DigestSize]byte]int)}
+	writer := &testStagingWriter{t: t, hashes: make(map[[4 + crypto.DigestSize]byte]int)}
 	l := Ledger{
 		log:             log,
 		genesisProto:    config.Consensus[protocol.ConsensusCurrentVersion],
