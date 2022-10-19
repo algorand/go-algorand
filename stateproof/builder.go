@@ -43,33 +43,33 @@ func (spw *Worker) fetchBuilderForRound(rnd basics.Round) (builder, error) {
 		return spw.makeBuilderForRound(rnd)
 	}
 
-	var b builder
+	var buildr builder
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
-		b, err2 = getBuilder(tx, rnd)
+		buildr, err2 = getBuilder(tx, rnd)
 		return err2
 	})
 	if err == nil {
-		return b, nil
+		return buildr, nil
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
 		spw.log.Errorf("fetchBuilderForRound: could not fetch builder from DB: %v", err)
 	}
 
-	b, err = spw.makeBuilderForRound(rnd)
+	buildr, err = spw.makeBuilderForRound(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertBuilder(tx, rnd, &b)
+		return insertBuilder(tx, rnd, &buildr)
 	})
 
 	if err != nil {
 		// builder was successfully created, logging DB issue but returning builder.
 		spw.log.Errorf("fetchBuilderForRound: failed to insert builder into database: %v", err)
 	}
-	return b, nil
+	return buildr, nil
 }
 
 // makeBuilderForRound not threadsafe, should be called in a lock environment

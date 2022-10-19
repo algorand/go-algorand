@@ -223,10 +223,10 @@ func TestBuildersDB(t *testing.T) {
 
 	builders := make([]builder, 100)
 	for i := uint64(0); i < 100; i++ {
-		var b builder
-		b.Builder = &stateproof.Builder{}
-		b.Round = i
-		builders[i] = b
+		var bldr builder
+		bldr.Builder = &stateproof.Builder{}
+		bldr.Round = i
+		builders[i] = bldr
 
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return insertBuilder(tx, basics.Round(i), &builders[i])
@@ -253,17 +253,17 @@ func TestBuildersDB(t *testing.T) {
 	a.NoError(err)
 	a.Equal(100-35, count)
 
-	var b builder
+	var bldr builder
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		b, err = getBuilder(tx, basics.Round(34))
+		bldr, err = getBuilder(tx, basics.Round(34))
 		return err
 	})
 	a.ErrorIs(err, sql.ErrNoRows)
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		b, err = getBuilder(tx, basics.Round(35))
+		bldr, err = getBuilder(tx, basics.Round(35))
 		return err
 	})
 	a.NoError(err)
-	a.Equal(uint64(35), b.Round)
+	a.Equal(uint64(35), bldr.Round)
 }

@@ -186,20 +186,20 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	if err != nil {
 		return builder{}, fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
 	}
-	var b builder
-	err = protocol.Decode(rawBuilder, &b)
+	var bldr builder
+	err = protocol.Decode(rawBuilder, &bldr)
 	if err != nil {
 		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
 	}
 
 	// Stored Builder is corrupted...
-	if b.Builder == nil {
+	if bldr.Builder == nil {
 		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
 	}
 
-	b.Builder.AllocSigs() // make a slice for sigs
+	bldr.Builder.AllocSigs() // make a slice for sigs
 
-	return b, nil
+	return bldr, nil
 }
 
 // deleteBuilders deletes all builders up to rnd
