@@ -2161,11 +2161,13 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 			randObj, _ := protocol.RandomizeObject(&basics.AppParams{})
 			basicsAppParams := *randObj.(*basics.AppParams)
 
-			var data resourcesData
-			data.SetAppParams(basicsAppParams, false)
-			roundTripAppParams := data.GetAppParams()
+			for _, haveHoldings := range []bool{true, false} {
+				var data resourcesData
+				data.SetAppParams(basicsAppParams, haveHoldings)
+				roundTripAppParams := data.GetAppParams()
 
-			require.Equal(t, basicsAppParams, roundTripAppParams)
+				require.Equal(t, basicsAppParams, roundTripAppParams)
+			}
 		}
 	})
 
@@ -2189,11 +2191,13 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 			randObj, _ := protocol.RandomizeObject(&basics.AssetParams{})
 			basicsAssetParams := *randObj.(*basics.AssetParams)
 
-			var data resourcesData
-			data.SetAssetParams(basicsAssetParams, false)
-			roundTripAssetParams := data.GetAssetParams()
+			for _, haveHoldings := range []bool{true, false} {
+				var data resourcesData
+				data.SetAssetParams(basicsAssetParams, haveHoldings)
+				roundTripAssetParams := data.GetAssetParams()
 
-			require.Equal(t, basicsAssetParams, roundTripAssetParams)
+				require.Equal(t, basicsAssetParams, roundTripAssetParams)
+			}
 		}
 	})
 }
