@@ -86,7 +86,6 @@ func makeStateProofDB(accessor db.Accessor) error {
 
 	err := db.Initialize(accessor, migrations)
 	if err != nil {
-		accessor.Close()
 		return fmt.Errorf("unable to initialize participation registry database: %w", err)
 	}
 
