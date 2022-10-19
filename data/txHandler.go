@@ -92,7 +92,6 @@ type TxHandler struct {
 	prevRound uint64
 
 	txRequests requestedTxnSet
-	//txRequestsMu deadlock.Mutex
 
 	// prevTxns contains the stxns from the previous block.
 	// The value is map[transactions.Txid]SignedTxn
@@ -238,13 +237,8 @@ func (handler *TxHandler) OnNewBlock(block bookkeeping.Block, delta ledgercore.S
 		txidList[i] = txid
 	}
 	handler.txidRequestDone <- txidList
-	// handler.txRequestsMu.Lock()
-	// for _, txid := range txidList {
-	// 	handler.txRequests.popByTxid(txid)
-	// }
 	handler.prevTxns.Store(prevTxns)
 	atomic.StoreUint64(&handler.prevRound, uint64(block.BlockHeader.Round))
-	// handler.txRequestsMu.Unlock()
 }
 
 // Start enables the processing of incoming messages at the transaction handler
@@ -367,6 +361,8 @@ type tx3Data struct {
 	enabled bool
 }
 
+// tx3Check determines if a peer is version 3 and does the tx-request protocol.
+// The result is cached in peer data.
 func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 	txpd := net.GetPeerData(npeer, peerTxn2Key)
 	if txpd != nil {
@@ -392,13 +388,8 @@ func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 	return out
 }
 
-func (handler *TxHandler) smarterTxnBroadcast(wi *txBacklogMsg) {
-	verifiedTxGroup := wi.unverifiedTxGroup
-	net := wi.rawmsg.Net
-	sender := wi.rawmsg.Sender
-	TxnBroadcast(handler.ctx, net, verifiedTxGroup, sender)
-}
-
+// TxnBroadcast sends a transaction group to all peers (except sender we got it from).
+// TxnBroadcast does protocol things more clever than just sending the txn group, but gets it done in the end.
 func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup []transactions.SignedTxn, sender network.Peer) (err error) {
 	peers := net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)
 	logging.Base().Infof("txHandler TxnBroadcast, sender=%p, %d peeers", sender, len(peers))
@@ -501,15 +492,10 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			txidList[i] = stxn.ID()
 		}
 		handler.txidRequestDone <- txidList
-
-		// handler.txRequestsMu.Lock()
-		// for _, stxn := range unverifiedTxGroup {
-		// 	handler.txRequests.popByTxid(stxn.ID())
-		// }
-		// handler.txRequestsMu.Unlock()
 	default:
-		// if we failed here we want to increase the corresponding metric. It might suggest that we
-		// want to increase the queue size.
+		// If we failed here we want to increase the
+		// corresponding metric. It might suggest that we want
+		// to increase the queue size.
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 	}
 
@@ -523,7 +509,7 @@ const requestExpiration = time.Millisecond * 900
 func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	select {
 	case handler.txAdvertiseQueue <- rawmsg:
-	// yay
+	// enqueued
 	default:
 		txAdvertiseDrops.Inc(nil)
 	}
@@ -643,8 +629,6 @@ func (handler *TxHandler) retryHandlerTick(now time.Time) {
 
 // retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
 func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
-	// handler.txRequestsMu.Lock()
-	// defer handler.txRequestsMu.Unlock()
 	if len(handler.txRequests.ar) == 0 {
 		return
 	}
