@@ -141,6 +141,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
 	var writeDuration time.Duration
 
+	// TODO: Add progress to logs
 	printLogsFunc := func() {
 		lf.log.Infof(
 			"writing balances to disk took %d seconds, "+

@@ -336,6 +336,7 @@ type compactOnlineAccountDeltas struct {
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
+// TODO: Add states of my own?
 const (
 	// catchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
 	catchpointStateLastCatchpoint = catchpointState("lastCatchpoint")
