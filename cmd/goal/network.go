@@ -35,6 +35,7 @@ var startNode string
 var noImportKeys bool
 var noClean bool
 var devModeOverride bool
+var noRewardOverride bool
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -47,6 +48,7 @@ func init() {
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
+	networkCreateCmd.Flags().BoolVar(&noRewardOverride, "noReward", false, "Forces the configuration to disable Rewards")
 
 	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
 
@@ -101,7 +103,7 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride, noRewardOverride)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)

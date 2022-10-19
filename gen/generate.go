@@ -149,14 +149,27 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
 	}
 
-	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, genesisData.DevMode, verboseOut)
+	return generateGenesisFiles(
+		proto, consensusParams, allocation, genesisData, outDir, verboseOut,
+	)
 }
 
-func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, devmode bool, verboseOut io.Writer) (err error) {
+func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, allocation []genesisAllocation, genData GenesisData, outDir string, verboseOut io.Writer) (err error) {
 
-	genesisAddrs := make(map[string]basics.Address)
-	records := make(map[string]basics.AccountData)
+	var (
+		netName               = genData.NetworkName
+		schemaVersionModifier = genData.VersionModifier
+		firstWalletValid      = genData.FirstPartKeyRound
+		lastWalletValid       = genData.LastPartKeyRound
+		partKeyDilution       = genData.LastPartKeyRound
+		feeSink, rewardsPool  = genData.FeeSink, genData.RewardsPool
+		devmode               = genData.DevMode
+		noRewards             = genData.NoRewards
+		comment               = genData.Comment
+
+		genesisAddrs = make(map[string]basics.Address)
+		records      = make(map[string]basics.AccountData)
+	)
 
 	if partKeyDilution == 0 {
 		partKeyDilution = protoParams.DefaultKeyDilution
@@ -327,7 +340,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	}
 
 	rewardBalance := defaultIncentivePoolBalanceAtInception
-	if devmode {
+	if noRewards {
 		rewardBalance = protoParams.MinBalance
 	}
 
