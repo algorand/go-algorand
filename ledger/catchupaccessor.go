@@ -537,10 +537,12 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	progress.HashesWriteDuration += durHashes
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
-	progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
 	progress.ProcessedBytes += uint64(len(bytes))
 	for _, acctBal := range normalizedAccountBalances {
 		progress.TotalAccountHashes += uint64(len(acctBal.accountHashes))
+		if !acctBal.partialBalance {
+			progress.ProcessedAccounts++
+		}
 	}
 
 	// not strictly required, but clean up the pointer when we're done.

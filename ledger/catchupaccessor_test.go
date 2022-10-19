@@ -468,6 +468,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	log := logging.TestingLog(t)
 	writer := &testStagingWriter{hashes: make(map[[4 + crypto.DigestSize]byte]int)}
 	l := Ledger{
+		log:             log,
 		genesisProto:    config.Consensus[protocol.ConsensusCurrentVersion],
 		synchronousMode: db.SynchronousMode(100), // non-existing in order to skip the underlying db call in ledger.setSynchronousMode
 	}
