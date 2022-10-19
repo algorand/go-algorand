@@ -1069,6 +1069,30 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
+// writeCatchpointStateProofVerificationData inserts all the state proof verification data in the provided array into
+// the catchpointstateproofverification table.
+func writeCatchpointStateProofVerificationData(ctx context.Context, tx *sql.Tx, verificationData *ledgercore.StateProofVerificationData) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+
+	if err != nil {
+		return err
+	}
+
+	defer insertStmt.Close()
+
+	f := func() error {
+		_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(verificationData))
+		return err
+	}
+
+	err = db.Retry(f)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
 func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
@@ -1120,6 +1144,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointstateproofverification",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1140,6 +1165,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (targetstateproofround INTEGER PRIMARY KEY NOT NULL, verificationdata BLOB NOT NULL)",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
@@ -1163,11 +1189,13 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"DROP TABLE IF EXISTS assetcreators",
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
+		"DROP TABLE IF EXISTS stateproofverification",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointstateproofverification RENAME TO stateproofverification",
 	}
 
 	for _, stmt := range stmts {

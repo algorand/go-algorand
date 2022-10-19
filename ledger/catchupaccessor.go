@@ -255,15 +255,15 @@ func (c *CatchpointCatchupAccessorImpl) ProgressStagingBalances(ctx context.Cont
 		return c.processStagingBalances(ctx, bytes, progress)
 	}
 	if sectionName == "stateProofVerificationData.msgpack" {
-		return c.processStateProofVerificationData(ctx, bytes, progress)
+		return c.processStagingStateProofVerificationData(ctx, bytes, progress)
 	}
 	// we want to allow undefined sections to support backward compatibility.
 	c.log.Warnf("CatchpointCatchupAccessorImpl::ProgressStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
 	return nil
 }
 
-// processStagingContent deserialize the given bytes as a temporary staging balances content
-func (c *CatchpointCatchupAccessorImpl) processStateProofVerificationData(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
+// processStagingStateProofVerificationData deserialize the given bytes as a temporary staging state proof verification data
+func (c *CatchpointCatchupAccessorImpl) processStagingStateProofVerificationData(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
 	// TODO: Add seen header?
 	var decodedData catchpointStateProofVerificationData
 	err = protocol.Decode(bytes, &decodedData)
@@ -277,7 +277,7 @@ func (c *CatchpointCatchupAccessorImpl) processStateProofVerificationData(_ cont
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// TODO: Write catchpoint state?
 		for _, data := range decodedData.data {
-			err = insertStateProofVerificationData(ctx, tx, &data)
+			err = writeCatchpointStateProofVerificationData(ctx, tx, &data)
 			if err != nil {
 				return err
 			}
