@@ -150,7 +150,11 @@ func (spw *Worker) initBuilders() {
 	defer spw.mu.Unlock()
 
 	// need to fetch all rounds
-	rnds := spw.getAllBuilderRounds()
+	rnds, err := spw.getAllBuilderRounds()
+	if err != nil {
+		spw.log.Errorf("initBuilders: could init builders: %v", err)
+		return
+	}
 
 	for _, rnd := range rnds {
 		if _, ok := spw.builders[rnd]; ok {

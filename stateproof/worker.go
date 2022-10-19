@@ -122,14 +122,14 @@ func (spw *Worker) Shutdown() {
 	spw.db.Close()
 }
 
-func (spw *Worker) getAllBuilderRounds() []basics.Round {
+func (spw *Worker) getAllBuilderRounds() ([]basics.Round, error) {
 	var rnds []basics.Round
-	spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		tmp, err := getBuilderRounds(tx)
 		rnds = tmp
 		return err
 	})
-	return rnds
+	return rnds, err
 }
 
 // SortAddress implements sorting by Address keys for
