@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -35,7 +36,6 @@ import (
 )
 
 // loadOrCreateBuilder either loads a builder from the DB or creates a new builder.
-// Not threadsafe, should be called in a lock environment
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
 		return spw.createBuilder(rnd)
@@ -44,6 +44,10 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	buildr, err := spw.loadBuilderFromDB(rnd)
 	if err == nil {
 		return buildr, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
+		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
 	buildr, err = spw.createBuilder(rnd)
@@ -61,6 +65,7 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	return buildr, nil
 }
 
+// loadBuilderFromDB loads a builder from disk and fill it with stored signatures
 func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	var buildr builder
 	var sigs []pendingSig
@@ -145,10 +150,9 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	// need to fetch all rounds
-	rnds, err := spw.getAllBuilderRounds()
+	rnds, err := spw.getAllRounds()
 	if err != nil {
-		spw.log.Errorf("initBuilders: failed to load builder rounds: %v", err)
+		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)
 		return
 	}
 
@@ -158,7 +162,7 @@ func (spw *Worker) initBuilders() {
 			continue
 		}
 
-		buildr, err := spw.loadBuilderFromDB(rnd)
+		buildr, err := spw.loadOrCreateBuilder(rnd)
 		if err != nil {
 			spw.log.Warnf("initBuilders: failed to load builder for round %d", rnd)
 			continue
@@ -167,11 +171,13 @@ func (spw *Worker) initBuilders() {
 	}
 }
 
-func (spw *Worker) getAllBuilderRounds() ([]basics.Round, error) {
+func (spw *Worker) getAllRounds() ([]basics.Round, error) {
+	// Some state proof databases might only contain a signature table. For that reason, when trying to create builders for possible state proof
+	// rounds we search the signature table and not the builder table
 	var rnds []basics.Round
 	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		var err error
-		rnds, err = getBuilderRounds(tx)
+		rnds, err = getSignatureRounds(tx)
 		return err
 	})
 	return rnds, err
@@ -181,26 +187,26 @@ func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig)
 	rnd := builderForRound.Round
 	pos, ok := builderForRound.AddrToPos[sig.signer]
 	if !ok {
-		spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
+		spw.log.Warnf("insertSigToBuilder: cannot find %v in round %d", sig.signer, rnd)
 		return
 	}
 
 	isPresent, err := builderForRound.Present(pos)
 	if err != nil {
-		spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+		spw.log.Warnf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
 		return
 	}
 	if isPresent {
-		spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 		return
 	}
 
 	if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
-		spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
+		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
 		return
 	}
 	if err := builderForRound.Add(pos, sig.sig); err != nil {
-		spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
+		spw.log.Warnf("insertSigToBuilder: error while adding sig. inner error: %w", err)
 		return
 	}
 }

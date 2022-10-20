@@ -134,11 +134,7 @@ func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) 
 	if err != nil {
 		return nil, err
 	}
-	signaturesAtRound, exists := tmpmap[rnd]
-	if exists {
-		return signaturesAtRound, nil
-	}
-	return nil, nil
+	return tmpmap[rnd], nil
 
 }
 
@@ -226,9 +222,9 @@ func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
-func getBuilderRounds(tx *sql.Tx) ([]basics.Round, error) {
+func getSignatureRounds(tx *sql.Tx) ([]basics.Round, error) {
 	var rnds []basics.Round
-	rows, err := tx.Query("SELECT DISTINCT round FROM builders")
+	rows, err := tx.Query("SELECT DISTINCT sprnd FROM sigs")
 	if err != nil {
 		return nil, err
 	}
