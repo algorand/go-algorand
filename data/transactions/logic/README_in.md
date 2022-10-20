@@ -15,7 +15,7 @@ to, the other transactions in their atomic transaction group, and a
 few global values. In addition, _Smart Contracts_ have access to
 limited state that is global to the application, per-account local
 state for each account that has opted-in to the application, and
-per-application named _boxes_ of arbitrary state. For both types of
+additional per-application arbitrary state in named _boxes_. For both types of
 program, approval is signaled by finishing with the stack containing a
 single non-zero uint64 value, though `return` can be used to signal an
 early approval which approves based only upon the top stack value

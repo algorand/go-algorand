@@ -614,14 +614,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x45 {uint8 depth}
 - Stack: ..., A &rarr; ...
-- Replace the Nth value from the top of the stack. bury 0 fails.
+- replace the Nth value from the top of the stack with A. bury 0 fails.
 - Availability: v8
 
 ## popn n
 
 - Opcode: 0x46 {uint8 stack depth}
 - Stack: ..., [N items] &rarr; ...
-- Remove N values from the top of the stack
+- remove N values from the top of the stack
 - Availability: v8
 
 ## dupn n
@@ -1103,7 +1103,7 @@ Fails unless the last instruction executed was a `callsub`.
 
 - Opcode: 0x8c {int8 frame slot}
 - Stack: ..., A &rarr; ...
-- Replace the Nth (signed) value from the frame pointer in the stack
+- replace the Nth (signed) value from the frame pointer in the stack with A
 - Availability: v8
 
 ## switch target ...

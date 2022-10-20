@@ -128,7 +128,7 @@ var opDocByName = map[string]string{
 	"dup2":    "duplicate A and B",
 	"dupn":    "duplicate A, N times",
 	"dig":     "Nth value from the top of the stack. dig 0 is equivalent to dup",
-	"bury":    "Replace the Nth value from the top of the stack. bury 0 fails.",
+	"bury":    "replace the Nth value from the top of the stack with A. bury 0 fails.",
 	"cover":   "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.",
 	"uncover": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.",
 	"swap":    "swaps A and B on stack",
@@ -199,8 +199,8 @@ var opDocByName = map[string]string{
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
 
 	"frame_dig":  "Nth (signed) value from the frame pointer.",
-	"frame_bury": "Replace the Nth (signed) value from the frame pointer in the stack",
-	"popn":       "Remove N values from the top of the stack",
+	"frame_bury": "replace the Nth (signed) value from the frame pointer in the stack with A",
+	"popn":       "remove N values from the top of the stack",
 
 	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
 	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
