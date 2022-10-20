@@ -1501,7 +1501,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, it returns the box names of that application. No particular ordering is guaranteed.",
+        "description": "Given an application ID, it returns the application's box names without ordering guarantees.  When query is limited by `max`, the response contains an arbitrary subset of application box names.",
         "produces": [
           "application/json"
         ],

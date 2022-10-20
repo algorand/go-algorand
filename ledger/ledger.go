@@ -540,8 +540,9 @@ func (l *Ledger) LookupKv(rnd basics.Round, key string) (*string, error) {
 	return l.accts.LookupKv(rnd, key)
 }
 
-// LookupKeysByPrefix searches keys with specific prefix, up to `maxKeyNum`
-// if `maxKeyNum` == 0, then it loads all keys with such prefix
+// LookupKeysByPrefix searches keys with specific prefix, up to `maxKeyNum`.
+// If `maxKeyNum` == 0, then it loads all keys with such prefix.
+// If search result count > `maxKeyNum`, then the method returns without error providing `maxKeyNum` results.  Partial result sets provide an arbitrary subset of all keys.
 func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
