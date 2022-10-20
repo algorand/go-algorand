@@ -134,7 +134,12 @@ func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) 
 	if err != nil {
 		return nil, err
 	}
-	return tmpmap[rnd], nil
+	signaturesAtRound, exists := tmpmap[rnd]
+	if exists {
+		return signaturesAtRound, nil
+	}
+	return nil, nil
+
 }
 
 func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
@@ -210,7 +215,7 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
 	}
 
-	bldr.Builder.AllocSigs() // make a slice for sigs
+	bldr.Builder.AllocSigs()
 
 	return bldr, nil
 }
@@ -220,7 +225,6 @@ func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	_, err := tx.Exec(deleteBuilderForRound, rnd)
 	return err
 }
-
 
 func getBuilderRounds(tx *sql.Tx) ([]basics.Round, error) {
 	var rnds []basics.Round

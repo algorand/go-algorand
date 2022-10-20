@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sort"
 
@@ -50,11 +49,12 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	buildr, err = spw.createBuilder(rnd)
 	if err != nil {
 		return builder{}, err
-	} // fetch Or make. if make, then no need for sigs.
+	}
 
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { return persistBuilder(tx, rnd, &buildr) })
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &buildr)
+	})
 	if err != nil {
-		// builder was successfully created, logging DB issue but returning builder.
 		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
 	}
 
@@ -64,7 +64,8 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	var buildr builder
 	var sigs []pendingSig
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err2 error) {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
 		buildr, err2 = getBuilder(tx, rnd)
 		if err2 != nil {
 			return err2
@@ -74,14 +75,11 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	})
 
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			spw.log.Errorf("loadBuilderFromDB: could not fetch builder from DB: %v", err)
-		}
 		return builder{}, err
 	}
 
 	spw.fillBuilder(sigs, buildr)
-	return buildr, err
+	return buildr, nil
 }
 
 func (spw *Worker) fillBuilder(sigs []pendingSig, buildr builder) {
