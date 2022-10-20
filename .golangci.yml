@@ -33,6 +33,30 @@ linters-settings:
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).error
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
+  govet:
+    settings:
+      printf:
+        # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
+        # Default: []
+        funcs:
+          - (github.com/algorand/go-algorand/logging.Logger).Debugf
+          - (github.com/algorand/go-algorand/logging.Logger).Infof
+          - (github.com/algorand/go-algorand/logging.Logger).Warnf
+          - (github.com/algorand/go-algorand/logging.Logger).Errorf
+          - (github.com/algorand/go-algorand/logging.Logger).Fatalf
+          - (github.com/algorand/go-algorand/logging.Logger).Panicf
+          - (github.com/algorand/go-algorand/logging.Logger).Debugln
+          - (github.com/algorand/go-algorand/logging.Logger).Infoln
+          - (github.com/algorand/go-algorand/logging.Logger).Warnln
+          - (github.com/algorand/go-algorand/logging.Logger).Errorln
+          - (github.com/algorand/go-algorand/logging.Logger).Fatalln
+          - (github.com/algorand/go-algorand/logging.Logger).Panicln
+          - (github.com/algorand/go-algorand/logging.Logger).Debug
+          - (github.com/algorand/go-algorand/logging.Logger).Info
+          - (github.com/algorand/go-algorand/logging.Logger).Warn
+          - (github.com/algorand/go-algorand/logging.Logger).Error
+          - (github.com/algorand/go-algorand/logging.Logger).Fatal
+          - (github.com/algorand/go-algorand/logging.Logger).Panic
 
 issues:
   # Work our way back over time to be clean against all these

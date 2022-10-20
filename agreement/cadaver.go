@@ -123,7 +123,7 @@ func (c *cadaver) trySetup() bool {
 	if c.out.bytesWritten >= c.fileSizeTarget {
 		err := c.out.Close()
 		if err != nil {
-			logging.Base().Warn("unable to close cadaver file : %v", err)
+			logging.Base().Warnf("unable to close cadaver file : %v", err)
 		}
 		err = os.Rename(c.filename(), c.filename()+".archive")
 		if err != nil {
