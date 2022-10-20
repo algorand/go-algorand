@@ -1065,6 +1065,7 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 	w.persistBuilders = false
+	w.Start()
 	defer w.Shutdown()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
@@ -1101,13 +1102,14 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
-	defer w.Shutdown()
 	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
 	}
 
+	w.Start()
+	defer w.Shutdown()
 	msg := sigFromAddr{
 		SignerAddress: addresses[3],
 		Round:         basics.Round(proto.StateProofInterval * 2),
@@ -1320,7 +1322,7 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 }
 
-func TestWorker_BuildersPersistence_StateProofChainStalled(t *testing.T) {
+func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1334,9 +1336,11 @@ func TestWorker_BuildersPersistence_StateProofChainStalled(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
-	defer w.Shutdown()
+
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
@@ -1354,16 +1358,43 @@ func TestWorker_BuildersPersistence_StateProofChainStalled(t *testing.T) {
 	// In disk
 	r := basics.Round(512)
 	for i := 0; i < 9; i++ {
+		var builderFromDisk builder
 		a.NoError(
 			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-				_, err := getBuilder(tx, r)
+				var err error
+				builderFromDisk, err = getBuilder(tx, r)
 				return err
 			}))
+		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
+		r += 256
+	}
+
+	w.Shutdown()
+
+	dbs, _ = dbOpenTestRand(t, true, dbRand)
+	w = newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
+	defer w.Shutdown()
+
+	// In memory
+	a.Equal(9, len(w.builders))
+	// In disk
+	r = basics.Round(512)
+	for i := 0; i < 9; i++ {
+		var builderFromDisk builder
+		a.NoError(
+			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+				var err error
+				builderFromDisk, err = getBuilder(tx, r)
+				return err
+			}))
+		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
 		r += 256
 	}
 }
 
-func TestBuilderLoadsFromDisk(t *testing.T) {
+
+func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1377,14 +1408,16 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
-	defer w.Shutdown()
+
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
-	// Wait on all signatures
+	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
 	for {
 		_, err := s.waitOnSigWithTimeout(time.Second * 2)
 		if err != nil {
@@ -1392,40 +1425,127 @@ func TestBuilderLoadsFromDisk(t *testing.T) {
 		}
 	}
 
+	w.Shutdown()
+
+	dbs, _ = dbOpenTestRand(t, true, dbRand)
+	w = newTestWorkerDB(t, s, dbs.Wdb)
+
+	// we now remove all builders from the table. This will cause the worker to create the builders from the ledger.
+	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from builders")
+		return err
+	}))
+
+	w.Start()
+	defer w.Shutdown()
 	w.mu.Lock()
-	bldrForComparission := w.builders[512]
-	w.mu.Unlock()
-
-	// running through the builder with no ram or ledger:
-	// without the Disk, it isn't possible to fetch the builder correctly.
-	w.mu.Lock()
-	w.builders = map[basics.Round]builder{}
-	w.ledger = nil
-
-	_, err := w.loadOrCreateBuilder(512)
-	w.mu.Unlock()
-	a.NoError(err)
-
-	// without accessing the DB and the ledger fetching is not possible:
-	w.persistBuilders = false
-	a.Panics(func() {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-
-		w.loadOrCreateBuilder(512)
-	})
-	//a.Panics(func() {
-	//	w.initBuilders()
-	//})
-
-	// Loading the builders from the disk, along with their sigs.
-	w.persistBuilders = true
-	w.initBuilders()
-
-	w.mu.Lock()
-	a.Equal(bldrForComparission, w.builders[512])
+	a.Equal(9, len(w.builders))
+	for _,v := range w.builders {
+		for j := 0; j < len(v.Participants); j++ {
+			present, err := v.Present(uint64(j))
+			a.NoError(err)
+			a.True(present)
+		}
+	}
 	w.mu.Unlock()
 }
+
+//
+//func TestWorker_LoadPersistentBuilders(t *testing.T) {
+//	partitiontest.PartitionTest(t)
+//	a := require.New(t)
+//
+//	var keys []account.Participation
+//	for i := 0; i < 2; i++ {
+//		var parent basics.Address
+//		crypto.RandBytes(parent[:])
+//		p := newPartKey(t, parent)
+//		defer p.Close()
+//		keys = append(keys, p.Participation)
+//	}
+//
+//	s := newWorkerStubs(t, keys, 10)
+//	w := newTestWorker(t, s)
+//	w.Start()
+//
+//
+//	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+//	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+//
+//	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
+//	for {
+//		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+//		if err != nil {
+//			break
+//		}
+//	}
+//	w.Shutdown()
+//}
+
+
+
+
+//
+//func TestBuilderLoadsFromDisk(t *testing.T) {
+//	partitiontest.PartitionTest(t)
+//	a := require.New(t)
+//
+//	var keys []account.Participation
+//	for i := 0; i < 2; i++ {
+//		var parent basics.Address
+//		crypto.RandBytes(parent[:])
+//		p := newPartKey(t, parent)
+//		defer p.Close()
+//		keys = append(keys, p.Participation)
+//	}
+//
+//	s := newWorkerStubs(t, keys, 10)
+//	w := newTestWorker(t, s)
+//	w.Start()
+//	defer w.Shutdown()
+//
+//	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+//	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+//
+//	// Wait on all signatures
+//	for {
+//		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+//		if err != nil {
+//			break
+//		}
+//	}
+//
+//	w.mu.Lock()
+//	bldrForComparission := w.builders[512]
+//	w.mu.Unlock()
+//
+//	// running through the builder with no ram or ledger:
+//	// without the Disk, it isn't possible to fetch the builder correctly.
+//	w.mu.Lock()
+//	w.builders = map[basics.Round]builder{}
+//	w.ledger = nil
+//
+//	_, err := w.loadOrCreateBuilder(512)
+//	w.mu.Unlock()
+//	a.NoError(err)
+//
+//	// without accessing the DB and the ledger fetching is not possible:
+//	w.persistBuilders = false
+//	a.Panics(func() {
+//		w.mu.Lock()
+//		defer w.mu.Unlock()
+//
+//		w.loadOrCreateBuilder(512)
+//	})
+//
+//	// Loading the builders from the disk, along with their sigs.
+//	w.persistBuilders = true
+//	w.initBuilders()
+//
+//	w.mu.Lock()
+//	a.Equal(bldrForComparission, w.builders[512])
+//	w.mu.Unlock()
+//}
 
 func TestBuilderFromDiskCreatesMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)

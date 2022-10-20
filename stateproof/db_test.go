@@ -71,6 +71,7 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 	}))
 
 	b := builder{Builder: &stateproof.Builder{}}
+	b.ProvenWeight = 5
 	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return persistBuilder(tx, 0, &b)
 	}), "no such table: builders")
@@ -82,10 +83,13 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 		return persistBuilder(tx, 0, &b)
 	}))
 
+	var b2 builder
 	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := getBuilder(tx, 0)
+		var err error
+		b2, err = getBuilder(tx, 0)
 		return err
 	}))
+	a.Equal(b.BuilderPersistingFields, b2.BuilderPersistingFields)
 }
 
 func TestPendingSigDB(t *testing.T) {
@@ -177,7 +181,7 @@ func TestSigExistQuery(t *testing.T) {
 		}))
 	}
 
-	// test:
+	// all addresses have signed the message so isPendingSigExist should result with true:
 	for r := basics.Round(0); r < basics.Round(n/2); r++ {
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			exists, err := isPendingSigExist(tx, r, accts[r])
@@ -185,18 +189,19 @@ func TestSigExistQuery(t *testing.T) {
 			require.True(t, exists)
 			return nil
 		}))
-
-		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			wrongAddress := accts[r]
-			var actCopy basics.Address
-			copy(actCopy[:], wrongAddress[:])
-			actCopy[0]++
-			exists, err := isPendingSigExist(tx, r, actCopy)
-			require.NoError(t, err)
-			require.False(t, exists)
-			return nil
-		}))
 	}
+
+	// a "wrongAddress" should not have signatures in the dabase
+	require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		wrongAddress := accts[0]
+		var actCopy basics.Address
+		copy(actCopy[:], wrongAddress[:])
+		actCopy[0]++
+		exists, err := isPendingSigExist(tx, 0, actCopy)
+		require.NoError(t, err)
+		require.False(t, exists)
+		return nil
+	}))
 
 	require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deletePendingSigsBeforeRound(tx, basics.Round(n))

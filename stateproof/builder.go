@@ -35,7 +35,22 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// loadOrCreateBuilder either loads a builder from the DB or creates a new builder.
+
+// loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
+// this function fills the builder with all the available signatures
+func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder, error) {
+	b, err := spw.loadOrCreateBuilder(rnd)
+	if err != nil{
+		return builder{}, err
+	}
+
+	if err := spw.loadSignaturesIntoBuilder(&b); err != nil{
+		return builder{}, err
+	}
+	return b, nil
+}
+
+
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
 		return spw.createBuilder(rnd)
@@ -65,32 +80,36 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	return buildr, nil
 }
 
-// loadBuilderFromDB loads a builder from disk and fill it with stored signatures
+// loadBuilderFromDB loads a builder from disk.
 func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	var buildr builder
-	var sigs []pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err2 error
 		buildr, err2 = getBuilder(tx, rnd)
-		if err2 != nil {
-			return err2
-		}
-		sigs, err2 = getPendingSigsForRound(tx, rnd)
 		return err2
 	})
-
 	if err != nil {
 		return builder{}, err
 	}
 
-	spw.fillBuilder(sigs, buildr)
 	return buildr, nil
 }
 
-func (spw *Worker) fillBuilder(sigs []pendingSig, buildr builder) {
-	for _, sig := range sigs {
-		spw.insertSigToBuilder(&buildr, &sig)
+func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error{
+	var sigs []pendingSig
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		sigs, err2 = getPendingSigsForRound(tx, basics.Round(buildr.Round))
+		return err2
+	})
+	if err != nil{
+		return err
 	}
+
+	for _, sig := range sigs {
+		spw.insertSigToBuilder(buildr, &sig)
+	}
+	return nil
 }
 
 func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
@@ -162,7 +181,7 @@ func (spw *Worker) initBuilders() {
 			continue
 		}
 
-		buildr, err := spw.loadOrCreateBuilder(rnd)
+		buildr, err := spw.loadOrCreateBuilderWithSignatures(rnd)
 		if err != nil {
 			spw.log.Warnf("initBuilders: failed to load builder for round %d", rnd)
 			continue
@@ -271,7 +290,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
 		}
 
-		builderForRound, err = spw.loadOrCreateBuilder(sfa.Round)
+		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
