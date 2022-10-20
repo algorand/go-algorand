@@ -248,19 +248,6 @@ func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
 }
 
-func fillNodeStatusResponse(nodeStatus v1.NodeStatus) generatedV2.NodeStatusResponse {
-	return generatedV2.NodeStatusResponse{
-		LastRound:                 nodeStatus.LastRound,
-		LastVersion:               nodeStatus.LastVersion,
-		NextVersion:               nodeStatus.NextVersion,
-		NextVersionRound:          nodeStatus.NextVersionRound,
-		NextVersionSupported:      nodeStatus.NextVersionSupported,
-		TimeSinceLastRound:        uint64(nodeStatus.TimeSinceLastRound),
-		CatchupTime:               uint64(nodeStatus.CatchupTime),
-		StoppedAtUnsupportedRound: nodeStatus.StoppedAtUnsupportedRound,
-	}
-}
-
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported
@@ -514,8 +501,8 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 }
 
 // Block gets the block info for the given round
-func (client RestClient) Block(round uint64) (response v1.Block, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/block/%d", round), nil)
+func (client RestClient) Block(round uint64) (response generatedV2.BlockResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/block/%d", round), nil)
 	return
 }
 

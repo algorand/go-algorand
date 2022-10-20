@@ -908,16 +908,13 @@ func TestSPWithTXPoolFull(t *testing.T) {
 		err = fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
-		require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[0].Type)
-		var msg stateproofmsg.Message
-		err = protocol.Decode(b.Transactions.Transactions[0].StateProof.StateProofMessage, &msg)
-		require.NoError(t, err)
-		require.Equal(t, uint64(8), msg.LastAttestedRound)
+		require.Equal(t, protocol.StateProofTx, b.Payset[0].Txn.Type)
+		require.Equal(t, uint64(8), b.Payset[0].Txn.StateProofTxnFields.Message.LastAttestedRound)
 		break
 	}
 	require.Less(t, round, uint64(20))
@@ -967,12 +964,12 @@ func TestAtMostOneSPFullPool(t *testing.T) {
 		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
 
 		params, err = relay.SuggestedParams()
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
 		tid := 0
@@ -980,14 +977,11 @@ func TestAtMostOneSPFullPool(t *testing.T) {
 		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
 		// break after finding it, and look for the next one in a subsequent block
 		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
-		for ; tid < len(b.Transactions.Transactions); tid++ {
-			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
-				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+		for ; tid < len(b.Payset); tid++ {
+			if string(b.Payset[tid].Txn.Type) == string(protocol.StateProofTx) {
+				require.Equal(t, protocol.StateProofTx, b.Payset[tid].Txn.Type)
 
-				var msg stateproofmsg.Message
-				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
-				require.NoError(t, err)
-				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+				require.Equal(t, int(expectedSPRound), int(b.Payset[tid].Txn.StateProofTxnFields.Message.LastAttestedRound))
 
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break
@@ -1107,12 +1101,12 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
 
 		params, err = relay.SuggestedParams()
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
 		tid := 0
@@ -1120,14 +1114,11 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
 		// break after finding it, and look for the next one in a subsequent block
 		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
-		for ; tid < len(b.Transactions.Transactions); tid++ {
-			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
-				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+		for ; tid < len(b.Payset); tid++ {
+			if string(b.Payset[tid].Txn.Type) == string(protocol.StateProofTx) {
+				require.Equal(t, protocol.StateProofTx, b.Payset[tid].Txn.Type)
 
-				var msg stateproofmsg.Message
-				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
-				require.NoError(t, err)
-				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+				require.Equal(t, int(expectedSPRound), int(b.Payset[tid].Txn.StateProofTxnFields.Message.LastAttestedRound))
 
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break

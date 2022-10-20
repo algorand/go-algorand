@@ -150,7 +150,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	_, err = sClient.WaitForRound(uint64(lastValidRound + 1))
 	a.NoError(err)
 
-	blk, err := sClient.Block(latestRound)
+	blk, err := sClient.BookkeepingBlock(latestRound)
 	a.NoError(err)
 	a.Equal(blk.CurrentProtocol, protocolCheck)
 

@@ -20,8 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -42,18 +44,27 @@ func (mes *MockEventSender) EventWithDetails(category telemetryspec.Category, id
 	mes.events = append(mes.events, event{category: category, identifier: identifier, details: details})
 }
 
+// Helper method to create an EncodedBlockCert for the block handler.
+func makeTestBlock(round uint64) rpcs.EncodedBlockCert {
+	return rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(round)}}}
+}
+
 func TestConsecutiveBlocks(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
-	bs.onBlock(v1.Block{Round: 300})
+	makeTestBlock := func(round uint64) rpcs.EncodedBlockCert {
+		return rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(round)}}}
+	}
+
+	bs.onBlock(makeTestBlock(300))
 	// first consecutive block
-	bs.onBlock(v1.Block{Round: 301})
+	bs.onBlock(makeTestBlock(301))
 	// reset
-	bs.onBlock(v1.Block{Round: 303})
+	bs.onBlock(makeTestBlock(303))
 	// second consecutive block
-	bs.onBlock(v1.Block{Round: 304})
+	bs.onBlock(makeTestBlock(304))
 
 	require.Equal(t, 2, len(sender.events))
 }
@@ -70,9 +81,9 @@ func TestAgreementTime(t *testing.T) {
 		bs := blockstats{log: &sender}
 
 		start := time.Now()
-		bs.onBlock(v1.Block{Round: 300})
+		bs.onBlock(makeTestBlock(300))
 		time.Sleep(sleepTime)
-		bs.onBlock(v1.Block{Round: 301})
+		bs.onBlock(makeTestBlock(301))
 		end := time.Now()
 
 		require.Equal(t, 1, len(sender.events))

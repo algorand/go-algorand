@@ -805,7 +805,7 @@ func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp v1.Block, err error) {
+func (c *Client) Block(round uint64) (resp generatedV2.BlockResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -814,7 +814,7 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 }
 
 // RawBlock takes a round and returns its block
-func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+func (c *Client) RawBlock(round uint64) (resp []byte, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.RawBlock(round)
@@ -822,20 +822,27 @@ func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
 	return
 }
 
-// BookkeepingBlock takes a round and returns its block
-func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+// EncodedBlockCert takes a round and returns its parsed block and certificate
+func (c *Client) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
 		resp, err = algod.RawBlock(round)
 		if err == nil {
-			var b rpcs.EncodedBlockCert
-			err = protocol.DecodeReflect(resp, &b)
+			err = protocol.DecodeReflect(resp, &blockCert)
 			if err != nil {
 				return
 			}
-			block = b.Block
 		}
+	}
+	return
+}
+
+// BookkeepingBlock takes a round and returns its block
+func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+	blockCert, err := c.EncodedBlockCert(round)
+	if err == nil {
+		return blockCert.Block, nil
 	}
 	return
 }
@@ -1034,7 +1041,7 @@ func (c *Client) ExportKey(walletHandle []byte, password, account string) (resp 
 
 // ConsensusParams returns the consensus parameters for the protocol active at the specified round
 func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
-	block, err := c.Block(round)
+	block, err := c.BookkeepingBlock(round)
 	if err != nil {
 		return
 	}
@@ -1196,11 +1203,11 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			if dr.Round, err = client.CurrentRound(); err != nil {
 				return
 			}
-			var b v1.Block
-			if b, err = client.Block(dr.Round); err != nil {
+			var b bookkeeping.Block
+			if b, err = client.BookkeepingBlock(dr.Round); err != nil {
 				return
 			}
-			dr.LatestTimestamp = uint64(b.Timestamp)
+			dr.LatestTimestamp = uint64(b.BlockHeader.TimeStamp)
 		}
 	}
 	return
