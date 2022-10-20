@@ -134,7 +134,7 @@ func BenchmarkBatchVerifierBig(b *testing.B) {
 		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
 			totalTransactions := b.N
 			count := totalTransactions / batchSize
-			if count * batchSize < totalTransactions {
+			if count*batchSize < totalTransactions {
 				count++
 			}
 			for x := 0; x < count; x++ {
@@ -146,7 +146,7 @@ func BenchmarkBatchVerifierBig(b *testing.B) {
 
 // BenchmarkBatchVerifierBigWithInvalid builds over BenchmarkBatchVerifierBig by introducing
 // invalid sigs to even numbered batch sizes. This shows the impact of invalid sigs on the
-// performance. Basically, all the gains from batching disappear. 
+// performance. Basically, all the gains from batching disappear.
 func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
 	c := makeCurve25519Secret()
 	badSig := Signature{}
@@ -163,7 +163,7 @@ func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
 		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
 			totalTransactions := b.N
 			count := totalTransactions / batchSize
-			if count * batchSize < totalTransactions {
+			if count*batchSize < totalTransactions {
 				count++
 			}
 			for x := 0; x < count; x++ {

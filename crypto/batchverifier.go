@@ -38,6 +38,7 @@ package crypto
 import "C"
 import (
 	"errors"
+	//	"runtime"
 	"unsafe"
 )
 
@@ -133,11 +134,13 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	return failed, ErrBatchHasFailedSigs
 }
 
+var Counter int
+
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
 func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
-
+	Counter++
 	numberOfSignatures := len(messages)
 
 	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
@@ -153,6 +156,10 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.free(publicKeysAllocation)
 		C.free(signaturesAllocation)
 		C.free(valid)
+
+		//		runtime.KeepAlive(messages)
+		//		runtime.KeepAlive(publicKeys)
+		//		runtime.KeepAlive(signatures)
 	}()
 
 	// load all the data pointers into the array pointers.
