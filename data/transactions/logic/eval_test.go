@@ -5803,6 +5803,45 @@ int 2
 int 88
 match done1 done2; done1: ; done2: ;
 `, 8)
+
+	// allow mixed types for match cases
+	testAccepts(t, `
+int 1
+int 100
+byte "101"
+byte "101"
+match done1 done2; done1: ; done2: ;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+int 1
+byte "0"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+int 1
+int 1
+match zero one
+err
+one: int 1; return
+zero: int 0;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+byte "1"
+int 1
+match zero one
+int 1; return
+zero: int 0;
+one:  int 0;
+`, 8)
 }
 
 func TestPushConsts(t *testing.T) {
