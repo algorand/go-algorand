@@ -984,7 +984,7 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 	if major < versionPeerFeaturesNum[0] {
 		return 0
 	}
-	if minor < versionPeerFeaturesNum[1] {
+	if (major == versionPeerFeaturesNum[0]) && (minor < versionPeerFeaturesNum[1]) {
 		return 0
 	}
 
