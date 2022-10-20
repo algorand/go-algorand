@@ -950,6 +950,7 @@ func (wp *wsPeer) pfProposalCompressionSupported() bool {
 
 type peerFeatureFlag int
 
+// bit flags, 1 2 4 8 etc
 const pfCompressedProposal peerFeatureFlag = 1
 
 // versionPeerFeatures defines protocol version when peer features were introduced

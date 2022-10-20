@@ -22,6 +22,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -357,9 +359,42 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 
 const peerTxn2Key = "tx3"
 
+func parseVersion(version string) ([]int, error) {
+	parts := strings.Split(version, ".")
+	vi := make([]int, len(parts))
+	for i, ps := range parts {
+		xi, err := strconv.ParseInt(ps, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		vi[i] = int(xi)
+	}
+	return vi, nil
+}
+
+func versionGreaterEqual(a, b []int) bool {
+	for i, av := range a {
+		if i >= len(b) {
+			return true
+		}
+		if b[i] < av {
+			return true
+		}
+		if b[i] > av {
+			return false
+		}
+	}
+	if len(a) == len(b) {
+		return true
+	}
+	return false
+}
+
 type tx3Data struct {
 	enabled bool
 }
+
+var txRequestVersion = []int{3, 0}
 
 // tx3Check determines if a peer is version 3 and does the tx-request protocol.
 // The result is cached in peer data.
@@ -373,9 +408,8 @@ func tx3Check(net network.GossipNode, npeer network.Peer) (out *tx3Data) {
 	}
 	peer, ok := npeer.(network.UnicastPeer)
 	if ok {
-		version := peer.Version()
-		if version == "3" {
-			// TODO: this logic needs to change before network.ProtocolVersion advances beyond "3"
+		pv, err := parseVersion(peer.Version())
+		if err == nil && versionGreaterEqual(pv, txRequestVersion) {
 			out = &tx3Data{enabled: true}
 			net.SetPeerData(npeer, peerTxn2Key, out)
 			return out
