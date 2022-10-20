@@ -1033,7 +1033,7 @@
       "Name": "bury",
       "Args": ".",
       "Size": 2,
-      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
+      "Doc": "replace the Nth value from the top of the stack with A. bury 0 fails.",
       "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
@@ -1043,7 +1043,7 @@
       "Opcode": 70,
       "Name": "popn",
       "Size": 2,
-      "Doc": "Remove N values from the top of the stack",
+      "Doc": "remove N values from the top of the stack",
       "ImmediateNote": "{uint8 stack depth}",
       "Groups": [
         "Flow Control"
@@ -1644,7 +1644,7 @@
       "Name": "frame_bury",
       "Args": ".",
       "Size": 2,
-      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
+      "Doc": "replace the Nth (signed) value from the frame pointer in the stack with A",
       "ImmediateNote": "{int8 frame slot}",
       "Groups": [
         "Flow Control"
