@@ -69,7 +69,7 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 		if err2 != nil {
 			return err2
 		}
-		sigs, err2 = getPendingSigsForEound(tx, rnd)
+		sigs, err2 = getPendingSigsForRound(tx, rnd)
 		return err2
 	})
 
@@ -86,11 +86,10 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 
 func (spw *Worker) fillBuilder(sigs []pendingSig, buildr builder) {
 	for _, sig := range sigs {
-		spw.insertSigToBuilder(buildr, sig)
+		spw.insertSigToBuilder(&buildr, &sig)
 	}
 }
 
-// createBuilder not threadsafe, should be called in a lock environment
 func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
@@ -151,7 +150,7 @@ func (spw *Worker) initBuilders() {
 	// need to fetch all rounds
 	rnds, err := spw.getAllBuilderRounds()
 	if err != nil {
-		spw.log.Errorf("initBuilders: could init builders: %v", err)
+		spw.log.Errorf("initBuilders: failed to load builder rounds: %v", err)
 		return
 	}
 
@@ -162,32 +161,25 @@ func (spw *Worker) initBuilders() {
 		}
 
 		buildr, err := spw.loadBuilderFromDB(rnd)
-		if err == nil {
-			spw.builders[rnd] = buildr
-			continue
-		}
-
-		buildr, err = spw.createBuilder(rnd)
 		if err != nil {
-			spw.log.Warnf("addSigsToBuilder: createBuilder(%d): %v", rnd, err)
+			spw.log.Warnf("initBuilders: failed to load builder for round %d", rnd)
 			continue
 		}
 		spw.builders[rnd] = buildr
-
-		var sigs map[basics.Round][]pendingSig
-		if err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			sigs, err = getPendingSigs(tx)
-			return err
-		}); err != nil {
-			spw.log.Errorf("initBuilders: could not fetch pending sigs from DB: %v", err)
-			continue
-		}
-
-		spw.fillBuilder(sigs[rnd], buildr)
 	}
 }
 
-func (spw *Worker) insertSigToBuilder(builderForRound builder, sig pendingSig) {
+func (spw *Worker) getAllBuilderRounds() ([]basics.Round, error) {
+	var rnds []basics.Round
+	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		var err error
+		rnds, err = getBuilderRounds(tx)
+		return err
+	})
+	return rnds, err
+}
+
+func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig) {
 	rnd := builderForRound.Round
 	pos, ok := builderForRound.AddrToPos[sig.signer]
 	if !ok {

@@ -18,7 +18,6 @@ package stateproof
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -120,16 +119,6 @@ func (spw *Worker) Shutdown() {
 	spw.shutdown()
 	spw.wg.Wait()
 	spw.db.Close()
-}
-
-func (spw *Worker) getAllBuilderRounds() ([]basics.Round, error) {
-	var rnds []basics.Round
-	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		tmp, err := getBuilderRounds(tx)
-		rnds = tmp
-		return err
-	})
-	return rnds, err
 }
 
 // SortAddress implements sorting by Address keys for

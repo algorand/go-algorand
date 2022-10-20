@@ -124,7 +124,7 @@ func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 	return rowsToPendingSigs(rows)
 }
 
-func getPendingSigsForEound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) {
+func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) {
 	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE sprnd=?", rnd)
 	if err != nil {
 		return nil, err
@@ -220,6 +220,7 @@ func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	_, err := tx.Exec(deleteBuilderForRound, rnd)
 	return err
 }
+
 
 func getBuilderRounds(tx *sql.Tx) ([]basics.Round, error) {
 	var rnds []basics.Round
