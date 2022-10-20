@@ -104,8 +104,8 @@ type StateDelta struct {
 	Totals AccountTotals
 }
 
-// NewBalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
-type NewBalanceRecord struct {
+// BalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
+type BalanceRecord struct {
 	Addr basics.Address
 	AccountData
 }
@@ -157,9 +157,9 @@ type AssetResourceRecord struct {
 // The map would point the address/address+creatable id onto the index of the
 // element within the slice.
 type AccountDeltas struct {
-	// Actual data. If an account is deleted, `Accts` contains the NewBalanceRecord
+	// Actual data. If an account is deleted, `Accts` contains the BalanceRecord
 	// with an empty `AccountData` and a populated `Addr`.
-	Accts []NewBalanceRecord
+	Accts []BalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
 
@@ -192,7 +192,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 // MakeAccountDeltas creates account delta
 func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
-		Accts:      make([]NewBalanceRecord, 0, hint*2),
+		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
 
 		appResourcesCache:   make(map[AccountApp]int),
@@ -339,12 +339,12 @@ func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, AccountData) {
 // Upsert adds ledgercore.AccountData into deltas
 func (ad *AccountDeltas) Upsert(addr basics.Address, data AccountData) {
 	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
-		ad.Accts[idx] = NewBalanceRecord{Addr: addr, AccountData: data}
+		ad.Accts[idx] = BalanceRecord{Addr: addr, AccountData: data}
 		return
 	}
 
 	last := len(ad.Accts)
-	ad.Accts = append(ad.Accts, NewBalanceRecord{Addr: addr, AccountData: data})
+	ad.Accts = append(ad.Accts, BalanceRecord{Addr: addr, AccountData: data})
 
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)
@@ -394,7 +394,7 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback uint64) {
 	// Accts takes up 232 bytes per entry, and is saved for 320 rounds
 	if uint64(cap(sd.Accts.Accts)-len(sd.Accts.Accts))*accountArrayEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
-		accts := make([]NewBalanceRecord, len(sd.Accts.Accts))
+		accts := make([]BalanceRecord, len(sd.Accts.Accts))
 		copy(accts, sd.Accts.Accts)
 		sd.Accts.Accts = accts
 	}
