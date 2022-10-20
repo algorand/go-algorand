@@ -338,7 +338,8 @@ type WebsocketNetwork struct {
 
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
-	peersChangeCounter int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersByID          map[string]*wsPeer // peersByID maps a verified unique identifier to a peer
+	peersChangeCounter int32              // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
@@ -773,6 +774,8 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
+	wn.log.Infoln("AXELAXEL: START NETWORK 1")
+	wn.log.Infoln("AXELAXEL: START NETWORK 2")
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
@@ -780,6 +783,7 @@ func (wn *WebsocketNetwork) Start() {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
+	wn.log.Infoln("AXELAXEL: START NETWORK 3")
 	if wn.config.NetAddress != "" {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
@@ -1088,6 +1092,8 @@ func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (con
 
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	wn.log.Infoln("AXELAXEL: SERVE!")
+	wn.log.Infoln("AXELAXEL RECEIVED HEADERS:", request.Header)
 	trackedRequest := wn.requestsTracker.GetTrackedRequest(request)
 
 	if wn.checkIncomingConnectionLimits(response, request, trackedRequest.remoteHost, trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName) != http.StatusOK {
@@ -1125,12 +1131,22 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		challenge = wn.prioScheme.NewPrioChallenge()
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
+
+	wn.log.Infoln("AXELAXEL: DEDUP TIME")
+	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	idChal := IdentityChallengeFromB64(idChalB64)
+	wn.log.Infoln("AXELAXEL: ChAL OBJ:", idChal)
+
+	idChalResp := NewIdentityChallengeResponse()
+	wn.log.Infoln("AXELAXEL: RESP:", idChalResp)
+
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
 		wn.log.Info("ws upgrade fail ", err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
 		return
 	}
+	wn.log.Infoln("AXELAXEL: UPGRADED")
 
 	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
 	if wn.requestsLogger != nil {
@@ -1146,10 +1162,12 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
+		identity:          "axel",
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
+	wn.peersByID["axel"] = peer
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -1160,10 +1178,13 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			InstanceName:  trackedRequest.otherInstanceName,
 		})
 
+	wn.log.Infoln("AXELAXEL: MSG OF INTEREST BACK ATCHA")
 	wn.maybeSendMessagesOfInterest(peer, nil)
+	wn.log.Infoln("AXELAXEL: MSG OF INTEREST DONE")
 
 	peers.Set(float64(wn.NumPeers()))
 	incomingPeers.Set(float64(wn.numIncomingPeers()))
+	wn.log.Infoln("AXELAXEL: SERVE HTTP DONE")
 }
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
@@ -2002,6 +2023,7 @@ func filterASCII(unfilteredString string) (filteredString string) {
 // tryConnect opens websocket connection and checks initial connection parameters.
 // addr should be 'host:port' or a URL, gossipAddr is the websocket endpoint URL
 func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
+	wn.log.Infoln("AXELAXEL: TRY CONNECT")
 	defer wn.tryConnectReleaseAddr(addr, gossipAddr)
 	defer func() {
 		if xpanic := recover(); xpanic != nil {
@@ -2014,6 +2036,15 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	for _, supportedProtocolVersion := range SupportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
+
+	wn.log.Infoln("AXELAXEL: ATTACH HEADER")
+	idChal := NewIdentityChallenge()
+	wn.log.Infoln("AXELAXEL: CHALLENGE:", idChal)
+	idChalB64 := idChal.EncodeB64()
+	wn.log.Infoln("AXELAXEL: B64!", idChalB64)
+	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChalB64)
+	wn.log.Infoln("AXELAXEL: ATTACHED!")
+	wn.log.Infoln("AXELAXEL: HEADER", requestHeader)
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
@@ -2028,7 +2059,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
+	wn.log.Infoln("AXELAXEL: TRIED")
+	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
+	wn.log.Infoln("AXELAXEL: GOT A DEDUP CHALLENGE OBJECT: ", idChalResp)
 	if err != nil {
+		wn.log.Infoln("AXELAXEL: TRYING ERROR")
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which alredy finsihed reading all the data from the network
 			// and placed it all in a ioutil.NopCloser reader.
@@ -2062,6 +2098,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 		return
 	}
+	wn.log.Infoln("AXELAXEL: GOT RESPONSE")
 
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
 	// we need to examine the headers here to extract which protocol version we should be using.
@@ -2070,6 +2107,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		// The error was already logged, so no need to log again.
 		return
 	}
+	wn.log.Infoln("AXELAXEL: RESP HEADER OK")
 
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
@@ -2102,12 +2140,15 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Endpoint:      peer.GetAddress(),
 		})
 
+	wn.log.Infoln("AXELAXEL: GONNNA SEND MSG OF INTEREST")
 	wn.maybeSendMessagesOfInterest(peer, nil)
+	wn.log.Infoln("AXELAXEL: SENT MSG OF INTEREST")
 
 	peers.Set(float64(wn.NumPeers()))
 	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
 
 	if wn.prioScheme != nil {
+		// priority challenge
 		challenge := response.Header.Get(PriorityChallengeHeader)
 		if challenge != "" {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
@@ -2120,6 +2161,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			}
 		}
 	}
+	wn.log.Infoln("AXELAXEL: DONE TRYING")
 }
 
 // GetPeerData returns the peer data associated with a particular key.

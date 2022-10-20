@@ -201,6 +201,9 @@ type wsPeer struct {
 	// is present in wn.peers.
 	peerIndex int
 
+	identity         string
+	identityVerified bool
+
 	// Challenge sent to the peer on an incoming connection
 	prioChallenge string
 
@@ -292,7 +295,8 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
