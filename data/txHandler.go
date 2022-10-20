@@ -384,10 +384,7 @@ func versionGreaterEqual(a, b []int) bool {
 			return false
 		}
 	}
-	if len(a) == len(b) {
-		return true
-	}
-	return false
+	return len(a) == len(b)
 }
 
 type tx3Data struct {
@@ -458,6 +455,9 @@ func TxnBroadcast(ctx context.Context, net network.GossipNode, verifiedTxGroup [
 			}
 			err = peer.Unicast(ctx, blob, protocol.TxnTag)
 			logging.Base().Info("sent TX")
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
