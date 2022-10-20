@@ -901,6 +901,47 @@
         ],
         "type": "object"
       },
+      "AccountBalanceRecord": {
+        "description": "",
+        "properties": {
+          "account-data": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "address": {
+            "description": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account-data",
+          "address"
+        ],
+        "type": "object"
+      },
+      "AccountDeltas": {
+        "description": "",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountBalanceRecord"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/AppResourceRecord"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetResourceRecord"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -957,6 +998,41 @@
         "required": [
           "address",
           "delta"
+        ],
+        "type": "object"
+      },
+      "AppResourceRecord": {
+        "description": "",
+        "properties": {
+          "address": {
+            "description": "",
+            "type": "string"
+          },
+          "app-index": {
+            "description": "",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "app-local-state": {
+            "$ref": "#/components/schemas/ApplicationLocalState"
+          },
+          "app-local-state-deleted": {
+            "description": "",
+            "type": "boolean"
+          },
+          "app-params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          },
+          "app-params-deleted": {
+            "description": "",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "app-index",
+          "app-local-state-deleted",
+          "app-params-deleted"
         ],
         "type": "object"
       },
@@ -1179,6 +1255,41 @@
           "creator",
           "decimals",
           "total"
+        ],
+        "type": "object"
+      },
+      "AssetResourceRecord": {
+        "description": "",
+        "properties": {
+          "address": {
+            "description": "",
+            "type": "string"
+          },
+          "asset-holding": {
+            "$ref": "#/components/schemas/AssetHolding"
+          },
+          "asset-holding-deleted": {
+            "description": "",
+            "type": "boolean"
+          },
+          "asset-index": {
+            "description": "",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "asset-params": {
+            "$ref": "#/components/schemas/AssetParams"
+          },
+          "asset-params-deleted": {
+            "description": "",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "asset-holding-deleted",
+          "asset-index",
+          "asset-params-deleted"
         ],
         "type": "object"
       },

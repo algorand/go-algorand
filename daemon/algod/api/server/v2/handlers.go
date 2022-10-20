@@ -916,6 +916,167 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// GetAccountDeltas returns the AccountDeltas for a given round.
+// (GET /v2/accountdeltas/{round})
+func (v2 *Handlers) GetAccountDeltas(ctx echo.Context, round uint64) error {
+	ads, err := v2.Node.LedgerForAPI().GetAccountDeltasForRound(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingAccountDeltas, v2.Log)
+	}
+
+	var accts []generated.AccountBalanceRecord
+	var apps []generated.AppResourceRecord
+	var assets []generated.AssetResourceRecord
+
+	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
+	}
+	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
+	}
+
+	for _, record := range ads.GetAllAccounts() {
+		var apiParticipation *generated.AccountParticipation
+		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+			apiParticipation = &generated.AccountParticipation{
+				VoteParticipationKey:      record.VoteID[:],
+				SelectionParticipationKey: record.SelectionID[:],
+				VoteFirstValid:            uint64(record.VoteFirstValid),
+				VoteLastValid:             uint64(record.VoteLastValid),
+				VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			}
+			if !record.StateProofID.IsEmpty() {
+				tmp := record.StateProofID[:]
+				apiParticipation.StateProofKey = &tmp
+			}
+		}
+		var ot basics.OverflowTracker
+		pendingRewards := basics.PendingRewards(&ot, consensusParams, record.MicroAlgos, record.RewardsBase, hdr.RewardsLevel)
+
+		amountWithoutPendingRewards, overflowed := basics.OSubA(record.MicroAlgos, pendingRewards)
+		if overflowed {
+			return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
+		}
+		accts = append(accts, generated.AccountBalanceRecord{
+			AccountData: generated.Account{
+				SigType:                     nil,
+				Round:                       round,
+				Address:                     record.Addr.String(),
+				Amount:                      record.MicroAlgos.Raw,
+				PendingRewards:              pendingRewards.Raw,
+				AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
+				Rewards:                     record.RewardedMicroAlgos.Raw,
+				Status:                      record.Status.String(),
+				RewardBase:                  &record.RewardsBase,
+				Participation:               apiParticipation,
+				TotalCreatedAssets:          record.TotalAssetParams,
+				TotalCreatedApps:            record.TotalAppParams,
+				TotalAssetsOptedIn:          record.TotalAssets,
+				AuthAddr:                    addrOrNil(record.AuthAddr),
+				TotalAppsOptedIn:            record.TotalAppLocalStates,
+				AppsTotalSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: record.TotalAppSchema.NumByteSlice,
+					NumUint:      record.TotalAppSchema.NumUint,
+				},
+				AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+				MinBalance:          record.MinBalance(&consensusParams).Raw,
+			},
+			Address: record.Addr.String(),
+		})
+	}
+
+	for _, app := range ads.GetAllAppResources() {
+		var appLocalState *generated.ApplicationLocalState = nil
+		if app.State.LocalState != nil {
+			localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
+			appLocalState = &generated.ApplicationLocalState{
+				Id:       uint64(app.Aidx),
+				KeyValue: localState,
+				Schema: generated.ApplicationStateSchema{
+					NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
+					NumUint:      app.State.LocalState.Schema.NumUint,
+				},
+			}
+		}
+		var appParams *generated.ApplicationParams = nil
+		if app.Params.Params != nil {
+			globalState := convertTKVToGenerated(&app.Params.Params.GlobalState)
+			appParams = &generated.ApplicationParams{
+				ApprovalProgram:   app.Params.Params.ApprovalProgram,
+				ClearStateProgram: app.Params.Params.ClearStateProgram,
+				Creator:           app.Addr.String(),
+				ExtraProgramPages: numOrNil(uint64(app.Params.Params.ExtraProgramPages)),
+				GlobalState:       globalState,
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: app.Params.Params.GlobalStateSchema.NumByteSlice,
+					NumUint:      app.Params.Params.GlobalStateSchema.NumUint,
+				},
+				LocalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: app.Params.Params.LocalStateSchema.NumByteSlice,
+					NumUint:      app.Params.Params.LocalStateSchema.NumUint,
+				},
+			}
+		}
+		apps = append(apps, generated.AppResourceRecord{
+			Address:              app.Addr.String(),
+			AppIndex:             uint64(app.Aidx),
+			AppParamsDeleted:     app.Params.Deleted,
+			AppParams:            appParams,
+			AppLocalStateDeleted: app.State.Deleted,
+			AppLocalState:        appLocalState,
+		})
+	}
+
+	for _, asset := range ads.GetAllAssetResources() {
+		var assetHolding *generated.AssetHolding = nil
+		if asset.Holding.Holding != nil {
+			assetHolding = &generated.AssetHolding{
+				Amount:   asset.Holding.Holding.Amount,
+				AssetId:  uint64(asset.Aidx),
+				IsFrozen: asset.Holding.Holding.Frozen,
+			}
+		}
+		var assetParams *generated.AssetParams = nil
+		if asset.Params.Params != nil {
+			assetParams = &generated.AssetParams{
+				Clawback:      strOrNil(asset.Params.Params.Clawback.String()),
+				Creator:       asset.Addr.String(),
+				Decimals:      uint64(asset.Params.Params.Decimals),
+				DefaultFrozen: &asset.Params.Params.DefaultFrozen,
+				Freeze:        strOrNil(asset.Params.Params.Freeze.String()),
+				Manager:       strOrNil(asset.Params.Params.Manager.String()),
+				MetadataHash:  byteOrNil(asset.Params.Params.MetadataHash[:]),
+				Name:          strOrNil(asset.Params.Params.AssetName),
+				NameB64:       byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.AssetName)))),
+				Reserve:       strOrNil(asset.Params.Params.Reserve.String()),
+				Total:         asset.Params.Params.Total,
+				UnitName:      strOrNil(asset.Params.Params.UnitName),
+				UnitNameB64:   byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.UnitName)))),
+				Url:           strOrNil(asset.Params.Params.URL),
+				UrlB64:        byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.URL)))),
+			}
+		}
+		assets = append(assets, generated.AssetResourceRecord{
+			Address:             asset.Addr.String(),
+			AssetIndex:          uint64(asset.Aidx),
+			AssetHoldingDeleted: asset.Holding.Deleted,
+			AssetHolding:        assetHolding,
+			AssetParams:         assetParams,
+			AssetParamsDeleted:  asset.Params.Deleted,
+		})
+	}
+
+	response := generated.AccountDeltas{
+		Accounts: &accts,
+		Apps:     &apps,
+		Assets:   &assets,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // TransactionParams returns the suggested parameters for constructing a new transaction.
 // (GET /v2/transactions/params)
 func (v2 *Handlers) TransactionParams(ctx echo.Context) error {

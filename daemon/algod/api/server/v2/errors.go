@@ -23,6 +23,7 @@ var (
 	errAccountAssetDoesNotExist                = "account asset info not found"
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
+	errFailedRetrievingAccountDeltas           = "failed retrieving account deltas"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedParsingFormatOption               = "failed to parse the format option"

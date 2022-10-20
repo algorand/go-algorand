@@ -1919,6 +1919,122 @@
         }
       }
     },
+    "AccountDeltas": {
+      "description": "",
+      "type": "object",
+      "required": [
+
+      ],
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+           "$ref": "#/definitions/AccountBalanceRecord"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AppResourceRecord"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetResourceRecord"
+          }
+        }
+      }
+    },
+    "AccountBalanceRecord": {
+      "description": "",
+      "type": "object",
+      "required": [
+        "address",
+        "account-data"
+      ],
+      "properties": {
+        "address": {
+          "description": "",
+          "type": "string"
+        },
+        "account-data": {
+          "$ref": "#/definitions/Account"
+        }
+      }
+    },
+    "AppResourceRecord": {
+      "description": "",
+      "type": "object",
+      "required": [
+        "app-index",
+        "address",
+        "app-params-deleted",
+        "app-local-state-deleted"
+      ],
+      "properties": {
+        "app-index": {
+          "description": "",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "address": {
+          "description": "",
+          "type": "string"
+        },
+        "app-params-deleted": {
+          "description": "",
+          "type": "boolean"
+        },
+        "app-local-state-deleted": {
+          "description": "",
+          "type": "boolean"
+        },
+        "app-params": {
+          "description": "",
+          "$ref": "#/definitions/ApplicationParams"
+        },
+        "app-local-state": {
+          "description": "",
+          "$ref": "#/definitions/ApplicationLocalState"
+        }
+      }
+    },
+    "AssetResourceRecord": {
+      "description": "",
+      "required": [
+        "asset-index",
+        "address",
+        "asset-params-deleted",
+        "asset-holding-deleted"
+      ],
+      "properties": {
+        "asset-index": {
+          "description": "",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "address": {
+          "description": "",
+          "type": "string"
+        },
+        "asset-params-deleted": {
+          "description": "",
+          "type": "boolean"
+        },
+        "asset-params": {
+          "description": "",
+          "$ref": "#/definitions/AssetParams"
+        },
+        "asset-holding-deleted": {
+          "description": "",
+          "type": "boolean"
+        },
+        "asset-holding": {
+          "$ref": "#/definitions/AssetHolding"
+        }
+      }
+    },
     "AccountParticipation": {
       "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
       "type": "object",

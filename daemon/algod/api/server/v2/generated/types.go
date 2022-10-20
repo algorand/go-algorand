@@ -94,6 +94,24 @@ type Account struct {
 	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
+// AccountBalanceRecord defines model for AccountBalanceRecord.
+type AccountBalanceRecord struct {
+
+	// Account information at a given round.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AccountData
+	AccountData Account `json:"account-data"`
+	Address     string  `json:"address"`
+}
+
+// AccountDeltas defines model for AccountDeltas.
+type AccountDeltas struct {
+	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
+	Apps     *[]AppResourceRecord    `json:"apps,omitempty"`
+	Assets   *[]AssetResourceRecord  `json:"assets,omitempty"`
+}
+
 // AccountParticipation defines model for AccountParticipation.
 type AccountParticipation struct {
 
@@ -122,6 +140,20 @@ type AccountStateDelta struct {
 
 	// Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AppResourceRecord defines model for AppResourceRecord.
+type AppResourceRecord struct {
+	Address  string `json:"address"`
+	AppIndex uint64 `json:"app-index"`
+
+	// Stores local state associated with an application.
+	AppLocalState        *ApplicationLocalState `json:"app-local-state,omitempty"`
+	AppLocalStateDeleted bool                   `json:"app-local-state-deleted"`
+
+	// Stores the global information associated with an application.
+	AppParams        *ApplicationParams `json:"app-params,omitempty"`
+	AppParamsDeleted bool               `json:"app-params-deleted"`
 }
 
 // Application defines model for Application.
@@ -257,6 +289,28 @@ type AssetParams struct {
 
 	// Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// AssetResourceRecord defines model for AssetResourceRecord.
+type AssetResourceRecord struct {
+	Address string `json:"address"`
+
+	// Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding        *AssetHolding `json:"asset-holding,omitempty"`
+	AssetHoldingDeleted bool          `json:"asset-holding-deleted"`
+	AssetIndex          uint64        `json:"asset-index"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	AssetParams        *AssetParams `json:"asset-params,omitempty"`
+	AssetParamsDeleted bool         `json:"asset-params-deleted"`
 }
 
 // BuildVersion defines model for BuildVersion.
