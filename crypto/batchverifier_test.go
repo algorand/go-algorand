@@ -121,9 +121,11 @@ func BenchmarkBatchVerifier(b *testing.B) {
 	require.NoError(b, bv.Verify())
 }
 
+// BenchmarkBatchVerifierBig with b.N over 1000 will report the expected performance
+// gain as the batchsize increases. All sigs are valid.
 func BenchmarkBatchVerifierBig(b *testing.B) {
 	c := makeCurve25519Secret()
-	for batchSize := 1; batchSize <= 48; batchSize++ {
+	for batchSize := 1; batchSize <= 96; batchSize++ {
 		bv := MakeBatchVerifierWithHint(batchSize)
 		for i := 0; i < batchSize; i++ {
 			str := randString()
@@ -137,6 +139,44 @@ func BenchmarkBatchVerifierBig(b *testing.B) {
 			}
 			for x := 0; x < count; x++ {
 				require.NoError(b, bv.Verify())
+			}
+		})
+	}
+}
+
+// BenchmarkBatchVerifierBigWithInvalid builds over BenchmarkBatchVerifierBig by introducing
+// invalid sigs to even numbered batch sizes. This shows the impact of invalid sigs on the
+// performance. Basically, all the gains from batching disappear. 
+func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
+	c := makeCurve25519Secret()
+	badSig := Signature{}
+	for batchSize := 1; batchSize <= 96; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			if batchSize%2 == 0 && (i == 0 || rand.Float32() < 0.1) {
+				bv.EnqueueSignature(c.SignatureVerifier, str, badSig)
+			} else {
+				bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+			}
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count * batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				failed, err := bv.VerifyWithFeedback()
+				if err != nil {
+					for i, f := range failed {
+						if bv.signatures[i] == badSig {
+							require.True(b, f)
+						} else {
+							require.False(b, f)
+						}
+					}
+				}
 			}
 		})
 	}
