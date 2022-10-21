@@ -233,7 +233,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if s.syncRoundSet && r >= basics.Round(s.syncRound+s.cfg.MaxAcctLookback) {
+	if s.syncRoundSet && r >= basics.Round(s.getSyncRound()+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0
