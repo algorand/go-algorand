@@ -176,7 +176,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 			"creator account is unknown.")
 	}
 
-	response, err := client.AccountInformationV2(creator, false)
+	response, err := client.AccountInformationV2(creator, true)
 	if err != nil {
 		reportErrorf(errorRequestFail, err)
 	}
@@ -771,22 +771,18 @@ var infoAssetCmd = &cobra.Command{
 			*asset.Params.Reserve = asset.Params.Creator
 		}
 
-		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, false)
+		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, true)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		var res *generated.AssetHolding
+		var res generated.AssetHolding
 		if reserve.Assets != nil {
-			for _, asset := range *reserve.Assets {
-				if assetID == asset.AssetId {
-					*res = asset
+			for _, reserveAsset := range *reserve.Assets {
+				if assetID == reserveAsset.AssetId {
+					res = reserveAsset
 					break
 				}
-			}
-			// Asset ID was not found in account
-			if res == nil {
-				reportErrorf(errorRequestFail, "cannot find asset ID in account")
 			}
 		} else {
 			reportErrorf(errorRequestFail, "cannot find asset ID in account")
