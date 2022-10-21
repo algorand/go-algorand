@@ -962,7 +962,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
-	info, err := client.AccountInformationV2(account0, false)
+	info, err := client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 0)
@@ -971,7 +971,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
 
 	// Check that asset is visible
-	info, err = client.AccountInformationV2(account0, false)
+	info, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)

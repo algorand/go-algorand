@@ -131,7 +131,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		if err == nil {
 			pingTxInfo, err = pingClient.PendingTransactionInformationV2(pingTx.ID().String())
 		}
-		waitForTransaction = err != nil || pongTxInfo.ConfirmedRound != nil || *pongTxInfo.ConfirmedRound == 0 || pingTxInfo.ConfirmedRound != nil || *pingTxInfo.ConfirmedRound == 0
+		waitForTransaction = err != nil || (pongTxInfo.ConfirmedRound != nil && *pongTxInfo.ConfirmedRound == 0) || (pingTxInfo.ConfirmedRound != nil && *pingTxInfo.ConfirmedRound == 0)
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound

@@ -47,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-codec/codec"
 )
 
 var fixture fixtures.RestClientFixture
@@ -854,9 +855,12 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 	a.True(len(statusResponse.TopTransactions) == 1)
 
 	pendingTxn := transactions.SignedTxn{}
-	txnBody, err := json.Marshal(statusResponse.TopTransactions[0])
+	var output []byte
+	enc := codec.NewEncoderBytes(&output, protocol.CodecHandle)
+	err = enc.Encode(statusResponse.TopTransactions[0])
 	a.NoError(err)
-	err = json.Unmarshal(txnBody, &pendingTxn)
+	dec := codec.NewDecoderBytes(output, protocol.CodecHandle)
+	err = dec.Decode(pendingTxn)
 	a.NoError(err)
 	a.True(pendingTxn.Txn.ID().String() == tx.ID().String())
 }
@@ -891,13 +895,17 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		txIDsSeen[tx2.ID().String()] = true
 	}
 	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	a.NoError(err)
 	a.True(int(statusResponse.TotalTransactions) == NumTxns)
 	a.True(len(statusResponse.TopTransactions) == MaxTxns)
 	for _, tx := range statusResponse.TopTransactions {
 		pendingTxn := transactions.SignedTxn{}
-		txnBody, err := json.Marshal(tx)
+		var output []byte
+		enc := codec.NewEncoderBytes(&output, protocol.CodecHandle)
+		err = enc.Encode(tx)
 		a.NoError(err)
-		err = json.Unmarshal(txnBody, &pendingTxn)
+		dec := codec.NewDecoderBytes(output, protocol.CodecHandle)
+		err = dec.Decode(pendingTxn)
 		a.NoError(err)
 
 		a.True(txIDsSeen[pendingTxn.Txn.ID().String()])
