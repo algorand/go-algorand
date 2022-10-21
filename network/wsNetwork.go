@@ -1915,8 +1915,10 @@ var SupportedProtocolVersions = []string{"3.0", "2.2", "2.1"}
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
  *  2.2 Peer features
  *  3   Txn moving by Advertise/Request
+ *
+ * After 2.2 it must be exactly {int}.{int}
  */
-const ProtocolVersion = "3"
+const ProtocolVersion = "3.0"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
