@@ -44,6 +44,9 @@ const blockQueryPeerLimit = 10
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
+var ErrSyncModeNotEnabled = errors.New("attempted to set sync round for catchup service when EnableSyncMode was disabled")
+var ErrSyncRoundInvalid = errors.New("requested sync round cannot be higher than the latest round")
+
 // PendingUnmatchedCertificate is a single certificate that is being waited upon to have its corresponding block fetched.
 type PendingUnmatchedCertificate struct {
 	Cert         agreement.Certificate
@@ -154,10 +157,10 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 // SetSyncRound attempts to set the minimum sync round to keep in the cache
 func (s *Service) SetSyncRound(rnd uint64) error {
 	if !s.cfg.EnableSyncMode {
-		return fmt.Errorf("attempted to set sync round for catchup service when EnableSyncMode was disabled")
+		return ErrSyncModeNotEnabled
 	}
 	if basics.Round(rnd) < s.ledger.LastRound() {
-		return fmt.Errorf("requested sync round %d cannot be higher than the latest round %d", rnd, s.ledger.LastRound())
+		return ErrSyncRoundInvalid
 	}
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
@@ -169,7 +172,7 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 // UnsetSyncRound removes any previously set sync round TODO do we need this?
 func (s *Service) UnsetSyncRound() error {
 	if !s.cfg.EnableSyncMode {
-		return fmt.Errorf("attempted to modify sync round status for catchup service when EnableSyncMode was disabled")
+		return ErrSyncModeNotEnabled
 	}
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
@@ -177,10 +180,13 @@ func (s *Service) UnsetSyncRound() error {
 	return nil
 }
 
-func (s *Service) getSyncRound() (bool, uint64) {
+func (s *Service) GetSyncRound() (bool, uint64, error) {
+	if !s.cfg.EnableSyncMode {
+		return false, 0, ErrSyncModeNotEnabled
+	}
 	s.syncRoundMu.RLock()
 	defer s.syncRoundMu.RUnlock()
-	return s.syncRoundSet, s.syncRound
+	return s.syncRoundSet, s.syncRound, nil
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -239,7 +245,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if set, syncRound := s.getSyncRound(); set && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
+	if set, syncRound, err := s.GetSyncRound(); err == nil && set && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0

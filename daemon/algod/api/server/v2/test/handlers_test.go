@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/catchup"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -146,6 +148,100 @@ func TestGetRoundDeltas(t *testing.T) {
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
 	require.NoError(t, err)
 	require.Equal(t, poolDeltaResponseGolden, actualResponse)
+}
+
+func TestSyncRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	dummyShutdownChan := make(chan struct{})
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	defer releasefunc()
+
+	// TestSetSyncRound 200
+	mockCall := mockNode.On("SetSyncRound", mock.Anything).Return(nil)
+	err := handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 400 SyncModeNotEnabled
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncModeNotEnabled)
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 400 SyncRoundInvalid
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncRoundInvalid)
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 500 InternalError
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(fmt.Errorf("unknown error"))
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 500, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetSyncRound 400 SyncModeNotEnabled
+	mockCall = mockNode.On("GetSyncRound").Return(false, 0, catchup.ErrSyncModeNotEnabled)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestGetSyncRound 200
+	mockCall = mockNode.On("GetSyncRound").Return(true, 2, nil)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestGetSyncRound 500 InternalError
+	mockCall = mockNode.On("GetSyncRound").Return(false, 0, fmt.Errorf("unknown error"))
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 500, rec.Code)
+	c, rec = newReq(t)
+
+	// TestUnsetSyncRound 400 SyncModeNotEnabled
+	mockCall = mockNode.On("UnsetSyncRound").Return(catchup.ErrSyncModeNotEnabled)
+	err = handler.UnsetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestUnsetSyncRound 200
+	mockCall = mockNode.On("UnsetSyncRound").Return(nil)
+	err = handler.UnsetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestGetSyncRound 500 InternalError
+	mockCall = mockNode.On("UnsetSyncRound").Return(fmt.Errorf("unknown error"))
+	err = handler.UnsetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 500, rec.Code)
+
+	mock.AssertExpectationsForObjects(t, mockNode)
 }
 
 func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {

@@ -740,6 +740,13 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetSyncRoundResponse defines model for GetSyncRoundResponse.
+type GetSyncRoundResponse struct {
+
+	// The minimum sync round for the ledger.
+	Round uint64 `json:"round"`
+}
+
 // LightBlockHeaderProofResponse defines model for LightBlockHeaderProofResponse.
 type LightBlockHeaderProofResponse LightBlockHeaderProof
 

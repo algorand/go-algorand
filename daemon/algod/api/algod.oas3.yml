@@ -466,6 +466,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetSyncRoundResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "round": {
+                  "description": "The minimum sync round for the ledger.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": ""
+      },
       "LightBlockHeaderProofResponse": {
         "content": {
           "application/json": {
@@ -3463,6 +3482,172 @@
           }
         },
         "summary": "Get the current supply reported by the ledger."
+      }
+    },
+    "/v2/ledger/sync": {
+      "get": {
+        "description": "Gets the minimum sync round for the ledger.",
+        "operationId": "GetSyncRound",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "round": {
+                      "description": "The minimum sync round for the ledger.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sync round not set."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the minimum sync round the ledger is keeping in cache.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/v2/ledger/sync/{round}": {
+      "post": {
+        "description": "Sets the minimum sync round on the ledger.",
+        "operationId": "SetSyncRound",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Can not set sync round to an earlier round than the current round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a round, tells the ledger to keep that round in its cache.",
+        "tags": [
+          "private"
+        ]
       }
     },
     "/v2/participation": {

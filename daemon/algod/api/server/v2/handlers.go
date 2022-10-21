@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/catchup"
 	"io"
 	"math"
 	"net/http"
@@ -99,6 +100,8 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 	SetSyncRound(rnd uint64) error
+	GetSyncRound() (bool, uint64, error)
+	UnsetSyncRound() error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -933,6 +936,56 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	doDryrunRequest(&dr, &response)
 	response.ProtocolVersion = string(protocolVersion)
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// UnsetSyncRound removes the sync round restriction from the ledger.
+// (DELETE /v2/ledger/sync)
+func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
+	err := v2.Node.UnsetSyncRound()
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncModeNotEnabled:
+			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+		}
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// SetSyncRound sets the sync round on the ledger.
+// (POST /v2/ledger/sync/{round})
+func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
+	err := v2.Node.SetSyncRound(round)
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncModeNotEnabled:
+			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
+		case catchup.ErrSyncRoundInvalid:
+			return badRequest(ctx, err, errFailedSettingSyncRound, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+		}
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// GetSyncRound gets the sync round from the ledger.
+// (GET /v2/ledger/sync)
+func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
+	set, rnd, err := v2.Node.GetSyncRound()
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncModeNotEnabled:
+			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
+		}
+	}
+	if !set {
+		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})
 }
 
 // GetRoundDeltas returns the deltas for a given round.

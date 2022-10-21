@@ -1382,3 +1382,7 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 	return node.catchupService.SetSyncRound(rnd)
 }
+
+func (node *AlgorandFullNode) GetSyncRound() (bool, uint64, error) {
+	return node.catchupService.GetSyncRound()
+}
