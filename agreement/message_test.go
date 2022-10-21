@@ -84,6 +84,9 @@ func BenchmarkVoteDecoding(b *testing.B) {
 	}
 }
 
+// TestMessageBackwardCompatibility ensures MessageHandle field can be
+// properly decoded from message.
+// This test is only needed for agreement state serialization switch from reflection to msgp.
 func TestMessageBackwardCompatibility(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
