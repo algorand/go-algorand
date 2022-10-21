@@ -3485,6 +3485,63 @@
       }
     },
     "/v2/ledger/sync": {
+      "delete": {
+        "description": "Unset the ledger sync round.",
+        "operationId": "UnsetSyncRound",
+        "responses": {
+          "200": {
+            "content": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sync round not set."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Removes minimum sync round restriction from the ledger.",
+        "tags": [
+          "private"
+        ]
+      },
       "get": {
         "description": "Gets the minimum sync round for the ledger.",
         "operationId": "GetSyncRound",
@@ -3527,16 +3584,6 @@
               }
             },
             "description": "Invalid API Token"
-          },
-          "408": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "timed out on request"
           },
           "500": {
             "content": {
@@ -3608,16 +3655,6 @@
               }
             },
             "description": "Invalid API Token"
-          },
-          "408": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "timed out on request"
           },
           "500": {
             "content": {
