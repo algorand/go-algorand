@@ -49,6 +49,8 @@ var (
 	DuplicateNetworkMessageReceivedTotal = MetricName{Name: "algod_network_duplicate_message_received_total", Description: "Total number of duplicate messages that were received from the network"}
 	// DuplicateNetworkMessageReceivedBytesTotal The total number ,in bytes, of the duplicate messages that were received from the network
 	DuplicateNetworkMessageReceivedBytesTotal = MetricName{Name: "algod_network_duplicate_message_received_bytes_total", Description: "The total number ,in bytes, of the duplicate messages that were received from the network"}
+	// DuplicateNetworkFilterReceivedTotal Total number of duplicate filter messages (tag MsgDigestSkipTag) that were received from the network
+	DuplicateNetworkFilterReceivedTotal = MetricName{Name: "algod_network_duplicate_filter_received_total", Description: "Total number of duplicate filter messages that were received from the network"}
 	// OutgoingNetworkMessageFilteredOutTotal Total number of messages that were not sent per peer request
 	OutgoingNetworkMessageFilteredOutTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_total", Description: "Total number of messages that were not sent per peer request"}
 	// OutgoingNetworkMessageFilteredOutBytesTotal Total number of bytes saved by not sending messages that were asked not to be sent by peer

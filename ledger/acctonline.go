@@ -634,7 +634,6 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
-			err = nil
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
@@ -748,7 +747,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 // not participate in round == voteRnd.
 // See the normalization description in AccountData.NormalizedOnlineBalance().
 // The return value of totalOnlineStake represents the total stake that is online for voteRnd: it is an approximation since voteRnd did not yet occur.
-func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) (topOnlineAccounts []*ledgercore.OnlineAccount, totalOnlineStake basics.MicroAlgos, err error) {
+func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*ledgercore.OnlineAccount, totalOnlineStake basics.MicroAlgos, err error) {
 	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {
@@ -764,7 +763,6 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			}
 			// the round number cannot be found in deltas, it is in history
 			inMemory = false
-			err = nil
 		}
 
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
@@ -903,6 +901,13 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			totalOnlineStake = ot.SubA(totalOnlineStake, oa.MicroAlgos)
 			if ot.Overflowed {
 				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
+			}
+			if params.StateProofExcludeTotalWeightWithRewards {
+				rewards := basics.PendingRewards(&ot, *params, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
+				totalOnlineStake = ot.SubA(totalOnlineStake, rewards)
+				if ot.Overflowed {
+					return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound rewards")
+				}
 			}
 		}
 

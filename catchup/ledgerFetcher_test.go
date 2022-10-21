@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -44,8 +43,7 @@ func TestNoPeersAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
-	var peer network.Peer
-	peer = &lf // The peer is an opaque interface.. we can add anything as a Peer.
+	peer := &lf // The peer is an opaque interface.. we can add anything as a Peer.
 	err := lf.downloadLedger(context.Background(), peer, basics.Round(0))
 	require.Equal(t, errNonHTTPPeer, err)
 }

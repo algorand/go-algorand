@@ -1,0 +1,22 @@
+name: "codegen verification"
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  codegen_verification:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          path: go-algorand
+      - name: Uninstall existing go installation
+        run: sudo apt-get -y -q purge golang-go
+      - name: Run codegen_verification.sh
+        run: |
+          export GOPATH="${GITHUB_WORKSPACE}/go"
+          cd go-algorand
+          scripts/travis/codegen_verification.sh

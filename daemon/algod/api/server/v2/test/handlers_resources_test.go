@@ -18,6 +18,7 @@ package test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -98,8 +99,12 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
-func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	panic("not implemented")
+func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := l.Block(rnd)
+	if err != nil {
+		return bookkeeping.BlockHeader{}, err
+	}
+	return blk.BlockHeader, nil
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
 	panic("not implemented")
@@ -111,7 +116,11 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 	panic("not implemented")
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
-	panic("not implemented")
+	if len(l.blocks) == 0 {
+		err = fmt.Errorf("mockledger error: no block")
+		return
+	}
+	return l.blocks[0], nil
 }
 
 func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {

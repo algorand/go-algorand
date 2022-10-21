@@ -896,6 +896,18 @@ func TestBytecTooFar(t *testing.T) {
 	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
 }
 
+func TestManualCBlockEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// TestManualCBlock in assembler_test.go demonstrates that these will use
+	// an inserted constant block.
+	testAccepts(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", 2)
+	testAccepts(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", 2)
+	testAccepts(t, "byte 0x2222; byte 0x2222; concat; len; int 4; ==; return; bytecblock 0x11", 2)
+	testAccepts(t, "b skip; bytecblock 0x11; skip: byte 0x2222; byte 0x2222; concat; len; int 4; ==", 2)
+}
+
 func TestTxnBadField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1065,7 +1077,7 @@ const globalV7TestProgram = globalV6TestProgram + `
 `
 
 const globalV8TestProgram = globalV7TestProgram + `
-// No new globals in v7
+// No new globals in v8
 `
 
 func TestGlobal(t *testing.T) {
@@ -1563,7 +1575,8 @@ assert
 int 1
 `
 
-const testTxnProgramTextV8 = testTxnProgramTextV7
+const testTxnProgramTextV8 = testTxnProgramTextV7 + `
+`
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -3585,6 +3598,51 @@ func BenchmarkUintCmp(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkDupnProto(b *testing.B) {
+	benches := [][]string{
+		{"dupn1", `
+ b main
+f:
+ proto 1 1
+ byte "repeat"
+ dupn 0						// return 1 string
+ retsub
+main:
+ int 777; dupn 0;			// start with 1 int on stack
+`, "callsub f", "len"},
+		{"dupn10", `
+ b main
+f:
+ proto 10 10
+ byte "repeat"
+ dupn 9						// return 10 strings
+ retsub
+main:
+ int 777; dupn 9; 			// start with 10 ints on stack
+`, "callsub f", strings.Repeat("pop;", 9) + "len"},
+		{"dupn100", `
+ b main
+f:
+ proto 100 100
+ byte "repeat"
+ dupn 99						// return 100 strings
+ retsub
+main:
+ int 777; dupn 99; 			// start with 100 ints on stack
+`, "callsub f", strings.Repeat("pop;", 99) + "len"},
+		{"dp1", "int 777", "dupn 1; popn 1", ""},
+		{"dp10", "int 777", "dupn 10; popn 10", ""},
+		{"dp100", "int 777", "dupn 100; popn 100", ""},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
 func BenchmarkByteLogic(b *testing.B) {
 	benches := [][]string{
 		{"b&", "", "byte 0x012345678901feab; byte 0x01ffffffffffffff; b&; pop", "int 1"},
@@ -4192,7 +4250,7 @@ func notrack(program string) string {
 	return pragma + program
 }
 
-type evalTester func(pass bool, err error) bool
+type evalTester func(t *testing.T, pass bool, err error) bool
 
 func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
 	t.Helper()
@@ -4222,7 +4280,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					require.NoError(t, err)
 					ep = defaultEvalParamsWithVersion(&txn, lv)
 					pass, err := EvalSignature(0, ep)
-					ok := tester(pass, err)
+					ok := tester(t, pass, err)
 					if !ok {
 						t.Log(ep.Trace.String())
 						t.Log(err)
@@ -4242,22 +4300,36 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
 func testRejects(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
-func testPanics(t *testing.T, program string, introduced uint64) error {
+func testPanics(t *testing.T, program string, introduced uint64, pattern ...string) error {
 	t.Helper()
-	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+	return testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
+		t.Helper()
 		// TEAL panic! not just reject at exit
-		return !pass && err != nil
+		if pass {
+			return false
+		}
+		if err == nil {
+			t.Log("program rejected rather panicked")
+			return false
+		}
+		for _, p := range pattern {
+			if !strings.Contains(err.Error(), p) {
+				t.Log(err, "does not contain", p)
+				return false
+			}
+		}
+		return true
 	})
 }
 
@@ -4375,6 +4447,29 @@ func TestDig(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
 	testPanics(t, notrack("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3)
+}
+
+func TestBury(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// bury 0 panics
+	source := "int 3; int 2; int 7; bury 0; int 1; return"
+	testProg(t, source, 8, Expect{1, "bury 0 always fails"})
+	testPanics(t, notrack("int 3; int 2; int 7; bury 0; int 1; return"), 8, "bury outside stack")
+
+	// bury 1 pops the ToS and replaces the thing "1 down", which becomes the new ToS
+	testAccepts(t, "int 3; int 2; int 7; bury 1; int 7; ==; assert; int 3; ==", 8)
+
+	// bury 2
+	testAccepts(t, `int 3; int 2; int 7;
+		bury 2;
+		int 2; ==; assert
+		int 7; ==;
+`, 8)
+
+	// bury too deep
+	testPanics(t, notrack("int 3; int 2; int 7;	bury 3; int 1; return"), 8, "bury outside stack")
 }
 
 func TestCover(t *testing.T) {
@@ -5514,4 +5609,85 @@ func TestTypeComplaints(t *testing.T) {
 
 	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
+}
+
+func TestSwitchInt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// take the 0th label
+	testAccepts(t, `
+int 0
+switch zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label
+	testRejects(t, `
+int 1
+switch zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// same, but jumping to end of program
+	testAccepts(t, `
+int 1; dup
+switch zero one
+zero: err
+one:
+`, 8)
+
+	// no match
+	testAccepts(t, `
+int 2
+switch zero one
+int 1; return					// falls through to here
+zero: int 0; return
+one:  int 0; return
+`, 8)
+
+	// jump forward and backward
+	testAccepts(t, `
+int 0
+start:
+int 1
++
+dup
+int 1
+-
+switch start end
+err
+end:
+int 2
+==
+assert
+int 1
+`, 8)
+
+	// 0 labels are allowed, but weird!
+	testAccepts(t, `
+int 0
+switch
+int 1
+`, 8)
+
+	testPanics(t, notrack("switch; int 1"), 8)
+
+	// make the switch the final instruction
+	testAccepts(t, `
+int 1
+int 0
+switch done1 done2; done1: ; done2: ;
+`, 8)
+
+	// make the switch the final instruction, and don't match
+	testAccepts(t, `
+int 1
+int 88
+switch done1 done2; done1: ; done2: ;
+`, 8)
 }
