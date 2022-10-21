@@ -35,21 +35,19 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
 // this function fills the builder with all the available signatures
 func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder, error) {
 	b, err := spw.loadOrCreateBuilder(rnd)
-	if err != nil{
+	if err != nil {
 		return builder{}, err
 	}
 
-	if err := spw.loadSignaturesIntoBuilder(&b); err != nil{
+	if err := spw.loadSignaturesIntoBuilder(&b); err != nil {
 		return builder{}, err
 	}
 	return b, nil
 }
-
 
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	if !spw.persistBuilders {
@@ -95,14 +93,14 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	return buildr, nil
 }
 
-func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error{
+func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	var sigs []pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err2 error
 		sigs, err2 = getPendingSigsForRound(tx, basics.Round(buildr.Round))
 		return err2
 	})
-	if err != nil{
+	if err != nil {
 		return err
 	}
 

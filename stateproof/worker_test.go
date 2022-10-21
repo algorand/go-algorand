@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -171,7 +172,13 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 	return hdr, nil
 }
 
+var errEmptyVoters = errors.New("ledger does not have voters")
+
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
+	if len(s.keysForVoters) == 0 {
+		return nil, errEmptyVoters
+	}
+
 	voters := &ledgercore.VotersForRound{
 		Proto:       config.Consensus[protocol.ConsensusCurrentVersion],
 		AddrToPos:   make(map[basics.Address]uint64),
@@ -1065,8 +1072,8 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
 	w.persistBuilders = false
-	w.Start()
-	defer w.Shutdown()
+	err := makeStateProofDB(w.db)
+	require.NoError(t, err)
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1102,14 +1109,14 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
+	err := makeStateProofDB(w.db)
+	require.NoError(t, err)
 	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
 	}
 
-	w.Start()
-	defer w.Shutdown()
 	msg := sigFromAddr{
 		SignerAddress: addresses[3],
 		Round:         basics.Round(proto.StateProofInterval * 2),
@@ -1341,9 +1348,11 @@ func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 
+	const expectedStateproofs = 9
+	const firstExpectedStateproof = 512
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
 	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
 	for {
@@ -1353,46 +1362,19 @@ func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 		}
 	}
 
-	// In memory
-	a.Equal(9, len(w.builders))
-	// In disk
-	r := basics.Round(512)
-	for i := 0; i < 9; i++ {
-		var builderFromDisk builder
-		a.NoError(
-			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-				var err error
-				builderFromDisk, err = getBuilder(tx, r)
-				return err
-			}))
-		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
-		r += 256
-	}
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
 
 	w.Shutdown()
+	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	s.keysForVoters = []account.Participation{}
 
 	dbs, _ = dbOpenTestRand(t, true, dbRand)
 	w = newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 	defer w.Shutdown()
 
-	// In memory
-	a.Equal(9, len(w.builders))
-	// In disk
-	r = basics.Round(512)
-	for i := 0; i < 9; i++ {
-		var builderFromDisk builder
-		a.NoError(
-			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-				var err error
-				builderFromDisk, err = getBuilder(tx, r)
-				return err
-			}))
-		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
-		r += 256
-	}
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
 }
-
 
 func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1407,15 +1389,17 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
+	const expectedStateproofs = 9
+	const firstExpectedStateproof = 512
+
 	s := newWorkerStubs(t, keys, 10)
 	dbRand := crypto.RandUint64()
 	dbs, _ := dbOpenTestRand(t, true, dbRand)
 	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
 	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
 	for {
@@ -1426,7 +1410,6 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 	}
 
 	w.Shutdown()
-
 	dbs, _ = dbOpenTestRand(t, true, dbRand)
 	w = newTestWorkerDB(t, s, dbs.Wdb)
 
@@ -1438,16 +1421,89 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 
 	w.Start()
 	defer w.Shutdown()
+
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
+
+}
+
+func compareBuilders(a *require.Assertions, expectedStateproofs int, w *Worker, firstExpectedStateproof int, proto config.ConsensusParams) {
 	w.mu.Lock()
-	a.Equal(9, len(w.builders))
-	for _,v := range w.builders {
+	defer w.mu.Unlock()
+	// In memory
+	a.Equal(expectedStateproofs, len(w.builders))
+	// In disk
+	r := basics.Round(firstExpectedStateproof)
+	for i := 0; i < expectedStateproofs; i++ {
+		var builderFromDisk builder
+		a.NoError(
+			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+				var err error
+				builderFromDisk, err = getBuilder(tx, r)
+				return err
+			}))
+		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
+		r += basics.Round(proto.StateProofInterval)
+	}
+
+	// verify the in-memory builder has signatures loaded
+	for _, v := range w.builders {
 		for j := 0; j < len(v.Participants); j++ {
 			present, err := v.Present(uint64(j))
 			a.NoError(err)
 			a.True(present)
 		}
 	}
-	w.mu.Unlock()
+}
+
+func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	lastRound := proto.StateProofInterval * 2
+	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
+
+	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
+	require.NoError(t, err)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	require.NoError(t, err)
+
+	hashedStateproofMessage := stateproofMessage.Hash()
+	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
+	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+	require.NoError(t, err)
+
+	msg.Sig = sig
+	// Create the database
+	err = makeStateProofDB(w.db)
+	require.NoError(t, err)
+
+	msgBytes := protocol.Encode(&msg)
+	// add signature so  builder will get loaded
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
+
+	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	s.keysForVoters = []account.Participation{}
+
+	// removing the builder from memory will force the worker to load it from disk
+	w.builders = make(map[basics.Round]builder)
+	_, exists := w.builders[msg.Round]
+	require.False(t, exists)
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Ignore, fwd)
+	require.NoError(t, err)
+	_, exists = w.builders[msg.Round]
+	require.True(t, exists)
+
+	w.persistBuilders = false
+	// removing the builder from memory will force the worker to load it from disk
+	w.builders = make(map[basics.Round]builder)
+	_, err = w.handleSig(msg, msg.SignerAddress)
+	require.ErrorIs(t, err, errEmptyVoters)
+	_, exists = w.builders[msg.Round]
+	require.False(t, exists)
 }
 
 //
@@ -1481,9 +1537,6 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 //	}
 //	w.Shutdown()
 //}
-
-
-
 
 //
 //func TestBuilderLoadsFromDisk(t *testing.T) {
@@ -1546,108 +1599,108 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 //	a.Equal(bldrForComparission, w.builders[512])
 //	w.mu.Unlock()
 //}
-
-func TestBuilderFromDiskCreatesMessage(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	var keys []account.Participation
-	for i := 0; i < 2; i++ {
-		var parent basics.Address
-		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
-	}
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
-	w.Start()
-	defer w.Shutdown()
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
-
-	// Wait on all signatures
-	for {
-		_, err := s.waitOnSigWithTimeout(time.Second * 2)
-		if err != nil {
-			break
-		}
-	}
-	// dropping inRam builder making:
-	w.mu.Lock()
-	w.ledger = nil
-	w.builders = map[basics.Round]builder{}
-	bldr, err := w.loadOrCreateBuilder(512)
-	w.mu.Unlock()
-
-	a.NoError(err)
-	a.NotEmpty(bldr.Message)
-}
-
-func TestLoadBuilderFromDiskWithSigs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	var keys []account.Participation
-	for i := 0; i < 2; i++ {
-		var parent basics.Address
-		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
-	}
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
-	w.Start()
-	defer w.Shutdown()
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
-
-	// Wait on all signatures
-	for {
-		_, err := s.waitOnSigWithTimeout(time.Second * 2)
-		if err != nil {
-			break
-		}
-	}
-
-	var sigs map[basics.Round][]pendingSig
-	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		tmp, err := getPendingSigsFromThisNode(tx)
-		a.NoError(err)
-		sigs = tmp
-		// deleting the sig ensures we'll be able to add it using the `handleSig` function.
-		_, err = tx.Exec("DELETE FROM sigs where sprnd=512 AND signer=?", sigs[512][0].signer[:])
-		return err
-	}))
-	sig := sigs[512][0]
-	a.NotEmpty(sig)
-
-	// dropping inRam builder making:
-
-	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		_, err := getBuilder(tx, 512) // ensuring builder in DB.
-		return err
-	}))
-
-	w.mu.Lock()
-	comparisionBuilder := w.builders[512]
-	w.mu.Unlock()
-
-	w.builders = map[basics.Round]builder{}
-
-	_, err := w.handleSig(sigFromAddr{
-		SignerAddress: sig.signer,
-		Round:         512,
-		Sig:           sig.sig,
-	}, nil)
-	a.NoError(err)
-
-	w.mu.Lock()
-	a.Equal(comparisionBuilder, w.builders[512])
-	w.mu.Unlock()
-}
+//
+//func TestBuilderFromDiskCreatesMessage(t *testing.T) {
+//	partitiontest.PartitionTest(t)
+//	a := require.New(t)
+//
+//	var keys []account.Participation
+//	for i := 0; i < 2; i++ {
+//		var parent basics.Address
+//		crypto.RandBytes(parent[:])
+//		p := newPartKey(t, parent)
+//		defer p.Close()
+//		keys = append(keys, p.Participation)
+//	}
+//
+//	s := newWorkerStubs(t, keys, 10)
+//	w := newTestWorker(t, s)
+//	w.Start()
+//	defer w.Shutdown()
+//
+//	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+//	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+//
+//	// Wait on all signatures
+//	for {
+//		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+//		if err != nil {
+//			break
+//		}
+//	}
+//	// dropping inRam builder making:
+//	w.mu.Lock()
+//	w.ledger = nil
+//	w.builders = map[basics.Round]builder{}
+//	bldr, err := w.loadOrCreateBuilder(512)
+//	w.mu.Unlock()
+//
+//	a.NoError(err)
+//	a.NotEmpty(bldr.Message)
+//}
+//
+//func TestLoadBuilderFromDiskWithSigs(t *testing.T) {
+//	partitiontest.PartitionTest(t)
+//	a := require.New(t)
+//
+//	var keys []account.Participation
+//	for i := 0; i < 2; i++ {
+//		var parent basics.Address
+//		crypto.RandBytes(parent[:])
+//		p := newPartKey(t, parent)
+//		defer p.Close()
+//		keys = append(keys, p.Participation)
+//	}
+//
+//	s := newWorkerStubs(t, keys, 10)
+//	w := newTestWorker(t, s)
+//	w.Start()
+//	defer w.Shutdown()
+//
+//	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+//	s.advanceLatest(10*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+//
+//	// Wait on all signatures
+//	for {
+//		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+//		if err != nil {
+//			break
+//		}
+//	}
+//
+//	var sigs map[basics.Round][]pendingSig
+//	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+//		tmp, err := getPendingSigsFromThisNode(tx)
+//		a.NoError(err)
+//		sigs = tmp
+//		// deleting the sig ensures we'll be able to add it using the `handleSig` function.
+//		_, err = tx.Exec("DELETE FROM sigs where sprnd=512 AND signer=?", sigs[512][0].signer[:])
+//		return err
+//	}))
+//	sig := sigs[512][0]
+//	a.NotEmpty(sig)
+//
+//	// dropping inRam builder making:
+//
+//	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+//		_, err := getBuilder(tx, 512) // ensuring builder in DB.
+//		return err
+//	}))
+//
+//	w.mu.Lock()
+//	comparisionBuilder := w.builders[512]
+//	w.mu.Unlock()
+//
+//	w.builders = map[basics.Round]builder{}
+//
+//	_, err := w.handleSig(sigFromAddr{
+//		SignerAddress: sig.signer,
+//		Round:         512,
+//		Sig:           sig.sig,
+//	}, nil)
+//	a.NoError(err)
+//
+//	w.mu.Lock()
+//	a.Equal(comparisionBuilder, w.builders[512])
+//	w.mu.Unlock()
+//}
