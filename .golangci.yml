@@ -104,9 +104,9 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
-        - gofmt
+        # - gofmt
         - gosimple
-        - govet
+        # - govet
         - ineffassign
         - misspell
         - nolintlint
