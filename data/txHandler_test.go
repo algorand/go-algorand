@@ -197,7 +197,8 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 
 	const numTxns = 11
 	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, 1),
+		backlogQueue:    make(chan *txBacklogMsg, 1),
+		txidRequestDone: make(chan []transactions.Txid, 1),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
