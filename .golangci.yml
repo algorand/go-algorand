@@ -57,6 +57,17 @@ linters-settings:
           - (github.com/algorand/go-algorand/logging.Logger).Error
           - (github.com/algorand/go-algorand/logging.Logger).Fatal
           - (github.com/algorand/go-algorand/logging.Logger).Panic
+          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
+          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).errorf
+          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).lineErrorf
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportInfof
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportInfoln
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnf
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnln
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawf
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawln
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorf
+          - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorln
 
 issues:
   # Work our way back over time to be clean against all these
