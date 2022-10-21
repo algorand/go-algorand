@@ -1386,3 +1386,7 @@ func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 func (node *AlgorandFullNode) GetSyncRound() (bool, uint64, error) {
 	return node.catchupService.GetSyncRound()
 }
+
+func (node *AlgorandFullNode) UnsetSyncRound() error {
+	return node.catchupService.UnsetSyncRound()
+}
