@@ -253,13 +253,24 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
-// BenchmarkIncomingTxHandlerProcessing sends singed transactions to be handled and verified
+func TestIncomingTxHandle(t *testing.T) {
+	incomingTxHandlerProcessing(1, t)
+}
+
+func TestIncomingTxGroupHandle(t *testing.T) {
+	incomingTxHandlerProcessing(proto.MaxTxGroupSize, t)
+}
+
+// incomingTxHandlerProcessing is comprehensive transaction handling test, emulating
+// the production code as much as possible.
+// sends singed transactions to be handled and verified
 // It reports the number of dropped transactions. This includes the decoding of the
 // messages, and emulating the backlog processing.
-func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
+func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	crypto.Counter = 0
 	const numUsers = 100
-	log := logging.TestingLog(b)
+	numberOfTransactionGroups := 1000
+	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
@@ -281,14 +292,14 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
 
-	require.Equal(b, len(genesis), numUsers+1)
+	require.Equal(t, len(genesis), numUsers+1)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
+	ledgerName := fmt.Sprintf("%s-mem-%d", t.Name(), numberOfTransactionGroups)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
-	require.NoError(b, err)
+	require.NoError(t, err)
 
 	l := ledger
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
@@ -348,8 +359,9 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	}()
 
 	// Prepare the transactions
-	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, addresses, secrets)
-	encodedSignedTransactionGroups := make([]network.IncomingMessage, 0, b.N)
+	signedTransactionGroups, badTxnGroups :=
+		makeSignedTxnGroups(numberOfTransactionGroups, numUsers, maxGroupSize, addresses, secrets)
+	encodedSignedTransactionGroups := make([]network.IncomingMessage, 0, numberOfTransactionGroups)
 	for _, stxngrp := range signedTransactionGroups {
 		data := make([]byte, 0)
 		for _, stxn := range stxngrp {
@@ -367,10 +379,11 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 		txnCounter := 0
 		invalidCounter := 0
 		defer func() {
-			fmt.Printf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
-			fmt.Printf("crypto calls %d avg txn/batch: %d\n", crypto.Counter, txnCounter/crypto.Counter)
+			t.Logf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
+			if crypto.Counter > 0 {
+				t.Logf("crypto calls %d avg txn/batch: %d\n", crypto.Counter, txnCounter/crypto.Counter)
+			}
 		}()
-		b.ResetTimer()
 		tt := time.Now()
 		for wi := range outChan {
 			txnCounter = txnCounter + len(wi.unverifiedTxGroup)
@@ -378,14 +391,14 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
 			_, inBad := badTxnGroups[u]
 			if wi.verificationErr == nil {
-				require.False(b, inBad, "No error for invalid signature")
+				require.False(t, inBad, "No error for invalid signature")
 			} else {
 				invalidCounter++
-				require.True(b, inBad, "Error for good signature")
+				require.True(t, inBad, "Error for good signature")
 			}
 		}
-		fmt.Printf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
-		fmt.Printf("Txn groups with invalid sigs: %d\n", invalidCounter)
+		t.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+		t.Logf("Txn groups with invalid sigs: %d\n", invalidCounter)
 	}()
 
 	// Send the transactions to the verifier
@@ -404,19 +417,22 @@ func BenchmarkIncomingTxHandlerProcessing(b *testing.B) {
 	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
 	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
 	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
-	fmt.Printf("dropped %s txn gropus\n", str)
+	t.Logf("dropped %s txn gropus\n", str)
 }
 
 // Prepare N transaction groups of random sizes with randomly invalid signatures
-func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
+func makeSignedTxnGroups(N, numUsers, maxGroupSize int, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
 	badTxnGroups map[uint64]interface{}) {
 	badTxnGroups = make(map[uint64]interface{})
 
-	maxGrpSize := proto.MaxTxGroupSize
+	protoMaxGrpSize := proto.MaxTxGroupSize
 	ret = make([][]transactions.SignedTxn, 0, N)
 	for u := 0; u < N; u++ {
-		grpSize := rand.Intn(maxGrpSize-1) + 1
+		grpSize := rand.Intn(protoMaxGrpSize-1) + 1
+		if grpSize > maxGroupSize {
+			grpSize = maxGroupSize
+		}
 		var txGroup transactions.TxGroup
 		txns := make([]transactions.Transaction, 0, grpSize)
 		for g := 0; g < grpSize; g++ {
@@ -461,7 +477,17 @@ func makeSignedTxnGroups(N, numUsers int, addresses []basics.Address,
 }
 
 // BenchmarkHandler sends singed transactions to be handled and verified
-func BenchmarkHandler(b *testing.B) {
+func BenchmarkHandleTxns(b *testing.B) {
+	b.N = b.N * proto.MaxTxGroupSize / 2
+	runHandlerBenchmark(1, b)
+}
+
+// BenchmarkHandler sends singed transaction groups to be handled and verified
+func BenchmarkHandleTxnGroups(b *testing.B) {
+	runHandlerBenchmark(proto.MaxTxGroupSize, b)
+}
+
+func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	crypto.Counter = 0
 	const numUsers = 100
 	log := logging.TestingLog(b)
@@ -502,7 +528,7 @@ func BenchmarkHandler(b *testing.B) {
 	defer handler.ctxCancel()
 
 	// Prepare the transactions
-	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, addresses, secrets)
+	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, addresses, secrets)
 	outChan := handler.postVerificationQueue
 	wg := sync.WaitGroup{}
 
@@ -514,10 +540,11 @@ func BenchmarkHandler(b *testing.B) {
 		txnCounter := 0
 		invalidCounter := 0
 		defer func() {
-			fmt.Printf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
-			fmt.Printf("crypto calls %d avg txn/batch: %d\n", crypto.Counter, txnCounter/crypto.Counter)
+			b.Logf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
+			if crypto.Counter > 0 {
+				b.Logf("crypto calls %d avg txn/batch: %d\n", crypto.Counter, txnCounter/crypto.Counter)
+			}
 		}()
-		b.ResetTimer()
 		tt := time.Now()
 		for wi := range outChan {
 			txnCounter = txnCounter + len(wi.unverifiedTxGroup)
@@ -531,10 +558,11 @@ func BenchmarkHandler(b *testing.B) {
 				require.True(b, inBad, "Error for good signature")
 			}
 		}
-		fmt.Printf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
-		fmt.Printf("Txn groups with invalid sigs: %d\n", invalidCounter)
+		b.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+		b.Logf("Txn groups with invalid sigs: %d\n", invalidCounter)
 	}()
 
+	b.ResetTimer()
 	for _, stxngrp := range signedTransactionGroups {
 		blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
 		handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, Context: &blm}
@@ -551,5 +579,5 @@ func BenchmarkHandler(b *testing.B) {
 	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
 	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
 	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
-	fmt.Printf("dropped %s txn gropus\n", str)
+	b.Logf("dropped %s txn gropus\n", str)
 }

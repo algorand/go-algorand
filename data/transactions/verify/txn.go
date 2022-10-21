@@ -726,9 +726,6 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 		bl := makeBatchLoad()
 		// TODO: separate operations here, and get the sig verification inside LogicSig outside
 		for _, ue := range uel.elementList {
-			if ue.TxnGroup[len(ue.TxnGroup)-1].Sig[0] == 0 && ue.TxnGroup[len(ue.TxnGroup)-1].Sig[2] == 0 && ue.TxnGroup[len(ue.TxnGroup)-1].Sig[4] == 0 {
-				fmt.Println("boom1")
-			}
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, uel.nbw.getBlockHeader(), uel.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, cannot go to the batch. return here.
