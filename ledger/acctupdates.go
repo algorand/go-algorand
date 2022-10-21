@@ -1080,8 +1080,9 @@ func (au *accountUpdates) lookupAccountDeltas(rnd basics.Round) (data ledgercore
 	if err != nil {
 		return
 	}
-	if currentDeltaLen < offset {
+	if currentDeltaLen < offset+1 {
 		err = fmt.Errorf("round %d not in deltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.deltas), offset)
+		return
 	}
 	data = au.deltas[offset]
 	return
