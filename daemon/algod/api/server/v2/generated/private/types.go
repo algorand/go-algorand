@@ -105,13 +105,6 @@ type AccountBalanceRecord struct {
 	Address     string  `json:"address"`
 }
 
-// AccountDeltas defines model for AccountDeltas.
-type AccountDeltas struct {
-	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
-	Apps     *[]AppResourceRecord    `json:"apps,omitempty"`
-	Assets   *[]AssetResourceRecord  `json:"assets,omitempty"`
-}
-
 // AccountParticipation defines model for AccountParticipation.
 type AccountParticipation struct {
 
@@ -507,6 +500,13 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// RoundDeltas defines model for RoundDeltas.
+type RoundDeltas struct {
+	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
+	Apps     *[]AppResourceRecord    `json:"apps,omitempty"`
+	Assets   *[]AssetResourceRecord  `json:"assets,omitempty"`
+}
+
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -821,6 +821,9 @@ type PostTransactionsResponse struct {
 	// encoding of the transaction hash.
 	TxId string `json:"txId"`
 }
+
+// RoundDeltasResponse defines model for RoundDeltasResponse.
+type RoundDeltasResponse RoundDeltas
 
 // StateProofResponse defines model for StateProofResponse.
 type StateProofResponse StateProof

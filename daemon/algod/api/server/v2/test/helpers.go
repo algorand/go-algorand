@@ -77,7 +77,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = generatedV2.AccountDeltas{
+var poolDeltaResponseGolden = generatedV2.RoundDeltas{
 	Accounts: &[]generatedV2.AccountBalanceRecord{
 		{
 			AccountData: generatedV2.Account{

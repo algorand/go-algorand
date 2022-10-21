@@ -649,6 +649,16 @@
         },
         "description": "Transaction ID of the submission."
       },
+      "RoundDeltasResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RoundDeltas"
+            }
+          }
+        },
+        "description": "Contains the deltas for a given round."
+      },
       "StateProofResponse": {
         "content": {
           "application/json": {
@@ -935,30 +945,6 @@
           "account-data",
           "address"
         ],
-        "type": "object"
-      },
-      "AccountDeltas": {
-        "description": "",
-        "properties": {
-          "accounts": {
-            "items": {
-              "$ref": "#/components/schemas/AccountBalanceRecord"
-            },
-            "type": "array"
-          },
-          "apps": {
-            "items": {
-              "$ref": "#/components/schemas/AppResourceRecord"
-            },
-            "type": "array"
-          },
-          "assets": {
-            "items": {
-              "$ref": "#/components/schemas/AssetResourceRecord"
-            },
-            "type": "array"
-          }
-        },
         "type": "object"
       },
       "AccountParticipation": {
@@ -1740,6 +1726,30 @@
           "pool-error",
           "txn"
         ],
+        "type": "object"
+      },
+      "RoundDeltas": {
+        "description": "",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountBalanceRecord"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/AppResourceRecord"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetResourceRecord"
+            },
+            "type": "array"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -3317,6 +3327,90 @@
         "tags": [
           "private"
         ]
+      }
+    },
+    "/v2/deltas/{round}": {
+      "get": {
+        "operationId": "GetRoundDeltas",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundDeltas"
+                }
+              }
+            },
+            "description": "Contains the deltas for a given round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a delta that covers a given round"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a RoundDeltas object for a given round"
       }
     },
     "/v2/ledger/supply": {

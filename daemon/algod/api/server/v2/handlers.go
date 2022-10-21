@@ -935,9 +935,10 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// GetAccountDeltas returns the AccountDeltas for a given round.
-// (GET /v2/accountdeltas/{round})
-func (v2 *Handlers) GetAccountDeltas(ctx echo.Context, round uint64) error {
+// GetRoundDeltas returns the deltas for a given round.
+// This should be a combination of AccountDeltas, KVStore Deltas, etc.
+// (GET /v2/deltas/{round})
+func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	ads, err := v2.Node.LedgerForAPI().GetAccountDeltasForRound(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingAccountDeltas, v2.Log)
@@ -1087,7 +1088,7 @@ func (v2 *Handlers) GetAccountDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	response := generated.AccountDeltas{
+	response := generated.RoundDeltas{
 		Accounts: &accts,
 		Apps:     &apps,
 		Assets:   &assets,

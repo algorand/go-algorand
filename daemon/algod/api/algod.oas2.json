@@ -1300,6 +1300,66 @@
         }
       ]
     },
+    "/v2/deltas/{round}": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a RoundDeltas object for a given round",
+        "operationId": "GetRoundDeltas",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/RoundDeltasResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta that covers a given round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/stateproofs/{round}": {
       "get": {
         "produces": [
@@ -1973,7 +2033,7 @@
         }
       }
     },
-    "AccountDeltas": {
+    "RoundDeltas": {
       "description": "",
       "type": "object",
       "required": [
@@ -3109,6 +3169,12 @@
     }
   },
   "responses": {
+    "RoundDeltasResponse": {
+      "description": "Contains the deltas for a given round.",
+      "schema": {
+        "$ref": "#/definitions/RoundDeltas"
+      }
+    },
     "LightBlockHeaderProofResponse": {
       "description": "Proof of a light block header.",
       "schema": {
