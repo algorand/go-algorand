@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -29,9 +28,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
-
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
@@ -237,7 +233,7 @@ var protoCmd = &cobra.Command{
 
 func readGenesis(dataDir string) (genesis bookkeeping.Genesis, err error) {
 	path := filepath.Join(dataDir, config.GenesisJSONFile)
-	genesisText, err := ioutil.ReadFile(path)
+	genesisText, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -382,7 +378,6 @@ func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoa
 	if err != nil {
 		return
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return
 }
 
@@ -564,7 +559,7 @@ func reportErrorf(format string, args ...interface{}) {
 	reportErrorln(fmt.Sprintf(format, args...))
 }
 
-// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// writeFile is a wrapper of os.WriteFile which considers the special
 // case of stdout filename
 func writeFile(filename string, data []byte, perm os.FileMode) error {
 	var err error
@@ -575,7 +570,7 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		}
 		return nil
 	}
-	return ioutil.WriteFile(filename, data, perm)
+	return os.WriteFile(filename, data, perm)
 }
 
 // writeDryrunReqToFile creates dryrun request object and writes to a file
@@ -593,13 +588,13 @@ func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilen
 	return
 }
 
-// readFile is a wrapper of ioutil.ReadFile which considers the
+// readFile is a wrapper of os.ReadFile which considers the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {
-		return ioutil.ReadAll(os.Stdin)
+		return io.ReadAll(os.Stdin)
 	}
-	return ioutil.ReadFile(filename)
+	return os.ReadFile(filename)
 }
 
 func checkTxValidityPeriodCmdFlags(cmd *cobra.Command) {

@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"regexp"
@@ -477,7 +476,7 @@ func doExportZone(network string, outputFilename string) bool {
 		return false
 	}
 	if outputFilename != "" {
-		err = ioutil.WriteFile(outputFilename, exportedZone, 0666)
+		err = os.WriteFile(outputFilename, exportedZone, 0666)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to write exported zone file : %v\n", err)
 			return false

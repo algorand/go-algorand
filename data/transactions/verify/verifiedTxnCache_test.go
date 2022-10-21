@@ -76,7 +76,7 @@ func TestBucketCycling(t *testing.T) {
 	require.Equal(t, 1, len(impl.buckets[0]))
 }
 
-func TestGetUnverifiedTranscationGroups50(t *testing.T) {
+func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	size := 300
@@ -97,11 +97,11 @@ func TestGetUnverifiedTranscationGroups50(t *testing.T) {
 		}
 	}
 
-	unverifiedGroups := impl.GetUnverifiedTranscationGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups := impl.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
 	require.Equal(t, len(expectedUnverifiedGroups), len(unverifiedGroups))
 }
 
-func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
+func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	if b.N < 20000 {
 		b.N = 20000
 	}
@@ -125,7 +125,7 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 	startTime := time.Now()
 	measuringMultipler := 1000
 	for i := 0; i < measuringMultipler; i++ {
-		impl.GetUnverifiedTranscationGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
+		impl.GetUnverifiedTransactionGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
 	}
 	duration := time.Now().Sub(startTime)
 	// calculate time per 10K verified entries:

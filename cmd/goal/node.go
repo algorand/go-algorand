@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -131,7 +131,7 @@ func getMissingCatchpointLabel(URL string) (label string, err error) {
 		err = errors.New(resp.Status)
 		return
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -648,7 +648,7 @@ var createCmd = &cobra.Command{
 		}
 
 		// copy genesis block to destination
-		err = ioutil.WriteFile(destPath, genesisContent, 0644)
+		err = os.WriteFile(destPath, genesisContent, 0644)
 		if err != nil {
 			reportErrorf(errorNodeCreation, err)
 		}

@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 7,
+  "EvalMaxVersion": 8,
   "LogicSigVersion": 7,
   "Ops": [
     {
@@ -1029,6 +1029,38 @@
       ]
     },
     {
+      "Opcode": 69,
+      "Name": "bury",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
+      "ImmediateNote": "{uint8 depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 70,
+      "Name": "popn",
+      "Size": 2,
+      "Doc": "Remove N values from the top of the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 71,
+      "Name": "dupn",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "duplicate A, N times",
+      "ImmediateNote": "{uint8 copy count}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
       "Opcode": 72,
       "Name": "pop",
       "Args": ".",
@@ -1299,7 +1331,7 @@
       "Size": 2,
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
       "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
-      "ImmediateNote": "{string return type}",
+      "ImmediateNote": "{uint8 return type}",
       "Groups": [
         "Byte Array Manipulation"
       ]
@@ -1560,7 +1592,7 @@
       "Name": "callsub",
       "Size": 3,
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
-      "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
@@ -1571,7 +1603,51 @@
       "Name": "retsub",
       "Size": 1,
       "Doc": "pop the top instruction from the call stack and branch to it",
-      "DocExtra": "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+      "DocExtra": "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 138,
+      "Name": "proto",
+      "Size": 3,
+      "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
+      "DocExtra": "Fails unless the last instruction executed was a `callsub`.",
+      "ImmediateNote": "{uint8 arguments} {uint8 return values}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 139,
+      "Name": "frame_dig",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "Nth (signed) value from the frame pointer.",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 140,
+      "Name": "frame_bury",
+      "Args": ".",
+      "Size": 2,
+      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 141,
+      "Name": "switch",
+      "Args": "U",
+      "Size": 0,
+      "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
       "Groups": [
         "Flow Control"
       ]

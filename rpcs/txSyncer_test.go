@@ -19,6 +19,7 @@ package rpcs
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net/http"
 	"net/rpc"
 	"strings"
@@ -44,9 +45,31 @@ type mockPendingTxAggregate struct {
 	txns []transactions.SignedTxn
 }
 
+var testSource rand.Source
+var testRand *rand.Rand
+
+func init() {
+	testSource = rand.NewSource(12345678)
+	testRand = rand.New(testSource)
+}
+
+func testRandBytes(d []byte) {
+	// We don't need cryptographically strong random bytes for a
+	// unit test, we _do_ need deterministic 'random' bytes so
+	// that _sometimes_ a bloom filter doesn't fail on the data
+	// (e.g. TestSync() below).
+	n, err := testRand.Read(d)
+	if n != len(d) {
+		panic("short rand read")
+	}
+	if err != nil {
+		panic(err)
+	}
+}
+
 func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 	var secret [32]byte
-	crypto.RandBytes(secret[:])
+	testRandBytes(secret[:])
 	sk := crypto.GenerateSignatureSecrets(crypto.Seed(secret))
 	mock := mockPendingTxAggregate{
 		txns: make([]transactions.SignedTxn, txCount),
@@ -54,7 +77,7 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 
 	for i := 0; i < txCount; i++ {
 		var note [16]byte
-		crypto.RandBytes(note[:])
+		testRandBytes(note[:])
 		tx := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{

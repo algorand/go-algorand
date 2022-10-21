@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -246,7 +246,7 @@ func TestConfigExampleIsCorrect(t *testing.T) {
 // see their default (zero) values and instead see the
 // new default because they won't exist in the old file.
 func loadWithoutDefaults(cfg Local) (Local, error) {
-	file, err := ioutil.TempFile("", "lwd")
+	file, err := os.CreateTemp("", "lwd")
 	if err != nil {
 		return Local{}, err
 	}
@@ -551,4 +551,32 @@ func TestLocalVersionField(t *testing.T) {
 	}
 	expectedTag = expectedTag[:len(expectedTag)-1]
 	require.Equal(t, expectedTag, string(field.Tag))
+}
+
+func TestGetNonDefaultConfigValues(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	// set 4 non-default values
+	cfg.AgreementIncomingBundlesQueueLength = 2
+	cfg.AgreementIncomingProposalsQueueLength = 200
+	cfg.TxPoolSize = 30
+	cfg.Archival = true
+
+	// ask for 2 of them
+	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
+
+	// assert correct
+	expected := map[string]interface{}{
+		"AgreementIncomingBundlesQueueLength": uint64(2),
+		"TxPoolSize":                          int(30),
+	}
+	assert.Equal(t, expected, ndmap)
+
+	// ask for field that doesn't exist: should skip
+	assert.Equal(t, expected, GetNonDefaultConfigValues(cfg, []string{"Blah", "AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+
+	// check unmodified defaults
+	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
 }
