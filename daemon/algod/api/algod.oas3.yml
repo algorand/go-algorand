@@ -304,6 +304,25 @@
         },
         "description": "Asset information"
       },
+      "BlockHashResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "blockHash": {
+                  "description": "Block header hash.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "blockHash"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Hash of a block header."
+      },
       "BlockResponse": {
         "content": {
           "application/json": {
@@ -2810,6 +2829,89 @@
           }
         },
         "summary": "Get the block for the given round."
+      }
+    },
+    "/v2/blocks/{round}/hash": {
+      "get": {
+        "operationId": "GetBlockHash",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block hash information.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "blockHash": {
+                      "description": "Block header hash.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "blockHash"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Hash of a block header."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "None existing block "
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the block hash for the block on the given round."
       }
     },
     "/v2/blocks/{round}/lightheader/proof": {

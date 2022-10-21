@@ -38,6 +38,9 @@ type ServerInterface interface {
 	// Get the block for the given round.
 	// (GET /v2/blocks/{round})
 	GetBlock(ctx echo.Context, round uint64, params GetBlockParams) error
+	// Get the block hash for the block on the given round.
+	// (GET /v2/blocks/{round}/hash)
+	GetBlockHash(ctx echo.Context, round uint64) error
 	// Gets a proof for a given light block header inside a state proof commitment
 	// (GET /v2/blocks/{round}/lightheader/proof)
 	GetLightBlockHeaderProof(ctx echo.Context, round uint64) error
@@ -394,6 +397,36 @@ func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshalled arguments
 	err = w.Handler.GetBlock(ctx, round, params)
+	return err
+}
+
+// GetBlockHash converts echo context to params.
+func (w *ServerInterfaceWrapper) GetBlockHash(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameter("simple", false, "round", ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set("api_key.Scopes", []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetBlockHash(ctx, round)
 	return err
 }
 
@@ -837,6 +870,7 @@ func RegisterHandlers(router interface {
 	router.GET("/v2/applications/:application-id", wrapper.GetApplicationByID, m...)
 	router.GET("/v2/assets/:asset-id", wrapper.GetAssetByID, m...)
 	router.GET("/v2/blocks/:round", wrapper.GetBlock, m...)
+	router.GET("/v2/blocks/:round/hash", wrapper.GetBlockHash, m...)
 	router.GET("/v2/blocks/:round/lightheader/proof", wrapper.GetLightBlockHeaderProof, m...)
 	router.GET("/v2/blocks/:round/transactions/:txid/proof", wrapper.GetTransactionProof, m...)
 	router.GET("/v2/ledger/supply", wrapper.GetSupply, m...)

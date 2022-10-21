@@ -984,7 +984,7 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 
 }
 
-var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
+var txPoolGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
 
 func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
@@ -993,7 +993,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	for true {
 		select {
 		case <-ticker.C:
-			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
+			txPoolGauge.Set(float64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}

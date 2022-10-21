@@ -2131,6 +2131,183 @@ func TestResourcesDataSetData(t *testing.T) {
 	}
 }
 
+// TestResourceDataRoundtripConversion ensures that basics.AppLocalState, basics.AppParams,
+// basics.AssetHolding, and basics.AssetParams can be converted to resourcesData and back without
+// losing any data. It uses reflection to be sure that no new fields are omitted.
+//
+// In other words, this test makes sure any new fields in basics.AppLocalState, basics.AppParams,
+// basics.AssetHolding, or basics.AssetParam also get added to resourcesData.
+func TestResourceDataRoundtripConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("basics.AppLocalState", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&basics.AppLocalState{})
+			basicsAppLocalState := *randObj.(*basics.AppLocalState)
+
+			var data resourcesData
+			data.SetAppLocalState(basicsAppLocalState)
+			roundTripAppLocalState := data.GetAppLocalState()
+
+			require.Equal(t, basicsAppLocalState, roundTripAppLocalState)
+		}
+	})
+
+	t.Run("basics.AppParams", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&basics.AppParams{})
+			basicsAppParams := *randObj.(*basics.AppParams)
+
+			for _, haveHoldings := range []bool{true, false} {
+				var data resourcesData
+				data.SetAppParams(basicsAppParams, haveHoldings)
+				roundTripAppParams := data.GetAppParams()
+
+				require.Equal(t, basicsAppParams, roundTripAppParams)
+			}
+		}
+	})
+
+	t.Run("basics.AssetHolding", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&basics.AssetHolding{})
+			basicsAssetHolding := *randObj.(*basics.AssetHolding)
+
+			var data resourcesData
+			data.SetAssetHolding(basicsAssetHolding)
+			roundTripAssetHolding := data.GetAssetHolding()
+
+			require.Equal(t, basicsAssetHolding, roundTripAssetHolding)
+		}
+	})
+
+	t.Run("basics.AssetParams", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&basics.AssetParams{})
+			basicsAssetParams := *randObj.(*basics.AssetParams)
+
+			for _, haveHoldings := range []bool{true, false} {
+				var data resourcesData
+				data.SetAssetParams(basicsAssetParams, haveHoldings)
+				roundTripAssetParams := data.GetAssetParams()
+
+				require.Equal(t, basicsAssetParams, roundTripAssetParams)
+			}
+		}
+	})
+}
+
+// TestBaseAccountDataRoundtripConversion ensures that baseAccountData can be converted to
+// ledgercore.AccountData and basics.AccountData and back without losing any data. It uses
+// reflection to be sure that no new fields are omitted.
+//
+// In other words, this test makes sure any new fields in baseAccountData also get added to
+// ledgercore.AccountData and basics.AccountData. You should add a manual override in this test if
+// the field really only belongs in baseAccountData.
+func TestBaseAccountDataRoundtripConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("ledgercore.AccountData", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&baseAccountData{})
+			baseAccount := *randObj.(*baseAccountData)
+
+			ledgercoreAccount := baseAccount.GetLedgerCoreAccountData()
+			var roundTripAccount baseAccountData
+			roundTripAccount.SetCoreAccountData(&ledgercoreAccount)
+
+			// Manually set UpdateRound, since it is lost in GetLedgerCoreAccountData
+			roundTripAccount.UpdateRound = baseAccount.UpdateRound
+
+			require.Equal(t, baseAccount, roundTripAccount)
+		}
+	})
+
+	t.Run("basics.AccountData", func(t *testing.T) {
+		t.Parallel()
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&baseAccountData{})
+			baseAccount := *randObj.(*baseAccountData)
+
+			basicsAccount := baseAccount.GetAccountData()
+			var roundTripAccount baseAccountData
+			roundTripAccount.SetAccountData(&basicsAccount)
+
+			// Manually set UpdateRound, since it is lost in GetAccountData
+			roundTripAccount.UpdateRound = baseAccount.UpdateRound
+
+			// Manually set resources, since resource information is lost in GetAccountData
+			roundTripAccount.TotalAssetParams = baseAccount.TotalAssetParams
+			roundTripAccount.TotalAssets = baseAccount.TotalAssets
+			roundTripAccount.TotalAppLocalStates = baseAccount.TotalAppLocalStates
+			roundTripAccount.TotalAppParams = baseAccount.TotalAppParams
+
+			require.Equal(t, baseAccount, roundTripAccount)
+		}
+	})
+}
+
+// TestBasicsAccountDataRoundtripConversion ensures that basics.AccountData can be converted to
+// baseAccountData and back without losing any data. It uses reflection to be sure that this test is
+// always up-to-date with new fields.
+//
+// In other words, this test makes sure any new fields in basics.AccountData also get added to
+// baseAccountData.
+func TestBasicsAccountDataRoundtripConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for i := 0; i < 1000; i++ {
+		randObj, _ := protocol.RandomizeObject(&basics.AccountData{})
+		basicsAccount := *randObj.(*basics.AccountData)
+
+		var baseAccount baseAccountData
+		baseAccount.SetAccountData(&basicsAccount)
+		roundTripAccount := baseAccount.GetAccountData()
+
+		// Manually set resources, since GetAccountData doesn't attempt to restore them
+		roundTripAccount.AssetParams = basicsAccount.AssetParams
+		roundTripAccount.Assets = basicsAccount.Assets
+		roundTripAccount.AppLocalStates = basicsAccount.AppLocalStates
+		roundTripAccount.AppParams = basicsAccount.AppParams
+
+		require.Equal(t, basicsAccount, roundTripAccount)
+		require.Equal(t, uint64(len(roundTripAccount.AssetParams)), baseAccount.TotalAssetParams)
+		require.Equal(t, uint64(len(roundTripAccount.Assets)), baseAccount.TotalAssets)
+		require.Equal(t, uint64(len(roundTripAccount.AppLocalStates)), baseAccount.TotalAppLocalStates)
+		require.Equal(t, uint64(len(roundTripAccount.AppParams)), baseAccount.TotalAppParams)
+	}
+}
+
+// TestLedgercoreAccountDataRoundtripConversion ensures that ledgercore.AccountData can be converted
+// to baseAccountData and back without losing any data. It uses reflection to be sure that no new
+// fields are omitted.
+//
+// In other words, this test makes sure any new fields in ledgercore.AccountData also get added to
+// baseAccountData.
+func TestLedgercoreAccountDataRoundtripConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for i := 0; i < 1000; i++ {
+		randObj, _ := protocol.RandomizeObject(&ledgercore.AccountData{})
+		ledgercoreAccount := *randObj.(*ledgercore.AccountData)
+
+		var baseAccount baseAccountData
+		baseAccount.SetCoreAccountData(&ledgercoreAccount)
+		roundTripAccount := baseAccount.GetLedgerCoreAccountData()
+
+		require.Equal(t, ledgercoreAccount, roundTripAccount)
+	}
+}
+
 func TestBaseAccountDataIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	positiveTesting := func(t *testing.T) {

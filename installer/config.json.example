@@ -1,5 +1,5 @@
 {
-    "Version": 23,
+    "Version": 24,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 7,
@@ -10,7 +10,7 @@
     "BaseLoggerDebugLevel": 4,
     "BlockServiceCustomFallbackEndpoints": "",
     "BroadcastConnectionsLimit": -1,
-    "CadaverSizeTarget": 1073741824,
+    "CadaverSizeTarget": 0,
     "CatchpointFileHistoryLength": 365,
     "CatchpointInterval": 10000,
     "CatchpointTracking": 0,
