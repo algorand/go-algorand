@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-deadlock"
 )
 
 const catchupPeersForSync = 10
@@ -76,10 +77,10 @@ type Service struct {
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
-	// Set when a user specifies a syncRound
-	syncRoundSet bool
 	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRound uint64
+	syncRoundMu  deadlock.RWMutex
+	syncRoundSet bool
+	syncRound    uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -158,8 +159,9 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 	if basics.Round(rnd) < s.ledger.LastRound() {
 		return fmt.Errorf("requested sync round %d cannot be higher than the latest round %d", rnd, s.ledger.LastRound())
 	}
+	s.syncRoundMu.Lock()
+	defer s.syncRoundMu.Unlock()
 	s.syncRoundSet = true
-	atomic.StoreUint64(&s.syncRound, rnd)
 	s.syncRound = rnd
 	return nil
 }
@@ -169,12 +171,16 @@ func (s *Service) UnsetSyncRound() error {
 	if !s.cfg.EnableSyncMode {
 		return fmt.Errorf("attempted to modify sync round status for catchup service when EnableSyncMode was disabled")
 	}
+	s.syncRoundMu.Lock()
+	defer s.syncRoundMu.Unlock()
 	s.syncRoundSet = false
 	return nil
 }
 
-func (s *Service) getSyncRound() uint64 {
-	return atomic.LoadUint64(&s.syncRound)
+func (s *Service) getSyncRound() (bool, uint64) {
+	s.syncRoundMu.RLock()
+	defer s.syncRoundMu.RUnlock()
+	return s.syncRoundSet, s.syncRound
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -233,7 +239,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if s.syncRoundSet && r >= basics.Round(s.getSyncRound()+s.cfg.MaxAcctLookback) {
+	if set, syncRound := s.getSyncRound(); set && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0
