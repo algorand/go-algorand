@@ -19,6 +19,7 @@ package crypto
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -254,4 +255,30 @@ func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
 			require.False(t, f)
 		}
 	}
+}
+
+func TestBatchVerifierGC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const n = 128
+	for i := 0; i < 100; i++ {
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
+			bv := MakeBatchVerifierWithHint(n)
+			var s Seed
+
+			for i := 0; i < n; i++ {
+				msg := randString()
+				RandBytes(s[:])
+				sigSecrets := GenerateSignatureSecrets(s)
+				sig := sigSecrets.Sign(msg)
+				bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+			}
+			require.NoError(t, bv.Verify())
+
+			runtime.GC()
+		})
+	}
+
 }
