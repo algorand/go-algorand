@@ -17,9 +17,11 @@
 package v2
 
 import (
+	"math"
+	"testing"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestApplicationBoxesMaxKeys(t *testing.T) {
@@ -35,5 +37,5 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 	require.Equal(t, uint64(2), applicationBoxesMaxKeys(0, 1))
 
 	// Response size _not_ limited
-	require.Equal(t, uint64(0), applicationBoxesMaxKeys(0, 0))
+	require.Equal(t, uint64(math.MaxUint64), applicationBoxesMaxKeys(0, 0))
 }

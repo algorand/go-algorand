@@ -46,14 +46,13 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt                *sql.Stmt
-	lookupStmt                        *sql.Stmt
-	lookupResourcesStmt               *sql.Stmt
-	lookupAllResourcesStmt            *sql.Stmt
-	lookupKvPairStmt                  *sql.Stmt
-	lookupKeysByPrefixTypicalStmt     *sql.Stmt
-	lookupKeysByPrefixEmptyOrAllFStmt *sql.Stmt
-	lookupCreatorStmt                 *sql.Stmt
+	listCreatablesStmt     *sql.Stmt
+	lookupStmt             *sql.Stmt
+	lookupResourcesStmt    *sql.Stmt
+	lookupAllResourcesStmt *sql.Stmt
+	lookupKvPairStmt       *sql.Stmt
+	lookupKeysByRangeStmt  *sql.Stmt
+	lookupCreatorStmt      *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -2605,12 +2604,7 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixTypicalStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.lookupKeysByPrefixEmptyOrAllFStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? WHERE id='acctbase'")
+	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2728,14 +2722,15 @@ func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
 }
 
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+	if end == nil {
+		// Not an expected use case, it's asking for all keys, or all keys
+		// prefixed by some number of 0xFF bytes.
+		return 0, fmt.Errorf("Lookup by strange prefix %#v", prefix)
+	}
 	err = db.Retry(func() error {
-		prefixBytes, prefixIncrBytes := keyPrefixIntervalPreprocessing([]byte(prefix))
 		var rows *sql.Rows
-		if prefixIncrBytes != nil {
-			rows, err = qs.lookupKeysByPrefixTypicalStmt.Query(prefixBytes, prefixIncrBytes)
-		} else {
-			rows, err = qs.lookupKeysByPrefixEmptyOrAllFStmt.Query(prefixBytes)
-		}
+		rows, err = qs.lookupKeysByRangeStmt.Query(start, end)
 		if err != nil {
 			return err
 		}
@@ -2744,7 +2739,7 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		var v sql.NullString
 
 		for rows.Next() {
-			if maxKeyNum > 0 && resultCount == maxKeyNum {
+			if resultCount == maxKeyNum {
 				return nil
 			}
 			err = rows.Scan(&round, &v)
@@ -3096,8 +3091,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
-		&qs.lookupKeysByPrefixTypicalStmt,
-		&qs.lookupKeysByPrefixEmptyOrAllFStmt,
+		&qs.lookupKeysByRangeStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {

@@ -1199,7 +1199,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 	if requestedMax == 0 {
 		if algodMax == 0 {
-			return 0 // unlimited results when both requested and algod max are 0
+			return math.MaxUint64 // unlimited results when both requested and algod max are 0
 		}
 		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
 	}
