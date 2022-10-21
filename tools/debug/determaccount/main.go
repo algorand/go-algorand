@@ -14,37 +14,32 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package client
+package main
 
 import (
-	"net/http"
-	"time"
+	"encoding/binary"
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
-const (
-	timeoutSecs = 120
-)
+var numAccounts = flag.Uint64("numaccounts", 0, "Use this many accounts")
+var offset = flag.Uint64("offset", 0, "Start at this offset")
 
-// KMDClient is the client used to interact with the kmd API over its socket
-type KMDClient struct {
-	httpClient http.Client
-	apiToken   string
-	address    string
-}
-
-func makeHTTPClient() http.Client {
-	client := http.Client{
-		Timeout: timeoutSecs * time.Second,
+func main() {
+	flag.Parse()
+	if *numAccounts == 0 {
+		flag.Usage()
+		os.Exit(1)
 	}
-	return client
-}
-
-// MakeKMDClient instantiates a KMDClient for the given sockFile and apiToken
-func MakeKMDClient(address string, apiToken string) (KMDClient, error) {
-	kcl := KMDClient{
-		httpClient: makeHTTPClient(),
-		apiToken:   apiToken,
-		address:    address,
+	for i := uint64(0); i < *numAccounts; i++ {
+		acct := i + *offset
+		var seed crypto.Seed
+		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+		secrets := crypto.GenerateSignatureSecrets(seed)
+		fmt.Println(i, acct, basics.Address(secrets.SignatureVerifier).String())
 	}
-	return kcl, nil
 }
