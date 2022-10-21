@@ -50,7 +50,7 @@ var ErrInvalidSignature = errors.New("At least one signature didn't pass verific
 // to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
 // "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
 // show that these are realistic numbers )
-const txnPerWorksetThreshold = 32
+const txnPerWorksetThreshold = 64
 
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
@@ -573,7 +573,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 	resultOtput <-chan VerificationResult) {
 
 	resultChan := make(chan VerificationResult)
-	numberOfExecPoolSeats := verificationPool.GetParallelism()
+	numberOfExecPoolSeats := verificationPool.GetParallelism() * 10
 
 	sm := streamManager{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
