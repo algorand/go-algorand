@@ -228,6 +228,8 @@ func getSignatureRounds(tx *sql.Tx) ([]basics.Round, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	var rnd basics.Round
 	for rows.Next() {
 		err := rows.Scan(&rnd)
