@@ -384,7 +384,6 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 		defer func() {
 			t.Logf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
 		}()
-		tt := time.Now()
 		for wi := range outChan {
 			txnCounter = txnCounter + len(wi.unverifiedTxGroup)
 			groupCounter++
