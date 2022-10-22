@@ -27,7 +27,6 @@ import (
 
 func TestSortProposalValueLess(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//address := crypto.Hash([]byte("test address"))
 	// initialize a new digest with all bytes being 'a'
 	d1 := new(crypto.Digest)
 	for i := range d1 {

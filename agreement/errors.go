@@ -22,7 +22,6 @@ import (
 
 // serializableError, or state machine error, is a serializable error that
 // is correctly written to cadaver files.
-//msgp:ignore serializableErrorUnderlying
 type serializableError string
 
 // implement error interface
