@@ -2177,25 +2177,28 @@
       }
     },
     "RoundDeltas": {
-      "description": "",
+      "description": "Contains updates from a given round.",
       "type": "object",
       "required": [
 
       ],
       "properties": {
         "accounts": {
+          "description": "Array of Account updates for the round",
           "type": "array",
           "items": {
            "$ref": "#/definitions/AccountBalanceRecord"
           }
         },
         "apps": {
+          "description": "Array of App updates for the round.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AppResourceRecord"
           }
         },
         "assets": {
+          "description": "Array of Asset updates for the round.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AssetResourceRecord"
@@ -2204,7 +2207,7 @@
       }
     },
     "AccountBalanceRecord": {
-      "description": "",
+      "description": "Account and its address",
       "type": "object",
       "required": [
         "address",
@@ -2212,16 +2215,17 @@
       ],
       "properties": {
         "address": {
-          "description": "",
+          "description": "Address of the updated account.",
           "type": "string"
         },
         "account-data": {
+          "description": "Updated account data.",
           "$ref": "#/definitions/Account"
         }
       }
     },
     "AppResourceRecord": {
-      "description": "",
+      "description": "Represents AppParams and AppLocalStateDelta in deltas",
       "type": "object",
       "required": [
         "app-index",
@@ -2231,34 +2235,34 @@
       ],
       "properties": {
         "app-index": {
-          "description": "",
+          "description": "App index",
           "type": "integer",
           "x-algorand-format": "uint64"
         },
         "address": {
-          "description": "",
+          "description": "App account address",
           "type": "string"
         },
         "app-params-deleted": {
-          "description": "",
+          "description": "Whether the app params were deleted",
           "type": "boolean"
         },
         "app-local-state-deleted": {
-          "description": "",
+          "description": "Whether the app local state was deleted",
           "type": "boolean"
         },
         "app-params": {
-          "description": "",
+          "description": "App params",
           "$ref": "#/definitions/ApplicationParams"
         },
         "app-local-state": {
-          "description": "",
+          "description": "App local state",
           "$ref": "#/definitions/ApplicationLocalState"
         }
       }
     },
     "AssetResourceRecord": {
-      "description": "",
+      "description": "Represents AssetParams and AssetHolding in deltas",
       "required": [
         "asset-index",
         "address",
@@ -2267,27 +2271,28 @@
       ],
       "properties": {
         "asset-index": {
-          "description": "",
+          "description": "Index of the asset",
           "type": "integer",
           "x-algorand-format": "uint64"
         },
         "address": {
-          "description": "",
+          "description": "Account address of the asset",
           "type": "string"
         },
         "asset-params-deleted": {
-          "description": "",
+          "description": "Whether the asset params were deleted",
           "type": "boolean"
         },
         "asset-params": {
-          "description": "",
+          "description": "Assets params",
           "$ref": "#/definitions/AssetParams"
         },
         "asset-holding-deleted": {
-          "description": "",
+          "description": "Whether the asset holding was deleted",
           "type": "boolean"
         },
         "asset-holding": {
+          "description": "The asset holding",
           "$ref": "#/definitions/AssetHolding"
         }
       }
@@ -3313,7 +3318,7 @@
   },
   "responses": {
     "GetSyncRoundResponse": {
-      "description": "",
+      "description": "Response containing the ledger's minimum sync round",
       "schema": {
         "type": "object",
         "required": [

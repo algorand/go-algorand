@@ -102,7 +102,9 @@ type AccountBalanceRecord struct {
 	// Definition:
 	// data/basics/userBalance.go : AccountData
 	AccountData Account `json:"account-data"`
-	Address     string  `json:"address"`
+
+	// Address of the updated account.
+	Address string `json:"address"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -137,16 +139,24 @@ type AccountStateDelta struct {
 
 // AppResourceRecord defines model for AppResourceRecord.
 type AppResourceRecord struct {
-	Address  string `json:"address"`
+
+	// App account address
+	Address string `json:"address"`
+
+	// App index
 	AppIndex uint64 `json:"app-index"`
 
 	// Stores local state associated with an application.
-	AppLocalState        *ApplicationLocalState `json:"app-local-state,omitempty"`
-	AppLocalStateDeleted bool                   `json:"app-local-state-deleted"`
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// Whether the app local state was deleted
+	AppLocalStateDeleted bool `json:"app-local-state-deleted"`
 
 	// Stores the global information associated with an application.
-	AppParams        *ApplicationParams `json:"app-params,omitempty"`
-	AppParamsDeleted bool               `json:"app-params-deleted"`
+	AppParams *ApplicationParams `json:"app-params,omitempty"`
+
+	// Whether the app params were deleted
+	AppParamsDeleted bool `json:"app-params-deleted"`
 }
 
 // Application defines model for Application.
@@ -286,15 +296,21 @@ type AssetParams struct {
 
 // AssetResourceRecord defines model for AssetResourceRecord.
 type AssetResourceRecord struct {
+
+	// Account address of the asset
 	Address string `json:"address"`
 
 	// Describes an asset held by an account.
 	//
 	// Definition:
 	// data/basics/userBalance.go : AssetHolding
-	AssetHolding        *AssetHolding `json:"asset-holding,omitempty"`
-	AssetHoldingDeleted bool          `json:"asset-holding-deleted"`
-	AssetIndex          uint64        `json:"asset-index"`
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// Whether the asset holding was deleted
+	AssetHoldingDeleted bool `json:"asset-holding-deleted"`
+
+	// Index of the asset
+	AssetIndex uint64 `json:"asset-index"`
 
 	// AssetParams specifies the parameters for an asset.
 	//
@@ -302,8 +318,10 @@ type AssetResourceRecord struct {
 	//
 	// Definition:
 	// data/transactions/asset.go : AssetParams
-	AssetParams        *AssetParams `json:"asset-params,omitempty"`
-	AssetParamsDeleted bool         `json:"asset-params-deleted"`
+	AssetParams *AssetParams `json:"asset-params,omitempty"`
+
+	// Whether the asset params were deleted
+	AssetParamsDeleted bool `json:"asset-params-deleted"`
 }
 
 // BuildVersion defines model for BuildVersion.
@@ -502,9 +520,15 @@ type PendingTransactionResponse struct {
 
 // RoundDeltas defines model for RoundDeltas.
 type RoundDeltas struct {
+
+	// Array of Account updates for the round
 	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
-	Apps     *[]AppResourceRecord    `json:"apps,omitempty"`
-	Assets   *[]AssetResourceRecord  `json:"assets,omitempty"`
+
+	// Array of App updates for the round.
+	Apps *[]AppResourceRecord `json:"apps,omitempty"`
+
+	// Array of Asset updates for the round.
+	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
 }
 
 // StateDelta defines model for StateDelta.

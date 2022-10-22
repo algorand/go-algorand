@@ -483,7 +483,7 @@
             }
           }
         },
-        "description": ""
+        "description": "Response containing the ledger's minimum sync round"
       },
       "LightBlockHeaderProofResponse": {
         "content": {
@@ -950,13 +950,13 @@
         "type": "object"
       },
       "AccountBalanceRecord": {
-        "description": "",
+        "description": "Account and its address",
         "properties": {
           "account-data": {
             "$ref": "#/components/schemas/Account"
           },
           "address": {
-            "description": "",
+            "description": "Address of the updated account.",
             "type": "string"
           }
         },
@@ -1026,14 +1026,14 @@
         "type": "object"
       },
       "AppResourceRecord": {
-        "description": "",
+        "description": "Represents AppParams and AppLocalStateDelta in deltas",
         "properties": {
           "address": {
-            "description": "",
+            "description": "App account address",
             "type": "string"
           },
           "app-index": {
-            "description": "",
+            "description": "App index",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1041,14 +1041,14 @@
             "$ref": "#/components/schemas/ApplicationLocalState"
           },
           "app-local-state-deleted": {
-            "description": "",
+            "description": "Whether the app local state was deleted",
             "type": "boolean"
           },
           "app-params": {
             "$ref": "#/components/schemas/ApplicationParams"
           },
           "app-params-deleted": {
-            "description": "",
+            "description": "Whether the app params were deleted",
             "type": "boolean"
           }
         },
@@ -1283,21 +1283,21 @@
         "type": "object"
       },
       "AssetResourceRecord": {
-        "description": "",
+        "description": "Represents AssetParams and AssetHolding in deltas",
         "properties": {
           "address": {
-            "description": "",
+            "description": "Account address of the asset",
             "type": "string"
           },
           "asset-holding": {
             "$ref": "#/components/schemas/AssetHolding"
           },
           "asset-holding-deleted": {
-            "description": "",
+            "description": "Whether the asset holding was deleted",
             "type": "boolean"
           },
           "asset-index": {
-            "description": "",
+            "description": "Index of the asset",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1305,7 +1305,7 @@
             "$ref": "#/components/schemas/AssetParams"
           },
           "asset-params-deleted": {
-            "description": "",
+            "description": "Whether the asset params were deleted",
             "type": "boolean"
           }
         },
@@ -1748,21 +1748,24 @@
         "type": "object"
       },
       "RoundDeltas": {
-        "description": "",
+        "description": "Contains updates from a given round.",
         "properties": {
           "accounts": {
+            "description": "Array of Account updates for the round",
             "items": {
               "$ref": "#/components/schemas/AccountBalanceRecord"
             },
             "type": "array"
           },
           "apps": {
+            "description": "Array of App updates for the round.",
             "items": {
               "$ref": "#/components/schemas/AppResourceRecord"
             },
             "type": "array"
           },
           "assets": {
+            "description": "Array of Asset updates for the round.",
             "items": {
               "$ref": "#/components/schemas/AssetResourceRecord"
             },
@@ -3563,7 +3566,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Response containing the ledger's minimum sync round"
           },
           "400": {
             "content": {
