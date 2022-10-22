@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -79,4 +82,43 @@ func BenchmarkVoteDecoding(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		decodeVote(msgBytes)
 	}
+}
+
+// TestMessageBackwardCompatibility ensures MessageHandle field can be
+// properly decoded from message.
+// This test is only needed for agreement state serialization switch from reflection to msgp.
+func TestMessageBackwardCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type messageMetadata struct {
+		raw network.IncomingMessage
+	}
+
+	encoded, err := base64.StdEncoding.DecodeString("iaZCdW5kbGWAr0NvbXBvdW5kTWVzc2FnZYKoUHJvcG9zYWyApFZvdGWArU1lc3NhZ2VIYW5kbGWAqFByb3Bvc2FsgKNUYWeiUFC1VW5hdXRoZW50aWNhdGVkQnVuZGxlgLdVbmF1dGhlbnRpY2F0ZWRQcm9wb3NhbICzVW5hdXRoZW50aWNhdGVkVm90ZYCkVm90ZYA=")
+	require.NoError(t, err)
+
+	// run on master f57a276 to get the encoded data for above
+	// msg := message{
+	// 	MessageHandle: &messageMetadata{raw: network.IncomingMessage{Tag: protocol.Tag("mytag"), Data: []byte("some data")}},
+	// 	Tag:           protocol.ProposalPayloadTag,
+	// }
+
+	// result := protocol.EncodeReflect(&msg)
+	// fmt.Println(base64.StdEncoding.EncodeToString(result))
+
+	m1 := message{
+		messageHandle: &messageMetadata{raw: network.IncomingMessage{Tag: protocol.Tag("mytag"), Data: []byte("some data")}},
+		Tag:           protocol.ProposalPayloadTag,
+	}
+
+	var m2 message
+	err = protocol.Decode(encoded, &m2)
+	require.NoError(t, err)
+
+	var m3 message
+	err = protocol.DecodeReflect(encoded, &m3)
+	require.NoError(t, err)
+
+	require.Equal(t, m2, m3)
+	require.Equal(t, m1, m2)
 }
