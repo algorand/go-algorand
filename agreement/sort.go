@@ -62,15 +62,12 @@ type SortProposalValue []proposalValue
 
 func (a SortProposalValue) Len() int { return len(a) }
 func (a SortProposalValue) Less(i, j int) bool {
-	if a[i].OriginalPeriod < a[j].OriginalPeriod {
-		return true
-	} else if a[i].OriginalPeriod > a[j].OriginalPeriod {
-		return false
+	if a[i].OriginalPeriod != a[j].OriginalPeriod {
+		return a[i].OriginalPeriod < a[j].OriginalPeriod
 	}
-	if bytes.Compare(a[i].OriginalProposer[:], a[j].OriginalProposer[:]) < 0 {
-		return true
-	} else if bytes.Compare(a[j].OriginalProposer[:], a[i].OriginalProposer[:]) < 0 {
-		return false
+	cmp := bytes.Compare(a[i].OriginalProposer[:], a[j].OriginalProposer[:])
+	if cmp != 0 {
+		return cmp < 0
 	}
 	if bytes.Compare(a[i].BlockDigest[:], a[j].BlockDigest[:]) < 0 {
 		return true
