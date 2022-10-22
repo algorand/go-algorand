@@ -44,7 +44,10 @@ const blockQueryPeerLimit = 10
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
+// ErrSyncModeNotEnabled is returned by "SyncRound" APIs when EnableSyncMode is false
 var ErrSyncModeNotEnabled = errors.New("attempted to set sync round for catchup service when EnableSyncMode was disabled")
+
+// ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
 var ErrSyncRoundInvalid = errors.New("requested sync round cannot be higher than the latest round")
 
 // PendingUnmatchedCertificate is a single certificate that is being waited upon to have its corresponding block fetched.
@@ -180,6 +183,7 @@ func (s *Service) UnsetSyncRound() error {
 	return nil
 }
 
+// GetSyncRound returns whether a round has been previously set, the minimum sync round, and an error
 func (s *Service) GetSyncRound() (bool, uint64, error) {
 	if !s.cfg.EnableSyncMode {
 		return false, 0, ErrSyncModeNotEnabled
