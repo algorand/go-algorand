@@ -191,7 +191,6 @@ func init() {
 
 	panicIfErr(methodAppCmd.MarkFlagRequired("method"))
 	panicIfErr(methodAppCmd.MarkFlagRequired("from"))
-	panicIfErr(appCmd.PersistentFlags().MarkHidden("app-arg"))
 }
 
 func panicIfErr(err error) {
