@@ -261,11 +261,8 @@ func TestIncomingTxGroupHandle(t *testing.T) {
 	incomingTxHandlerProcessing(proto.MaxTxGroupSize, t)
 }
 
-// incomingTxHandlerProcessing is comprehensive transaction handling test, emulating
-// the production code as much as possible.
-// sends singed transactions to be handled and verified
-// It reports the number of dropped transactions. This includes the decoding of the
-// messages, and emulating the backlog processing.
+// incomingTxHandlerProcessing is a comprehensive transaction handling test
+// It handles the singed transactions by passing them to the backlog for verification
 func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	const numUsers = 100
 	numberOfTransactionGroups := 1000
@@ -414,8 +411,9 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	t.Logf("dropped %s txn gropus\n", str)
 }
 
-// Prepare N transaction groups of random sizes with randomly invalid signatures
-func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalid float32, addresses []basics.Address,
+// makeSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
+// invalid signatures of a given probability (invalidProb)
+func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
 	badTxnGroups map[uint64]interface{}) {
 	badTxnGroups = make(map[uint64]interface{})
@@ -460,7 +458,7 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalid float32, address
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures
-		if rand.Float32() < invalid {
+		if rand.Float32() < invalidProb {
 			tinGrp := rand.Intn(grpSize)
 			signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
 			badTxnGroups[uint64(u)] = struct{}{}
@@ -470,17 +468,19 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalid float32, address
 	return
 }
 
-// BenchmarkHandler sends singed transactions to be handled and verified
+// BenchmarkHandler sends singed transactions the the verifier
 func BenchmarkHandleTxns(b *testing.B) {
 	b.N = b.N * proto.MaxTxGroupSize / 2
 	runHandlerBenchmark(1, b)
 }
 
-// BenchmarkHandler sends singed transaction groups to be handled and verified
+// BenchmarkHandler sends singed transaction groups to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	runHandlerBenchmark(proto.MaxTxGroupSize, b)
 }
 
+// runHandlerBenchmark has a similar workflow to incomingTxHandlerProcessing,
+// but bypasses the backlog, and sends the transactions directly to the verifier
 func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
