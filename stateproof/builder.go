@@ -367,6 +367,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		}
 
 		spw.deleteOldSigs(&hdr)
+		spw.deleteOldKeys(&hdr)
 		spw.deleteOldBuilders(&hdr)
 
 		// Broadcast signatures based on the previous block(s) that
@@ -461,6 +462,24 @@ func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
 	}
 }
 
+func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
+		return
+	}
+
+	oldestRoundToRemove := stateProofNextRound.SubSaturate(basics.Round(proto.StateProofInterval))
+
+	keys := spw.accts.StateProofKeys(oldestRoundToRemove)
+	for _, key := range keys {
+		if err := spw.accts.DeleteStateProofKey(key.ParticipationID, oldestRoundToRemove); err != nil {
+			spw.log.Warnf("deleteOldKeys: could not remove key for round %s %v %v", key.ParticipationID, oldestRoundToRemove, err)
+		}
+	}
+
+}
+
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
 
@@ -477,8 +496,8 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 		return deleteBuilders(tx, oldestRoundToRemove)
 	})
 	if err != nil {
-		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 	}
+	spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 }
 
 func (spw *Worker) tryBroadcast() {

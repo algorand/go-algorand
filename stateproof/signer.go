@@ -39,8 +39,6 @@ type sigFromAddr struct {
 
 func (spw *Worker) signer(latest basics.Round) {
 	nextRnd := spw.nextStateProofRound(latest)
-	// at this point there isn't any known stateproof by the signer, set as 0 to ensure no keys will be deleted.
-	prevStateProof := nextRnd
 	for { // Start signing StateProofs from nextRnd onwards
 		select {
 		case <-spw.ledger.Wait(nextRnd):
@@ -55,28 +53,9 @@ func (spw *Worker) signer(latest basics.Round) {
 			spw.invokeBuilder(nextRnd)
 			nextRnd++
 
-			nxtstateProof := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-			if nxtstateProof > prevStateProof {
-				spw.attemptKeyDeletionPriorToRound(prevStateProof)
-				prevStateProof = nxtstateProof
-			}
-
 		case <-spw.ctx.Done():
 			spw.wg.Done()
 			return
-		}
-	}
-}
-
-// attempts to delete any key that its first valid is <= (prevStateproofRound - lifetime)
-func (spw *Worker) attemptKeyDeletionPriorToRound(prevStateproofRound basics.Round) {
-	for _, key := range spw.accts.StateProofKeys(prevStateproofRound) {
-		latestRndToDelete := prevStateproofRound - basics.Round(key.StateProofSecrets.SignerContext.KeyLifetime)
-		if latestRndToDelete > prevStateproofRound {
-			continue
-		}
-		if err := spw.accts.DeleteStateProofKey(key.ParticipationID, latestRndToDelete); err != nil {
-			spw.log.Warnf("spw.signBlock(%d): Couldn't delete StateProof keys: %v", prevStateproofRound, err)
 		}
 	}
 }
