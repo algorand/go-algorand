@@ -1348,13 +1348,8 @@ func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
-	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
-	for {
-		_, err := s.waitOnSigWithTimeout(time.Second * 2)
-		if err != nil {
-			break
-		}
-	}
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	a.NoError(err)
 
 	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
 
@@ -1395,13 +1390,8 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
-	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
-	for {
-		_, err := s.waitOnSigWithTimeout(time.Second * 2)
-		if err != nil {
-			break
-		}
-	}
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	a.NoError(err)
 
 	w.Shutdown()
 	dbs, _ = dbOpenTestRand(t, true, dbRand)
