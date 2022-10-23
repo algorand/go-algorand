@@ -69,8 +69,8 @@ type appParams struct {
 	basics.AppParams
 	Creator basics.Address
 
-	boxes   map[string]string
-	boxMods map[string]*string
+	boxes   map[string][]byte // will never contain a nil slice
+	boxMods map[string][]byte // nil slice indicates a deletion
 }
 
 type asaParams struct {
@@ -274,14 +274,14 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 						boxBytesTotal -= len(k) + len(base)
 						continue
 					}
-					if len(*v) != len(base) {
-						panic(fmt.Sprintf("mismatch %v %v", *v, base))
+					if len(v) != len(base) {
+						panic(fmt.Sprintf("mismatch %v %v", v, base))
 					}
 					continue
 				}
 				// fresh box in mods, count it
 				boxesTotal++
-				boxBytesTotal += len(k) + len(*v)
+				boxBytesTotal += len(k) + len(v)
 			}
 		}
 	}
@@ -399,7 +399,7 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 }
 
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value []byte, appAddr basics.Address) error {
 	if appIdx.Address() != appAddr {
 		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
 	}
@@ -408,7 +408,7 @@ func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAdd
 		return fmt.Errorf("no such app %d", appIdx)
 	}
 	if params.boxMods == nil {
-		params.boxMods = make(map[string]*string)
+		params.boxMods = make(map[string][]byte)
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
@@ -417,33 +417,33 @@ func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value string, appAdd
 	} else if _, ok := params.boxes[key]; ok {
 		return fmt.Errorf("attempt to recreate %s", key)
 	}
-	params.boxMods[key] = &value
+	params.boxMods[key] = value
 	l.applications[appIdx] = params
 	return nil
 }
 
-func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
+func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) ([]byte, bool, error) {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return "", false, nil
+		return nil, false, nil
 	}
 	if params.boxMods != nil {
 		if ps, ok := params.boxMods[key]; ok {
 			if ps == nil { // deletion in mod
-				return "", false, nil
+				return nil, false, nil
 			}
-			return *ps, true, nil
+			return ps, true, nil
 		}
 	}
 	if params.boxes == nil {
-		return "", false, nil
+		return nil, false, nil
 	}
 	box, ok := params.boxes[key]
 	return box, ok, nil
 }
 
 // SetBox set a box value through the boxMods mechanism. It can be Reset()
-func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error {
+func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value []byte) error {
 	current, ok, err := l.GetBox(appIdx, key)
 	if err != nil {
 		return err
@@ -453,12 +453,12 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error 
 	}
 	params := l.applications[appIdx] // assured, based on above
 	if params.boxMods == nil {
-		params.boxMods = make(map[string]*string)
+		params.boxMods = make(map[string][]byte)
 	}
 	if len(current) != len(value) {
 		return fmt.Errorf("wrong box size %#v %d != %d", key, len(current), len(value))
 	}
-	params.boxMods[key] = &value
+	params.boxMods[key] = value
 	return nil
 }
 
@@ -476,7 +476,7 @@ func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Addre
 	}
 	params := l.applications[appIdx] // assured, based on above
 	if params.boxMods == nil {
-		params.boxMods = make(map[string]*string)
+		params.boxMods = make(map[string][]byte)
 	}
 	params.boxMods[key] = nil
 	return true, nil

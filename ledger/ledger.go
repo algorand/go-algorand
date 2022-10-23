@@ -533,7 +533,7 @@ func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basi
 }
 
 // LookupKv loads a KV pair from the accounts update
-func (l *Ledger) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (l *Ledger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 

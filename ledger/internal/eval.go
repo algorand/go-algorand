@@ -45,7 +45,7 @@ type LedgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
-	LookupKv(basics.Round, string) (*string, error)
+	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -135,7 +135,7 @@ type roundCowBase struct {
 	creators map[creatable]foundAddress
 
 	// Similar cache for kv entries. A nil entry means ledger has no such pair
-	kvStore map[string]*string
+	kvStore map[string][]byte
 }
 
 func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, stateProofNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
@@ -151,7 +151,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
 		assets:            make(map[ledgercore.AccountAsset]cachedAssetHolding),
 		creators:          make(map[creatable]foundAddress),
-		kvStore:           make(map[string]*string),
+		kvStore:           make(map[string][]byte),
 	}
 }
 

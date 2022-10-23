@@ -78,10 +78,10 @@ type IncludedTransactions struct {
 // the conclusion of a block during the called to roundCowState.deltas()
 type KvValueDelta struct {
 	// Data stores the most recent value (nil == deleted)
-	Data *string
+	Data []byte
 
 	// OldData stores the previous vlaue (nil == didn't exist)
-	OldData *string
+	OldData []byte
 }
 
 // StateDelta describes the delta between a given round to the previous round

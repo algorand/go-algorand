@@ -107,7 +107,7 @@ func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (
 	return nil, errors.New("GetAppCreator() not implemented")
 }
 
-func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) (*string, error) {
+func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) ([]byte, error) {
 	// This function is unused.
 	return nil, errors.New("LookupKv() not implemented")
 }

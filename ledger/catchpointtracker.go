@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -1014,10 +1015,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			continue
 		}
 		if mv.oldData != nil {
-			if mv.data != nil && *mv.oldData == *mv.data {
+			if mv.data != nil && bytes.Equal(mv.oldData, mv.data) {
 				continue // changed back within the delta span
 			}
-			deleteHash := kvHashBuilderV6(key, *mv.oldData)
+			deleteHash := kvHashBuilderV6(key, mv.oldData)
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), key, err)
@@ -1030,7 +1031,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if mv.data != nil {
-			addHash := kvHashBuilderV6(key, *mv.data)
+			addHash := kvHashBuilderV6(key, mv.data)
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(addHash), key, err)
@@ -1435,7 +1436,7 @@ func resourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, cty
 }
 
 // kvHashBuilderV6 calculates the hash key used for the trie by combining the key and value
-func kvHashBuilderV6(key string, value string) []byte {
+func kvHashBuilderV6(key string, value []byte) []byte {
 	hash := hashBufV6(0, 3) // 3 indicates a kv pair
 
 	prehash := make([]byte, len(key)+len(value))

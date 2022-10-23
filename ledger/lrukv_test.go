@@ -40,7 +40,7 @@ func TestLRUBasicKV(t *testing.T) {
 	for i := 0; i < kvNum; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
 		kv := persistedKVData{
-			value: &kvValue,
+			value: []byte(kvValue),
 			round: basics.Round(i),
 		}
 		baseKV.write(kv, fmt.Sprintf("key%d", i))
@@ -51,7 +51,7 @@ func TestLRUBasicKV(t *testing.T) {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), kv.round)
-		require.Equal(t, fmt.Sprintf("kv %d value", i), *(kv.value))
+		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
 	}
 
 	// verify expected missing entries
@@ -71,7 +71,7 @@ func TestLRUBasicKV(t *testing.T) {
 			// expected to have it.
 			require.True(t, has)
 			require.Equal(t, basics.Round(i), kv.round)
-			require.Equal(t, fmt.Sprintf("kv %d value", i), *(kv.value))
+			require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
 		} else {
 			require.False(t, has)
 			require.Equal(t, persistedKVData{}, kv)
@@ -91,7 +91,7 @@ func TestLRUKVPendingWrites(t *testing.T) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			kvValue := fmt.Sprintf("kv %d value", i)
 			kv := persistedKVData{
-				value: &kvValue,
+				value: []byte(kvValue),
 				round: basics.Round(i),
 			}
 			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
@@ -142,7 +142,7 @@ func TestLRUKVPendingWritesWarning(t *testing.T) {
 		for i := 0; i < j; i++ {
 			kvValue := fmt.Sprintf("kv %d value", i)
 			kv := persistedKVData{
-				value: &kvValue,
+				value: []byte(kvValue),
 				round: basics.Round(i),
 			}
 			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
@@ -167,7 +167,7 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
 		kv := persistedKVData{
-			value: &kvValue,
+			value: []byte(kvValue),
 			round: basics.Round(i),
 		}
 		baseKV.writePending(kv, fmt.Sprintf("key%d", i))
@@ -180,7 +180,7 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), kv.round)
-		require.Equal(t, fmt.Sprintf("kv %d value", i), *(kv.value))
+		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
 	}
 
 	// verify expected missing entries
@@ -230,7 +230,7 @@ func generatePersistedKVData(startRound, endRound int) []cachedKVData {
 
 		kvs[i-startRound] = cachedKVData{
 			persistedKVData: persistedKVData{
-				value: &kvValue,
+				value: []byte(kvValue),
 				round: basics.Round(i + startRound),
 			},
 			key: fmt.Sprintf("key%d", i),

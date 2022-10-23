@@ -1159,7 +1159,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	}
 
 	for i := 0; i < len(kvPairDBPrepareSet); i++ {
-		err := writer.upsertKvPair(string(kvPairDBPrepareSet[i].key), string(kvPairDBPrepareSet[i].value))
+		err := writer.upsertKvPair(string(kvPairDBPrepareSet[i].key), kvPairDBPrepareSet[i].value)
 		require.NoError(t, err)
 	}
 
@@ -1333,7 +1333,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 			crypto.RandBytes(valueBuffer)
 			appID := basics.AppIndex(crypto.RandUint64())
 			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
-			err = writer.upsertKvPair(boxKey, string(valueBuffer))
+			err = writer.upsertKvPair(boxKey, valueBuffer)
 			require.NoError(b, err)
 
 			if i == 0 {
@@ -2664,7 +2664,7 @@ type mockAccountWriter struct {
 	rowids    map[int64]basics.Address
 	resources map[mockResourcesKey]ledgercore.AccountResource
 
-	kvStore map[string]string
+	kvStore map[string][]byte
 
 	lastRowid   int64
 	availRowIds []int64
@@ -2856,7 +2856,7 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 	return 1, nil
 }
 
-func (m *mockAccountWriter) upsertKvPair(key string, value string) error {
+func (m *mockAccountWriter) upsertKvPair(key string, value []byte) error {
 	m.kvStore[key] = value
 	return nil
 }
@@ -3278,7 +3278,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 		writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
 		require.NoError(b, err)
 		for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
-			err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), string(make([]byte, boxSize)))
+			err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), make([]byte, boxSize))
 			require.NoError(b, err)
 			cnt++
 		}

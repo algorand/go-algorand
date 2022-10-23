@@ -139,10 +139,10 @@ type modifiedResource struct {
 // tracker).
 type modifiedKvValue struct {
 	// data stores the most recent value (nil == deleted)
-	data *string
+	data []byte
 
 	// oldData stores the previous vlaue (nil == didn't exist)
-	oldData *string
+	oldData []byte
 
 	// ndelta keeps track of how many times the key for this value appears in
 	// accountUpdates.deltas.  This is used to evict modifiedValue entries when
@@ -332,11 +332,11 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
 
-func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return au.lookupKv(rnd, key, true /* take lock */)
 }
 
-func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bool) (*string, error) {
+func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bool) ([]byte, error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -881,7 +881,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
 }
 
-func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return aul.au.lookupKv(rnd, key, false /* don't sync */)
 }
 
