@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -48,15 +49,56 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	return dbOpenTestRand(t, inMemory, crypto.RandUint64())
 }
 
+func TestDbSchemaUpgrade1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	migrations := []db.Migration{
+		dbSchemaUpgrade0,
+		dbSchemaUpgrade1,
+	}
+
+	a.NoError(db.Initialize(dbs.Wdb, migrations[:1]))
+
+	// performing a request on sig db.
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var psig pendingSig
+		crypto.RandBytes(psig.signer[:])
+		return addPendingSig(tx, 0, psig)
+	}))
+
+	b := builder{Builder: &stateproof.Builder{}}
+	b.ProvenWeight = 5
+	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, 0, &b)
+	}), "no such table: builders")
+
+	// migrating the DB to the next version.
+	a.NoError(makeStateProofDB(dbs.Wdb))
+
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, 0, &b)
+	}))
+
+	var b2 builder
+	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		b2, err = getBuilder(tx, 0)
+		return err
+	}))
+	a.Equal(b.BuilderPersistingFields, b2.BuilderPersistingFields)
+}
+
 func TestPendingSigDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(dbs.Wdb)
 	require.NoError(t, err)
 
 	for r := basics.Round(0); r < basics.Round(100); r++ {
@@ -116,4 +158,117 @@ func TestPendingSigDB(t *testing.T) {
 			require.Equal(t, psigsThis[r][0].signer[4], byte(0))
 		}
 	}
+}
+
+func TestSigExistQuery(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	require.NoError(t, makeStateProofDB(dbs.Wdb))
+
+	n := 8
+	var accts []basics.Address
+	// setup:
+	for r := basics.Round(0); r < basics.Round(n); r++ {
+		var psig pendingSig
+		crypto.RandBytes(psig.signer[:])
+		accts = append(accts, psig.signer)
+
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return addPendingSig(tx, r, psig)
+		}))
+	}
+
+	// all addresses have signed the message so isPendingSigExist should result with true:
+	for r := basics.Round(0); r < basics.Round(n/2); r++ {
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			exists, err := isPendingSigExist(tx, r, accts[r])
+			require.NoError(t, err)
+			require.True(t, exists)
+			return nil
+		}))
+	}
+
+	// a "wrongAddress" should not have signatures in the dabase
+	require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		wrongAddress := accts[0]
+		var actCopy basics.Address
+		copy(actCopy[:], wrongAddress[:])
+		actCopy[0]++
+		exists, err := isPendingSigExist(tx, 0, actCopy)
+		require.NoError(t, err)
+		require.False(t, exists)
+		return nil
+	}))
+
+	require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deletePendingSigsBeforeRound(tx, basics.Round(n))
+	}))
+
+	for r := basics.Round(n / 2); r < basics.Round(n); r++ {
+		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			exists, err := isPendingSigExist(tx, r, accts[r])
+			require.NoError(t, err)
+			require.False(t, exists)
+			return nil
+		}))
+	}
+}
+
+func TestBuildersDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+	err := makeStateProofDB(dbs.Wdb)
+	a.NoError(err)
+
+	builders := make([]builder, 100)
+	for i := uint64(0); i < 100; i++ {
+		var bldr builder
+		bldr.Builder = &stateproof.Builder{}
+		bldr.Round = i
+		builders[i] = bldr
+
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return persistBuilder(tx, basics.Round(i), &builders[i])
+		})
+		a.NoError(err)
+	}
+
+	var count int
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		return err
+	})
+	a.NoError(err)
+	a.Equal(100, count)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deleteBuilders(tx, basics.Round(35))
+	})
+	a.NoError(err)
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		return err
+	})
+	a.NoError(err)
+	a.Equal(100-35, count)
+
+	var bldr builder
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		bldr, err = getBuilder(tx, basics.Round(34))
+		return err
+	})
+	a.ErrorIs(err, sql.ErrNoRows)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		bldr, err = getBuilder(tx, basics.Round(35))
+		return err
+	})
+	a.NoError(err)
+	a.Equal(uint64(35), bldr.Round)
 }

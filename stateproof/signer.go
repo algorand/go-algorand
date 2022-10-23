@@ -137,6 +137,13 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
+		exists, err := spw.sigExistsInDB(hdr.Round, key.Account)
+		if err != nil {
+			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", hdr.Round, err)
+		} else if exists {
+			continue
+		}
+
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
 			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)

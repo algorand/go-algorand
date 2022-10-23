@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -171,7 +172,13 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 	return hdr, nil
 }
 
+var errEmptyVoters = errors.New("ledger does not have voters")
+
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
+	if len(s.keysForVoters) == 0 {
+		return nil, errEmptyVoters
+	}
+
 	voters := &ledgercore.VotersForRound{
 		Proto:       config.Consensus[protocol.ConsensusCurrentVersion],
 		AddrToPos:   make(map[basics.Address]uint64),
@@ -282,6 +289,19 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	require.NoError(t, err)
 
 	return part
+}
+
+func countBuildersInDB(store db.Accessor) (nrows int, err error) {
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT COUNT(*) FROM builders")
+		err := row.Scan(&nrows)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return
 }
 
 func TestWorkerAllSigs(t *testing.T) {
@@ -454,6 +474,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 
 func TestWorkerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
@@ -491,8 +512,8 @@ func TestWorkerRestart(t *testing.T) {
 		w.Shutdown()
 	}
 
-	require.True(t, formedAt > 1)
-	require.True(t, formedAt < 5)
+	a.Greater(formedAt, 1)
+	a.Less(formedAt, 5)
 }
 
 func TestWorkerHandleSig(t *testing.T) {
@@ -625,6 +646,9 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, len(w.builders))
+	countDB, err := countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(expectedStateProofs, countDB)
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -642,6 +666,9 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 	a.Equal(3, len(w.builders))
+	countDB, err = countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(3, countDB)
 
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
@@ -692,6 +719,9 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	// should not give up on rounds
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	countDB, err := countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -714,6 +744,9 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	// should not give up on rounds
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	countDB, err = countBuildersInDB(w.db)
+	a.NoError(err)
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
 	roundSigs = make(map[basics.Round][]pendingSig)
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -782,9 +815,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	spw = newTestWorker(t, tns)
 
 	// Prepare the database
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(spw.db)
 	require.NoError(t, err)
 
 	// All the keys are for round 255. This way, starting the period at 256,
@@ -1020,6 +1051,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
+	defer w.Shutdown()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1028,12 +1060,7 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Ignore, fwd)
-	expected := ledgercore.ErrNoEntry{
-		Round:     msg.Round,
-		Latest:    w.ledger.Latest(),
-		Committed: w.ledger.Latest(),
-	}
-	require.Equal(t, expected, err)
+	require.ErrorContains(t, err, "latest round is smaller than given")
 }
 
 // relays reject signatures for wrong message (sig verification fails)
@@ -1043,6 +1070,8 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
+	err := makeStateProofDB(w.db)
+	require.NoError(t, err)
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1078,6 +1107,8 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
+	err := makeStateProofDB(w.db)
+	require.NoError(t, err)
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
@@ -1122,9 +1153,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 
 	msg.Sig = sig
 	// Create the database
-	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err = makeStateProofDB(w.db)
 	require.NoError(t, err)
 
 	msgBytes := protocol.Encode(&msg)
@@ -1152,8 +1181,11 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
+	defer w.Shutdown()
+
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
 	require.NoError(t, err)
+
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
 	require.NoError(t, err)
 
@@ -1174,7 +1206,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	require.Contains(t, "no such table: sigs", err.Error())
 }
 
-// relays reject signatures when could not makeBuilderForRound
+// relays reject signatures when could not createBuilder
 func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1193,6 +1225,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
+	defer w.Shutdown()
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(512))
@@ -1288,4 +1321,199 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 		Data: msgBytes,
 	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
+}
+
+func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
+
+	const expectedStateproofs = 9
+	const firstExpectedStateproof = 512
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+
+	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
+	for {
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		if err != nil {
+			break
+		}
+	}
+
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
+
+	w.Shutdown()
+	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	s.keysForVoters = []account.Participation{}
+
+	dbs, _ = dbOpenTestRand(t, true, dbRand)
+	w = newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
+	defer w.Shutdown()
+
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
+}
+
+func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	const expectedStateproofs = 9
+	const firstExpectedStateproof = 512
+
+	s := newWorkerStubs(t, keys, 10)
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+
+	// Wait on all signatures (should be many since they're re-broadcasted until the StateProof transaction is accepted)
+	for {
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		if err != nil {
+			break
+		}
+	}
+
+	w.Shutdown()
+	dbs, _ = dbOpenTestRand(t, true, dbRand)
+	w = newTestWorkerDB(t, s, dbs.Wdb)
+
+	// we now remove all builders from the table. This will cause the worker to create the builders from the ledger.
+	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from builders")
+		return err
+	}))
+
+	w.Start()
+	defer w.Shutdown()
+
+	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
+
+}
+
+func compareBuilders(a *require.Assertions, expectedStateproofs int, w *Worker, firstExpectedStateproof int, proto config.ConsensusParams) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// In memory
+	a.Equal(expectedStateproofs, len(w.builders))
+	// In disk
+	r := basics.Round(firstExpectedStateproof)
+	for i := 0; i < expectedStateproofs; i++ {
+		var builderFromDisk builder
+		a.NoError(
+			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+				var err error
+				builderFromDisk, err = getBuilder(tx, r)
+				return err
+			}))
+		a.Equal(w.builders[r].BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
+		r += basics.Round(proto.StateProofInterval)
+	}
+
+	// verify the in-memory builder has signatures loaded
+	for _, v := range w.builders {
+		for j := 0; j < len(v.Participants); j++ {
+			present, err := v.Present(uint64(j))
+			a.NoError(err)
+			a.True(present)
+		}
+	}
+}
+
+func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	lastRound := proto.StateProofInterval * 2
+	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
+
+	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
+	require.NoError(t, err)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	require.NoError(t, err)
+
+	hashedStateproofMessage := stateproofMessage.Hash()
+	spRecords := s.StateProofKeys(basics.Round(proto.StateProofInterval * 2))
+	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+	require.NoError(t, err)
+
+	msg.Sig = sig
+	// Create the database
+	err = makeStateProofDB(w.db)
+	require.NoError(t, err)
+
+	msgBytes := protocol.Encode(&msg)
+	// add signature so  builder will get loaded
+	reply := w.handleSigMessage(network.IncomingMessage{
+		Data: msgBytes,
+	})
+	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
+
+	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	s.keysForVoters = []account.Participation{}
+
+	// removing the builder from memory will force the worker to load it from disk
+	w.builders = make(map[basics.Round]builder)
+	_, exists := w.builders[msg.Round]
+	require.False(t, exists)
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	// we expect the handler to ignore the signature since the builder and the old signature were loaded
+	require.Equal(t, network.Ignore, fwd)
+	require.NoError(t, err)
+	_, exists = w.builders[msg.Round]
+	require.True(t, exists)
+
+	// verify that builders can be loaded even if there are no signatures
+	w.builders = make(map[basics.Round]builder)
+	_, exists = w.builders[msg.Round]
+	require.False(t, exists)
+	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from sigs")
+		return err
+	}))
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Broadcast, fwd)
+	require.NoError(t, err)
+	_, exists = w.builders[msg.Round]
+	require.True(t, exists)
+
+	// remove builder from disk and memory we fail the builder creation (since the ledger also returns error)
+	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from builders")
+		return err
+	}))
+	w.builders = make(map[basics.Round]builder)
+	_, err = w.handleSig(msg, msg.SignerAddress)
+	require.ErrorIs(t, err, errEmptyVoters)
+	_, exists = w.builders[msg.Round]
+	require.False(t, exists)
 }
