@@ -1497,6 +1497,22 @@ func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	_, exists = w.builders[msg.Round]
 	require.True(t, exists)
 
+	// verify that builders can be loaded even if there are no signatures
+	
+	w.builders = make(map[basics.Round]builder)
+	_, exists = w.builders[msg.Round]
+	require.False(t, exists)
+	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from sigs")
+		return err
+	}))
+	fwd, err = w.handleSig(msg, msg.SignerAddress)
+	require.Equal(t, network.Broadcast, fwd)
+	require.NoError(t, err)
+	_, exists = w.builders[msg.Round]
+	require.True(t, exists)
+
+
 	w.persistBuilders = false
 	// removing the builder from memory will force the worker to load it from disk
 	w.builders = make(map[basics.Round]builder)
