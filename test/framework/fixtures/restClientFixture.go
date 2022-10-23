@@ -216,7 +216,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
 	}
 	for _, addr := range addresses {
-		info, err := client.AccountInformationV2(addr, false)
+		info, err := client.AccountInformationV2(addr, true)
 		f.failOnError(err, "failed to get account info: %v")
 		accounts = append(accounts, info)
 	}

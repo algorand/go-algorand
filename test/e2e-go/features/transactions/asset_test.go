@@ -834,7 +834,7 @@ func TestAssetSend(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating asset slots")
 
-	info, err = client.AccountInformationV2(extra, false)
+	info, err = client.AccountInformationV2(extra, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -913,7 +913,7 @@ func TestAssetSend(t *testing.T) {
 	a.True(confirmed, "clawback")
 
 	// Check that the asset balances are correct
-	info, err = client.AccountInformationV2(account0, false)
+	info, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -925,7 +925,7 @@ func TestAssetSend(t *testing.T) {
 		}
 	}
 
-	info, err = client.AccountInformationV2(extra, false)
+	info, err = client.AccountInformationV2(extra, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -1227,12 +1227,12 @@ func verifyAssetParameters(asset generated.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 
-	asser.Equal(asset.UnitName, unitName)
-	asser.Equal(asset.Name, assetName)
-	asser.Equal(asset.Manager, manager)
-	asser.Equal(asset.Reserve, reserve)
-	asser.Equal(asset.Freeze, freeze)
-	asser.Equal(asset.Clawback, clawback)
-	asser.Equal(asset.MetadataHash, metadataHash)
-	asser.Equal(asset.Url, assetURL)
+	asser.Equal(*asset.UnitName, unitName)
+	asser.Equal(*asset.Name, assetName)
+	asser.Equal(*asset.Manager, manager)
+	asser.Equal(*asset.Reserve, reserve)
+	asser.Equal(*asset.Freeze, freeze)
+	asser.Equal(*asset.Clawback, clawback)
+	asser.Equal(*asset.MetadataHash, metadataHash)
+	asser.Equal(*asset.Url, assetURL)
 }

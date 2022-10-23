@@ -758,6 +758,20 @@ var infoAssetCmd = &cobra.Command{
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
 
+		// Helper methods for dereferencing optional asset fields.
+		derefString := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+		derefBool := func(b *bool) bool {
+			if b == nil {
+				return false
+			}
+			return *b
+		}
+
 		lookupAssetID(cmd, creator, client)
 
 		asset, err := client.AssetInformationV2(assetID)
@@ -766,9 +780,9 @@ var infoAssetCmd = &cobra.Command{
 		}
 
 		reserveEmpty := false
-		if asset.Params.Reserve != nil && *asset.Params.Reserve == "" {
+		if derefString(asset.Params.Reserve) == "" {
 			reserveEmpty = true
-			*asset.Params.Reserve = asset.Params.Creator
+			asset.Params.Reserve = &asset.Params.Creator
 		}
 
 		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, true)
@@ -786,19 +800,6 @@ var infoAssetCmd = &cobra.Command{
 			}
 		} else {
 			reportErrorf(errorRequestFail, "cannot find asset ID in account")
-		}
-
-		derefString := func(s *string) string {
-			if s == nil {
-				return ""
-			}
-			return *s
-		}
-		derefBool := func(b *bool) bool {
-			if b == nil {
-				return false
-			}
-			return *b
 		}
 
 		fmt.Printf("Asset ID:         %d\n", assetID)

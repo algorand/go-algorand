@@ -502,7 +502,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 
 // Block gets the block info for the given round
 func (client RestClient) Block(round uint64) (response generatedV2.BlockResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/block/%d", round), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
 }
 
