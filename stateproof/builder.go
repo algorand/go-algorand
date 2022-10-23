@@ -50,10 +50,6 @@ func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder,
 }
 
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
-	if !spw.persistBuilders {
-		return spw.createBuilder(rnd)
-	}
-
 	buildr, err := spw.loadBuilderFromDB(rnd)
 	if err == nil {
 		return buildr, nil
@@ -475,10 +471,6 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 		if rnd < oldestRoundToRemove {
 			delete(spw.builders, rnd)
 		}
-	}
-
-	if !spw.persistBuilders {
-		return
 	}
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {

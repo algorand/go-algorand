@@ -60,8 +60,6 @@ type Worker struct {
 
 	// builders is indexed by the round of the block being signed.
 	builders map[basics.Round]builder
-	// Flag to indicate if builders data should be persisted to the disk (required for recoverability of lagging StateProof chain)
-	persistBuilders bool
 
 	ctx      context.Context
 	shutdown context.CancelFunc
@@ -72,21 +70,20 @@ type Worker struct {
 }
 
 // NewWorker constructs a new Worker, as used by the node.
-func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender, persistBuilders bool) *Worker {
+func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Worker{
-		db:              db,
-		log:             log,
-		accts:           accts,
-		ledger:          ledger,
-		net:             net,
-		txnSender:       txnSender,
-		builders:        make(map[basics.Round]builder),
-		persistBuilders: persistBuilders,
-		ctx:             ctx,
-		shutdown:        cancel,
-		signedCh:        make(chan struct{}, 1),
+		db:        db,
+		log:       log,
+		accts:     accts,
+		ledger:    ledger,
+		net:       net,
+		txnSender: txnSender,
+		builders:  make(map[basics.Round]builder),
+		ctx:       ctx,
+		shutdown:  cancel,
+		signedCh:  make(chan struct{}, 1),
 	}
 }
 

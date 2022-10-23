@@ -269,7 +269,7 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 }
 
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
-	return NewWorker(dba, logging.TestingLog(t), s, s, s, s, true)
+	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
 }
 
 func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
@@ -596,7 +596,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	logger := logging.NewLogger()
 	logger.SetOutput(io.Discard)
 
-	w := NewWorker(dbs.Wdb, logger, s, s, s, s, false)
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 
 	w.Start()
 	defer w.Shutdown()
@@ -1051,7 +1051,6 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
-	w.persistBuilders = false
 	defer w.Shutdown()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
@@ -1071,7 +1070,6 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
-	w.persistBuilders = false
 	err := makeStateProofDB(w.db)
 	require.NoError(t, err)
 
@@ -1111,7 +1109,6 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 	w := newTestWorker(t, s)
 	err := makeStateProofDB(w.db)
 	require.NoError(t, err)
-	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
@@ -1185,8 +1182,6 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	defer w.Shutdown()
-	// don't want the worker to access the builder db and fail due to the lack of said db.
-	w.persistBuilders = false
 
 	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
 	require.NoError(t, err)
@@ -1231,7 +1226,6 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
 	defer w.Shutdown()
-	w.persistBuilders = false
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(512))
@@ -1498,7 +1492,7 @@ func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	require.True(t, exists)
 
 	// verify that builders can be loaded even if there are no signatures
-	
+
 	w.builders = make(map[basics.Round]builder)
 	_, exists = w.builders[msg.Round]
 	require.False(t, exists)
@@ -1512,9 +1506,11 @@ func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	_, exists = w.builders[msg.Round]
 	require.True(t, exists)
 
-
-	w.persistBuilders = false
-	// removing the builder from memory will force the worker to load it from disk
+	// remove builder from disk and memory we fail the builder creation (since the ledger also returns error)
+	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from builders")
+		return err
+	}))
 	w.builders = make(map[basics.Round]builder)
 	_, err = w.handleSig(msg, msg.SignerAddress)
 	require.ErrorIs(t, err, errEmptyVoters)
