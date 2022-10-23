@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -2252,6 +2253,9 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
 			return err0
 		}
+		if err0 := createStateProofVerificationTable(ctx, tx); err0 != nil {
+			return err0
+		}
 
 		return nil
 	})
@@ -2382,9 +2386,11 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	defaultAccountDBVersion := accountDBVersion
 	accountDBVersion = 6
+
 	defer func() {
-		accountDBVersion = 7
+		accountDBVersion = defaultAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2418,6 +2424,9 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 			return err
 		}
 		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := createStateProofVerificationTable(ctx, tx); err != nil {
 			return err
 		}
 		return nil
@@ -3009,4 +3018,155 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
+}
+
+func TestStateProofVerificationTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	numOfStateProofs := uint64(3)
+	firstStateProofDataConfirmedRound := proto.StateProofInterval
+	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
+
+	lastStateProofDataConfirmedRound := firstStateProofDataConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
+	lastStateProofDataTargetRound := lastStateProofDataConfirmedRound + proto.StateProofInterval
+
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(firstStateProofDataTargetRound)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < firstStateProofDataConfirmedRound-1; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, false, any)
+
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += 10
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
+
+	for i := firstStateProofDataConfirmedRound; i < lastStateProofDataConfirmedRound; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
+	// Last one should be in memory as a result of cfg.MaxAcctLookback not being equal to 0.
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
+
+	l.WaitForCommit(blk.BlockHeader.Round)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs, proto.StateProofInterval, true, any)
+
+	var stateProofReceived bookkeeping.StateProofTrackingData
+	stateProofReceived.StateProofNextRound = basics.Round(firstStateProofDataTargetRound + proto.StateProofInterval)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: stateProofReceived,
+	}
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += 10
+
+	// This implementation is an easy way to feed the delta, which the state proof verification tracker relies on,
+	// to the ledger.
+	delta, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	delta.StateProofNext = stateProofReceived.StateProofNextRound
+	vb := ledgercore.MakeValidatedBlock(blk, delta)
+	err = l.AddValidatedBlock(vb, agreement.Certificate{})
+
+	require.NoError(t, err)
+
+	for i := uint64(0); i < proto.MaxBalLookback; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	l.WaitForCommit(blk.BlockHeader.Round)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, false, any)
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound+proto.StateProofInterval),
+		numOfStateProofs-1, proto.StateProofInterval, true, any)
+}
+
+func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	numOfStateProofs := uint64(3)
+	firstStateProofDataConfirmedRound := proto.StateProofInterval
+	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
+
+	lastStateProofDataConfirmedRound := firstStateProofDataConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
+	lastStateProofDataTargetRound := lastStateProofDataConfirmedRound + proto.StateProofInterval
+
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(firstStateProofDataTargetRound)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < lastStateProofDataConfirmedRound; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	l.WaitForCommit(blk.BlockHeader.Round)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
+
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
 }

@@ -75,13 +75,14 @@ type Ledger struct {
 	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
-	accts       accountUpdates
-	acctsOnline onlineAccounts
-	catchpoint  catchpointTracker
-	txTail      txTail
-	bulletin    bulletin
-	notifier    blockNotifier
-	metrics     metricsTracker
+	accts                  accountUpdates
+	acctsOnline            onlineAccounts
+	catchpoint             catchpointTracker
+	txTail                 txTail
+	bulletin               bulletin
+	notifier               blockNotifier
+	metrics                metricsTracker
+	stateProofVerification stateProofVerificationTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -205,13 +206,14 @@ func (l *Ledger) reloadLedger() error {
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,       // update the balances
-		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
-		&l.acctsOnline, // update online account balances history
-		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,    // provide closed channel signaling support for completed rounds
-		&l.notifier,    // send OnNewBlocks to subscribers
-		&l.metrics,     // provides metrics reporting support
+		&l.accts,                  // update the balances
+		&l.catchpoint,             // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline,            // update online account balances history
+		&l.txTail,                 // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,               // provide closed channel signaling support for completed rounds
+		&l.notifier,               // send OnNewBlocks to subscribers
+		&l.metrics,                // provides metrics reporting support
+		&l.stateProofVerification, // provides state proof verification support
 	}
 
 	l.accts.initialize(l.cfg)
@@ -450,6 +452,14 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.acctsOnline.voters.getVoters(rnd)
+}
+
+// StateProofVerificationData returns the data required to verify the state proof whose last attested round is
+// stateProofLastAttestedRound.
+func (l *Ledger) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.stateProofVerification.LookupVerificationData(stateProofLastAttestedRound)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and

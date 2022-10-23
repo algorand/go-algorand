@@ -31,6 +31,14 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
+// StateProofVerificationData
+//              |-----> (*) MarshalMsg
+//              |-----> (*) CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> (*) Msgsize
+//              |-----> (*) MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
@@ -936,4 +944,156 @@ func (z *OnlineRoundParamsData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *OnlineRoundParamsData) MsgIsZero() bool {
 	return ((*z).OnlineSupply == 0) && ((*z).RewardsLevel == 0) && ((*z).CurrentProtocol.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).OnlineTotalWeight.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).TargetStateProofRound.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).VotersCommitment.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pw"
+			o = append(o, 0xa2, 0x70, 0x77)
+			o = (*z).OnlineTotalWeight.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "spround"
+			o = append(o, 0xa7, 0x73, 0x70, 0x72, 0x6f, 0x75, 0x6e, 0x64)
+			o = (*z).TargetStateProofRound.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "vc"
+			o = append(o, 0xa2, 0x76, 0x63)
+			o = (*z).VotersCommitment.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *StateProofVerificationData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationData)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).TargetStateProofRound.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TargetStateProofRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VotersCommitment.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VotersCommitment")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).OnlineTotalWeight.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OnlineTotalWeight")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = StateProofVerificationData{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "spround":
+				bts, err = (*z).TargetStateProofRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TargetStateProofRound")
+					return
+				}
+			case "vc":
+				bts, err = (*z).VotersCommitment.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VotersCommitment")
+					return
+				}
+			case "pw":
+				bts, err = (*z).OnlineTotalWeight.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OnlineTotalWeight")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationData)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *StateProofVerificationData) Msgsize() (s int) {
+	s = 1 + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).OnlineTotalWeight.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *StateProofVerificationData) MsgIsZero() bool {
+	return ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero())
 }

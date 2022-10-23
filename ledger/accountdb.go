@@ -59,6 +59,10 @@ type onlineAccountsDbQueries struct {
 	lookupOnlineTotalsStmt  *sql.Stmt
 }
 
+type stateProofVerificationDbQueries struct {
+	lookupStateProofVerificationData *sql.Stmt
+}
+
 var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS acctrounds (
 		id string primary key,
@@ -164,6 +168,11 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
+const createStateProofVerificationTableQuery = `
+	CREATE TABLE IF NOT EXISTS stateproofverification (
+	targetstateproofround integer primary key NOT NULL,
+	verificationdata blob NOT NULL)`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -178,12 +187,13 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
 	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
+	`DROP TABLE IF EXISTS stateproofverification`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(7)
+var accountDBVersion = int32(8)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -1375,6 +1385,11 @@ func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err 
 
 func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Executable) error {
 	_, err := e.ExecContext(ctx, createCatchpointFirstStageInfoTable)
+	return err
+}
+
+func createStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTableQuery)
 	return err
 }
 
@@ -5036,4 +5051,73 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 		return err
 	}
 	return db.Retry(f)
+}
+
+func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+
+	if err != nil {
+		return err
+	}
+
+	defer insertStmt.Close()
+
+	for _, commitData := range data {
+		verificationData := commitData.verificationData
+		f := func() error {
+			_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+			return err
+		}
+
+		err = db.Retry(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
+	f := func() error {
+		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
+		return err
+	}
+	return db.Retry(f)
+}
+
+func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
+	var err error
+	qs := &stateProofVerificationDbQueries{}
+
+	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	if err != nil {
+		return nil, err
+	}
+
+	return qs, nil
+}
+
+func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	data := ledgercore.StateProofVerificationData{}
+	queryFunc := func() error {
+		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
+		var buf []byte
+		err := row.Scan(&buf)
+		if err != nil {
+			return err
+		}
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	err := db.Retry(queryFunc)
+	return &data, err
 }
