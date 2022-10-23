@@ -51,9 +51,9 @@ def build_netgoal_params(template_dict):
         '-w', str(wallets_count),
         '-R', str(relay_count),
         '-N', str(participating_instance_count),
-        '-H', str(non_participating_instance_count),
+        '-X', str(non_participating_instance_count),
         '-n', str(nodes_count),
-        '-X', str(npn_count),
+        '-x', str(npn_count),
         '--relay-template', relay_config,
         '--node-template', participating_node_config,
         '--non-participating-node-template', non_participating_node_config
