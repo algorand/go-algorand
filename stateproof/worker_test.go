@@ -241,7 +241,7 @@ func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.Signe
 func (s *testWorkerStubs) RegisterHandlers([]network.TaggedMessageHandler) {
 }
 
-func (s *testWorkerStubs) advanceLatestWithoutStateProof(delta uint64) {
+func (s *testWorkerStubs) advanceRoundsWithoutStateProof(delta uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -251,7 +251,7 @@ func (s *testWorkerStubs) advanceLatestWithoutStateProof(delta uint64) {
 }
 
 // used to simulate to workers that rounds have advanced, and stateproofs were created.
-func (s *testWorkerStubs) advanceLatestAndStateProofs(delta uint64) {
+func (s *testWorkerStubs) advanceRoundsAndStateProofs(delta uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -339,12 +339,12 @@ func TestWorkerAllSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	// Go through several iterations, making sure that we get
 	// the signatures and certs broadcast at each round.
 	for iter := 0; iter < 5; iter++ {
-		s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+		s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
@@ -408,8 +408,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -425,7 +425,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	}
 
 	// Expect a state proof to be formed in the next StateProofInterval/2.
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval / 2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval / 2)
 
 	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
 	require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(3 * proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -505,7 +505,7 @@ func TestWorkerRestart(t *testing.T) {
 	s := newWorkerStubs(t, keys, 10)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(3*proto.StateProofInterval - 1)
+	s.advanceRoundsWithoutStateProof(3*proto.StateProofInterval - 1)
 
 	dbRand := crypto.RandUint64()
 
@@ -551,7 +551,7 @@ func TestWorkerHandleSig(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(3 * proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -587,10 +587,10 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestAndStateProofs(proto.StateProofInterval) // going to rnd 256 // the stproof is in 512
+	s.advanceRoundsAndStateProofs(proto.StateProofInterval) // going to rnd 256 // the stproof is in 512
 	require.Zero(t, s.GetNumDeletedKeys())
 
-	s.advanceLatestAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768.
+	s.advanceRoundsAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768.
 
 	ctx, cncl := context.WithTimeout(context.Background(), time.Second*5)
 	defer cncl()
@@ -640,7 +640,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(3 * proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
 	require.NoError(t, w.db.Atomic(
@@ -674,10 +674,10 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	for iter := 0; iter < expectedStateProofs; iter++ {
-		s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+		s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 		tx := <-s.txmsg
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
@@ -736,10 +736,10 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	for iter := uint64(0); iter < proto.StateProofMaxRecoveryIntervals+1; iter++ {
-		s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+		s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 		tx := <-s.txmsg
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
@@ -769,7 +769,7 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	})
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(roundSigs)))
 
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 	tx := <-s.txmsg
 	a.Equal(tx.Txn.Type, protocol.StateProofTx)
 
@@ -972,9 +972,9 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval + proto.StateProofInterval/2)
 
-	s.advanceLatestWithoutStateProof(proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -1385,7 +1385,7 @@ func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 	const firstExpectedStateproof = 512
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+	s.advanceRoundsWithoutStateProof((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
@@ -1427,7 +1427,7 @@ func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
 	w.Start()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceLatest((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
+	s.advanceRoundsWithoutStateProof((expectedStateproofs+1)*proto.StateProofInterval + proto.StateProofInterval/2) // 512, 768, 1024, ... (9 StateProofs)
 
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
