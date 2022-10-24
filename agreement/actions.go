@@ -387,7 +387,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		case nil:
 			// no error.
 			persistCompleteEvents := s.persistState(persistStateDone)
-			// we want to place there two one after the other. That way, the second would not get executed up until the first one is complete.
+			// we want to place these two one after the other. That way, the second would not get executed up until the first one is complete.
 			s.demux.prioritize(persistCompleteEvents)
 			s.demux.prioritize(voteEvents)
 		default:
@@ -403,11 +403,11 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 }
 
 func ignoreAction(e messageEvent, err *serializableError) action {
-	return networkAction{T: ignore, Err: err, h: e.Input.messageHandle}
+	return networkAction{T: ignore, Err: err, h: e.Input.MessageHandle}
 }
 
 func disconnectAction(e messageEvent, err *serializableError) action {
-	return networkAction{T: disconnect, Err: err, h: e.Input.messageHandle}
+	return networkAction{T: disconnect, Err: err, h: e.Input.MessageHandle}
 }
 
 func broadcastAction(tag protocol.Tag, o interface{}) action {
@@ -426,7 +426,7 @@ func broadcastAction(tag protocol.Tag, o interface{}) action {
 }
 
 func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
-	a := networkAction{T: relay, h: e.Input.messageHandle, Tag: tag}
+	a := networkAction{T: relay, h: e.Input.MessageHandle, Tag: tag}
 	// TODO would be good to have compiler check this (and related) type switch
 	// by specializing one method per type
 	switch tag {

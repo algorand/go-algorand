@@ -150,6 +150,7 @@ type (
 		out chan cryptoResult
 	}
 
+	//msgp:ignore bundleFuture
 	bundleFuture struct {
 		message
 		index uint64

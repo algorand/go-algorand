@@ -140,11 +140,11 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				var msg message
 				switch tag {
 				case protocol.AgreementVoteTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
+					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
 				case protocol.VoteBundleTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
+					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
@@ -367,7 +367,7 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 		return
 	}
 
-	tailmsg := message{messageHandle: m.messageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
+	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
 	proto, err := l.ConsensusVersion(ParamsRound(synthetic.ConsensusRound()))
 	synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto}).(messageEvent)

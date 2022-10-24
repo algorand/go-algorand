@@ -93,7 +93,7 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 		}
 
 		return message{
-			messageHandle:       MessageHandle(msgHandle),
+			MessageHandle:       MessageHandle(msgHandle),
 			Tag:                 tag,
 			UnauthenticatedVote: makeUnauthenticatedVote(l, sender, selection, voting, Round, Period, Step, proposal),
 		}
@@ -103,13 +103,13 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 			Block: e,
 		}
 		return message{
-			messageHandle:           MessageHandle(msgHandle),
+			MessageHandle:           MessageHandle(msgHandle),
 			Tag:                     tag,
 			UnauthenticatedProposal: payload,
 		}
 	default: // protocol.VoteBundleTag
 		return message{
-			messageHandle: MessageHandle(msgHandle),
+			MessageHandle: MessageHandle(msgHandle),
 			Tag:           tag,
 			UnauthenticatedBundle: unauthenticatedBundle{
 				Round:    Round,
@@ -180,9 +180,9 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 	for _, msgType := range msgTypes {
 		for i := getSelectorCapacity(msgType) * 5; i > 0; i-- {
 			msg := <-verifier.Verified(msgType)
-			_, has := usedMsgIDs[msg.messageHandle]
+			_, has := usedMsgIDs[msg.MessageHandle]
 			assert.True(t, has)
-			delete(usedMsgIDs, msg.messageHandle)
+			delete(usedMsgIDs, msg.MessageHandle)
 		}
 		assert.False(t, verifier.ChannelFull(msgType))
 		assert.Zero(t, len(verifier.Verified(msgType)))
@@ -230,8 +230,8 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 		}
 		msgIDMutex.Lock()
 		defer msgIDMutex.Unlock()
-		_, has := usedMsgIDs[msg.messageHandle]
-		delete(usedMsgIDs, msg.messageHandle)
+		_, has := usedMsgIDs[msg.MessageHandle]
+		delete(usedMsgIDs, msg.MessageHandle)
 		return assert.True(t, has)
 	}
 
@@ -333,7 +333,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	c := verifier.Verified(protocol.ProposalPayloadTag)
 	request := cryptoProposalRequest{
 		message: message{
-			messageHandle:           MessageHandle(0),
+			MessageHandle:           MessageHandle(0),
 			Tag:                     protocol.ProposalPayloadTag,
 			UnauthenticatedProposal: proposals[0].unauthenticatedProposal,
 		},
