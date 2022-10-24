@@ -2683,6 +2683,8 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 // using an argument of type *RawBytes instead; see the documentation
 // for RawBytes for restrictions on its use.
 
+// After check source code, a []byte slice destination is definitely cloned.
+
 func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err error) {
 	err = db.Retry(func() error {
 		var val []byte
