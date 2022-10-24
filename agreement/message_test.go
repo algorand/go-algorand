@@ -107,6 +107,11 @@ func TestMessageBackwardCompatibility(t *testing.T) {
 	// fmt.Println(base64.StdEncoding.EncodeToString(result))
 
 	m1 := message{
+		MessageHandle: &messageMetadata{raw: network.IncomingMessage{Tag: protocol.Tag("mytag"), Data: []byte("some data")}},
+		Tag:           protocol.ProposalPayloadTag,
+	}
+
+	m4 := message{
 		Tag: protocol.ProposalPayloadTag,
 	}
 
@@ -114,11 +119,12 @@ func TestMessageBackwardCompatibility(t *testing.T) {
 	err = protocol.Decode(encoded, &m2)
 	require.NoError(t, err)
 
-	// DecodeReflect also breaks when it encounters an unexpected field
-	//var m3 message
-	//err = protocol.DecodeReflect(encoded, &m3)
-	//require.NoError(t, err)
+	e1 := protocol.Encode(&m1)
+	var m3 message
 
-	//require.Equal(t, m2, m3)
-	require.Equal(t, m1, m2)
+	err = protocol.Decode(e1, &m3)
+	require.NoError(t, err)
+
+	require.Equal(t, m2, m3)
+	require.Equal(t, m4, m2) //check that it decoded to a field with MessageHandle
 }
