@@ -1231,9 +1231,7 @@ func TestBoxNamesByAppID(t *testing.T) {
 	testClient := localFixture.LibGoalClient
 
 	testClient.WaitForRound(1)
-
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
-
+	
 	wh, err := testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
