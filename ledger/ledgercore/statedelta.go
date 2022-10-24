@@ -701,6 +701,6 @@ func (ad *AccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 }
 
 // GetAllAccounts returns all account NewBalanceRecords
-func (ad *AccountDeltas) GetAllAccounts() []NewBalanceRecord {
-	return ad.accts
+func (ad *AccountDeltas) GetAllAccounts() []BalanceRecord {
+	return ad.Accts
 }
