@@ -17,7 +17,6 @@
 package fixtures
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/stretchr/testify/require"
 
@@ -272,16 +272,18 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
 			f.t.Logf("txn failed to confirm: ", addr, txid)
-			pendingTxns, err := f.AlgodClient.GetPendingTransactions(0)
+			response, err := f.AlgodClient.GetRawPendingTransactions(0)
 			if err == nil {
+				// Parse pending transaction response
+				var pendingTxns struct {
+					TopTransactions   []transactions.SignedTxn
+					TotalTransactions uint64
+				}
+				err = protocol.DecodeReflect(response, &pendingTxns)
+				require.NoError(f.t, err)
 				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
 				for _, txn := range pendingTxns.TopTransactions {
-					pendingTxn := transactions.SignedTxn{}
-					txnBody, err := json.Marshal(txn)
-					require.NoError(f.t, err)
-					err = json.Unmarshal(txnBody, &pendingTxn)
-					require.NoError(f.t, err)
-					pendingTxids = append(pendingTxids, pendingTxn.Txn.ID().String())
+					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
 				}
 				f.t.Logf("pending txids: ", pendingTxids)
 			} else {

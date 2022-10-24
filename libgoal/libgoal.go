@@ -963,6 +963,27 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+type PendingTransactionsStruct struct {
+	TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
+	TotalTransactions uint64                   `json:"total-transactions"`
+}
+
+// GetParsedPendingTransactions returns the parsed response with pending transactions.
+func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTransactionsStruct, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.GetRawPendingTransactions(maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
 // VerifyParticipationKey checks if a given participationID is installed in a loop until timeout has elapsed.
 func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID string) error {
 	start := time.Now()

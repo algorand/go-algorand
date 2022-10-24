@@ -320,8 +320,8 @@ var createAssetCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				if txn.AssetIndex != nil && *txn.AssetIndex != 0 {
-					reportInfof("Created asset with asset index %d", *txn.AssetIndex)
+				if txn.TransactionResults.CreatedAssetIndex != 0 {
+					reportInfof("Created asset with asset index %d", txn.TransactionResults.CreatedAssetIndex)
 				}
 			}
 		} else {

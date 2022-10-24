@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -308,14 +307,10 @@ int 1
 		_, err = client.WaitForRound(round + 1)
 		a.NoError(err)
 		// Ensure the txn committed
-		resp, err = client.GetPendingTransactions(2)
+		resp, err := client.GetParsedPendingTransactions(2)
 		a.NoError(err)
 		if resp.TotalTransactions == 1 {
-			pendingTxn := transactions.SignedTxn{}
-			txnBody, err := json.Marshal(resp.TopTransactions[0])
-			a.NoError(err)
-			err = json.Unmarshal(txnBody, &pendingTxn)
-			a.NoError(err)
+			pendingTxn := resp.TopTransactions[0]
 			a.Equal(pendingTxn.Txn.ID().String(), txid)
 			continue
 		}

@@ -134,6 +134,11 @@ func stripTransaction(tx string) string {
 	return tx
 }
 
+// RawResponse is fulfilled by responses that should not be decoded as json
+type RawResponse interface {
+	SetBytes([]byte)
+}
+
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
 func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 	var err error
@@ -196,9 +201,9 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	}
 
 	// Response must implement RawResponse
-	raw, ok := response.(v1.RawResponse)
+	raw, ok := response.(RawResponse)
 	if !ok {
-		return fmt.Errorf("can only decode raw response into type implementing v1.RawResponse")
+		return fmt.Errorf("can only decode raw response into type implementing RawResponse")
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -216,8 +221,8 @@ func (client RestClient) get(response interface{}, path string, request interfac
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
-// the response must implement the v1.RawResponse interface
-func (client RestClient) getRaw(response v1.RawResponse, path string, request interface{}) error {
+// the response must implement the RawResponse interface
+func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
 	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
 }
 
@@ -257,13 +262,23 @@ func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2
 }
 
 type pendingTransactionsParams struct {
-	Max uint64 `url:"max"`
+	Max    uint64 `url:"max"`
+	Format string `url:"format"`
 }
 
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response generatedV2.PendingTransactionsResponse, err error) {
-	err = client.get(&response, "/v2/transactions/pending", pendingTransactionsParams{maxTxns})
+	err = client.get(&response, "/v2/transactions/pending", pendingTransactionsParams{Max: maxTxns, Format: "json"})
+	return
+}
+
+// GetRawPendingTransactions gets the raw encoded msgpack transactions.
+// If maxTxns = 0, fetches as many transactions as possible.
+func (client RestClient) GetRawPendingTransactions(maxTxns uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, "/v2/transactions/pending", pendingTransactionsParams{maxTxns, "msgpack"})
+	response = blob
 	return
 }
 
@@ -384,7 +399,7 @@ func (client RestClient) AccountInformationV2(address string, includeCreatables 
 	return
 }
 
-// Blob represents arbitrary blob of data satisfying v1.RawResponse interface
+// Blob represents arbitrary blob of data satisfying RawResponse interface
 type Blob []byte
 
 // SetBytes fulfills the RawResponse interface on Blob

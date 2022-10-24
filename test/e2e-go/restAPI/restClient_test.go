@@ -19,7 +19,6 @@ package restapi
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 
@@ -47,7 +46,6 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-codec/codec"
 )
 
 var fixture fixtures.RestClientFixture
@@ -848,20 +846,14 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 	// Check that a single pending txn is corectly displayed
 	tx, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee, minAcctBalance, nil)
 	a.NoError(err)
-	statusResponse, err := testClient.GetPendingTransactions(0)
+	statusResponse, err := testClient.GetParsedPendingTransactions(0)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
 	a.True(statusResponse.TotalTransactions == 1)
 	a.True(len(statusResponse.TopTransactions) == 1)
 
-	pendingTxn := transactions.SignedTxn{}
-	var output []byte
-	enc := codec.NewEncoderBytes(&output, protocol.CodecHandle)
-	err = enc.Encode(statusResponse.TopTransactions[0])
-	a.NoError(err)
-	dec := codec.NewDecoderBytes(output, protocol.CodecHandle)
-	err = dec.Decode(pendingTxn)
-	a.NoError(err)
+	// Parse response into SignedTxn
+	pendingTxn := statusResponse.TopTransactions[0]
 	a.True(pendingTxn.Txn.ID().String() == tx.ID().String())
 }
 
@@ -894,22 +886,13 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		a.NoError(err)
 		txIDsSeen[tx2.ID().String()] = true
 	}
-	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	statusResponse, err := testClient.GetParsedPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.True(int(statusResponse.TotalTransactions) == NumTxns)
 	a.True(len(statusResponse.TopTransactions) == MaxTxns)
 	for _, tx := range statusResponse.TopTransactions {
-		pendingTxn := transactions.SignedTxn{}
-		var output []byte
-		enc := codec.NewEncoderBytes(&output, protocol.CodecHandle)
-		err = enc.Encode(tx)
-		a.NoError(err)
-		dec := codec.NewDecoderBytes(output, protocol.CodecHandle)
-		err = dec.Decode(pendingTxn)
-		a.NoError(err)
-
-		a.True(txIDsSeen[pendingTxn.Txn.ID().String()])
-		delete(txIDsSeen, pendingTxn.Txn.ID().String())
+		a.True(txIDsSeen[tx.Txn.ID().String()])
+		delete(txIDsSeen, tx.Txn.ID().String())
 	}
 	a.True(len(txIDsSeen) == NumTxns-MaxTxns)
 }
@@ -949,17 +932,13 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	txHigh, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee*10, minAcctBalance, nil)
 	a.NoError(err)
 
-	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	statusResponse, err := testClient.GetParsedPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
 	a.True(int(statusResponse.TotalTransactions) == NumTxns+1)
 	a.True(len(statusResponse.TopTransactions) == MaxTxns)
 
-	pendingTxn := transactions.SignedTxn{}
-	txnBody, err := json.Marshal(statusResponse.TopTransactions[0])
-	a.NoError(err)
-	err = json.Unmarshal(txnBody, &pendingTxn)
-	a.NoError(err)
+	pendingTxn := statusResponse.TopTransactions[0]
 	a.True(pendingTxn.Txn.ID().String() == txHigh.ID().String())
 }
 
