@@ -338,8 +338,8 @@ type WebsocketNetwork struct {
 
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
-	peersByID          map[string]*wsPeer // peersByID maps a verified unique identifier to a peer
-	peersChangeCounter int32              // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersByID          map[crypto.PublicKey]*wsPeer // peersByID maps a Public Identification Key to a given peer
+	peersChangeCounter int32                        // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
@@ -371,6 +371,9 @@ type WebsocketNetwork struct {
 	prioScheme       NetPrioScheme
 	prioTracker      *prioTracker
 	prioResponseChan chan *wsPeer
+
+	// identityKeys is the keypair used for identity challenges
+	identityKeys *crypto.SignatureSecrets
 
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
@@ -741,6 +744,11 @@ func (wn *WebsocketNetwork) setup() {
 		wn.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
 
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
+	wn.peersByID = map[crypto.PublicKey]*wsPeer{}
+
 	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
 	if readBufferLen < 100 {
 		readBufferLen = 100
@@ -1092,8 +1100,6 @@ func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (con
 
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	wn.log.Infoln("AXELAXEL: SERVE!")
-	wn.log.Infoln("AXELAXEL RECEIVED HEADERS:", request.Header)
 	trackedRequest := wn.requestsTracker.GetTrackedRequest(request)
 
 	if wn.checkIncomingConnectionLimits(response, request, trackedRequest.remoteHost, trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName) != http.StatusOK {
@@ -1132,13 +1138,21 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
 
-	wn.log.Infoln("AXELAXEL: DEDUP TIME")
+	wn.log.Infoln("AXELAXEL: ID CHAL SERVE TIME")
 	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
 	idChal := IdentityChallengeFromB64(idChalB64)
 	wn.log.Infoln("AXELAXEL: ChAL OBJ:", idChal)
-
-	idChalResp := NewIdentityChallengeResponse()
-	wn.log.Infoln("AXELAXEL: RESP:", idChalResp)
+	wn.log.Infoln("AXELAXEL: ChAL VERIFIED:", idChal.verify())
+	peerPublicKey := idChal.Key
+	// if we already have a verified peer using this key, do not proceed
+	if wn.peersByID[peerPublicKey] != nil &&
+		wn.peersByID[peerPublicKey].identityVerified {
+		wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
+		return
+	}
+	idChalResp := NewIdentityChallengeResponse((crypto.PublicKey)(wn.identityKeys.SignatureVerifier), idChal)
+	responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalResp.SignAndEncodeB64(wn.identityKeys))
+	wn.log.Infoln("AXELAXEL: RESP HEADER:", responseHeader)
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
@@ -1146,7 +1160,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "ws upgrade fail"})
 		return
 	}
-	wn.log.Infoln("AXELAXEL: UPGRADED")
 
 	// we want to tell the response object that the status was changed to 101 ( switching protocols ) so that it will be logged.
 	if wn.requestsLogger != nil {
@@ -1162,12 +1175,13 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
-		identity:          "axel",
+		identity:          peerPublicKey,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
-	wn.peersByID["axel"] = peer
+	wn.peersByID[peerPublicKey] = peer
+	wn.log.Infoln("AXELAXEL: KEY MAP: ", wn.peersByID)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2037,14 +2051,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	wn.log.Infoln("AXELAXEL: ATTACH HEADER")
-	idChal := NewIdentityChallenge()
-	wn.log.Infoln("AXELAXEL: CHALLENGE:", idChal)
-	idChalB64 := idChal.EncodeB64()
-	wn.log.Infoln("AXELAXEL: B64!", idChalB64)
+	wn.log.Infoln("AXELAXEL: BUILDING CHALLENGE!")
+	idChal := NewIdentityChallenge((crypto.PublicKey)(wn.identityKeys.SignatureVerifier))
+	wn.log.Infoln("AXELAXEL: CHALLENGE", idChal)
+	idChalB64 := idChal.SignAndEncodeB64(wn.identityKeys)
 	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChalB64)
-	wn.log.Infoln("AXELAXEL: ATTACHED!")
 	wn.log.Infoln("AXELAXEL: HEADER", requestHeader)
+
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
@@ -2059,12 +2072,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
-	wn.log.Infoln("AXELAXEL: TRIED")
-	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
-	idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
-	wn.log.Infoln("AXELAXEL: GOT A DEDUP CHALLENGE OBJECT: ", idChalResp)
 	if err != nil {
-		wn.log.Infoln("AXELAXEL: TRYING ERROR")
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which alredy finsihed reading all the data from the network
 			// and placed it all in a ioutil.NopCloser reader.
@@ -2098,7 +2106,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 		return
 	}
-	wn.log.Infoln("AXELAXEL: GOT RESPONSE")
 
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
 	// we need to examine the headers here to extract which protocol version we should be using.
@@ -2107,7 +2114,38 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		// The error was already logged, so no need to log again.
 		return
 	}
-	wn.log.Infoln("AXELAXEL: RESP HEADER OK")
+
+	wn.log.Infoln("AXELAXEL: ID CHAL RESPONSE TIME")
+	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	if idChalRespB64 == "" {
+		wn.log.Warnf("ws connect(%s) no identification challenge", gossipAddr)
+		wn.log.Infoln("AXELAXEL: NO RESP CHAL")
+	}
+	idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
+	wn.log.Infoln("AXELAXEL: GOT A ID RESPONSE OBJECT: ", idChalResp)
+	// if the identification challenge response is not correctly signed, do not proceed
+	if err = idChalResp.verify(); err != nil {
+		wn.log.Warnf("ws connect(%s) failed identification challenge signature: %s", gossipAddr, err.Error())
+		wn.log.Infoln("AXELAXEL: SIG FAIL")
+	}
+	// if the signed challenge does not return our original challenge, do not proceed
+	if idChalResp.Challenge != idChal.Challenge {
+		wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChal.Challenge)
+		wn.log.Infoln("AXELAXEL: CHAL MISMATCH")
+		wn.log.Infoln("AXELAXEL: ", idChalResp.Challenge)
+		wn.log.Infoln("AXELAXEL: ", idChal.Challenge)
+		return
+	}
+	// now that we have validated the identity challenge, we can proceed and treat this public key as valid
+	wn.log.Infoln("AXELAXEL: CHAL MATCH!~!!")
+	peerPublicKey := idChalResp.Key
+	// if we already have a verified peer using this key, do not proceed
+	if wn.peersByID[peerPublicKey] != nil &&
+		wn.peersByID[peerPublicKey].identityVerified {
+		wn.log.Warnf("ws connect(%s) already connected", gossipAddr)
+		wn.log.Infoln("AXELAXEL: ALREADY CONNECTED")
+		return
+	}
 
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
@@ -2125,10 +2163,14 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
+		identity:                    peerPublicKey,
+		identityVerified:            true,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
+	wn.peersByID[peerPublicKey] = peer
+	wn.log.Infoln("AXELAXEL: KEY MAP: ", wn.peersByID)
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2140,9 +2182,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Endpoint:      peer.GetAddress(),
 		})
 
-	wn.log.Infoln("AXELAXEL: GONNNA SEND MSG OF INTEREST")
 	wn.maybeSendMessagesOfInterest(peer, nil)
-	wn.log.Infoln("AXELAXEL: SENT MSG OF INTEREST")
 
 	peers.Set(float64(wn.NumPeers()))
 	outgoingPeers.Set(float64(wn.numOutgoingPeers()))

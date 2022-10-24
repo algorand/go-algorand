@@ -201,7 +201,7 @@ type wsPeer struct {
 	// is present in wn.peers.
 	peerIndex int
 
-	identity         string
+	identity         crypto.PublicKey
 	identityVerified bool
 
 	// Challenge sent to the peer on an incoming connection
