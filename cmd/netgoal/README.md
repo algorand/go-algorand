@@ -1,7 +1,7 @@
 # Netgoal
 
 ## netgoal generate
-`--participation-host-machines (-N)` and `--npn-host-machines (-X)` are optional parameters and they default to `--participation-algod-nodes (-n)` and `--npn-algod-nodes (-x)` respectively.
+`--participation-host-machines (-N)` and `--npn-host-machines (-X)` are optional parameters and they default to `--participation-algod-nodes (-n)` and `--npn-algod-nodes (-x)` respectively, i.e. defaults to a machine per algod node.
 
 ### Long-Form Flags Example
 - Wallets: The command below will generate 100 wallets for the 100 participation algod nodes. By default each npn gets one wallet each. If there is more wallets than nodes, it will get split across the algod nodes.
