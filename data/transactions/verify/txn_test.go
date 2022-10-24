@@ -66,17 +66,7 @@ type DummyLedgerForSignature struct {
 }
 
 func (d *DummyLedgerForSignature) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}, nil
+	return createDummyBlockHeader(), nil
 }
 
 func keypair() *crypto.SignatureSecrets {
@@ -109,20 +99,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 			exp = int(blockRound) + rand.Intn(30)
 		}
 
-		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      multiAddress[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(iss),
-				LastValid:   basics.Round(exp),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: multiAddress[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		txs[i] = createPayTransaction(f, iss, exp, a, multiAddress[s], multiAddress[r])
 		signed[i].Txn = txs[i]
 
 		// create multi sig that 2 out of 3 has signed the txn
@@ -193,20 +170,7 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 			exp = int(blockRound) + rand.Intn(30)
 		}
 
-		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      addresses[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(iss),
-				LastValid:   basics.Round(exp),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		txs[i] = createPayTransaction(f, iss, exp, a, addresses[s], addresses[r])
 		signed[i] = txs[i].Sign(secrets[s])
 		u += 100
 	}
@@ -713,20 +677,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 		a := rand.Intn(1000)
 		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
 
-		signedTxn[i].Txn = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      multiAddress[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(1),
-				LastValid:   basics.Round(100),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: multiAddress[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		signedTxn[i].Txn = createPayTransaction(f, 1, 100, a, multiAddress[s], multiAddress[r])
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
@@ -787,6 +738,23 @@ func createDummyBlockHeader() bookkeeping.BlockHeader {
 		RewardsState: bookkeeping.RewardsState{
 			FeeSink:     feeSink,
 			RewardsPool: poolAddr,
+		},
+	}
+}
+
+func createPayTransaction(fee uint64, fv, lv, amount int, sender, receiver basics.Address) transactions.Transaction {
+	return transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: fee},
+			FirstValid:  basics.Round(fv),
+			LastValid:   basics.Round(lv),
+			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: uint64(amount)},
 		},
 	}
 }
@@ -859,19 +827,7 @@ func BenchmarkTxn(b *testing.B) {
 		b.N = 2000
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round:       50,
-			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
-			},
-			RewardsState: bookkeeping.RewardsState{
-				FeeSink:     feeSink,
-				RewardsPool: poolAddr,
-			},
-		},
-	}
+	blk := bookkeeping.Block{BlockHeader: createDummyBlockHeader()}
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 
 	b.ResetTimer()
@@ -891,17 +847,7 @@ func TestStreamVerifier(t *testing.T) {
 
 	numOfTxns := 10000
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
@@ -932,7 +878,7 @@ func TestStreamVerifier(t *testing.T) {
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		// process the thecked signatures
+		// process the results
 		for x := 0; x < numOfTxnGroups; x++ {
 			select {
 			case result := <-resultChan:
