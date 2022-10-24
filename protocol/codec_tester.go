@@ -357,6 +357,11 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 				break
 			}
 		}
+	case reflect.Interface:
+		if v.Type().Name() == "MessageHandle" && strings.HasSuffix(v.Type().PkgPath(), "agreement") {
+			return nil
+		}
+		fallthrough
 	default:
 		return fmt.Errorf("unsupported object kind %v", v.Kind())
 	}

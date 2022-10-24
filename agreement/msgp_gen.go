@@ -102,14 +102,6 @@ import (
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
 //
-// message
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
-//
 // messageEvent
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -2645,6 +2637,7 @@ func (z *freshnessData) Msgsize() (s int) {
 func (z *freshnessData) MsgIsZero() bool {
 	return ((*z).PlayerRound.MsgIsZero()) && ((*z).PlayerPeriod == 0) && ((*z).PlayerStep == 0) && ((*z).PlayerLastConcluding == 0)
 }
+
 // MarshalMsg implements msgp.Marshaler
 func (z *messageEvent) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())

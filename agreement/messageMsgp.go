@@ -343,7 +343,7 @@ func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					if zb0002 { // isnil
-						var q struct{} // assign empty struct
+						var q struct{}
 						(*z).MessageHandle = q
 					}
 					for zb0001 > 0 {
