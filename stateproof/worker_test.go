@@ -132,6 +132,15 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 			Voting:            part.Voting,
 		}
 		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+		if signerInRound == nil {
+			continue
+		}
+		KeyInLifeTime, _ := signerInRound.FirstRoundInKeyLifetime()
+
+		// simulate that the key was removed
+		if basics.Round(KeyInLifeTime) < s.deletedStateProofKeys[part.ID()] {
+			continue
+		}
 		partRecordForRound := account.StateProofSecretsForRound{
 			ParticipationRecord: partRecord,
 			StateProofSecrets:   signerInRound,
@@ -641,44 +650,118 @@ func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 	w.Start()
 	defer w.Shutdown()
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(firstExpectedStateproof + expectedNumberOfStateProofs*proto.StateProofInterval)
-	// Expect all signatures to be broadcast.
-
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	require.NoError(t, err)
 
-	require.NoError(t, w.db.Atomic(
-		func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.Exec("DROP TABLE sigs")
-			return err
-		}),
-	)
-
-	// since no state proofs was confirmed (i.e the next state proof round == firstExpectedStateproof), and the key for
-	// (firstExpectedStateproof - proto.StateProofInterval) is never used, we expect the builder to keep all keys
-	// up to firstExpectedStateproof
+	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
+	// to keep its keys to sign the state proof firstExpectedStateproof. every part should have keys for that round
 	s.mu.Lock()
-	for i := 0; i < len(keys); i++ {
-		rnd, exists := s.deletedStateProofKeys[keys[i].ID()]
-		require.True(t, exists)
-		require.Equal(t, basics.Round(firstExpectedStateproof-proto.StateProofInterval), rnd)
-	}
+	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
 	s.mu.Unlock()
 
-	// confirm stateproof for firstExpectedStateproof -> worker should remove keys from firstExpectedStateproof
-	s.advanceRoundsAndStateProofs(1)
+	advanceRoundsAndStateProofsSlowly(t, s, 2*proto.StateProofInterval)
 
-	err = waitForBuilderAndSignerToWaitOnRound(s)
+	// second state proof is confirmed, no need for the keys of the first state proof
+	s.mu.Lock()
+	fmt.Println(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, 0, len(checkedKeys))
+	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	require.Equal(t, len(keys), len(checkedKeys))
+	checkedKeys = s.StateProofKeys(basics.Round(4 * proto.StateProofInterval))
+	require.Equal(t, len(keys), len(checkedKeys))
+	s.mu.Unlock()
+}
+
+func TestKeysRemoveOnlyAfterStateProofAccepted2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const stateProofIntervalForTest = 64
+	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
+	tmp.StateProofInterval = stateProofIntervalForTest
+	config.Consensus[protocol.ConsensusCurrentVersion] = tmp
+	defer func() {
+		tmp = config.Consensus[protocol.ConsensusCurrentVersion]
+		tmp.StateProofInterval = 256
+		config.Consensus[protocol.ConsensusCurrentVersion] = tmp
+	}()
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	dbs, _ := dbOpenTest(t, true)
+
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+
+	const expectedNumberOfStateProofs = 3
+	const firstExpectedStateproof = stateProofIntervalForTest * 2
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceRoundsWithoutStateProof(firstExpectedStateproof + expectedNumberOfStateProofs*proto.StateProofInterval)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
 	require.NoError(t, err)
 
+	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
+	// to keep its keys to sign the state proof firstExpectedStateproof. every part should have keys for that round
 	s.mu.Lock()
-	for i := 0; i < len(keys); i++ {
-		rnd, exists := s.deletedStateProofKeys[keys[i].ID()]
-		require.True(t, exists)
-		require.Equal(t, basics.Round(firstExpectedStateproof), rnd)
-	}
+	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
 	s.mu.Unlock()
+
+	// confirm stateproof for firstExpectedStateproof
+	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
+
+	// the first state proof was confirmed. Nevertheless, node should keep the keys for the firstExpectedStateproof
+	// since both are within the same keylifetime
+	s.mu.Lock()
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
+	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
+	require.Equal(t, len(keys), len(checkedKeys))
+	s.mu.Unlock()
+
+	advanceRoundsAndStateProofsSlowly(t, s, 2*proto.StateProofInterval)
+
+	// when the 3rd state proof is confirmed the first key is not longer needed
+	s.mu.Lock()
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, 0, len(checkedKeys))
+	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
+	require.Equal(t, 0, len(checkedKeys))
+	checkedKeys = s.StateProofKeys(4 * stateProofIntervalForTest)
+	require.Equal(t, len(keys), len(checkedKeys))
+
+	// make sure that we have key for the last state proof
+	checkedKeys = s.StateProofKeys(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	require.Equal(t, len(keys), len(checkedKeys))
+	s.mu.Unlock()
+}
+
+func advanceRoundsAndStateProofsSlowly(t *testing.T, s *testWorkerStubs, numberOfRounds uint64) {
+	// since adding blocks to our mock ledger happens very fast, the worker might
+	// not iterate over the latest block. Hence, we add some blocks -> wait -> add one more -> wait
+	s.advanceRoundsAndStateProofs(numberOfRounds - 1)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
+	s.advanceRoundsAndStateProofs(1)
+	err = waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
 }
 
 func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
