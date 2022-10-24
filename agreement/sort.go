@@ -69,15 +69,16 @@ func (a SortProposalValue) Less(i, j int) bool {
 	if cmp != 0 {
 		return cmp < 0
 	}
-	if bytes.Compare(a[i].BlockDigest[:], a[j].BlockDigest[:]) < 0 {
-		return true
-	} else if bytes.Compare(a[j].BlockDigest[:], a[i].BlockDigest[:]) < 0 {
-		return false
+	cmp = bytes.Compare(a[i].BlockDigest[:], a[j].BlockDigest[:])
+	if cmp != 0 {
+		return cmp < 0
 	}
-	if bytes.Compare(a[i].EncodingDigest[:], a[j].EncodingDigest[:]) < 0 {
-		return true
+	cmp = bytes.Compare(a[i].BlockDigest[:], a[j].BlockDigest[:])
+	if cmp != 0 {
+		return cmp < 0
 	}
-	// final case a[i] >= a[j]
-	return false
+	cmp = bytes.Compare(a[i].EncodingDigest[:], a[j].EncodingDigest[:])
+	return cmp < 0
 }
+
 func (a SortProposalValue) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
