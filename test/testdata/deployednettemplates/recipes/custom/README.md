@@ -22,10 +22,9 @@ Build and create the recipe.
 
 ## "Quick" Start - Manual recipe generation (not using Jenkins)
 Generate the recipe with the `network-tpl.json` file
-- (See the first section above for small networks.)
+- (See the first section above for small networks. See Troubleshooting for netgoal path set up)
 1. Make sure you're in the same directory as this README and `cp network_templates/network-tpl.json network-tpl.json`
-2. Set the path to the tools folder with `netgoal`, e.g. `PATH=$PATH:go-algorand/tmp/dev_pkg/tools` (you will need to build netgoal if you haven't already, refer to go-algorand build docs)
-3. Generate the recipe with a python script:
+2. Generate the recipe with a python script:
 ```
 cd go-algorand
 python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json
@@ -68,7 +67,7 @@ Most parameters that can be modified by config.json can be found in `go-algorand
 
 ## Troubleshooting
 ### Can't find netgoal
-- Make sure you have netgoal installed
+- Make sure you have netgoal installed (you can either download it or run through the go-algorand build process)
 - Make sure you export GOBIN and GOPATH in your environment and add it to your path.
 On a mac, update by editing `~/.zshrc`, add
 ```
