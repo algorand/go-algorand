@@ -19,7 +19,6 @@ package ledger
 import (
 	"archive/tar"
 	"context"
-	"crypto/sha512"
 	"database/sql"
 	"fmt"
 	"io"
@@ -99,9 +98,12 @@ type catchpointFileBalancesChunkV6 struct {
 }
 
 type catchpointStateProofVerificationData struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	// TODO: allocbound?
-	data []ledgercore.StateProofVerificationData `codec:"spd"`
+	_struct struct{}                                `codec:",omitempty,omitemptyarray"`
+	data    []ledgercore.StateProofVerificationData `codec:"spd"`
+}
+
+func (data catchpointStateProofVerificationData) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.StateProofVerificationData, protocol.Encode(&data)
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
@@ -146,17 +148,14 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
-// TODO: This flow should be combined with the normal WriteStep
-
-func (cw *catchpointWriter) WritePreamble() (crypto.Digest, error) {
-	// TODO: Cancellation?
+func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, error) {
 	rawData, err := stateProofVerificationData(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
 
 	wrappedData := catchpointStateProofVerificationData{data: *rawData}
-	encodedData := protocol.Encode(&wrappedData)
+	encodedData := crypto.HashRep(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
 		Name: "stateProofVerificationData.msgpack",
@@ -173,8 +172,7 @@ func (cw *catchpointWriter) WritePreamble() (crypto.Digest, error) {
 		return crypto.Digest{}, err
 	}
 
-	// TODO: Add domain separator.
-	dataHash := sha512.Sum512_256(encodedData)
+	dataHash := crypto.Hash(encodedData)
 
 	return dataHash, nil
 }

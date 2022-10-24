@@ -1066,7 +1066,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 			return
 		}
 
-		stateProofVerificationDataHash, err = catchpointWriter.WritePreamble()
+		stateProofVerificationDataHash, err = catchpointWriter.WriteStateProofVerificationData()
 		if err != nil {
 			return
 		}
@@ -1138,7 +1138,6 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	// TODO: Return actual state proof digest here
 	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), stateProofVerificationDataHash, nil
 }
 
@@ -1173,9 +1172,9 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		Totals:                     accountTotals,
 		TotalAccounts:              totalAccounts,
 		TotalChunks:                totalChunks,
-		StateProofVerificationHash: stateProofVerificationHash,
 		BiggestChunkLen:            biggestChunkLen,
 		TrieBalancesHash:           trieBalancesHash,
+		StateProofVerificationHash: stateProofVerificationHash,
 	}
 	return insertOrReplaceCatchpointFirstStageInfo(ctx, tx, accountsRound, &info)
 }
