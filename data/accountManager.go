@@ -45,7 +45,8 @@ type AccountManager struct {
 	log      logging.Logger
 }
 
-// DeleteStateProofKey deletes all keys connected to ParticipationID that came before (including) the given round.
+// DeleteStateProofKey deletes all keys connected to ParticipationID that came before the given round.
+// The round is excluded.
 func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	return manager.registry.DeleteStateProofKeys(id, round)
 }

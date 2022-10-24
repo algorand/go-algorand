@@ -473,8 +473,13 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 
 	keys := spw.accts.StateProofKeys(oldestRoundToRemove)
 	for _, key := range keys {
-		if err := spw.accts.DeleteStateProofKey(key.ParticipationID, oldestRoundToRemove); err != nil {
-			spw.log.Warnf("deleteOldKeys: could not remove key for round %s %v %v", key.ParticipationID, oldestRoundToRemove, err)
+		roundToRemove, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
+		if err != nil {
+			spw.log.Warnf("deleteOldKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, roundToRemove, err)
+		}
+		err = spw.accts.DeleteStateProofKey(key.ParticipationID, basics.Round(roundToRemove))
+		if err != nil {
+			spw.log.Warnf("deleteOldKeys: could not remove key for account %v on round %s: %v", key.ParticipationID, roundToRemove, err)
 		}
 	}
 }
