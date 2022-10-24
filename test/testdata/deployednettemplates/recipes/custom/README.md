@@ -25,7 +25,7 @@ Generate the recipe with the `network-tpl.json` file
 - (See the first section above for small networks.)
 1. Make sure you're in the same directory as this README and `cp network_templates/network-tpl.json network-tpl.json`
 2. Set the path to the tools folder with `netgoal`, e.g. `PATH=$PATH:go-algorand/tmp/dev_pkg/tools` (you will need to build netgoal if you haven't already, refer to go-algorand build docs)
-2. Generate the recipe with a python script:
+3. Generate the recipe with a python script:
 ```
 cd go-algorand
 python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json
