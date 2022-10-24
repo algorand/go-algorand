@@ -71,7 +71,7 @@ type Local struct {
 	// Logging
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
-	CadaverSizeTarget uint64 `version[0]:"1073741824"`
+	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.

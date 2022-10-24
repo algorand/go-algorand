@@ -31,7 +31,7 @@ var defaultLocal = Local{
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
 	BroadcastConnectionsLimit:                  -1,
-	CadaverSizeTarget:                          1073741824,
+	CadaverSizeTarget:                          0,
 	CatchpointFileHistoryLength:                365,
 	CatchpointInterval:                         10000,
 	CatchpointTracking:                         0,

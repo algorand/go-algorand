@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/passphrase"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,6 +45,8 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 		go randomDeterministicAccounts(initCfg, out)
 	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
 		go sequentialDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "mnemonic" {
+		go mnemonicDeterministicAccounts(initCfg, out)
 	}
 	return out
 }
@@ -51,7 +54,7 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
 	numAccounts := initCfg.NumPartAccounts
 	totalAccounts := initCfg.GeneratedAccountsCount
-	if totalAccounts < numAccounts*4 {
+	if totalAccounts < uint64(numAccounts)*4 {
 		// simpler rand strategy for smaller totalAccounts
 		order := rand.Perm(int(totalAccounts))[:numAccounts]
 		for _, acct := range order {
@@ -86,6 +89,21 @@ func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.Signatur
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
+	close(out)
+}
+
+func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for _, mnemonic := range initCfg.GeneratedAccountsMnemonics {
+		seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
+			os.Exit(1)
+		}
+		var seed crypto.Seed
+		copy(seed[:], seedbytes)
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+	close(out)
 }
 
 // load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey
