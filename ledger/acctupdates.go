@@ -484,10 +484,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 	for {
 		currentDBRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		offset, _err := au.roundOffset(round)
-		if _err != nil {
-			err = _err
-			return
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, rndErr
 		}
 
 		// reset `results` to be empty each iteration
@@ -542,10 +541,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 
 		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
 		// to find the rest matching keys in DB.
-		dbRound, _err := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
-		if _err != nil {
-			err = _err
-			return
+		dbRound, dbErr := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
+		if dbErr != nil {
+			return nil, dbErr
 		}
 		if dbRound == currentDBRound {
 			return
