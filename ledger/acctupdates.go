@@ -328,6 +328,17 @@ func (au *accountUpdates) close() {
 	au.baseKVs.prune(0)
 }
 
+// flushCaches flushes any pending data in caches so that it is fully available during future lookups.
+func (au *accountUpdates) flushCaches() {
+	au.accountsMu.Lock()
+
+	au.baseAccounts.flushPendingWrites()
+	au.baseResources.flushPendingWrites()
+	au.baseKVs.flushPendingWrites()
+
+	au.accountsMu.Unlock()
+}
+
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
@@ -815,6 +826,8 @@ type accountUpdatesLedgerEvaluator struct {
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
 }
+
+func (aul *accountUpdatesLedgerEvaluator) FlushCaches() {}
 
 // GenesisHash returns the genesis hash
 func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
