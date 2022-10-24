@@ -480,7 +480,7 @@ type streamManager struct {
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	cache            VerifiedTransactionCache
-	pendingTasksWg       sync.WaitGroup
+	pendingTasksWg   sync.WaitGroup
 }
 
 // NewBlockWatcher is a struct used to provide a new block header to the
