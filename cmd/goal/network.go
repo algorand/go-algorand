@@ -42,7 +42,6 @@ func init() {
 	networkCmd.MarkPersistentFlagRequired("rootdir")
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
-	networkCreateCmd.MarkFlagRequired("network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
 	networkCreateCmd.MarkFlagRequired("template")
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")

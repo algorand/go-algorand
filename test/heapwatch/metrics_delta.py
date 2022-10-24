@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+# Copyright (C) 2019-2022 Algorand, Inc.
+# This file is part of go-algorand
+#
+# go-algorand is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# go-algorand is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+#
+###
+#
+# Process /metrics data captured by heapWatch.py
+#
+# Generate text report on bandwidth in and out of relays/PN/NPN
 
 import argparse
 import configparser
@@ -143,18 +164,32 @@ class summary:
         self.tpsMeanSum = 0
         self.txBpsMeanSum = 0
         self.rxBpsMeanSum = 0
+        self.tpsSum = 0
+        self.blockTimeSum = 0
         self.sumsCount = 0
         self.nodes = {}
+        self.biByTime = {}
+        self.verifyMillis = []
 
     def __call__(self, ttr, nick):
         if not ttr:
+            logger.debug('no summary for %s', nick)
             return
         self.nodes[nick] = ttr
         logger.debug('%d points from %s', len(ttr.tpsList), nick)
         self.tpsMeanSum += meanOrZero(ttr.tpsList)
         self.txBpsMeanSum += meanOrZero(ttr.txBpsList)
         self.rxBpsMeanSum += meanOrZero(ttr.rxBpsList)
+        self.tpsSum += ttr.tps
+        self.blockTimeSum += ttr.blockTime
         self.sumsCount += 1
+        if ttr.biByTime:
+            self.biByTime.update(ttr.biByTime)
+        if ttr.verifyMillis:
+            self.verifyMillis.append(ttr.verifyMillis)
+
+    def blockinfo(self, curtime):
+        return self.biByTime.get(curtime)
 
     def byMsg(self):
         txPSums = {}
@@ -209,14 +244,42 @@ class summary:
     def __str__(self):
         if not self.sumsCount:
             tps, txbps, rxbps = math.nan, math.nan, math.nan
+            blockTimes = math.nan
         else:
-            tps = self.tpsMeanSum/self.sumsCount
+            #tps = self.tpsMeanSum/self.sumsCount
+            tps = self.tpsSum/self.sumsCount
+            blockTimes = self.blockTimeSum/self.sumsCount
             txbps = self.txBpsMeanSum/self.sumsCount
             rxbps = self.rxBpsMeanSum/self.sumsCount
         labelspace = ""
         if self.label:
             labelspace = self.label + " "
-        return '{byMsg}\n{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps))
+        if self.verifyMillis:
+            verifyMillis = labelspace + 'verify ms ({:.0f}/{:.0f}/{:.0f})\n'.format(min(self.verifyMillis), meanOrZero(self.verifyMillis), max(self.verifyMillis))
+        else:
+            verifyMillis = ''
+        return '{byMsg}\n{verifyMillis}{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes, verifyMillis=verifyMillis)
+
+    def plot_pool(self, outpath):
+        from matplotlib import pyplot as plt
+        any = False
+        for nick, ns in self.nodes.items():
+            if not ns.txPool:
+                continue
+            any = True
+            plt.plot(ns.times, ns.txPool, label=nick)
+            csvoutpath = outpath + nick + '.csv'
+            with open(csvoutpath, 'w') as fout:
+                writer = csv.writer(fout)
+                writer.writerow(['time', 'pool'])
+                for t, p in zip(ns.times, ns.txPool):
+                    writer.writerow([t,p])
+        if not any:
+            logger.error('no txPool in {}'.format(list(self.nodes.keys())))
+            return
+        plt.legend(loc='upper right')
+        plt.savefig(outpath + '.svg', format='svg')
+        plt.savefig(outpath + '.png', format='png')
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -230,7 +293,7 @@ def anynickre(nick_re, nicks):
 
 def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
     '''return {"node nickname":[path, path, ...], ...}'''
-    metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
+    metrics_fname_re = re.compile(r'(.*?)\.([0-9_]+\.?\d+)\.metrics')
     filesByNick = {}
     nonick = []
     tf_inventory_path = None
@@ -250,14 +313,16 @@ def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
         dapp(filesByNick, nick, path)
     return tf_inventory_path, filesByNick, nonick
 
-def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args):
+def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum):
     nretup = (nre,)
     for rnick, paths in filesByNick.items():
         nick = nick_to_tfname.get(rnick, rnick)
         if anynickre(nretup, (rnick,nick)):
-            rsum(process_files(args, nick, paths), nick)
+            rsum(process_files(args, nick, paths, grsum), nick)
 
 def main():
+    os.environ['TZ'] = 'UTC'
+    time.tzset()
     test_metric_line_re()
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_files', nargs='*')
@@ -267,6 +332,7 @@ def main():
     ap.add_argument('--report', default=None, help='path to write csv report')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
+    ap.add_argument('--pool-plot-root', help='write to foo.svg and .png')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -281,6 +347,7 @@ def main():
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
     tf_inventory_path, filesByNick, nonick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
+    logger.debug('%d files gathered into %d nicks', len(metrics_files), len(filesByNick))
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')
@@ -300,6 +367,7 @@ def main():
                     ip_to_name[ip] = k
         #logger.debug('names: %r', sorted(ip_to_name.values()))
         #logger.debug('ip to name %r', ip_to_name)
+        unfound = []
         for ip, name in ip_to_name.items():
             found = []
             for nick in filesByNick.keys():
@@ -310,14 +378,30 @@ def main():
             elif len(found) > 1:
                 logger.warning('ip %s (%s) found in nicks: %r', ip, name, found)
             else:
+                unfound.append((ip,name))
+        if not nick_to_tfname:
+            for ip,name in unfound:
                 logger.warning('ip %s (%s) no nick', ip, name)
         #logger.debug('nick_to_tfname %r', nick_to_tfname)
+    logger.debug('nicks: %s', ' '.join(map(lambda x: nick_to_tfname.get(x,x), filesByNick.keys())))
 
+    # global stats across all nodes
+    grsum = summary()
+    if nonick:
+        grsum(process_files(args, None, nonick), 'no nick')
+    for rnick, paths in filesByNick.items():
+        nick = nick_to_tfname.get(rnick, rnick)
+        logger.debug('%s: %d files', nick, len(paths))
+        grsum(process_files(args, nick, paths), nick)
+    if args.pool_plot_root:
+        grsum.plot_pool(args.pool_plot_root)
+
+    # maybe subprocess for stats across named groups
     if args.nick_re:
         # use each --nick-re=foo as a group
         for nre in args.nick_re:
             rsum = summary()
-            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
         return 0
@@ -325,20 +409,13 @@ def main():
         for lnre in args.nick_lre:
             label, nre = lnre.split(':', maxsplit=1)
             rsum = summary(label)
-            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args)
+            process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
         return 0
 
-
-    # no filters, glob it all up
-    rsum = summary()
-    if nonick:
-        rsum(process_files(args, None, nonick), 'no nick')
-    for rnick, paths in filesByNick.items():
-        nick = nick_to_tfname.get(rnick, rnick)
-        rsum(process_files(args, nick, paths), nick)
-    print(rsum)
+    # no filters, print global result
+    print(grsum)
     return 0
 
 def perProtocol(prefix, lists, sums, deltas, dt):
@@ -349,9 +426,22 @@ def perProtocol(prefix, lists, sums, deltas, dt):
             dapp(lists, sub, v/dt)
             sums[sub] = sums.get(sub,0) + v
 
-def process_files(args, nick, paths):
+def process_files(args, nick, paths, grsum=None):
     "returns a nodestats object"
-    return nodestats().process_files(args, nick, paths)
+    return nodestats().process_files(args, nick, paths, grsum and grsum.biByTime)
+
+path_time_re = re.compile(r'(\d\d\d\d)(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d\.+\d+)')
+
+def parse_path_time(path):
+    m = path_time_re.search(path)
+    if not m:
+        return None
+    ts = float(m.group(6))
+    si = math.floor(ts)
+    t = time.mktime((int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                     int(m.group(4)), int(m.group(5)), si, 0, 0, 0))
+    t += ts - si
+    return t
 
 class nodestats:
     def __init__(self):
@@ -371,14 +461,24 @@ class nodestats:
         # algod_network_sent_bytes_*
         self.txPLists = {}
         self.txPSums = {}
+        self.times = []
         # algod_tx_pool_count{}
         self.txPool = []
+        # total across all measurements
+        self.tps = 0
+        self.blockTime = 0
+        self.biByTime = {}
+        # average milliseconds per agreement block verify
+        self.verifyMillis = None
 
-    def process_files(self, args, nick=None, metrics_files=None):
+    def process_files(self, args, nick=None, metrics_files=None, bisource=None):
         "returns self, a nodestats object"
+        if bisource is None:
+            bisource = {}
         self.args = args
         self.nick = nick
         if metrics_files is None:
+            logger.debug('nodestats(%s) no metrics files', nick)
             return self
         reportf = None
         writer = None
@@ -398,18 +498,30 @@ class nodestats:
         prevtime = None
         prevPath = None
         prevbi = None
+        firstTime = None
+        firstBi = None
 
         for path in sorted(metrics_files):
+            curtime = parse_path_time(path) or os.path.getmtime(path)
+            self.times.append(curtime)
             with open(path, 'rt', encoding="utf-8") as fin:
                 cur = parse_metrics(fin)
+            # TODO: use _any_ node's blockinfo json
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
             bi = None
             if os.path.exists(bijsonpath):
                 with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
-            curtime = os.path.getmtime(path)
+                    self.biByTime[curtime] = bi
+            if bi is None:
+                bi = bisource.get(curtime)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
             #logger.debug('%s: %r', path, cur)
+            verifyGood = cur.get('algod_agreement_proposal_verify_good{}')
+            verifyMs = cur.get('algod_agreement_proposal_verify_ms{}')
+            if verifyGood and verifyMs:
+                # last writer wins
+                self.verifyMillis = verifyMs / verifyGood
             if prev is not None:
                 d = metrics_delta(prev, cur)
                 dt = curtime - prevtime
@@ -451,10 +563,20 @@ class nodestats:
                         tps,
                         blocktime,
                     ))
+            else:
+                firstTime = curtime
+                firstBi = bi
             prev = cur
             prevPath = path
             prevtime = curtime
             prevbi = bi
+        if prevbi is None or firstBi is None:
+            return self
+        txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
+        rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
+        totalDt = prevtime - firstTime
+        self.tps = txnCount / totalDt
+        self.blockTime = totalDt / rounds
         if writer and self.txBpsList:
             writer.writerow([])
             for bsum, msg in sorted([(bsum,msg) for msg,bsum in self.txPSums.items()]):

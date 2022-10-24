@@ -29,6 +29,12 @@ type Event string
 // StartupEvent event
 const StartupEvent Event = "Startup"
 
+// NameValue defines a named value, for use in an array reported to telemetry.
+type NameValue struct {
+	Name  string
+	Value interface{}
+}
+
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
 	Version      string
@@ -36,6 +42,7 @@ type StartupEventDetails struct {
 	Branch       string
 	Channel      string
 	InstanceHash string
+	Overrides    []NameValue
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
@@ -84,6 +91,7 @@ type BlockAcceptedEventDetails struct {
 	Hash         string
 	Round        uint64
 	ValidatedAt  time.Duration
+	ReceivedAt   time.Duration
 	PreValidated bool
 	PropBufLen   uint64
 	VoteBufLen   uint64
@@ -292,6 +300,8 @@ type PeerConnectionDetails struct {
 	Endpoint string `json:",omitempty"`
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
+	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
+	DuplicateFilterCount int64
 }
 
 // CatchpointGenerationEvent event

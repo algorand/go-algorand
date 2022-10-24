@@ -23,6 +23,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -91,7 +92,7 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 }
 
 func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on"})
+	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
 }
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
@@ -207,6 +208,8 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
+// The return error of fn should be a native sqlite3.Error type or an error wrapping it.
+// DO NOT return a custom error - the internal logic of Atmoic expects an sqlite error and uses that value.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	return db.atomic(fn, extras...)
 }
@@ -386,8 +389,12 @@ func (db *Accessor) GetPageSize(ctx context.Context) (pageSize uint64, err error
 
 // dbretry returns true if the error might be temporary
 func dbretry(obj error) bool {
-	err, ok := obj.(sqlite3.Error)
-	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
+	var sqliteErr sqlite3.Error
+	if errors.As(obj, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrLocked || sqliteErr.Code == sqlite3.ErrBusy
+	}
+
+	return false // Not an sqlite error type
 }
 
 // IsErrBusy examine the input inerr variable of type error and determine if it's a sqlite3 error for the ErrBusy error code.

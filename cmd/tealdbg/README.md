@@ -61,7 +61,7 @@ Local debugger supports setting the execution context: consensus protocol, trans
 
 ### Protocol
 
-Used to determine execution parameters and limits such as TEAL version, max program size and cost and so on.
+Used to determine execution parameters and limits such as program version, max program size and cost and so on.
 ```
 $ tealdbg debug --proto https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f
 $ tealdbg debug --proto future

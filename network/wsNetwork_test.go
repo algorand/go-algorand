@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -200,6 +201,47 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 	return &messageCounterHandler{target: target, done: make(chan struct{}), t: t}
 }
 
+type messageMatcherHandler struct {
+	lock deadlock.Mutex
+
+	target   [][]byte
+	received [][]byte
+	done     chan struct{}
+}
+
+func (mmh *messageMatcherHandler) Handle(message IncomingMessage) OutgoingMessage {
+	mmh.lock.Lock()
+	defer mmh.lock.Unlock()
+
+	mmh.received = append(mmh.received, message.Data)
+	if len(mmh.target) > 0 && mmh.done != nil && len(mmh.received) >= len(mmh.target) {
+		close(mmh.done)
+		mmh.done = nil
+	}
+
+	return OutgoingMessage{Action: Ignore}
+}
+
+func (mmh *messageMatcherHandler) Match() bool {
+	if len(mmh.target) != len(mmh.received) {
+		return false
+	}
+
+	sort.Slice(mmh.target, func(i, j int) bool { return bytes.Compare(mmh.target[i], mmh.target[j]) == -1 })
+	sort.Slice(mmh.received, func(i, j int) bool { return bytes.Compare(mmh.received[i], mmh.received[j]) == -1 })
+
+	for i := 0; i < len(mmh.target); i++ {
+		if !bytes.Equal(mmh.target[i], mmh.received[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func newMessageMatcher(t testing.TB, target [][]byte) *messageMatcherHandler {
+	return &messageMatcherHandler{target: target, done: make(chan struct{})}
+}
+
 func TestWebsocketNetworkStartStop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -259,6 +301,82 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	case <-counterDone:
 	case <-time.After(2 * time.Second):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
+// Set up two nodes, send proposal
+func TestWebsocketProposalPayloadCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testDef struct {
+		netASupProto []string
+		netAProto    string
+		netBSupProto []string
+		netBProto    string
+	}
+
+	var tests []testDef = []testDef{
+		// two old nodes
+		{[]string{"2.1"}, "2.1", []string{"2.1"}, "2.1"},
+
+		// two new nodes with overwritten config
+		{[]string{"2.2"}, "2.2", []string{"2.2"}, "2.2"},
+
+		// old node + new node
+		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.1"}, "2.1"},
+
+		// combinations
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.2"},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_%s(%s)+B_%s(%s)", test.netASupProto, test.netAProto, test.netBSupProto, test.netBProto), func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.GossipFanout = 1
+			netA.protocolVersion = test.netAProto
+			netA.supportedProtocolVersions = test.netASupProto
+			netA.Start()
+			defer netStop(t, netA, "A")
+			netB := makeTestWebsocketNode(t)
+			netB.config.GossipFanout = 1
+			netB.protocolVersion = test.netBProto
+			netA.supportedProtocolVersions = test.netBSupProto
+			addrA, postListen := netA.Address()
+			require.True(t, postListen)
+			t.Log(addrA)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+			netB.Start()
+			defer netStop(t, netB, "B")
+			messages := [][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+			}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
+
+			readyTimeout := time.NewTimer(2 * time.Second)
+			waitReady(t, netA, readyTimeout.C)
+			t.Log("a ready")
+			waitReady(t, netB, readyTimeout.C)
+			t.Log("b ready")
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+		})
 	}
 }
 
@@ -1467,7 +1585,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	now := time.Now()
 	expire := now.Add(5 * time.Second)
 	for {
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		if len(peer.sendBufferHighPrio)+len(peer.sendBufferBulk) == 0 {
 			break
 		}
@@ -1594,11 +1712,6 @@ func TestSetUserAgentHeader(t *testing.T) {
 func TestCheckProtocolVersionMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// note - this test changes the SupportedProtocolVersions global variable ( SupportedProtocolVersions ) and therefore cannot be parallelized.
-	originalSupportedProtocolVersions := SupportedProtocolVersions
-	defer func() {
-		SupportedProtocolVersions = originalSupportedProtocolVersions
-	}()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
@@ -1609,8 +1722,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
-
-	SupportedProtocolVersions = []string{"2", "1"}
+	wn.supportedProtocolVersions = []string{"2", "1"}
 
 	header1 := make(http.Header)
 	header1.Add(ProtocolAcceptVersionHeader, "1")
@@ -1794,7 +1906,6 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
 	expectedCounts := make(map[protocol.Tag]int)
-	expectedCounts[ft1] = 5
 	expectedCounts[ft2] = 5
 	var failed uint32
 	messageArriveWg := sync.WaitGroup{}
@@ -1839,21 +1950,20 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	require.NoError(t, netB.RegisterMessageInterest(ft1))
-	require.NoError(t, netB.RegisterMessageInterest(ft2))
+	netB.RegisterMessageInterest(ft2)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
 	waitPeerInternalChanQuiet(t, netA)
 
-	messageArriveWg.Add(5 * 2) // we're expecting exactly 10 messages.
+	messageArriveWg.Add(5) // we're expecting exactly 5 messages.
 	// send 5 messages of few types.
 	for i := 0; i < 5; i++ {
 		if atomic.LoadUint32(&failed) != 0 {
 			t.Errorf("failed")
 			break
 		}
-		netA.Broadcast(context.Background(), ft1, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), ft1, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
 		netA.Broadcast(context.Background(), ft3, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
 		netA.Broadcast(context.Background(), ft2, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), ft4, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
@@ -1865,7 +1975,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
 	defer incomingMsgSync.Unlock()
-	require.Equal(t, 2, len(msgCounters))
+	require.Equal(t, 1, len(msgCounters))
 	for tag, count := range msgCounters {
 		if atomic.LoadUint32(&failed) != 0 {
 			t.Errorf("failed")
@@ -2574,5 +2684,58 @@ func TestParseHostOrURL(t *testing.T) {
 			_, err := ParseHostOrURL(addr)
 			require.Error(t, err, "url should fail", addr)
 		})
+	}
+}
+
+func TestPreparePeerData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// no comression
+	req := broadcastRequest{
+		tags: []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag},
+		data: [][]byte{[]byte("test"), []byte("data")},
+	}
+
+	peers := []*wsPeer{}
+	wn := WebsocketNetwork{}
+	data, comp, digests := wn.preparePeerData(req, false, peers)
+	require.NotEmpty(t, data)
+	require.Empty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	// compression
+	peer1 := wsPeer{
+		features: 0,
+	}
+	peer2 := wsPeer{
+		features: pfCompressedProposal,
+	}
+	peers = []*wsPeer{&peer1, &peer2}
+	data, comp, digests = wn.preparePeerData(req, true, peers)
+	require.NotEmpty(t, data)
+	require.NotEmpty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+	require.Equal(t, len(comp), len(digests))
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	for i := range comp {
+		if req.tags[i] != protocol.ProposalPayloadTag {
+			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), comp[i])
+			require.Equal(t, data[i], comp[i])
+		} else {
+			require.NotEqual(t, data[i], comp[i])
+			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+		}
 	}
 }

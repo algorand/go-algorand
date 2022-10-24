@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,16 +44,6 @@ const (
 	authHeader          = "X-Algo-API-Token"
 	healthCheckEndpoint = "/health"
 	maxRawResponseBytes = 50e6
-)
-
-// APIVersion is used to define which server side API version would be used when making http requests to the server
-type APIVersion string
-
-const (
-	// APIVersionV1 suggests that the RestClient would use v1 calls whenever it's available for the given request.
-	APIVersionV1 APIVersion = "v1"
-	// APIVersionV2 suggests that the RestClient would use v2 calls whenever it's available for the given request.
-	APIVersionV2 APIVersion = "v2"
 )
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
@@ -92,25 +81,16 @@ func (e HTTPError) Error() string {
 
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
-	serverURL       url.URL
-	apiToken        string
-	versionAffinity APIVersion
+	serverURL url.URL
+	apiToken  string
 }
 
 // MakeRestClient is the factory for constructing a RestClient for a given endpoint
 func MakeRestClient(url url.URL, apiToken string) RestClient {
 	return RestClient{
-		serverURL:       url,
-		apiToken:        apiToken,
-		versionAffinity: APIVersionV1,
+		serverURL: url,
+		apiToken:  apiToken,
 	}
-}
-
-// SetAPIVersionAffinity sets the client affinity to use a specific version of the API
-func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAffinity APIVersion) {
-	previousAffinity = client.versionAffinity
-	client.versionAffinity = affinity
-	return
 }
 
 // filterASCII filter out the non-ascii printable characters out of the given input string.
@@ -135,7 +115,7 @@ func extractError(resp *http.Response) error {
 		return nil
 	}
 
-	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
+	errorBuf, _ := io.ReadAll(resp.Body) // ignore returned error
 	errorString := filterASCII(string(errorBuf))
 
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -221,7 +201,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return fmt.Errorf("can only decode raw response into type implementing v1.RawResponse")
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -252,31 +232,13 @@ func (client RestClient) post(response interface{}, path string, request interfa
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
 func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, "/v2/status", nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, "/v1/status", nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
+	err = client.get(&response, "/v2/status", nil)
 	return
 }
 
 // WaitForBlock returns the node status after waiting for the given round.
 func (client RestClient) WaitForBlock(round basics.Round) (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d/", round), nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
+	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
 	return
 }
 
@@ -303,17 +265,7 @@ func fillNodeStatusResponse(nodeStatus v1.NodeStatus) generatedV2.NodeStatusResp
 // blocks on the node end
 // Not supported
 func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
-
+	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
 
@@ -547,16 +499,9 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 
 // RawBlock gets the encoded, raw msgpack block for the given round
 func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		var blob Blob
-		err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
-		response = blob
-	default:
-		var raw v1.RawBlock
-		err = client.getRaw(&raw, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
-		response = raw
-	}
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 
@@ -638,7 +583,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -654,8 +599,14 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-// Proof gets a Merkle proof for a transaction in a block.
-func (client RestClient) Proof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.ProofResponse, err error) {
+// LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
+func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.LightBlockHeaderProofResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
+	return
+}
+
+// TransactionProof gets a Merkle proof for a transaction in a block.
+func (client RestClient) TransactionProof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.TransactionProofResponse, err error) {
 	txid = stripTransaction(txid)
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), proofParams{HashType: hashType.String()})
 	return

@@ -576,7 +576,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 			err := l.AddBlock(blk, agreement.Certificate{})
 			// AddBlock is used in 2 places:
 			// - data.ledger.EnsureBlock which reports a log message as Error or Debug
-			// - catchup.service.fetchAndWrite which leads to interrupting catchup or skiping the round
+			// - catchup.service.fetchAndWrite which leads to interrupting catchup or skipping the round
 			if err != nil {
 				switch err.(type) {
 				// The following two cases are okay to ignore, since these are expected and handled

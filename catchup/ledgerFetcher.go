@@ -36,14 +36,14 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-var errNoLedgerForRound = errors.New("No ledger available for given round")
+var errNoLedgerForRound = errors.New("no ledger available for given round")
 
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
 	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
 	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
 	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
-	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each itration from the incoming http data stream
+	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each iteration from the incoming http data stream
 	catchpointFileStreamReadSize = 4096
 )
 
@@ -114,7 +114,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
 	}
 
-	// at this point, we've already receieved the response headers. ensure that the
+	// at this point, we've already received the response headers. ensure that the
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
@@ -166,20 +166,9 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
 		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
-				}
-				return err
-			}
+		_, err = io.ReadFull(tarReader, balancesBlockBytes)
+		if err != nil {
+			return err
 		}
 		start := time.Now()
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)

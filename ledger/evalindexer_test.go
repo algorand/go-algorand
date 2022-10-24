@@ -47,6 +47,10 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 	return il.l.BlockHdr(il.latestRound)
 }
 
+func (il indexerLedgerForEvalImpl) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdrCached(round)
+}
+
 // The value of the returned map is nil iff the account was not found.
 func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error) {
 	res := make(map[basics.Address]*ledgercore.AccountData)
@@ -318,6 +322,7 @@ func TestResourceCaching(t *testing.T) {
 		Timestamp:   0,
 	}
 	l := newTestLedger(t, genesisBalances)
+	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)

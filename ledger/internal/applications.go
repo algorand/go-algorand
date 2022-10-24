@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -48,6 +49,9 @@ type cowForLogicLedger interface {
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	txnCounter() uint64
 	incTxnCount()
+
+	// The method should use the txtail to ensure MaxTxnLife+1 headers back are available
+	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func newLogicLedger(cow cowForLogicLedger) *logicLedger {
@@ -151,6 +155,10 @@ func (al *logicLedger) Round() basics.Round {
 
 func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
+}
+
+func (al *logicLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return al.cow.blockHdrCached(round)
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
@@ -274,9 +282,9 @@ func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
 
 	// We don't check min balances during in app txns.
 
-	// func (eval *BlockEvaluator) checkMinBalance will take care of
-	// it when the top-level txn concludes, as because cow will return
-	// all changed accounts in modifiedAccounts().
+	// func (eval *BlockEvaluator) checkMinBalance will take care of it when the
+	// top-level txn concludes, because cow will return all changed accounts in
+	// modifiedAccounts().
 
 	return nil
 

@@ -18,7 +18,7 @@ package basics
 
 import (
 	"math"
-	"math/big"
+	"math/bits"
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
@@ -200,17 +200,10 @@ func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 // Muldiv computes a*b/c.  The overflow flag indicates that
 // the result was 2^64 or greater.
 func Muldiv(a uint64, b uint64, c uint64) (res uint64, overflow bool) {
-	var aa big.Int
-	aa.SetUint64(a)
-
-	var bb big.Int
-	bb.SetUint64(b)
-
-	var cc big.Int
-	cc.SetUint64(c)
-
-	aa.Mul(&aa, &bb)
-	aa.Div(&aa, &cc)
-
-	return aa.Uint64(), !aa.IsUint64()
+	hi, lo := bits.Mul64(a, b)
+	if c <= hi {
+		return 0, true
+	}
+	quo, _ := bits.Div64(hi, lo, c)
+	return quo, false
 }

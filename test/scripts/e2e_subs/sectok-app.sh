@@ -214,4 +214,4 @@ ${xcmd} --from $CAROL transfer --receiver $BOB --amount $XFER2
 RES=$(${xcmd} --from $BOB transfer --receiver $CAROL --amount $XFER2 2>&1 || true)
 assertContains "$RES" "$ERR_APP_REJ_STR3" "reverse transfer (by group) should fail"
 
-date "+$scriptname done %Y%m%d_%H%M%S"
+date "+$scriptname OK %Y%m%d_%H%M%S"

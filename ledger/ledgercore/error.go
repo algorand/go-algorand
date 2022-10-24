@@ -37,7 +37,7 @@ func (tile TransactionInLedgerError) Error() string {
 	return fmt.Sprintf("transaction already in ledger: %v", tile.Txid)
 }
 
-// LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relavant rounds
+// LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relevant rounds
 type LeaseInLedgerError struct {
 	txid  transactions.Txid
 	lease Txlease

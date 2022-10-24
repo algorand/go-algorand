@@ -43,22 +43,22 @@ func randString() (b TestingHashable) {
 func signVerify(t *testing.T, c *SignatureSecrets, c2 *SignatureSecrets) {
 	s := randString()
 	sig := c.Sign(s)
-	if !c.Verify(s, sig, true) {
+	if !c.Verify(s, sig) {
 		t.Errorf("correct signature failed to verify (plain)")
 	}
 
 	s2 := randString()
 	sig2 := c.Sign(s2)
-	if c.Verify(s, sig2, true) {
+	if c.Verify(s, sig2) {
 		t.Errorf("wrong message incorrectly verified (plain)")
 	}
 
 	sig3 := c2.Sign(s)
-	if c.Verify(s, sig3, true) {
+	if c.Verify(s, sig3) {
 		t.Errorf("wrong key incorrectly verified (plain)")
 	}
 
-	if c.Verify(s2, sig3, true) {
+	if c.Verify(s2, sig3) {
 		t.Errorf("wrong message+key incorrectly verified (plain)")
 	}
 }

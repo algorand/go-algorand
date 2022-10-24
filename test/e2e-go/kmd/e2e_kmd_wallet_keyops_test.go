@@ -380,7 +380,7 @@ func TestSignProgram(t *testing.T) {
 	a.NotEqual(sig, crypto.Signature{})
 
 	ph := logic.Program(program)
-	a.True(secrets.SignatureVerifier.Verify(ph, sig, true))
+	a.True(secrets.SignatureVerifier.Verify(ph, sig))
 }
 
 func BenchmarkSignTransaction(b *testing.B) {

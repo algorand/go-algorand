@@ -30,8 +30,8 @@ export OS_TYPE
 
 export SHA
 
-ALGORAND_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-beta || echo algorand)
-DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || echo algorand-devtools)
+ALGORAND_PACKAGE_NAME=$(( [ "$CHANNEL" = beta ] && echo algorand-beta ) || ( [ "$CHANNEL" = alpha ] && echo algorand-alpha ) || ( echo algorand ))
+DEVTOOLS_PACKAGE_NAME=$(( [ "$CHANNEL" = beta ] && echo algorand-devtools-beta ) || ( [ "$CHANNEL" = alpha ] && echo algorand-devtools-alpha ) || ( echo algorand-devtools ))
 export ALGORAND_PACKAGE_NAME
 export DEVTOOLS_PACKAGE_NAME
 
@@ -61,7 +61,7 @@ then
     #   so although it appears as though I just lied to you, I did not :)
     #
     # rpm
-    if [ "$CHANNEL" = "beta" ]
+    if [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "alpha" ]
     then
         PACKAGE_NAME_SUFFIX="$CHANNEL-$VERSION-1.$ARCH_BIT"
     else
