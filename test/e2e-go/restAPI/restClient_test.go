@@ -1231,7 +1231,7 @@ func TestBoxNamesByAppID(t *testing.T) {
 	testClient := localFixture.LibGoalClient
 
 	testClient.WaitForRound(1)
-	
+
 	wh, err := testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
@@ -1549,8 +1549,20 @@ end:
 	numberOfBoxesRemaining := 3
 
 	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	allBoxes := resp
 	a.NoError(err)
 	a.Len(resp.Boxes, numberOfBoxesRemaining)
+
+	t.Run("limited query", func(t *testing.T) {
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), uint64(numberOfBoxesRemaining-1))
+		a.NoError(err)
+		a.Len(resp.Boxes, numberOfBoxesRemaining-1)
+	})
+	t.Run("limit == all boxes", func(t *testing.T) {
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), uint64(numberOfBoxesRemaining))
+		a.NoError(err)
+		a.Equal(allBoxes, resp)
+	})
 
 	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
 	a.NoError(err)
