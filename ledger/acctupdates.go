@@ -376,8 +376,9 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			// the key is in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset-1], so we'll need to check. Walk deltas
 			// backwards so later updates take priority.
-			for i := int(offset - 1); i >= 0; i-- {
-				mval, ok := au.kvDeltas[i][key]
+			for offset > 0 {
+				offset--
+				mval, ok := au.kvDeltas[offset][key]
 				if ok {
 					return mval.Data, nil
 				}
@@ -500,8 +501,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		results = map[string]bool{}
 		resultCount = 0
 
-		for i := int(offset - 1); i >= 0; i-- {
-			for keyInRound, mv := range au.kvDeltas[i] {
+		for offset > 0 {
+			offset--
+			for keyInRound, mv := range au.kvDeltas[offset] {
 				if !strings.HasPrefix(keyInRound, keyPrefix) {
 					continue
 				}
