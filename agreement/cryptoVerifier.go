@@ -82,6 +82,7 @@ type (
 		Quit()
 	}
 
+	//msgp:ignore cryptoVoteRequest
 	cryptoVoteRequest struct {
 		message                   // the message we would like to verify.
 		TaskIndex uint64          // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
@@ -90,6 +91,7 @@ type (
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
+	//msgp:ignore cryptoProposalRequest
 	cryptoProposalRequest struct {
 		message                   // the message we would like to verify.
 		TaskIndex uint64          // Caller specific number that would be passed back in the cryptoResult.TaskIndex field
@@ -99,6 +101,7 @@ type (
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
+	//msgp:ignore cryptoBundleRequest
 	cryptoBundleRequest struct {
 		message                   // the message we would like to verify.
 		TaskIndex uint64          // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
@@ -108,6 +111,7 @@ type (
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
+	//msgp:ignore cryptoResult
 	cryptoResult struct {
 		message
 		Err       *serializableError

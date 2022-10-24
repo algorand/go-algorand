@@ -324,6 +324,7 @@ type freshnessData struct {
 	PlayerLastConcluding step
 }
 
+//msgp:ignore filterableMessageEvent
 type filterableMessageEvent struct {
 	messageEvent
 
