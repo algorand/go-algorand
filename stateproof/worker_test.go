@@ -62,9 +62,15 @@ type testWorkerStubs struct {
 	txmsg                 chan transactions.SignedTxn
 	totalWeight           int
 	deletedStateProofKeys map[account.ParticipationID]basics.Round
+	version               protocol.ConsensusVersion
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
+	version := config.Consensus[protocol.ConsensusCurrentVersion]
+	return newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, version, totalWeight)
+}
+
+func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, version protocol.ConsensusVersion, params config.ConsensusParams, totalWeight int) *testWorkerStubs {
 	s := &testWorkerStubs{
 		t:                     nil,
 		mu:                    deadlock.Mutex{},
@@ -78,9 +84,10 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		txmsg:                 make(chan transactions.SignedTxn, 1024),
 		totalWeight:           totalWeight,
 		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
+		version:               version,
 	}
 	s.latest--
-	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
+	s.addBlock(2 * basics.Round(params.StateProofInterval))
 	return s
 }
 
@@ -89,7 +96,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
-	hdr.CurrentProtocol = protocol.ConsensusCurrentVersion
+	hdr.CurrentProtocol = s.version
 
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
@@ -114,8 +121,9 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 		close(s.waiters[s.latest])
 	}
 }
-
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, part := range s.keys {
 		partRecord := account.ParticipationRecord{
 			ParticipationID:   part.ID(),
@@ -303,15 +311,19 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
+func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
+	version := config.Consensus[protocol.ConsensusCurrentVersion]
+	return newPartKeyWithVersion(t, version, parent)
+}
+
 // You must call defer part.Close() after calling this function,
 // since it creates a DB accessor but the caller must close it (required for mss)
-func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
+func newPartKeyWithVersion(t testing.TB, protoParam config.ConsensusParams, parent basics.Address) account.PersistedParticipation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*proto.StateProofInterval), proto.DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*protoParam.StateProofInterval), protoParam.DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part
@@ -658,48 +670,42 @@ func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 
 	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
 	// to keep its keys to sign the state proof firstExpectedStateproof. every part should have keys for that round
-	s.mu.Lock()
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
-	s.mu.Unlock()
 
 	advanceRoundsAndStateProofsSlowly(t, s, 2*proto.StateProofInterval)
 
 	// second state proof is confirmed, no need for the keys of the first state proof
-	s.mu.Lock()
-	fmt.Println(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
 	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
 	checkedKeys = s.StateProofKeys(basics.Round(4 * proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
-	s.mu.Unlock()
 }
 
-func TestKeysRemoveOnlyAfterStateProofAccepted2(t *testing.T) {
+func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const stateProofIntervalForTest = 64
-	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
-	tmp.StateProofInterval = stateProofIntervalForTest
-	config.Consensus[protocol.ConsensusCurrentVersion] = tmp
+	const smallIntervalVersionName = "TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals"
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto.StateProofInterval = stateProofIntervalForTest
+	config.Consensus[smallIntervalVersionName] = proto
 	defer func() {
-		tmp = config.Consensus[protocol.ConsensusCurrentVersion]
-		tmp.StateProofInterval = 256
-		config.Consensus[protocol.ConsensusCurrentVersion] = tmp
+		delete(config.Consensus, smallIntervalVersionName)
 	}()
 
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
+		p := newPartKeyWithVersion(t, proto, parent)
 		defer p.Close()
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubsWithVersion(t, keys, smallIntervalVersionName, proto, 10)
 	dbs, _ := dbOpenTest(t, true)
 
 	logger := logging.NewLogger()
@@ -712,34 +718,29 @@ func TestKeysRemoveOnlyAfterStateProofAccepted2(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(firstExpectedStateproof + expectedNumberOfStateProofs*proto.StateProofInterval)
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	require.NoError(t, err)
 
 	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
 	// to keep its keys to sign the state proof firstExpectedStateproof. every part should have keys for that round
-	s.mu.Lock()
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
-	s.mu.Unlock()
 
 	// confirm stateproof for firstExpectedStateproof
 	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
 
 	// the first state proof was confirmed. Nevertheless, node should keep the keys for the firstExpectedStateproof
 	// since both are within the same keylifetime
-	s.mu.Lock()
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
 	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
 	require.Equal(t, len(keys), len(checkedKeys))
-	s.mu.Unlock()
 
 	advanceRoundsAndStateProofsSlowly(t, s, 2*proto.StateProofInterval)
 
 	// when the 3rd state proof is confirmed the first key is not longer needed
-	s.mu.Lock()
+
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
 	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
@@ -750,7 +751,6 @@ func TestKeysRemoveOnlyAfterStateProofAccepted2(t *testing.T) {
 	// make sure that we have key for the last state proof
 	checkedKeys = s.StateProofKeys(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	require.Equal(t, len(keys), len(checkedKeys))
-	s.mu.Unlock()
 }
 
 func advanceRoundsAndStateProofsSlowly(t *testing.T, s *testWorkerStubs, numberOfRounds uint64) {
