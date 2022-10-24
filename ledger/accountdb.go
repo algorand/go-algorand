@@ -389,6 +389,8 @@ type normalizedAccountBalance struct {
 	normalizedBalance uint64
 	// encodedResources provides the encoded form of the resources
 	encodedResources map[basics.CreatableIndex][]byte
+	// partial balance indicates that the original account balance was split into multiple parts in catchpoint creation time
+	partialBalance bool
 }
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
@@ -445,12 +447,22 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].accountData.MicroAlgos,
 			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
-		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		curHashIdx := 0
+		if balance.ExpectingMoreEntries {
+			// There is a single chunk in the catchpoint file with ExpectingMoreEntries
+			// set to false for this account. There may be multiple chunks with
+			// ExpectingMoreEntries set to true. In this case, we do not have to add the
+			// account's own hash to accountHashes.
+			normalizedAccountBalances[i].accountHashes = make([][]byte, len(balance.Resources))
+			normalizedAccountBalances[i].partialBalance = true
+		} else {
+			normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
+			normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+			curHashIdx++
+		}
 		if len(balance.Resources) > 0 {
 			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
 			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
-			resIdx := 0
 			for cidx, res := range balance.Resources {
 				var resData resourcesData
 				err = protocol.Decode(res, &resData)
@@ -465,10 +477,10 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				} else {
 					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
 				}
-				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+				normalizedAccountBalances[i].accountHashes[curHashIdx] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
-				resIdx++
+				curHashIdx++
 			}
 		}
 	}

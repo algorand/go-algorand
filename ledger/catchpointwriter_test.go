@@ -585,6 +585,9 @@ func testNewLedgerFromCatchpoint(t *testing.T, filepath string) *Ledger {
 		require.NoError(t, err)
 	}
 
+	err = accessor.BuildMerkleTrie(context.Background(), nil)
+	require.NoError(t, err)
+
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
