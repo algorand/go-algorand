@@ -257,13 +257,13 @@ func (s *testWorkerStubs) advanceRoundsAndStateProofs(delta uint64) {
 
 	for r := uint64(0); r < delta; r++ {
 		interval := basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
-		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-		tmp := s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic]
 		blk := s.blocks[s.latest]
-		if blk.Round%interval == 0 && tmp.StateProofNextRound-interval < blk.Round {
-			tmp.StateProofNextRound += interval
-			s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic] = tmp
+		stateProofNextRound := s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+		if blk.Round%interval == 0 && stateProofNextRound-interval < blk.Round {
+			stateProofNextRound += interval
 		}
+
+		s.addBlock(stateProofNextRound)
 	}
 }
 
@@ -617,7 +617,7 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	}
 }
 
-func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
+func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
@@ -635,13 +635,18 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	logger := logging.NewLogger()
 	logger.SetOutput(io.Discard)
 
-	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	const expectedNumberOfStateProofs = 3
+	const firstExpectedStateproof = 512
 
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 	w.Start()
 	defer w.Shutdown()
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceRoundsWithoutStateProof(3 * proto.StateProofInterval)
+	s.advanceRoundsWithoutStateProof(firstExpectedStateproof + expectedNumberOfStateProofs*proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
+
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
 
 	require.NoError(t, w.db.Atomic(
 		func(ctx context.Context, tx *sql.Tx) error {
@@ -650,8 +655,30 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 		}),
 	)
 
-	w.signStateProof(s.blocks[3*basics.Round(proto.StateProofInterval)])
-	require.Zero(t, s.GetNumDeletedKeys())
+	// since no state proofs was confirmed (i.e the next state proof round == firstExpectedStateproof), and the key for
+	// (firstExpectedStateproof - proto.StateProofInterval) is never used, we expect the builder to keep all keys
+	// up to firstExpectedStateproof
+	s.mu.Lock()
+	for i := 0; i < len(keys); i++ {
+		rnd, exists := s.deletedStateProofKeys[keys[i].ID()]
+		require.True(t, exists)
+		require.Equal(t, basics.Round(firstExpectedStateproof-proto.StateProofInterval), rnd)
+	}
+	s.mu.Unlock()
+
+	// confirm stateproof for firstExpectedStateproof -> worker should remove keys from firstExpectedStateproof
+	s.advanceRoundsAndStateProofs(1)
+
+	err = waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
+
+	s.mu.Lock()
+	for i := 0; i < len(keys); i++ {
+		rnd, exists := s.deletedStateProofKeys[keys[i].ID()]
+		require.True(t, exists)
+		require.Equal(t, basics.Round(firstExpectedStateproof), rnd)
+	}
+	s.mu.Unlock()
 }
 
 func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
@@ -1362,7 +1389,7 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 }
 
-func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
+func TestBuildersPersistenceAfterRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1404,7 +1431,7 @@ func TestWorker_BuildersPersistenceAfterRestart(t *testing.T) {
 	compareBuilders(a, expectedStateproofs, w, firstExpectedStateproof, proto)
 }
 
-func TestWorker_OnlySignaturesInDatabase(t *testing.T) {
+func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1478,7 +1505,7 @@ func compareBuilders(a *require.Assertions, expectedStateproofs int, w *Worker, 
 	}
 }
 
-func TestWorker_LoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
+func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]

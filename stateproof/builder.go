@@ -477,7 +477,6 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 			spw.log.Warnf("deleteOldKeys: could not remove key for round %s %v %v", key.ParticipationID, oldestRoundToRemove, err)
 		}
 	}
-
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
@@ -496,8 +495,8 @@ func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
 		return deleteBuilders(tx, oldestRoundToRemove)
 	})
 	if err != nil {
+		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 	}
-	spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 }
 
 func (spw *Worker) tryBroadcast() {
