@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/catchup"
 	"io"
 	"math"
 	"net/http"
@@ -31,7 +30,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -49,7 +51,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
-	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5

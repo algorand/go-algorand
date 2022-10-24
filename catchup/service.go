@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -35,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-deadlock"
 )
 
 const catchupPeersForSync = 10
@@ -48,7 +49,7 @@ const catchupRetryLimit = 500
 var ErrSyncModeNotEnabled = errors.New("attempted to set sync round for catchup service when EnableSyncMode was disabled")
 
 // ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
-var ErrSyncRoundInvalid = errors.New("requested sync round cannot be higher than the latest round")
+var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
 
 // PendingUnmatchedCertificate is a single certificate that is being waited upon to have its corresponding block fetched.
 type PendingUnmatchedCertificate struct {
