@@ -4,8 +4,8 @@
 `--participation-host-machines (-N)` and `--npn-host-machines (-X)` are optional parameters and they default to `--participation-algod-nodes (-n)` and `--npn-algod-nodes (-x)` respectively, i.e. defaults to a machine per algod node.
 
 ### Long-Form Flags Example
-- Wallets: The command below will generate 100 wallets for the 100 participation algod nodes. By default each npn gets one wallet each. If there is more wallets than nodes, it will get split across the algod nodes.
-- Relays: 8 Relays and 8 relay machines will be generated
+- Wallets: The command below will generate 100 wallets for the 100 participation algod nodes. By default each npn gets one wallet each. If there are more wallets than nodes, it will get split across the participation algod nodes.
+- Relays: 8 Relays and 8 machines to host the relays will be generated
 - Participation Nodes: 100 particiipation algod nodes will be distributed across 20 host machines.
 - Non-Participation Nodes (NPNs): 10 non-participation algod nodes will be distributed across 5 host machines.
 
