@@ -155,7 +155,7 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 	}
 
 	wrappedData := catchpointStateProofVerificationData{data: *rawData}
-	encodedData := crypto.HashRep(wrappedData)
+	encodedData := protocol.Encode(&wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
 		Name: "stateProofVerificationData.msgpack",
@@ -172,7 +172,8 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 		return crypto.Digest{}, err
 	}
 
-	dataHash := crypto.Hash(encodedData)
+	// TODO: This actually causes double usage of protocl.encode - above and in crypto.HashObj
+	dataHash := crypto.HashObj(wrappedData)
 
 	return dataHash, nil
 }
