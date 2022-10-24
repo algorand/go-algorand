@@ -1327,6 +1327,12 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return macct.AccountResource(), rnd, nil
 		}
 
+		// check baseAccoiunts again to see if it does not exist
+		if au.baseResources.readNotFound(addr, aidx) {
+			// it seems the account doesnt exist
+			return ledgercore.AccountResource{}, rnd, nil
+		}
+
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
@@ -1346,6 +1352,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 				au.baseResources.writePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, nil
 			}
+			au.baseResources.writeNotFoundPending(addr, aidx)
 			// otherwise return empty
 			return ledgercore.AccountResource{}, rnd, nil
 		}
@@ -1428,6 +1435,12 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return macct.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
+		// check baseAccoiunts again to see if it does not exist
+		if au.baseAccounts.readNotFound(addr) {
+			// it seems the account doesnt exist
+			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
+		}
+
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
@@ -1447,6 +1460,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				au.baseAccounts.writePending(persistedData)
 				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
+			au.baseAccounts.writeNotFoundPending(addr)
 			// otherwise return empty
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
