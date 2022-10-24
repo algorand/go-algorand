@@ -1302,6 +1302,10 @@
     },
     "/v2/deltas/{round}": {
       "get": {
+        "description": "Get round deltas for a round.",
+        "tags": [
+          "private"
+        ],
         "produces": [
           "application/json"
         ],

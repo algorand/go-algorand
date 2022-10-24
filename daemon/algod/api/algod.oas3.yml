@@ -3353,6 +3353,7 @@
     },
     "/v2/deltas/{round}": {
       "get": {
+        "description": "Get round deltas for a round.",
         "operationId": "GetRoundDeltas",
         "parameters": [
           {
@@ -3432,7 +3433,10 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a RoundDeltas object for a given round"
+        "summary": "Get a RoundDeltas object for a given round",
+        "tags": [
+          "private"
+        ]
       }
     },
     "/v2/ledger/supply": {

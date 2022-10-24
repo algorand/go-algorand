@@ -1071,21 +1071,21 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	}
 }
 
-func (au *accountUpdates) lookupAccountDeltas(rnd basics.Round) (data ledgercore.AccountDeltas, err error) {
+func (au *accountUpdates) lookupAccountDeltas(rnd basics.Round) (ledgercore.AccountDeltas, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	var offset uint64
-	currentDeltaLen := uint64(len(au.deltas))
-	offset, err = au.roundOffset(rnd)
+	var deltas ledgercore.AccountDeltas
+	offset, err := au.roundOffset(rnd)
 	if err != nil {
-		return
+		return deltas, err
 	}
-	if currentDeltaLen < offset+1 {
+	if uint64(len(au.deltas)) <= offset {
 		err = fmt.Errorf("round %d not in deltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.deltas), offset)
-		return
+		return deltas, err
 	}
-	data = au.deltas[offset]
-	return
+	deltas = au.deltas[offset]
+	return deltas, err
 }
 
 // lookupWithoutRewards returns the account data for a given address at a given round.

@@ -455,7 +455,7 @@ type Local struct {
 
 	// EnableSyncMode will boot the node with a subset of services, and allow users to control which rounds
 	// are synced to the ledger enabling them to ensure desired deltas are kept in the cache.
-	EnableSyncMode bool `version[23]:"false"`
+	EnableSyncMode bool `version[24]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
