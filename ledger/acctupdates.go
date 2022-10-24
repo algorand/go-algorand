@@ -1751,7 +1751,10 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for key, out := range dcc.compactKvDeltas {
 		cnt := out.ndeltas
-		mval := au.kvStore[key]
+		mval, ok := au.kvStore[key]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to key %s, but not in au.kvStore", cnt, key)
+		}
 		if cnt > mval.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to key %d, but au.kvStore had %d", cnt, key, mval.ndeltas)
 		} else if cnt == mval.ndeltas {
