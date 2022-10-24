@@ -10,7 +10,7 @@ netgoal generate -h
 ```
 
 Source code for netgoal can be found in `{GO_ALGORAND_PATH}/cmd/netgoal/generate.go`
-Documentation: https://github.com/algorand/go-algorand/tree/master/cmd/netgoal/README.md
+[Documentation](../../../../cmd/netgoal/README.md)
 
 Make sure you set the PATH and GOPATH variables to the netgoal binary's path.
 
