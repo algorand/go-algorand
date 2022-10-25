@@ -282,6 +282,8 @@ func reencode(stxns []transactions.SignedTxn) []byte {
 // backlogWorker is the worker go routine that process the incoming messages from the postVerificationQueue and backlogQueue channels
 // and dispatches them further.
 func (handler *TxHandler) backlogWorker() {
+	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
+	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
 	for {
 		// prioritize the postVerificationQueue
