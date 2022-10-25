@@ -22,7 +22,7 @@ Build and create the recipe.
 
 ## "Quick" Start - Manual recipe generation (not using Jenkins)
 Generate the recipe with the `network-tpl.json` file
-- (See the first section above for small networks.)
+- (See the first section above for small networks. See Troubleshooting for netgoal path set up)
 1. Make sure you're in the same directory as this README and `cp network_templates/network-tpl.json network-tpl.json`
 2. Generate the recipe with a python script:
 ```
@@ -67,7 +67,7 @@ Most parameters that can be modified by config.json can be found in `go-algorand
 
 ## Troubleshooting
 ### Can't find netgoal
-- Make sure you have netgoal installed
+- Make sure you have netgoal installed (you can either download it or run through the go-algorand build process)
 - Make sure you export GOBIN and GOPATH in your environment and add it to your path.
 On a mac, update by editing `~/.zshrc`, add
 ```
