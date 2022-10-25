@@ -185,7 +185,12 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	if response.CreatedAssets != nil {
 		for _, asset := range *response.CreatedAssets {
 			params := asset.Params
-			if params.UnitName != nil && *params.UnitName == assetUnitName {
+			if params.UnitName == nil && assetUnitName == "" {
+				// Since asset unit names can be left blank, try to match
+				// empty unit names in the user's account first.
+				assetID = asset.Index
+				nmatch++
+			} else if params.UnitName != nil && *params.UnitName == assetUnitName {
 				assetID = asset.Index
 				nmatch++
 			}
@@ -193,7 +198,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 
 	if nmatch == 0 {
-		reportErrorf("No matches for asset unit name %s in creator %s", assetUnitName, creator)
+		reportErrorf("No matches for asset unit name %s in creator %s; assets %v", assetUnitName, creator, *response.CreatedAssets)
 	}
 
 	if nmatch > 1 {
