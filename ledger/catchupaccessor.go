@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"crypto/sha512"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -800,9 +799,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		}
 
 		wrappedData := catchpointStateProofVerificationData{data: *rawStateVerificationProofData}
-		encodedData := protocol.Encode(&wrappedData)
-		// TODO: Domain separator
-		stateProofVerificationDataHash = sha512.Sum512_256(encodedData)
+		stateProofVerificationDataHash = crypto.HashObj(wrappedData)
 
 		return
 	})
