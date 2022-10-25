@@ -47,6 +47,7 @@ type PpConfig struct {
 	Quiet           bool
 	RandomNote      bool
 	RandomLease     bool
+	TotalLatency    bool
 
 	Program            []byte
 	LogicArgs          [][]byte

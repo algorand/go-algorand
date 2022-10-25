@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
@@ -128,6 +129,11 @@ func (ppa *pingPongAccount) String() string {
 	return ow.String()
 }
 
+type txidSendTime struct {
+	txid string
+	when time.Time
+}
+
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
 	cfg      PpConfig
@@ -148,6 +154,9 @@ type WorkerState struct {
 	refreshPos   int
 
 	client *libgoal.Client
+
+	sentTxid chan txidSendTime
+	blocks   chan *bookkeeping.Block
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -331,6 +340,25 @@ func (pps *WorkerState) schedule(n int) {
 	}
 	pps.nextSendTime = nextSendTime
 	//fmt.Printf("schedule now=%s next=%s\n", now, pps.nextSendTime)
+}
+
+func (pps *WorkerState) recordTxidSent(txid string, err error) {
+	if err != nil {
+		return
+	}
+	if pps.sentTxid == nil {
+		return
+	}
+	rec := txidSendTime{
+		txid: txid,
+		when: time.Now(),
+	}
+	select {
+	case pps.sentTxid <- rec:
+		// ok!
+	default:
+		// drop, oh well
+	}
 }
 
 func (pps *WorkerState) fundAccounts(client *libgoal.Client) error {
@@ -533,6 +561,10 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac *libgoal.Client) {
 	//			error = fundAccounts()
 	//  }
 
+	if pps.cfg.TotalLatency {
+		pps.sentTxid = make(chan txidSendTime, 20)
+		go pps.txidLatency()
+	}
 	pps.nextSendTime = time.Now()
 	ac.SetSuggestedParamsCacheAge(200 * time.Millisecond)
 	pps.client = ac
@@ -747,7 +779,9 @@ func (pps *WorkerState) sendFromTo(
 
 			sentCount++
 			pps.schedule(1)
-			_, sendErr = client.BroadcastTransaction(stxn)
+			var txid string
+			txid, sendErr = client.BroadcastTransaction(stxn)
+			pps.recordTxidSent(txid, sendErr)
 		} else {
 			// Generate txn group
 
@@ -818,6 +852,8 @@ func (pps *WorkerState) sendFromTo(
 			sentCount += uint64(len(txGroup))
 			pps.schedule(len(txGroup))
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
+			txid := txGroup[0].ID().String()
+			pps.recordTxidSent(txid, sendErr)
 		}
 
 		if sendErr != nil {
@@ -1260,4 +1296,13 @@ func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig
 		stxn, err = txn.Sign(signer.sk), nil
 	}
 	return
+}
+
+// thread which handles measuring total send-to-commit latency
+func (pps *WorkerState) txidLatency() {
+	for {
+		select {
+		case st := <-pps.sentTxid:
+		}
+	}
 }
