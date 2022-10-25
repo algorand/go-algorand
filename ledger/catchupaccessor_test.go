@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -288,6 +289,74 @@ func TestBuildMerkleTrie(t *testing.T) {
 	blockRound, err := catchpointAccessor.GetCatchupBlockRound(ctx)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), blockRound)
+}
+
+func TestParseStateProofVerificationData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	ctx := context.Background()
+	var progress CatchpointCatchupAccessorProgress
+
+	// We do this to create catchpoint staging tables.
+	err = catchpointAccessor.ResetStagingBalances(ctx, true)
+	require.NoError(t, err)
+
+	// We do this to initialize the catchpointblocks table. Needed to be able to use CompleteCatchup.
+	err = catchpointAccessor.StoreFirstBlock(ctx, &bookkeeping.Block{})
+	require.NoError(t, err)
+
+	// We do this to initialize the accounttotals table. Needed to be able to use CompleteCatchup.
+	accountsCount := uint64(len(initkeys))
+	fileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     basics.Round(0),
+		BlocksRound:       basics.Round(0),
+		Totals:            ledgercore.AccountTotals{},
+		TotalAccounts:     accountsCount,
+		TotalChunks:       (accountsCount + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		Catchpoint:        "",
+		BlockHeaderDigest: crypto.Digest{},
+	}
+	encodedFileHeader := protocol.Encode(&fileHeader)
+	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	require.NoError(t, err)
+
+	verificationData := ledgercore.StateProofVerificationData{
+		TargetStateProofRound: 120,
+		VotersCommitment:      nil,
+		ProvenWeight:          basics.MicroAlgos{Raw: 100},
+	}
+	wrappedData := catchpointStateProofVerificationData{
+		data: []ledgercore.StateProofVerificationData{verificationData},
+	}
+	blob := protocol.Encode(&wrappedData)
+
+	err = catchpointAccessor.ProgressStagingBalances(ctx, "stateProofVerificationData.msgpack", blob, &progress)
+	require.NoError(t, err)
+
+	err = catchpointAccessor.CompleteCatchup(ctx)
+	require.NoError(t, err)
+
+	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		trackedStateProofVerificationData, err := stateProofVerificationData(ctx, tx)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(*trackedStateProofVerificationData))
+		require.Equal(t, verificationData, (*trackedStateProofVerificationData)[0])
+		return nil
+	})
+	require.NoError(t, err)
 }
 
 // blockdb.go code
