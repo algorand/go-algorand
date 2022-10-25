@@ -30,7 +30,7 @@ import (
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // bundle{Filtered,Malformed}, and {soft,cert,next}Threshold.
 type voteAggregator struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 }
 
 func (agg *voteAggregator) T() stateMachineTag {

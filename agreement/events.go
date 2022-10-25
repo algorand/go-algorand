@@ -43,7 +43,7 @@ type event interface {
 // A ConsensusVersionView is a view of the consensus version as read from a
 // LedgerReader, associated with some round.
 type ConsensusVersionView struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	Err     *serializableError
 	Version protocol.ConsensusVersion
@@ -256,7 +256,7 @@ func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent
 }
 
 type messageEvent struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// {vote,bundle,payload}{Present,Verified}
 	T eventType
 
@@ -316,7 +316,7 @@ func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) externalEve
 // freshnessData is bundled with filterableMessageEvent
 // to allow for delegated freshness computation
 type freshnessData struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	PlayerRound          round
 	PlayerPeriod         period
@@ -628,7 +628,7 @@ func (e pinnedValueEvent) ComparableStr() string {
 }
 
 type thresholdEvent struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// {{soft,cert,next}Threshold, none}
 	T eventType
 
@@ -824,7 +824,7 @@ func (e nextThresholdStatusRequestEvent) ComparableStr() string {
 }
 
 type nextThresholdStatusEvent struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// the result of a nextThresholdStatusRequest. Contains two bits of information,
 	// capturing four cases:
 	// Bottom = false, Proposal = unset/bottom --> received no next value thresholds

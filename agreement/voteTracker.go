@@ -32,7 +32,7 @@ import (
 // canonical encoding of maps in msgpack format.
 
 type proposalVoteCounter struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	Count uint64
 	Votes map[basics.Address]vote `codec:"Votes,allocbound=-"`
@@ -47,7 +47,7 @@ type proposalVoteCounter struct {
 // It returns the following type(s) of event: none and
 // {soft,cert,next}Threshold.
 type voteTracker struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// Voters holds the set of voters which have voted in the current step.
 	// It is used to track whether a voter has equivocated.
 	Voters map[basics.Address]vote `codec:"Voters,allocbound=-"`

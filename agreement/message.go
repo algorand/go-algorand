@@ -52,7 +52,7 @@ type message struct {
 // These messages are concatenated as an optimization which prevents proposals
 // from being dropped.
 type compoundMessage struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	Vote     unauthenticatedVote
 	Proposal unauthenticatedProposal

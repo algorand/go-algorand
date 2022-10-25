@@ -42,7 +42,7 @@ import (
 // Trace properties
 //  - voteFilterRequest is idempotent
 type voteTrackerContract struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	Step   step
 	StepOk bool

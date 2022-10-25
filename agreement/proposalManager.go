@@ -30,7 +30,7 @@ import (
 // payload{Pipelined,Rejected,Accepted}, and proposal{Accepted,Committable}.
 
 type proposalManager struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 }
 
 func (m *proposalManager) T() stateMachineTag {

@@ -81,7 +81,7 @@ type rootRouter struct {
 }
 
 type roundRouter struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	proposalRoot listener // proposalMachineRound
 	voteRoot     listener // voteMachineRound
@@ -93,7 +93,7 @@ type roundRouter struct {
 }
 
 type periodRouter struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	proposalRoot listener // proposalMachinePeriod
 	voteRoot     listener // voteMachinePeriod
@@ -107,7 +107,7 @@ type periodRouter struct {
 }
 
 type stepRouter struct {
-	_struct  struct{} `codec:",omitempty,omitemptyarray"`
+	_struct  struct{} `codec:","`
 	voteRoot listener // voteMachineStep
 
 	VoteTracker voteTracker

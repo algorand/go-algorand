@@ -26,7 +26,7 @@ import (
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// Round, Period, and Step hold the current round, period, and step of
 	// the player state machine.
 	Round  round

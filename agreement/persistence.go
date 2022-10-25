@@ -33,7 +33,7 @@ import (
 
 // diskState represents the state required by the agreement protocol to be persistent.
 type diskState struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
 	Router []byte
 	Player []byte

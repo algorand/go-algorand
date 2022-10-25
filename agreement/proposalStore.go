@@ -37,7 +37,7 @@ var proposalAlreadyAssembledCounter = metrics.MakeCounter(
 // Once a proposal is successfully validated, it is stored by the
 // blockAssembler.
 type blockAssembler struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// Pipeline contains a proposal which has not yet been validated.  The
 	// proposal might be inside the cryptoVerifier, or it might be a
 	// pipelined proposal from the next round.
@@ -121,7 +121,7 @@ func (a blockAssembler) trim(p period) blockAssembler {
 // It returns the following type(s) of event: none, voteFiltered,
 // proposal{Accepted,Committable}, and payload{Pipelined,Rejected}.
 type proposalStore struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 	// Relevant contains a current collection of important proposal-values
 	// in the round. Relevant is indexed by period, and the proposalValue is
 	// the last one reported by the corresponding proposalMachinePeriod.
