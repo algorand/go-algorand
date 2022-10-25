@@ -596,6 +596,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 		for {
 			select {
 			case stx, ok := <-stxnChan:
+				// TODO: stxnChan is never closed in production code. this is only used in tests. REMOVE
 				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
 				if !ok {
 					if numberOfSigsInCurrent > 0 {

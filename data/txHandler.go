@@ -46,6 +46,7 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+
 // verifierStreamBufferSize is the number of txn that coult be accumulated before the verifier stream consumes them
 var verifierStreamBufferSize = 1000
 
@@ -167,7 +168,6 @@ func (handler *TxHandler) backlogWorker() {
 	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
 	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
-	defer close(handler.streamVerifierChan)
 	for {
 		// prioritize the postVerificationQueue
 		select {
