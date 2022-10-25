@@ -302,7 +302,7 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	l := ledger
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool, &cfg)
 	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
@@ -523,7 +523,7 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	l := ledger
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool, &cfg)
 	defer handler.ctxCancel()
 
 	// Prepare the transactions
