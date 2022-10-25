@@ -1564,7 +1564,7 @@ int 1
 
 func TestAppLocalGlobalErrorCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// t.Parallel() // No - Modifies Proto
+	// t.Parallel() No! Modifies Proto
 
 	ep, tx, ledger := makeSampleEnv()
 	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
