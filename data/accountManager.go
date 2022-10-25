@@ -67,7 +67,7 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				manager.log.Warnf("error while loading round secrets from participation registry: %v", err)
 				continue
 			}
 			out = append(out, partRndSecrets)
@@ -198,7 +198,7 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 
 	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round, agreementProto); err != nil {
-		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
+		manager.log.Warnf("error while deleting expired records from participation registry: %v", err)
 	}
 }
 
@@ -212,6 +212,6 @@ func (manager *AccountManager) Record(account basics.Address, round basics.Round
 	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
 	err := manager.registry.Record(account, round, participationType)
 	if err != nil {
-		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %v", account, participationType, round, err)
 	}
 }

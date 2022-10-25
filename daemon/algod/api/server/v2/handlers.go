@@ -362,7 +362,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
-			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
+			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
 			extraData := map[string]interface{}{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,
