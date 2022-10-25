@@ -589,62 +589,6 @@ func TestWorkerHandleSig(t *testing.T) {
 	}
 }
 
-//func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
-//	for i := 0; i < 300; i++ {
-//		TestSignerDeletesUnneededStateProofKeys1(t)
-//	}
-//
-//}
-
-func TestSignerDeletesUnneededStateProofKeys1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var keys []account.Participation
-	nParticipants := 2
-	for i := 0; i < nParticipants; i++ {
-		var parent basics.Address
-		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
-	}
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
-	w.Start()
-	defer w.Shutdown()
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceRoundsAndStateProofs(proto.StateProofInterval) // going to rnd 256 // the stproof is in 512
-	require.Zero(t, s.GetNumDeletedKeys())
-
-	s.advanceRoundsAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768.
-
-	ctx, cncl := context.WithTimeout(context.Background(), time.Second*5)
-	defer cncl()
-
-	// this busy wait shouldn't take long, the signer starts from round 512...
-	for w.lastSignedBlock() < 513 {
-		select {
-		case <-ctx.Done():
-			require.Fail(t, "test ran out of time.")
-			t.Fail()
-			return
-		default:
-			time.Sleep(time.Second)
-		}
-	}
-	require.Equal(t, nParticipants, s.GetNumDeletedKeys())
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	require.NotZero(t, len(s.deletedStateProofKeys))
-	for _, round := range s.deletedStateProofKeys {
-		require.LessOrEqual(t, int(round), 512)
-	}
-}
-
 func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion, proto config.ConsensusParams) ([]account.Participation, *testWorkerStubs, *Worker) {
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
