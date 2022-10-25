@@ -455,7 +455,7 @@ type Local struct {
 
 	// EnableUsageLog enables 10Hz log of CPU and RAM usage.
 	// Also adds 'algod_ram_usage` (number of bytes in use) to /metrics
-	EnableUsageLog bool `version[23]:"false"`
+	EnableUsageLog bool `version[24]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
