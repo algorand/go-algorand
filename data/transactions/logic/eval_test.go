@@ -146,7 +146,8 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	return ep
 }
 
-func (ep *EvalParams) isFull() bool {
+// `supportsAppEval` is test helper method for disambiguating whe `EvalParams` is suitable for logicsig vs app evaluations.
+func (ep *EvalParams) supportsAppEval() bool {
 	return ep.available != nil
 }
 
@@ -4091,7 +4092,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
 				ops := testProg(t, source, v)
-				if ep.isFull() {
+				if ep.supportsAppEval() {
 					testAppBytes(t, ops.Program, ep, expected, expected)
 				}
 				testLogicBytes(t, ops.Program, ep, expected, expected)
@@ -4100,7 +4101,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops := testProg(t, source, v)
-				if ep.isFull() {
+				if ep.supportsAppEval() {
 					testAppBytes(t, ops.Program, ep)
 				}
 				testLogicBytes(t, ops.Program, ep)
