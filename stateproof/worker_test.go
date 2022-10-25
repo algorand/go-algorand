@@ -653,7 +653,7 @@ func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	requireDeletedKeysToBeDeletedBefore(t, s, firstExpectedStateproof+basics.Round(proto.StateProofInterval))
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
-	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof + basics.Round(proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 
@@ -696,7 +696,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
-	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof + basics.Round(proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 
@@ -736,7 +736,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
-	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof + basics.Round(proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 
