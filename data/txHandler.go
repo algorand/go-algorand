@@ -111,18 +111,18 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
 	outChan = verify.MakeStream(handler.ctx, handler.streamVerifierChan,
 		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
-	go handler.processTxnStreamVerResults(outChan)
+	go handler.processTxnStreamVerifiedResults(outChan)
 	return handler
 }
 
-func (handler *TxHandler) processTxnStreamVerResults(outChan <-chan verify.VerificationResult) {
+func (handler *TxHandler) processTxnStreamVerifiedResults(outChan <-chan verify.VerificationResult) {
+	defer close(handler.postVerificationQueue)
 	for {
 		select {
 		case <-handler.ctx.Done():
 			return
 		case result, ok := <-outChan:
 			if !ok {
-				close(handler.postVerificationQueue)
 				return
 			}
 			txBLMsg := result.Context.(*txBacklogMsg)
@@ -167,6 +167,7 @@ func (handler *TxHandler) backlogWorker() {
 	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
 	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
+	defer close(handler.streamVerifierChan)
 	for {
 		// prioritize the postVerificationQueue
 		select {
@@ -185,7 +186,6 @@ func (handler *TxHandler) backlogWorker() {
 		select {
 		case wi, ok := <-handler.backlogQueue:
 			if !ok {
-				close(handler.streamVerifierChan)
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {

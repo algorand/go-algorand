@@ -584,6 +584,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 	}
 
 	go func() {
+		defer close(resultChan)
 		for x := 0; x < numberOfExecPoolSeats; x++ {
 			sm.seatReturnChan <- struct{}{}
 		}
@@ -594,15 +595,13 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 		uel := makeUnverifiedElementList(nbw, ledger)
 		for {
 			select {
-			case <-ctx.Done():
-				return //TODO: report the error ctx.Err()
 			case stx, ok := <-stxnChan:
 				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
 				if !ok {
 					if numberOfSigsInCurrent > 0 {
 						// send the current accumulated transactions to the pool
-						err := sm.addVerificationTaskToThePool(uel)
-						// if the poll is already terminated
+						err := sm.addVerificationTaskToThePool(uel, false)
+						// if the pool is already terminated
 						if err != nil {
 							continue
 						}
@@ -623,7 +622,7 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 				// if no batchable signatures here, send this as a task of its own
 				if numberOfBatchableSigsInGroup == 0 {
 					// no point in blocking and waiting for a seat here, let it wait in the exec pool
-					err := sm.addVerificationTaskToThePool(makeSingleUnverifiedElement(nbw, ledger, stx))
+					err := sm.addVerificationTaskToThePool(makeSingleUnverifiedElement(nbw, ledger, stx), false)
 					if err != nil {
 						sm.sendResult(stx.TxnGroup, stx.Context, err)
 					}
@@ -668,6 +667,9 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 					// was not added because no-available-seats. wait for some more txns
 					timer.Reset(waitForNextTxnDuration)
 				}
+			case <-ctx.Done():
+				return //TODO: report the error ctx.Err()
+
 			}
 		}
 	}()
@@ -702,7 +704,7 @@ func (sm *streamManager) processBatch(uel unverifiedElementList) (added bool) {
 	// more signatures to the batch do not harm performance (see crypto.BenchmarkBatchVerifierBig)
 	select {
 	case <-sm.seatReturnChan:
-		err := sm.addVerificationTaskToThePool(uel)
+		err := sm.addVerificationTaskToThePool(uel, true)
 		if err != nil {
 			// An error is returned when the context of the pool expires
 			// No need to report this
@@ -715,7 +717,7 @@ func (sm *streamManager) processBatch(uel unverifiedElementList) (added bool) {
 	}
 }
 
-func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList) error {
+func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList, returnSeat bool) error {
 	sm.pendingTasksWg.Add(1)
 	function := func(arg interface{}) interface{} {
 		defer sm.pendingTasksWg.Done()
@@ -781,8 +783,12 @@ func (sm *streamManager) addVerificationTaskToThePool(uel unverifiedElementList)
 		}
 		return struct{}{}
 	}
+	var retChan chan interface{}
+	if returnSeat {
+		retChan = sm.seatReturnChan
+	}
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, &uel, sm.seatReturnChan)
+	err := sm.verificationPool.EnqueueBacklog(sm.ctx, function, &uel, retChan)
 	return err
 }
 
@@ -814,6 +820,13 @@ func getNumberOfBatchableSigsInTxn(stx transactions.SignedTxn) (batchSigs uint64
 	}
 
 	if numSigs == 0 {
+		// Special case: special sender address can issue special transaction
+		// types (state proof txn) without any signature.  The well-formed
+		// check ensures that this transaction cannot pay any fee, and
+		// cannot have any other interesting fields, except for the state proof payload.
+		if stx.Txn.Sender == transactions.StateProofSender && stx.Txn.Type == protocol.StateProofTx {
+			return 0, nil
+		}
 		return 0, errors.New("signedtxn has no sig")
 	}
 	if numSigs != 1 {
