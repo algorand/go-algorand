@@ -963,6 +963,7 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// PendingTransactionsStruct represents a parsed PendingTransactionsResponse struct.
 type PendingTransactionsStruct struct {
 	TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
 	TotalTransactions uint64                   `json:"total-transactions"`

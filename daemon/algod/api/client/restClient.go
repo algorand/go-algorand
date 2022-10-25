@@ -497,8 +497,15 @@ func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionPa
 }
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
+// Deprecated
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
 	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
+	return
+}
+
+// SendRawTransactionV2 gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response generatedV2.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
 	return
 }
 
@@ -513,6 +520,19 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 
 	var response v1.TransactionID
 	return client.post(&response, "/v1/transactions", enc)
+}
+
+// SendRawTransactionGroupV2 gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroupV2(txgroup []transactions.SignedTxn) error {
+	// response is not terribly useful: it's the txid of the first transaction,
+	// which can be computed by the client anyway..
+	var enc []byte
+	for _, tx := range txgroup {
+		enc = append(enc, protocol.Encode(&tx)...)
+	}
+
+	var response generatedV2.PostTransactionsResponse
+	return client.post(&response, "/v2/transactions", enc)
 }
 
 // Block gets the block info for the given round
