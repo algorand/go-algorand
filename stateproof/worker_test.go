@@ -839,7 +839,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	a.Equal(3, len(roundSigs))
 }
 
-func TestWorkerBuildersRecoveryLimit(t *testing.T) {
+func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -903,18 +903,19 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	err = waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
 
-	// should not give up on rounds
-	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	// Although the max recovery has passed the worker will not delete
+	// builder and signatures
+	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(len(w.builders)))
 	countDB, err = countBuildersInDB(w.db)
 	a.NoError(err)
-	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
+	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(countDB))
 
 	roundSigs = make(map[basics.Round][]pendingSig)
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
 		return
 	})
-	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(roundSigs)))
+	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(len(roundSigs)))
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {

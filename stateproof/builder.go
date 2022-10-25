@@ -452,13 +452,17 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 }
 
 func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
-	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
+		return
+	}
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
+		return deletePendingSigsBeforeRound(tx, stateProofNextRound)
 	})
 	if err != nil {
-		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", oldestRoundToRemove, err)
+		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", stateProofNextRound, err)
 	}
 }
 
@@ -473,7 +477,8 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 	for _, key := range keys {
 		roundToRemove, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
 		if err != nil {
-			spw.log.Warnf("deleteOldKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, roundToRemove, err)
+			spw.log.Errorf("deleteOldKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, roundToRemove, err)
+			continue
 		}
 		err = spw.accts.DeleteStateProofKey(key.ParticipationID, basics.Round(roundToRemove))
 		if err != nil {
@@ -483,19 +488,23 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
-	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
+		return
+	}
 
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
 	for rnd := range spw.builders {
-		if rnd < oldestRoundToRemove {
+		if rnd < stateProofNextRound {
 			delete(spw.builders, rnd)
 		}
 	}
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deleteBuilders(tx, oldestRoundToRemove)
+		return deleteBuilders(tx, stateProofNextRound)
 	})
 	if err != nil {
 		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
