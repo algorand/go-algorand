@@ -49,7 +49,7 @@ type GenesisData struct {
 	Wallets           []WalletData
 	FeeSink           basics.Address
 	RewardsPool       basics.Address
-	NoRewards         bool
+	NoInitialRewards  bool
 	DevMode           bool
 	Comment           string
 }

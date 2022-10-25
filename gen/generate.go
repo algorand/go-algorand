@@ -165,7 +165,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		feeSink               = genData.FeeSink
 		rewardsPool           = genData.RewardsPool
 		devmode               = genData.DevMode
-		noRewards             = genData.NoRewards
+		noRewards             = genData.NoInitialRewards
 		comment               = genData.Comment
 
 		genesisAddrs = make(map[string]basics.Address)
