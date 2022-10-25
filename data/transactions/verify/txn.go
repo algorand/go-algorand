@@ -594,12 +594,18 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 		uel := makeUnverifiedElementList(nbw, ledger)
 		for {
 			select {
+			case <-ctx.Done():
+				return //TODO: report the error ctx.Err()
 			case stx, ok := <-stxnChan:
 				// if not expecting any more transactions (!ok) then flush what is at hand instead of waiting for the timer
 				if !ok {
 					if numberOfSigsInCurrent > 0 {
-						sm.addVerificationTaskToThePool(uel)
-						// ignore the error since we are done here
+						// send the current accumulated transactions to the pool
+						err := sm.addVerificationTaskToThePool(uel)
+						// if the poll is already terminated
+						if err != nil {
+							continue
+						}
 					}
 					// wait for the pending tasks, then close the result chan
 					sm.pendingTasksWg.Wait()
@@ -662,8 +668,6 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 					// was not added because no-available-seats. wait for some more txns
 					timer.Reset(waitForNextTxnDuration)
 				}
-			case <-ctx.Done():
-				return //TODO: report the error ctx.Err()
 			}
 		}
 	}()
