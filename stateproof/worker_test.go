@@ -592,9 +592,100 @@ func TestWorkerHandleSig(t *testing.T) {
 func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	var keys []account.Participation
+	nParticipants := 2
+	for i := 0; i < nParticipants; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
 
-	verifyKeyDeletion(t, proto, protocol.ConsensusCurrentVersion, basics.Round(proto.StateProofInterval))
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	s.advanceRoundsAndStateProofs(proto.StateProofInterval) // going to rnd 256 // the stproof is in 512
+	require.Zero(t, s.GetNumDeletedKeys())
+
+	s.advanceRoundsAndStateProofs(2 * proto.StateProofInterval) // advancing rounds up to 768.
+
+	ctx, cncl := context.WithTimeout(context.Background(), time.Second*5)
+	defer cncl()
+
+	// this busy wait shouldn't take long, the signer starts from round 512...
+	for w.lastSignedBlock() < 513 {
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "test ran out of time.")
+			t.Fail()
+			return
+		default:
+			time.Sleep(time.Second)
+		}
+	}
+	require.Equal(t, nParticipants, s.GetNumDeletedKeys())
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	require.NotZero(t, len(s.deletedStateProofKeys))
+	for _, round := range s.deletedStateProofKeys {
+		require.LessOrEqual(t, int(round), 512)
+	}
+}
+
+func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion, proto config.ConsensusParams) ([]account.Participation, *testWorkerStubs, *Worker) {
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKeyWithVersion(t, proto, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubsWithVersion(t, keys, version, proto, 10)
+	dbs, _ := dbOpenTest(t, true)
+
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	w.Start()
+	return keys, s, w
+}
+
+func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const expectedNumberOfStateProofs = uint64(3)
+	firstExpectedStateproof := basics.Round(proto.StateProofInterval * 2)
+
+	keys, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
+	defer w.Shutdown()
+
+	s.advanceRoundsWithoutStateProof(uint64(firstExpectedStateproof) + expectedNumberOfStateProofs*proto.StateProofInterval)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
+
+	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
+	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
+	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
+
+	// confirm stateproof for firstExpectedStateproof
+	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
+
+	// the first state proof was confirmed keys for that state proof can be removed
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, 0, len(checkedKeys))
+	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	require.Equal(t, len(keys), len(checkedKeys))
 }
 
 func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
@@ -609,7 +700,32 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 		delete(config.Consensus, smallIntervalVersionName)
 	}()
 
-	verifyKeyDeletion(t, proto, smallIntervalVersionName, stateProofIntervalForTest)
+	partitiontest.PartitionTest(t)
+
+	const expectedNumberOfStateProofs = uint64(3)
+	firstExpectedStateproof := basics.Round(proto.StateProofInterval * 2)
+
+	keys, s, w := createWorkerAndParticipants(t, smallIntervalVersionName, proto)
+	defer w.Shutdown()
+
+	s.advanceRoundsWithoutStateProof(uint64(firstExpectedStateproof) + expectedNumberOfStateProofs*proto.StateProofInterval)
+	err := waitForBuilderAndSignerToWaitOnRound(s)
+	require.NoError(t, err)
+
+	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
+	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
+	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
+
+	// confirm stateproof for firstExpectedStateproof
+	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
+
+	// the first state proof was confirmed. However, since keylifetime is greater than the state proof interval
+	// the key for firstExpectedStateproof should be kept (since it is being reused on 3 * proto.StateProofInterval)
+	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
+	require.Equal(t, len(keys), len(checkedKeys))
+	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
+	require.Equal(t, len(keys), len(checkedKeys))
 }
 
 func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
@@ -624,30 +740,10 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 		delete(config.Consensus, smallIntervalVersionName)
 	}()
 
-	verifyKeyDeletion(t, proto, smallIntervalVersionName, stateProofIntervalForTest)
-}
-
-func verifyKeyDeletion(t *testing.T, proto config.ConsensusParams, smallIntervalVersionName protocol.ConsensusVersion, stateProofIntervalForTest basics.Round) {
-	var keys []account.Participation
-	for i := 0; i < 2; i++ {
-		var parent basics.Address
-		crypto.RandBytes(parent[:])
-		p := newPartKeyWithVersion(t, proto, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
-	}
-
-	s := newWorkerStubsWithVersion(t, keys, smallIntervalVersionName, proto, 10)
-	dbs, _ := dbOpenTest(t, true)
-
-	logger := logging.NewLogger()
-	logger.SetOutput(io.Discard)
-
 	const expectedNumberOfStateProofs = uint64(3)
-	firstExpectedStateproof := stateProofIntervalForTest * 2
+	firstExpectedStateproof := basics.Round(proto.StateProofInterval * 2)
 
-	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
-	w.Start()
+	keys, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
 	defer w.Shutdown()
 
 	s.advanceRoundsWithoutStateProof(uint64(firstExpectedStateproof) + expectedNumberOfStateProofs*proto.StateProofInterval)
@@ -655,32 +751,17 @@ func verifyKeyDeletion(t *testing.T, proto config.ConsensusParams, smallInterval
 	require.NoError(t, err)
 
 	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
-	// to keep its keys to sign the state proof firstExpectedStateproof. every part should have keys for that round
+	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
 
 	// confirm stateproof for firstExpectedStateproof
 	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
 
-	// the first state proof was confirmed. Nevertheless, node should keep the keys for the firstExpectedStateproof
-	// since both are within the same keylifetime
-	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
-	require.Equal(t, len(keys), len(checkedKeys))
-	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
-	require.Equal(t, len(keys), len(checkedKeys))
-
-	advanceRoundsAndStateProofsSlowly(t, s, 2*proto.StateProofInterval)
-
-	// when the 3rd state proof is confirmed the first key is no longer needed
+	// the first state proof was confirmed keys for that state proof can be removed
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
-	checkedKeys = s.StateProofKeys(3 * stateProofIntervalForTest)
-	require.Equal(t, 0, len(checkedKeys))
-	checkedKeys = s.StateProofKeys(4 * stateProofIntervalForTest)
-	require.Equal(t, len(keys), len(checkedKeys))
-
-	// make sure that we have key for the last state proof
-	checkedKeys = s.StateProofKeys(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 

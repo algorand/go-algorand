@@ -469,9 +469,7 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 		return
 	}
 
-	oldestRoundToRemove := stateProofNextRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	keys := spw.accts.StateProofKeys(oldestRoundToRemove)
+	keys := spw.accts.StateProofKeys(stateProofNextRound)
 	for _, key := range keys {
 		roundToRemove, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
 		if err != nil {
