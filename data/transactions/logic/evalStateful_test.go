@@ -1564,7 +1564,7 @@ int 1
 
 func TestAppLocalGlobalErrorCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// t.Parallel() No! Modifies Proto
+	t.Parallel()
 
 	ep, tx, ledger := makeSampleEnv()
 	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
@@ -1586,7 +1586,7 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 
 	testApp(t, fmt.Sprintf(`int 0; byte "foo"; byte "%v"; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep)
 
-	ep.Proto.MaxAppSumKeyValueLens = 2
+	ep.Proto.MaxAppSumKeyValueLens = 2 // Override to generate error.
 	testApp(t, `byte "foo"; byte "foo"; app_global_put; int 1`, ep, "key/value total too long for key")
 
 	testApp(t, `int 0; byte "foo"; byte "foo"; app_local_put; int 1`, ep, "key/value total too long for key")
