@@ -149,18 +149,18 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 
 func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeight int) *workerForStateProofMessageTests {
 	s := &testWorkerStubs{
-		t:                     nil,
-		mu:                    deadlock.Mutex{},
-		latest:                0,
-		waiters:               make(map[basics.Round]chan struct{}),
-		waitersCount:          make(map[basics.Round]int),
-		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
-		keys:                  keys,
-		keysForVoters:         keys,
-		sigmsg:                make(chan []byte, 1024),
-		txmsg:                 make(chan transactions.SignedTxn, 1024),
-		totalWeight:           totalWeight,
-		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
+		t:                         nil,
+		mu:                        deadlock.Mutex{},
+		latest:                    0,
+		waiters:                   make(map[basics.Round]chan struct{}),
+		waitersCount:              make(map[basics.Round]int),
+		blocks:                    make(map[basics.Round]bookkeeping.BlockHeader),
+		keys:                      keys,
+		keysForVoters:             keys,
+		sigmsg:                    make(chan []byte, 1024),
+		txmsg:                     make(chan transactions.SignedTxn, 1024),
+		totalWeight:               totalWeight,
+		deletedKeysBeforeRoundMap: map[account.ParticipationID]basics.Round{},
 	}
 	sm := workerForStateProofMessageTests{w: s}
 	return &sm

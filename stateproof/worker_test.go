@@ -50,19 +50,19 @@ import (
 )
 
 type testWorkerStubs struct {
-	t                     testing.TB
-	mu                    deadlock.Mutex
-	latest                basics.Round
-	waiters               map[basics.Round]chan struct{}
-	waitersCount          map[basics.Round]int
-	blocks                map[basics.Round]bookkeeping.BlockHeader
-	keys                  []account.Participation
-	keysForVoters         []account.Participation
-	sigmsg                chan []byte
-	txmsg                 chan transactions.SignedTxn
-	totalWeight           int
-	deletedStateProofKeys map[account.ParticipationID]basics.Round
-	version               protocol.ConsensusVersion
+	t                         testing.TB
+	mu                        deadlock.Mutex
+	latest                    basics.Round
+	waiters                   map[basics.Round]chan struct{}
+	waitersCount              map[basics.Round]int
+	blocks                    map[basics.Round]bookkeeping.BlockHeader
+	keys                      []account.Participation
+	keysForVoters             []account.Participation
+	sigmsg                    chan []byte
+	txmsg                     chan transactions.SignedTxn
+	totalWeight               int
+	deletedKeysBeforeRoundMap map[account.ParticipationID]basics.Round
+	version                   protocol.ConsensusVersion
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
@@ -72,19 +72,19 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
 	proto := config.Consensus[version]
 	s := &testWorkerStubs{
-		t:                     nil,
-		mu:                    deadlock.Mutex{},
-		latest:                0,
-		waiters:               make(map[basics.Round]chan struct{}),
-		waitersCount:          make(map[basics.Round]int),
-		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
-		keys:                  keys,
-		keysForVoters:         keys,
-		sigmsg:                make(chan []byte, 1024*1024),
-		txmsg:                 make(chan transactions.SignedTxn, 1024),
-		totalWeight:           totalWeight,
-		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
-		version:               version,
+		t:                         nil,
+		mu:                        deadlock.Mutex{},
+		latest:                    0,
+		waiters:                   make(map[basics.Round]chan struct{}),
+		waitersCount:              make(map[basics.Round]int),
+		blocks:                    make(map[basics.Round]bookkeeping.BlockHeader),
+		keys:                      keys,
+		keysForVoters:             keys,
+		sigmsg:                    make(chan []byte, 1024*1024),
+		txmsg:                     make(chan transactions.SignedTxn, 1024),
+		totalWeight:               totalWeight,
+		deletedKeysBeforeRoundMap: map[account.ParticipationID]basics.Round{},
+		version:                   version,
 	}
 	s.latest--
 	s.addBlock(2 * basics.Round(proto.StateProofInterval))
@@ -146,7 +146,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 		KeyInLifeTime, _ := signerInRound.FirstRoundInKeyLifetime()
 
 		// simulate that the key was removed
-		if basics.Round(KeyInLifeTime) < s.deletedStateProofKeys[part.ID()] {
+		if basics.Round(KeyInLifeTime) < s.deletedKeysBeforeRoundMap[part.ID()] {
 			continue
 		}
 		partRecordForRound := account.StateProofSecretsForRound{
@@ -160,14 +160,14 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	s.mu.Lock()
-	s.deletedStateProofKeys[id] = round
+	s.deletedKeysBeforeRoundMap[id] = round
 	s.mu.Unlock()
 
 	return nil
 }
 func (s *testWorkerStubs) GetNumDeletedKeys() int {
 	s.mu.Lock()
-	numDeltedKeys := len(s.deletedStateProofKeys)
+	numDeltedKeys := len(s.deletedKeysBeforeRoundMap)
 	s.mu.Unlock()
 
 	return numDeltedKeys
@@ -610,6 +610,21 @@ func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion
 	return keys, s, w
 }
 
+// threshold == 0 meaning nothing was deleted.
+func requireDeletedKeysToBeDeletedBefore(t *testing.T, s *testWorkerStubs, threshold basics.Round) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, prt := range s.keys {
+		if threshold == 0 {
+			require.Equal(t, threshold, s.deletedKeysBeforeRoundMap[prt.ID()])
+			continue
+		}
+		// minus one because we delete keys up to the round stated in the map but not including!
+		require.Greater(t, threshold, s.deletedKeysBeforeRoundMap[prt.ID()]-1)
+	}
+}
+
 func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -628,11 +643,14 @@ func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
+	requireDeletedKeysToBeDeletedBefore(t, s, firstExpectedStateproof) // i should at this point have the keys to sign on round 512.... how come they were deleted?
 
 	// confirm stateproof for firstExpectedStateproof
 	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
 
 	// the first state proof was confirmed keys for that state proof can be removed
+	// So we should have the not deleted keys for proto.StateProofInterval + firstExpectedStateproof
+	requireDeletedKeysToBeDeletedBefore(t, s, firstExpectedStateproof+basics.Round(proto.StateProofInterval))
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
 	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
@@ -665,6 +683,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 
 	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
 	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
+	requireDeletedKeysToBeDeletedBefore(t, s, 0)
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
 
@@ -673,6 +692,8 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 
 	// the first state proof was confirmed. However, since keylifetime is greater than the state proof interval
 	// the key for firstExpectedStateproof should be kept (since it is being reused on 3 * proto.StateProofInterval)
+	requireDeletedKeysToBeDeletedBefore(t, s, 0)
+
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
 	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
@@ -703,6 +724,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 
 	// since no state proof was confirmed (i.e the next state proof round == firstExpectedStateproof), we expect a node
 	// to keep its keys to sign the state proof firstExpectedStateproof. every participant should have keys for that round
+	requireDeletedKeysToBeDeletedBefore(t, s, firstExpectedStateproof)
 	checkedKeys := s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, len(keys), len(checkedKeys))
 
@@ -710,6 +732,8 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
 
 	// the first state proof was confirmed keys for that state proof can be removed
+	requireDeletedKeysToBeDeletedBefore(t, s, basics.Round(proto.StateProofInterval)+firstExpectedStateproof)
+
 	checkedKeys = s.StateProofKeys(firstExpectedStateproof)
 	require.Equal(t, 0, len(checkedKeys))
 	checkedKeys = s.StateProofKeys(basics.Round(3 * proto.StateProofInterval))
