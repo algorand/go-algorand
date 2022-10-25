@@ -1373,6 +1373,28 @@ end:
 		}
 	}
 
+	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
+	assertBoxCount := func(expectedCount uint64) {
+		// Query without client-side limit.
+		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+
+		// Query with requested max < expected expectedCount.
+		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
+		a.ErrorContains(err, "Result limit exceeded")
+
+		// Query with requested max == expected expectedCount.
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+
+		// Query with requested max > expected expectedCount.
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+	}
+
 	// helper function, take operation and a slice of box names
 	// then submit transaction group containing all operations on box names
 	// Then we check these boxes are appropriately created/deleted
@@ -1498,10 +1520,7 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
-	maxBoxNumToGet := uint64(10)
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), maxBoxNumToGet)
-	a.NoError(err)
-	a.Len(resp.Boxes, int(maxBoxNumToGet))
+	assertBoxCount(uint64(len(testingBoxNames)))
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -1545,28 +1564,13 @@ end:
 		a.Equal(boxTest.value, boxResponse.Value)
 	}
 
+	const numberOfBoxesRemaining = uint64(3)
+	assertBoxCount(numberOfBoxesRemaining)
+
 	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
-	numberOfBoxesRemaining := 3
-
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
-	allBoxes := resp
-	a.NoError(err)
-	a.Len(resp.Boxes, numberOfBoxesRemaining)
-
-	t.Run("limited query", func(t *testing.T) {
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), uint64(numberOfBoxesRemaining-1))
-		a.NoError(err)
-		a.Len(resp.Boxes, numberOfBoxesRemaining-1)
-	})
-	t.Run("limit == all boxes", func(t *testing.T) {
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), uint64(numberOfBoxesRemaining))
-		a.NoError(err)
-		a.Equal(allBoxes, resp)
-	})
-
 	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
 	a.NoError(err)
-	a.Equal(uint64(numberOfBoxesRemaining), appAccountData.TotalBoxes)
+	a.Equal(numberOfBoxesRemaining, appAccountData.TotalBoxes)
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
@@ -1582,8 +1586,5 @@ end:
 	_, err = testClient.ApplicationInformation(uint64(createdAppID))
 	a.ErrorContains(err, "application does not exist")
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
-	a.NoError(err)
-	// upshot - we can still see the orphaned boxes:
-	a.Len(resp.Boxes, numberOfBoxesRemaining)
+	assertBoxCount(numberOfBoxesRemaining)
 }
