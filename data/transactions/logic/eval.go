@@ -233,9 +233,9 @@ type LedgerForLogic interface {
 	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
-	NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error
-	GetBox(appIdx basics.AppIndex, key string) (string, bool, error)
-	SetBox(appIdx basics.AppIndex, key string, value string) error
+	NewBox(appIdx basics.AppIndex, key string, value []byte, appAddr basics.Address) error
+	GetBox(appIdx basics.AppIndex, key string) ([]byte, bool, error)
+	SetBox(appIdx basics.AppIndex, key string, value []byte) error
 	DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error)
 
 	Perform(gi int, ep *EvalParams) error
@@ -3764,6 +3764,8 @@ func opExtract3(cx *EvalContext) error {
 	return err
 }
 
+// replaceCarefully is used to make a NEW byteslice copy of original, with
+// replacement written over the bytes starting at start.
 func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte, error) {
 	if start > uint64(len(original)) {
 		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))

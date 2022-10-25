@@ -1321,7 +1321,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		appIDset[appID] = struct{}{}
 		boxNameToAppID[boxName] = appID
 
-		boxChange := ledgercore.KvValueDelta{Data: &boxName}
+		boxChange := ledgercore.KvValueDelta{Data: []byte(boxName)}
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
 			logic.MakeBoxKey(appID, boxName): boxChange,
 		})
@@ -1389,9 +1389,9 @@ func TestKVCache(t *testing.T) {
 	var currentRound basics.Round
 	currentDBRound := basics.Round(1)
 
-	kvMap := make(map[string]string)
+	kvMap := make(map[string][]byte)
 	for i := 0; i < kvCnt; i++ {
-		kvMap[fmt.Sprintf("%d", i)] = fmt.Sprintf("value%d", i)
+		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
 	}
 
 	// add kvsPerBlock KVs on each iteration. The first kvCnt/kvsPerBlock
@@ -1406,7 +1406,7 @@ func TestKVCache(t *testing.T) {
 				name := fmt.Sprintf("%d", curKV)
 				curKV++
 				val := kvMap[name]
-				kvMods[name] = ledgercore.KvValueDelta{Data: &val, OldData: nil}
+				kvMods[name] = ledgercore.KvValueDelta{Data: val, OldData: nil}
 			}
 		}
 
@@ -1435,7 +1435,7 @@ func TestKVCache(t *testing.T) {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
-				require.Equal(t, kvMap[name], *persistedValue.value)
+				require.Equal(t, kvMap[name], persistedValue.value)
 			}
 		}
 	}
@@ -1450,7 +1450,7 @@ func TestKVCache(t *testing.T) {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
 				val := fmt.Sprintf("modified value%d", curKV)
-				kvMods[name] = ledgercore.KvValueDelta{Data: &val}
+				kvMods[name] = ledgercore.KvValueDelta{Data: []byte(val)}
 				curKV++
 			}
 		}
@@ -1468,7 +1468,7 @@ func TestKVCache(t *testing.T) {
 			for name := range kvMods {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
-				require.Equal(t, kvMap[name], *persistedValue.value)
+				require.Equal(t, kvMap[name], persistedValue.value)
 			}
 		}
 
@@ -1485,7 +1485,7 @@ func TestKVCache(t *testing.T) {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				expectedValue := fmt.Sprintf("modified value%s", name)
-				require.Equal(t, expectedValue, *persistedValue.value)
+				require.Equal(t, expectedValue, string(persistedValue.value))
 			}
 		}
 	}
@@ -1518,7 +1518,7 @@ func TestKVCache(t *testing.T) {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				value := fmt.Sprintf("modified value%s", name)
-				require.Equal(t, value, *persistedValue.value)
+				require.Equal(t, value, string(persistedValue.value))
 			}
 		}
 

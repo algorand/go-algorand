@@ -274,7 +274,7 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 //msgp:ignore persistedKVData
 type persistedKVData struct {
 	// kv value
-	value *string
+	value []byte
 	// the round number that is associated with the kv value. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose.
 	round basics.Round
@@ -1153,7 +1153,7 @@ func writeCatchpointStagingKVs(ctx context.Context, tx *sql.Tx, kvrs []encodedKV
 			return err
 		}
 
-		hash := kvHashBuilderV6(string(kvr.Key), string(kvr.Value))
+		hash := kvHashBuilderV6(string(kvr.Key), kvr.Value)
 		_, err = insertHash.ExecContext(ctx, hash)
 		if err != nil {
 			return err
@@ -2683,11 +2683,25 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
+// sql.go has the following contradictory comments:
+
+// Reference types such as []byte are only valid until the next call to Scan
+// and should not be retained. Their underlying memory is owned by the driver.
+// If retention is necessary, copy their values before the next call to Scan.
+
+// If a dest argument has type *[]byte, Scan saves in that argument a
+// copy of the corresponding data. The copy is owned by the caller and
+// can be modified and held indefinitely. The copy can be avoided by
+// using an argument of type *RawBytes instead; see the documentation
+// for RawBytes for restrictions on its use.
+
+// After check source code, a []byte slice destination is definitely cloned.
+
 func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err error) {
 	err = db.Retry(func() error {
-		var v sql.NullString
+		var val []byte
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &v)
+		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &val)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
@@ -2696,8 +2710,8 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err
 			}
 			return err
 		}
-		if v.Valid { // We got a non-null value, so it exists
-			pv.value = &v.String
+		if val != nil { // We got a non-null value, so it exists
+			pv.value = val
 			return nil
 		}
 		// we don't have that key, just return pv with the database round (pv.value==nil)
@@ -3316,7 +3330,7 @@ type accountsWriter interface {
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
 	updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error)
 
-	upsertKvPair(key string, value string) error
+	upsertKvPair(key string, value []byte) error
 	deleteKvPair(key string) error
 
 	insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error)
@@ -3484,14 +3498,14 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
+func (w accountsSQLWriter) upsertKvPair(key string, value []byte) error {
 	// NOTE! If we are passing in `string`, then for `BoxKey` case,
 	// we might contain 0-byte in boxKey, coming from uint64 appID.
 	// The consequence would be DB key write in be cut off after such 0-byte.
 	// Casting `string` to `[]byte` avoids such trouble, and test:
 	// - `TestBoxNamesByAppIDs` in `acctupdates_test`
 	// relies on such modification.
-	result, err := w.upsertKvPairStmt.Exec([]byte(key), []byte(value))
+	result, err := w.upsertKvPairStmt.Exec([]byte(key), value)
 	if err != nil {
 		return err
 	}
@@ -3798,7 +3812,7 @@ func accountsNewRoundImpl(
 	updatedKVs = make(map[string]persistedKVData, len(kvPairs))
 	for key, value := range kvPairs {
 		if value.data != nil {
-			err = writer.upsertKvPair(key, *value.data)
+			err = writer.upsertKvPair(key, value.data)
 			updatedKVs[key] = persistedKVData{value: value.data, round: lastUpdateRound}
 		} else {
 			err = writer.deleteKvPair(key)

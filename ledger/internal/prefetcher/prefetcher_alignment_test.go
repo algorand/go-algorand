@@ -145,7 +145,7 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 
 	return l.assets[addr][aidx], nil
 }
-func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	panic("not implemented")
 }
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

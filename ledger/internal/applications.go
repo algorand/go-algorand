@@ -196,37 +196,31 @@ func (cs *roundCowState) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return cs.delKey(creator, appIdx, true, key, 0)
 }
 
-func (cs *roundCowState) kvGet(key string) (string, bool, error) {
+func (cs *roundCowState) kvGet(key string) ([]byte, bool, error) {
 	value, ok := cs.mods.KvMods[key]
 	if !ok {
 		return cs.lookupParent.kvGet(key)
 	}
 	// If value is nil, it's a marker for a local deletion
-	if value.Data == nil {
-		return "", false, nil
-	}
-	return *value.Data, true, nil
+	return value.Data, value.Data != nil, nil
 }
 
-func (cb *roundCowBase) kvGet(key string) (string, bool, error) {
+func (cb *roundCowBase) kvGet(key string) ([]byte, bool, error) {
 	value, ok := cb.kvStore[key]
 	if !ok {
 		v, err := cb.l.LookupKv(cb.rnd, key)
 		if err != nil {
-			return "", false, err
+			return nil, false, err
 		}
 		value = v
 		cb.kvStore[key] = value
 	}
 	// If value is nil, it caches a lookup that returned nothing.
-	if value == nil {
-		return "", false, nil
-	}
-	return *value, true, nil
+	return value, value != nil, nil
 }
 
-func (cs *roundCowState) kvPut(key string, value string) error {
-	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: &value}
+func (cs *roundCowState) kvPut(key string, value []byte) error {
+	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: value}
 	return nil
 }
 
@@ -235,7 +229,7 @@ func (cs *roundCowState) kvDel(key string) error {
 	return nil
 }
 
-func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value string, appAddr basics.Address) error {
+func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte, appAddr basics.Address) error {
 	// Use same limit on key length as for global/local storage
 	if len(key) > cs.proto.MaxAppKeyLen {
 		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
@@ -274,12 +268,12 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value string
 	return cs.kvPut(fullKey, value)
 }
 
-func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
+func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) ([]byte, bool, error) {
 	fullKey := logic.MakeBoxKey(appIdx, key)
 	return cs.kvGet(fullKey)
 }
 
-func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string) error {
+func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value []byte) error {
 	fullKey := logic.MakeBoxKey(appIdx, key)
 	old, ok, err := cs.kvGet(fullKey)
 	if err != nil {

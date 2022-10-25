@@ -87,8 +87,8 @@ func (ml *emptyLedger) getKey(addr basics.Address, aidx basics.AppIndex, global 
 	return basics.TealValue{}, false, nil
 }
 
-func (ml *emptyLedger) kvGet(key string) (string, bool, error) {
-	return "", false, nil
+func (ml *emptyLedger) kvGet(key string) ([]byte, bool, error) {
+	return nil, false, nil
 }
 
 func (ml *emptyLedger) Counter() uint64 {

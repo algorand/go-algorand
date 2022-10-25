@@ -278,9 +278,9 @@ func TestBoxReadBudget(t *testing.T) {
 
 	// Sample txn has two box refs, so read budget is 2*100
 
-	ledger.NewBox(appID, "self", string(make([]byte, 100)), appAddr)
-	ledger.NewBox(appID, "other", string(make([]byte, 100)), appAddr)
-	ledger.NewBox(appID, "third", string(make([]byte, 100)), appAddr)
+	ledger.NewBox(appID, "self", make([]byte, 100), appAddr)
+	ledger.NewBox(appID, "other", make([]byte, 100), appAddr)
+	ledger.NewBox(appID, "third", make([]byte, 100), appAddr)
 
 	// Right at budget
 	logic.TestApp(t, `byte "self"; box_len; assert; byte "other"; box_len; assert; ==`, ep)
@@ -291,7 +291,7 @@ func TestBoxReadBudget(t *testing.T) {
 
 	// Increase "third" box size to 101
 	ledger.DelBox(appID, "third", appAddr)
-	ledger.NewBox(appID, "third", string(make([]byte, 101)), appAddr)
+	ledger.NewBox(appID, "third", make([]byte, 101), appAddr)
 
 	// Budget exceeded
 	logic.TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "box read budget (300) exceeded")

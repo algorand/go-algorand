@@ -42,7 +42,7 @@ import (
 
 type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
-	kvstore  map[string]string
+	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
 }
@@ -62,9 +62,9 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
 }
 
-func (l *mockLedger) LookupKv(round basics.Round, key string) (*string, error) {
+func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
 	if value, ok := l.kvstore[key]; ok {
-		return &value, nil
+		return value, nil
 	}
 	return nil, fmt.Errorf("Key %v does not exist", key)
 }

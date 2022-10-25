@@ -139,10 +139,10 @@ type modifiedResource struct {
 // tracker).
 type modifiedKvValue struct {
 	// data stores the most recent value (nil == deleted)
-	data *string
+	data []byte
 
 	// oldData stores the previous vlaue (nil == didn't exist)
-	oldData *string
+	oldData []byte
 
 	// ndelta keeps track of how many times the key for this value appears in
 	// accountUpdates.deltas.  This is used to evict modifiedValue entries when
@@ -332,11 +332,11 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
 
-func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return au.lookupKv(rnd, key, true /* take lock */)
 }
 
-func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bool) (*string, error) {
+func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bool) ([]byte, error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -376,8 +376,9 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			// the key is in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset-1], so we'll need to check. Walk deltas
 			// backwards so later updates take priority.
-			for i := int(offset - 1); i >= 0; i-- {
-				mval, ok := au.kvDeltas[i][key]
+			for offset > 0 {
+				offset--
+				mval, ok := au.kvDeltas[offset][key]
 				if ok {
 					return mval.Data, nil
 				}
@@ -483,10 +484,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 	for {
 		currentDBRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		offset, _err := au.roundOffset(round)
-		if _err != nil {
-			err = _err
-			return
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, rndErr
 		}
 
 		// reset `results` to be empty each iteration
@@ -500,8 +500,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		results = map[string]bool{}
 		resultCount = 0
 
-		for i := int(offset - 1); i >= 0; i-- {
-			for keyInRound, mv := range au.kvDeltas[i] {
+		for offset > 0 {
+			offset--
+			for keyInRound, mv := range au.kvDeltas[offset] {
 				if !strings.HasPrefix(keyInRound, keyPrefix) {
 					continue
 				}
@@ -540,10 +541,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 
 		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
 		// to find the rest matching keys in DB.
-		dbRound, _err := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
-		if _err != nil {
-			err = _err
-			return
+		dbRound, dbErr := au.accountsq.lookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
+		if dbErr != nil {
+			return nil, dbErr
 		}
 		if dbRound == currentDBRound {
 			return
@@ -881,7 +881,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
 }
 
-func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return aul.au.lookupKv(rnd, key, false /* don't sync */)
 }
 
@@ -1751,7 +1751,10 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for key, out := range dcc.compactKvDeltas {
 		cnt := out.ndeltas
-		mval := au.kvStore[key]
+		mval, ok := au.kvStore[key]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to key %s, but not in au.kvStore", cnt, key)
+		}
 		if cnt > mval.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to key %d, but au.kvStore had %d", cnt, key, mval.ndeltas)
 		} else if cnt == mval.ndeltas {

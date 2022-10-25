@@ -43,7 +43,7 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
-	LookupKv(basics.Round, string) (*string, error)
+	LookupKv(basics.Round, string) ([]byte, error)
 
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
@@ -151,7 +151,7 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 }
 
 // LookupKv delegates to the Ledger and marks the box key as touched for post-processing
-func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	value, err := l.il.LookupKv(rnd, key)
 	if err != nil {
 		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)

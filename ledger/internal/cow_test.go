@@ -85,8 +85,8 @@ func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global b
 	return basics.TealValue{}, false, nil
 }
 
-func (ml *mockLedger) kvGet(key string) (string, bool, error) {
-	return "", false, nil
+func (ml *mockLedger) kvGet(key string) ([]byte, bool, error) {
+	return nil, false, nil
 }
 
 func (ml *mockLedger) Counter() uint64 {

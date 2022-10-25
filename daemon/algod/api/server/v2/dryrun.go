@@ -330,7 +330,7 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 	return result, nil
 }
 
-func (dl *dryrunLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (dl *dryrunLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return nil, fmt.Errorf("boxes not implemented in dry run")
 }
 

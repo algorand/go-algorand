@@ -34,7 +34,7 @@ func (ep *EvalParams) Reset() {
 
 // Inefficient (hashing), just a testing convenience
 func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
-	l.NewBox(app, name, string(make([]byte, size)), app.Address())
+	l.NewBox(app, name, make([]byte, size), app.Address())
 }
 
 // Inefficient (hashing), just a testing convenience

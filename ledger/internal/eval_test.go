@@ -577,7 +577,7 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 	return res, nil
 }
 
-func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	panic("unimplemented")
 }
 
@@ -772,7 +772,7 @@ func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, a
 	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 

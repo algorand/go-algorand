@@ -321,7 +321,7 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 	return result, nil
 }
 
-func (l *localLedger) LookupKv(rnd basics.Round, name string) (*string, error) {
+func (l *localLedger) LookupKv(rnd basics.Round, name string) ([]byte, error) {
 	return nil, fmt.Errorf("boxes not implemented in debugger")
 }
 

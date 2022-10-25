@@ -65,7 +65,7 @@ type Handlers struct {
 type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
-	LookupKv(round basics.Round, key string) (*string, error)
+	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
@@ -1275,7 +1275,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 
 	response := generated.BoxResponse{
 		Name:  boxName,
-		Value: []byte(*value),
+		Value: value,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

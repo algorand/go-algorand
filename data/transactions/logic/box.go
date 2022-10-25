@@ -31,14 +31,14 @@ const (
 	boxDelete
 )
 
-func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) (string, bool, error) {
+func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) ([]byte, bool, error) {
 	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
-		return "", false, fmt.Errorf("boxes may not be accessed from ClearState program")
+		return nil, false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
 	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
 	if !ok {
-		return "", false, fmt.Errorf("invalid Box reference %v", name)
+		return nil, false, fmt.Errorf("invalid Box reference %v", name)
 	}
 
 	// Since the box is in cx.available, we know this GetBox call is cheap. It
@@ -47,14 +47,14 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	// another call to GetBox which most ops need anyway.
 	content, exists, err := cx.Ledger.GetBox(cx.appID, name)
 	if err != nil {
-		return "", false, err
+		return nil, false, err
 	}
 
 	switch operation {
 	case boxCreate:
 		if exists {
 			if createSize != uint64(len(content)) {
-				return "", false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
+				return nil, false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
 			}
 			// Since it exists, we have no dirty work to do. The weird case of
 			// box_put, which seems like a combination of create and write, is
@@ -83,7 +83,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	cx.available.boxes[boxRef{cx.appID, name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
-		return "", false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
+		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
 	}
 	return content, exists, nil
 }
@@ -122,7 +122,7 @@ func opBoxCreate(cx *EvalContext) error {
 	}
 	if !exists {
 		appAddr := cx.getApplicationAddress(cx.appID)
-		err = cx.Ledger.NewBox(cx.appID, name, string(make([]byte, size)), appAddr)
+		err = cx.Ledger.NewBox(cx.appID, name, make([]byte, size), appAddr)
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func opBoxReplace(cx *EvalContext) error {
 		return err
 	}
 	cx.stack = cx.stack[:pprev]
-	return cx.Ledger.SetBox(cx.appID, name, string(bytes))
+	return cx.Ledger.SetBox(cx.appID, name, bytes)
 }
 
 func opBoxDel(cx *EvalContext) error {
@@ -243,7 +243,10 @@ func opBoxGet(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack[last].Bytes = []byte(contents) // Will rightly panic if too big
+	if !exists {
+		contents = []byte{}
+	}
+	cx.stack[last].Bytes = contents // Will rightly panic if too big
 	cx.stack = append(cx.stack, boolToSV(exists))
 	return nil
 }
@@ -252,7 +255,7 @@ func opBoxPut(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // name
 
-	value := string(cx.stack[last].Bytes)
+	value := cx.stack[last].Bytes
 	name := string(cx.stack[prev].Bytes)
 
 	err := argCheck(cx, name, uint64(len(value)))
