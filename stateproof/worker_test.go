@@ -66,11 +66,11 @@ type testWorkerStubs struct {
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
-	version := config.Consensus[protocol.ConsensusCurrentVersion]
-	return newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, version, totalWeight)
+	return newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
 }
 
-func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, version protocol.ConsensusVersion, params config.ConsensusParams, totalWeight int) *testWorkerStubs {
+func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
+	proto := config.Consensus[version]
 	s := &testWorkerStubs{
 		t:                     nil,
 		mu:                    deadlock.Mutex{},
@@ -87,7 +87,7 @@ func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, versi
 		version:               version,
 	}
 	s.latest--
-	s.addBlock(2 * basics.Round(params.StateProofInterval))
+	s.addBlock(2 * basics.Round(proto.StateProofInterval))
 	return s
 }
 
@@ -589,7 +589,14 @@ func TestWorkerHandleSig(t *testing.T) {
 	}
 }
 
-func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
+//func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
+//	for i := 0; i < 300; i++ {
+//		TestSignerDeletesUnneededStateProofKeys1(t)
+//	}
+//
+//}
+
+func TestSignerDeletesUnneededStateProofKeys1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
@@ -648,7 +655,7 @@ func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithVersion(t, keys, version, proto, 10)
+	s := newWorkerStubsWithVersion(t, keys, version, 10)
 	dbs, _ := dbOpenTest(t, true)
 
 	logger := logging.NewLogger()

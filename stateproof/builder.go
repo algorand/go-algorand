@@ -366,9 +366,7 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		}
 
-		spw.deleteOldSigs(&hdr)
-		spw.deleteOldKeys(&hdr)
-		spw.deleteOldBuilders(&hdr)
+		spw.deleteStaleStateProofBuildData(&hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -451,29 +449,34 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
+func (spw *Worker) deleteStaleStateProofBuildData(currentHdr *bookkeeping.BlockHeader) {
 	proto := config.Consensus[currentHdr.CurrentProtocol]
 	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
 
+	if spw.LastCleanupRound == stateProofNextRound {
+		return
+	}
+
+	spw.deleteStaleSigs(stateProofNextRound)
+	spw.deleteStaleKeys(stateProofNextRound)
+	spw.deleteStaleBuilders(stateProofNextRound)
+	spw.LastCleanupRound = stateProofNextRound
+}
+
+func (spw *Worker) deleteStaleSigs(latestRoundToKeep basics.Round) {
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, stateProofNextRound)
+		return deletePendingSigsBeforeRound(tx, latestRoundToKeep)
 	})
 	if err != nil {
-		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", stateProofNextRound, err)
+		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", latestRoundToKeep, err)
 	}
 }
 
-func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
-		return
-	}
-
-	keys := spw.accts.StateProofKeys(stateProofNextRound)
+func (spw *Worker) deleteStaleKeys(latestRoundToKeep basics.Round) {
+	keys := spw.accts.StateProofKeys(latestRoundToKeep)
 	for _, key := range keys {
 		roundToRemove, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
 		if err != nil {
@@ -487,24 +490,18 @@ func (spw *Worker) deleteOldKeys(currentHdr *bookkeeping.BlockHeader) {
 	}
 }
 
-func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
-		return
-	}
-
+func (spw *Worker) deleteStaleBuilders(latestRoundToKeep basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
 	for rnd := range spw.builders {
-		if rnd < stateProofNextRound {
+		if rnd < latestRoundToKeep {
 			delete(spw.builders, rnd)
 		}
 	}
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deleteBuilders(tx, stateProofNextRound)
+		return deleteBuilders(tx, latestRoundToKeep)
 	})
 	if err != nil {
 		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
