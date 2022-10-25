@@ -608,7 +608,6 @@ func MakeStream(ctx context.Context, stxnChan <-chan UnverifiedElement, ledger l
 					}
 					// wait for the pending tasks, then close the result chan
 					sm.pendingTasksWg.Wait()
-					close(resultChan)
 					return
 				}
 
