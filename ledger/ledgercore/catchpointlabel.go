@@ -43,6 +43,8 @@ type CatchpointLabel struct {
 	totals                         AccountTotals
 }
 
+// TODO: Put stateProofVerificationDataHash behind a consensus param
+
 // MakeCatchpointLabel creates a catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest,
 	stateProofVerificationDataHash crypto.Digest, totals AccountTotals) CatchpointLabel {

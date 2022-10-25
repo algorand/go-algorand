@@ -1198,6 +1198,7 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE catchpointstateproofverification RENAME TO stateproofverification",
 	}
 
+	// TODO: Should we return an error if there's no catchpointstateproofverification table? No table != empty data
 	for _, stmt := range stmts {
 		_, err = tx.Exec(stmt)
 		if err != nil {

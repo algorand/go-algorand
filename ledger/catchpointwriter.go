@@ -97,6 +97,7 @@ type catchpointFileBalancesChunkV6 struct {
 	numAccounts uint64
 }
 
+// TODO: Add allocbound
 type catchpointStateProofVerificationData struct {
 	_struct struct{}                                `codec:",omitempty,omitemptyarray"`
 	data    []ledgercore.StateProofVerificationData `codec:"spd"`
