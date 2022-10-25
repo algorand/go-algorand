@@ -18,14 +18,15 @@ package network
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Initial Deduplication Header
 const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
 type identityChallenge struct {
@@ -145,6 +146,31 @@ func (i *identityChallengeResponse) SignAndEncodeB64(s *crypto.SignatureSecrets)
 	return b64enc
 }
 
-func CheckPeerValidation() {
-	return
+// SendIdentityChallengeVerification will send a signaturure of a challenge which was assigned
+// by the wsPeer
+func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
+	mbytes := append([]byte(protocol.NetIDVerificationTag), sig[:]...)
+	sent := wp.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
+	if !sent {
+		return fmt.Errorf("could not send challenge verification")
+	}
+	return nil
+}
+
+// identityVerificationHandler processes identity challenge verification messages,
+// which are websocket messages containing a signed signature which should match with the
+// peer's assigned challenge
+func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
+	peer := message.Sender.(*wsPeer)
+	sig := crypto.Signature{}
+	copy(sig[:], message.Data[:64])
+	verified := peer.identity.VerifyBytes(peer.identityChallenge[:], sig)
+	if verified {
+		peer.IdentityVerified()
+	}
+	return OutgoingMessage{}
+}
+
+var identityHandlers = []TaggedMessageHandler{
+	{protocol.NetIDVerificationTag, HandlerFunc(identityVerificationHandler)},
 }
