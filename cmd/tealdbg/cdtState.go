@@ -36,7 +36,7 @@ import (
 type cdtState struct {
 	// immutable content
 	disassembly string
-	proto       *config.ConsensusParams
+	proto       config.ConsensusParams
 	txnGroup    []transactions.SignedTxnWithAD
 	groupIndex  int
 	globals     []basics.TealValue
@@ -93,7 +93,7 @@ var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.FreezeAssetAccount:  addressHint,
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxnWithAD, groupIndex int, globals []basics.TealValue) {
+func (s *cdtState) Init(disassembly string, proto config.ConsensusParams, txnGroup []transactions.SignedTxnWithAD, groupIndex int, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup

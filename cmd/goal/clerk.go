@@ -1161,7 +1161,7 @@ var dryrunCmd = &cobra.Command{
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.NewEvalParams(txgroup, &params, nil)
+			ep := logic.NewEvalParams(txgroup, params, nil)
 			ep.SigLedger = logic.NoHeaderLedger{}
 			err := logic.CheckSignature(i, ep)
 			if err != nil {

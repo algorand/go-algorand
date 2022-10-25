@@ -655,23 +655,23 @@ repeat:
 	return
 }
 
-var proto *config.ConsensusParams
+var proto *config.ConsensusParamsVal
 
 func getProto(client *libgoal.Client) (config.ConsensusParams, error) {
 	if proto == nil {
 		var err error
 		status, err := client.Status()
 		if err != nil {
-			return config.ConsensusParams{}, err
+			return nil, err
 		}
 		currentProto, err := client.ConsensusParams(status.LastRound)
 		if err != nil {
-			return config.ConsensusParams{}, err
+			return nil, err
 		}
-		proto = &currentProto
+		proto = currentProto
 	}
 
-	return *proto, nil
+	return proto, nil
 }
 
 // ensure that cfg.NumPartAccounts have cfg.NumAppOptIn opted in selecting from cfg.NumApp

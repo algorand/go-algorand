@@ -390,7 +390,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address, &record, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address, &record, lastRound, consensus, amountWithoutPendingRewards)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -461,7 +461,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
 		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
-		MinBalance:          record.MinBalance(&consensus).Raw,
+		MinBalance:          record.MinBalance(consensus).Raw,
 	}
 	response := generated.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)

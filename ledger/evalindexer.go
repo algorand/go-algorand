@@ -225,7 +225,7 @@ func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto con
 		ilc, block.BlockHeader,
 		internal.EvaluatorOptions{
 			PaysetHint:  len(block.Payset),
-			ProtoParams: &proto,
+			ProtoParams: proto,
 			Generate:    false,
 			Validate:    false,
 		})

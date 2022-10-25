@@ -31,7 +31,7 @@ import (
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData,
-	lastRound basics.Round, consensus *config.ConsensusParams,
+	lastRound basics.Round, consensus *config.ConsensusParamsVal,
 	amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
 

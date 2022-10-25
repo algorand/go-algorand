@@ -258,7 +258,7 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 	}
 	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
 	ep := logic.EvalParams{
-		Proto:         &groupCtx.consensusParams,
+		Proto:         groupCtx.consensusParams,
 		TxnGroup:      txngroup,
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger, // won't be needed for CheckSignature
@@ -313,7 +313,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		return errors.New("Negative groupIndex")
 	}
 	ep := logic.EvalParams{
-		Proto:         &groupCtx.consensusParams,
+		Proto:         groupCtx.consensusParams,
 		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger,

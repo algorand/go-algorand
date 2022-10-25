@@ -258,7 +258,7 @@ func (l *Ledger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 func (l *Ledger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
 	blockhdr, err := l.BlockHdr(r)
 	if err != nil {
-		return config.ConsensusParams{}, err
+		return nil, err
 	}
 	return config.Consensus[blockhdr.UpgradeState.CurrentProtocol], nil
 }

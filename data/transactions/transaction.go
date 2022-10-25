@@ -395,7 +395,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		} else {
 			// This will check version matching, but not downgrading. That
 			// depends on chain state (so we pass an empty AppParams)
-			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
+			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, proto)
 			if err != nil {
 				return err
 			}
@@ -735,7 +735,7 @@ const syncProgramsVersion = 6
 // CheckContractVersions ensures that for syncProgramsVersion and higher, two programs are version
 // matched, and that they are not a downgrade.  If either program version is
 // >= proto.MinInnerApplVersion, downgrade of that program is not allowed.
-func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParamsVal) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {
 		return fmt.Errorf("bad ApprovalProgram: %v", err)

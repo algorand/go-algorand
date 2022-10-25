@@ -53,12 +53,12 @@ func (b lightBlockHeaders) Marshal(pos uint64) (crypto.Hashable, error) {
 // In addition, it also includes the trusted data for the next stateproof verification
 func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
-	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
+	commitment, err := createHeaderCommitment(l, proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
 
-	lnProvenWeight, err := calculateLnProvenWeight(&latestRoundHeader, &proto)
+	lnProvenWeight, err := calculateLnProvenWeight(&latestRoundHeader, proto)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
@@ -72,7 +72,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestR
 	}, nil
 }
 
-func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, proto *config.ConsensusParams) (uint64, error) {
+func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, proto *config.ConsensusParamsVal) (uint64, error) {
 	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
@@ -88,7 +88,7 @@ func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, pro
 	return lnProvenWeight, nil
 }
 
-func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams, latestRoundHeader *bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
+func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParamsVal, latestRoundHeader *bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
 	if latestRoundHeader.Round < basics.Round(stateProofInterval) {

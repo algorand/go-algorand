@@ -246,7 +246,7 @@ type resources struct {
 
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
-	Proto *config.ConsensusParams
+	Proto *config.ConsensusParamsVal
 
 	Trace *strings.Builder
 
@@ -308,7 +308,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 }
 
 // NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParamsVal, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
@@ -4823,7 +4823,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, cx.Proto)
 		if err != nil {
 			return err
 		}

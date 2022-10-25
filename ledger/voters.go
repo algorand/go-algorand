@@ -18,8 +18,9 @@ package ledger
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"sync"
+
+	"github.com/algorand/go-algorand/stateproof"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -80,7 +81,7 @@ type votersTracker struct {
 
 // votersRoundForStateProofRound computes the round number whose voting participants
 // will be used to sign the state proof for stateProofRnd.
-func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.ConsensusParams) basics.Round {
+func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.ConsensusParamsVal) basics.Round {
 	// To form a state proof on period that ends on stateProofRnd,
 	// we need a commitment to the voters StateProofInterval rounds
 	// before that, and the voters information from
@@ -106,7 +107,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 	}
 
 	startR := stateproof.GetOldestExpectedStateProof(&hdr)
-	startR = votersRoundForStateProofRound(startR, &proto)
+	startR = votersRoundForStateProofRound(startR, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {

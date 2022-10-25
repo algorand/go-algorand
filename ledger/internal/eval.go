@@ -495,7 +495,7 @@ func (cs *roundCowState) putAccount(addr basics.Address, acct ledgercore.Account
 	return nil
 }
 
-func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParamsVal) (res basics.MicroAlgos, err error) {
 	acct, err := cs.lookup(addr) // pending rewards unneeded
 	if err != nil {
 		return
@@ -606,7 +606,7 @@ type EvaluatorOptions struct {
 	Validate            bool
 	Generate            bool
 	MaxTxnBytesPerBlock int
-	ProtoParams         *config.ConsensusParams
+	ProtoParams         *config.ConsensusParamsVal
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -622,7 +622,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 			return nil, protocol.Error(hdr.CurrentProtocol)
 		}
 	} else {
-		proto = *evalOpts.ProtoParams
+		proto = evalOpts.ProtoParams
 	}
 
 	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
@@ -930,7 +930,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams := logic.NewEvalParams(txgroup, eval.proto, &eval.specials)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -1008,7 +1008,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+		effectiveMinBalance := dataNew.MinBalance(eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
 				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.TotalAssets)

@@ -25,9 +25,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// ConsensusParams specifies settings that might vary based on the
+// ConsensusParams is a reference to a ConsensusParamsVal.
+type ConsensusParams *ConsensusParamsVal
+
+// ConsensusParamsVal specifies settings that might vary based on the
 // particular version of the consensus protocol.
-type ConsensusParams struct {
+type ConsensusParamsVal struct {
 	// Consensus protocol upgrades.  Votes for upgrades are collected for
 	// UpgradeVoteRounds.  If the number of positive votes is over
 	// UpgradeThreshold, the proposal is accepted.
@@ -691,7 +694,7 @@ func initConsensusProtocols() {
 	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
 	// Base consensus protocol version, v7.
-	v7 := ConsensusParams{
+	v7 := ConsensusParamsVal{
 		UpgradeVoteRounds:        10000,
 		UpgradeThreshold:         9000,
 		DefaultUpgradeWaitRounds: 10000,
@@ -739,7 +742,7 @@ func initConsensusProtocols() {
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV7] = v7
+	Consensus[protocol.ConsensusV7] = &v7
 
 	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
 	v8 := v7
@@ -760,7 +763,7 @@ func initConsensusProtocols() {
 	v8.DownCommitteeThreshold = 3838
 
 	v8.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV8] = v8
+	Consensus[protocol.ConsensusV8] = &v8
 
 	// v7 can be upgraded to v8.
 	v7.ApprovedUpgrades[protocol.ConsensusV8] = 0
@@ -769,7 +772,7 @@ func initConsensusProtocols() {
 	v9 := v8
 	v9.MinBalance = 100000
 	v9.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV9] = v9
+	Consensus[protocol.ConsensusV9] = &v9
 
 	// v8 can be upgraded to v9.
 	v8.ApprovedUpgrades[protocol.ConsensusV9] = 0
@@ -784,7 +787,7 @@ func initConsensusProtocols() {
 	v10.DownCommitteeSize = 6000
 	v10.DownCommitteeThreshold = 4560
 	v10.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV10] = v10
+	Consensus[protocol.ConsensusV10] = &v10
 
 	// v9 can be upgraded to v10.
 	v9.ApprovedUpgrades[protocol.ConsensusV10] = 0
@@ -794,7 +797,7 @@ func initConsensusProtocols() {
 	v11.SupportSignedTxnInBlock = true
 	v11.PaysetCommit = PaysetCommitFlat
 	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV11] = v11
+	Consensus[protocol.ConsensusV11] = &v11
 
 	// v10 can be upgraded to v11.
 	v10.ApprovedUpgrades[protocol.ConsensusV11] = 0
@@ -803,7 +806,7 @@ func initConsensusProtocols() {
 	v12 := v11
 	v12.MaxVersionStringLen = 128
 	v12.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV12] = v12
+	Consensus[protocol.ConsensusV12] = &v12
 
 	// v11 can be upgraded to v12.
 	v11.ApprovedUpgrades[protocol.ConsensusV12] = 0
@@ -811,7 +814,7 @@ func initConsensusProtocols() {
 	// v13 makes the consensus version a meaningful string.
 	v13 := v12
 	v13.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV13] = v13
+	Consensus[protocol.ConsensusV13] = &v13
 
 	// v12 can be upgraded to v13.
 	v12.ApprovedUpgrades[protocol.ConsensusV13] = 0
@@ -822,7 +825,7 @@ func initConsensusProtocols() {
 	v14.ApplyData = true
 	v14.SupportGenesisHash = true
 	v14.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV14] = v14
+	Consensus[protocol.ConsensusV14] = &v14
 
 	// v13 can be upgraded to v14.
 	v13.ApprovedUpgrades[protocol.ConsensusV14] = 0
@@ -832,7 +835,7 @@ func initConsensusProtocols() {
 	v15.RewardsInApplyData = true
 	v15.ForceNonParticipatingFeeSink = true
 	v15.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV15] = v15
+	Consensus[protocol.ConsensusV15] = &v15
 
 	// v14 can be upgraded to v15.
 	v14.ApprovedUpgrades[protocol.ConsensusV15] = 0
@@ -842,7 +845,7 @@ func initConsensusProtocols() {
 	v16.CredentialDomainSeparationEnabled = true
 	v16.RequireGenesisHash = true
 	v16.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV16] = v16
+	Consensus[protocol.ConsensusV16] = &v16
 
 	// v15 can be upgraded to v16.
 	v15.ApprovedUpgrades[protocol.ConsensusV16] = 0
@@ -850,7 +853,7 @@ func initConsensusProtocols() {
 	// ConsensusV17 points to 'final' spec commit
 	v17 := v16
 	v17.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV17] = v17
+	Consensus[protocol.ConsensusV17] = &v17
 
 	// v16 can be upgraded to v17.
 	v16.ApprovedUpgrades[protocol.ConsensusV17] = 0
@@ -872,13 +875,13 @@ func initConsensusProtocols() {
 	v18.MaxAssetNameBytes = 32
 	v18.MaxAssetUnitNameBytes = 8
 	v18.MaxAssetURLBytes = 32
-	Consensus[protocol.ConsensusV18] = v18
+	Consensus[protocol.ConsensusV18] = &v18
 
 	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
 	v19 := v18
 	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	Consensus[protocol.ConsensusV19] = v19
+	Consensus[protocol.ConsensusV19] = &v19
 
 	// v18 can be upgraded to v19.
 	v18.ApprovedUpgrades[protocol.ConsensusV19] = 0
@@ -895,7 +898,7 @@ func initConsensusProtocols() {
 	// for the sake of future manual calculations, we'll round that down
 	// a bit :
 	v20.DefaultUpgradeWaitRounds = 140000
-	Consensus[protocol.ConsensusV20] = v20
+	Consensus[protocol.ConsensusV20] = &v20
 
 	// v19 can be upgraded to v20.
 	v19.ApprovedUpgrades[protocol.ConsensusV20] = 0
@@ -903,7 +906,7 @@ func initConsensusProtocols() {
 	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
 	v21 := v20
 	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV21] = v21
+	Consensus[protocol.ConsensusV21] = &v21
 	// v20 can be upgraded to v21.
 	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
 
@@ -912,14 +915,14 @@ func initConsensusProtocols() {
 	v22.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v22.MinUpgradeWaitRounds = 10000
 	v22.MaxUpgradeWaitRounds = 150000
-	Consensus[protocol.ConsensusV22] = v22
+	Consensus[protocol.ConsensusV22] = &v22
 
 	// v23 is an upgrade which fixes the behavior of leases so that
 	// it conforms with the intended spec.
 	v23 := v22
 	v23.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v23.FixTransactionLeases = true
-	Consensus[protocol.ConsensusV23] = v23
+	Consensus[protocol.ConsensusV23] = &v23
 	// v22 can be upgraded to v23.
 	v22.ApprovedUpgrades[protocol.ConsensusV23] = 10000
 	// v21 can be upgraded to v23.
@@ -991,7 +994,7 @@ func initConsensusProtocols() {
 
 	// Maximum number of apps a single account can opt into
 	v24.MaxAppsOptedIn = 10
-	Consensus[protocol.ConsensusV24] = v24
+	Consensus[protocol.ConsensusV24] = &v24
 
 	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
 	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
@@ -1002,7 +1005,7 @@ func initConsensusProtocols() {
 
 	// Enable AssetCloseAmount field
 	v25.EnableAssetCloseAmount = true
-	Consensus[protocol.ConsensusV25] = v25
+	Consensus[protocol.ConsensusV25] = &v25
 
 	// v26 adds support for teal3
 	v26 := v25
@@ -1017,7 +1020,7 @@ func initConsensusProtocols() {
 	// Enable teal3
 	v26.LogicSigVersion = 3
 
-	Consensus[protocol.ConsensusV26] = v26
+	Consensus[protocol.ConsensusV26] = &v26
 
 	// v25 or v24 can be upgraded to v26, with an update delay of 7 days ( see calculation above )
 	v25.ApprovedUpgrades[protocol.ConsensusV26] = 140000
@@ -1030,7 +1033,7 @@ func initConsensusProtocols() {
 	// Enable the ApplyDelta.EvalDelta.LocalDeltas fix
 	v27.NoEmptyLocalDeltas = true
 
-	Consensus[protocol.ConsensusV27] = v27
+	Consensus[protocol.ConsensusV27] = &v27
 
 	// v26 can be upgraded to v27, with an update delay of 3 days
 	// 60279 = (3 * 24 * 60 * 60 / 4.3)
@@ -1064,7 +1067,7 @@ func initConsensusProtocols() {
 	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
-	Consensus[protocol.ConsensusV28] = v28
+	Consensus[protocol.ConsensusV28] = &v28
 
 	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
 	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
@@ -1076,7 +1079,7 @@ func initConsensusProtocols() {
 	// Enable ExtraProgramPages for application update
 	v29.EnableExtraPagesOnAppUpdate = true
 
-	Consensus[protocol.ConsensusV29] = v29
+	Consensus[protocol.ConsensusV29] = &v29
 
 	// v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
 	v28.ApprovedUpgrades[protocol.ConsensusV29] = 60000
@@ -1101,7 +1104,7 @@ func initConsensusProtocols() {
 	// Allow 50 app opt ins
 	v30.MaxAppsOptedIn = 50
 
-	Consensus[protocol.ConsensusV30] = v30
+	Consensus[protocol.ConsensusV30] = &v30
 
 	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
@@ -1122,7 +1125,7 @@ func initConsensusProtocols() {
 	// Maximum validity period for key registration, to prevent generating too many StateProof keys
 	v31.MaxKeyregValidPeriod = 256*(1<<16) - 1
 
-	Consensus[protocol.ConsensusV31] = v31
+	Consensus[protocol.ConsensusV31] = &v31
 
 	// v30 can be upgraded to v31, with an update delay of 7 days ( see calculation above )
 	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000
@@ -1148,7 +1151,7 @@ func initConsensusProtocols() {
 	// Remove limits on maximum number of apps a single account can opt into
 	v32.MaxAppsOptedIn = 0
 
-	Consensus[protocol.ConsensusV32] = v32
+	Consensus[protocol.ConsensusV32] = &v32
 
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
 	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
@@ -1165,7 +1168,7 @@ func initConsensusProtocols() {
 
 	v33.MaxTxnBytesPerBlock = 5 * 1024 * 1024
 
-	Consensus[protocol.ConsensusV33] = v33
+	Consensus[protocol.ConsensusV33] = &v33
 
 	// v32 can be upgraded to v33, with an update delay of 7 days ( see calculation above )
 	v32.ApprovedUpgrades[protocol.ConsensusV33] = 140000
@@ -1193,14 +1196,14 @@ func initConsensusProtocols() {
 
 	v34.AgreementFilterTimeoutPeriod0 = 3400 * time.Millisecond
 
-	Consensus[protocol.ConsensusV34] = v34
+	Consensus[protocol.ConsensusV34] = &v34
 
 	v35 := v34
 	v35.StateProofExcludeTotalWeightWithRewards = true
 
 	v35.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	Consensus[protocol.ConsensusV35] = v35
+	Consensus[protocol.ConsensusV35] = &v35
 
 	// v33 and v34 can be upgraded to v35, with an update delay of 12h:
 	// 10046 = (12 * 60 * 60 / 4.3)
@@ -1215,31 +1218,31 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
 
-	Consensus[protocol.ConsensusFuture] = vFuture
+	Consensus[protocol.ConsensusFuture] = &vFuture
 
 	// vAlphaX versions are an separate series of consensus parameters and versions for alphanet
 	vAlpha1 := v32
 	vAlpha1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
 	vAlpha1.MaxTxnBytesPerBlock = 5000000
-	Consensus[protocol.ConsensusVAlpha1] = vAlpha1
+	Consensus[protocol.ConsensusVAlpha1] = &vAlpha1
 
 	vAlpha2 := vAlpha1
 	vAlpha2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	vAlpha2.AgreementFilterTimeoutPeriod0 = 3500 * time.Millisecond
 	vAlpha2.MaxTxnBytesPerBlock = 5 * 1024 * 1024
-	Consensus[protocol.ConsensusVAlpha2] = vAlpha2
+	Consensus[protocol.ConsensusVAlpha2] = &vAlpha2
 	vAlpha1.ApprovedUpgrades[protocol.ConsensusVAlpha2] = 10000
 
 	// vAlpha3 and vAlpha4 use the same parameters as v33 and v34
 	vAlpha3 := v33
 	vAlpha3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusVAlpha3] = vAlpha3
+	Consensus[protocol.ConsensusVAlpha3] = &vAlpha3
 	vAlpha2.ApprovedUpgrades[protocol.ConsensusVAlpha3] = 10000
 
 	vAlpha4 := v34
 	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
+	Consensus[protocol.ConsensusVAlpha4] = &vAlpha4
 	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
 }
 
