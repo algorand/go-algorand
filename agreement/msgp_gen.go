@@ -102,6 +102,14 @@ import (
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
 //
+// message
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
 // messageEvent
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -2636,6 +2644,386 @@ func (z *freshnessData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *freshnessData) MsgIsZero() bool {
 	return ((*z).PlayerRound.MsgIsZero()) && ((*z).PlayerPeriod == 0) && ((*z).PlayerStep == 0) && ((*z).PlayerLastConcluding == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *message) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 9
+	// string "Bundle"
+	o = append(o, 0x89, 0xa6, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65)
+	o = (*z).Bundle.MarshalMsg(o)
+	// string "CompoundMessage"
+	o = append(o, 0xaf, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x75, 0x6e, 0x64, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65)
+	// omitempty: check for empty values
+	zb0002Len := uint32(2)
+	var zb0002Mask uint8 /* 3 bits */
+	if (*z).CompoundMessage.Proposal.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x1
+	}
+	if (*z).CompoundMessage.Vote.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if (zb0002Mask & 0x1) == 0 { // if not empty
+		// string "Proposal"
+		o = append(o, 0xa8, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c)
+		o = (*z).CompoundMessage.Proposal.MarshalMsg(o)
+	}
+	if (zb0002Mask & 0x2) == 0 { // if not empty
+		// string "Vote"
+		o = append(o, 0xa4, 0x56, 0x6f, 0x74, 0x65)
+		o = (*z).CompoundMessage.Vote.MarshalMsg(o)
+	}
+	// string "MessageHandle"
+	o = append(o, 0xad, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65)
+	o = (*z).MessageHandle.MarshalMsg(o)
+	// string "Proposal"
+	o = append(o, 0xa8, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c)
+	o = (*z).Proposal.MarshalMsg(o)
+	// string "Tag"
+	o = append(o, 0xa3, 0x54, 0x61, 0x67)
+	o = (*z).Tag.MarshalMsg(o)
+	// string "UnauthenticatedBundle"
+	o = append(o, 0xb5, 0x55, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65)
+	o = (*z).UnauthenticatedBundle.MarshalMsg(o)
+	// string "UnauthenticatedProposal"
+	o = append(o, 0xb7, 0x55, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c)
+	o = (*z).UnauthenticatedProposal.MarshalMsg(o)
+	// string "UnauthenticatedVote"
+	o = append(o, 0xb3, 0x55, 0x6e, 0x61, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x56, 0x6f, 0x74, 0x65)
+	o = (*z).UnauthenticatedVote.MarshalMsg(o)
+	// string "Vote"
+	o = append(o, 0xa4, 0x56, 0x6f, 0x74, 0x65)
+	o = (*z).Vote.MarshalMsg(o)
+	return
+}
+
+func (_ *message) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*message)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).MessageHandle.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MessageHandle")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Tag.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Tag")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Vote.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Vote")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Proposal.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Bundle.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Bundle")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).UnauthenticatedVote.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedVote")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).UnauthenticatedProposal.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedProposal")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).UnauthenticatedBundle.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedBundle")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			var zb0004 bool
+			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if _, ok := err.(msgp.TypeError); ok {
+				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
+					return
+				}
+				if zb0003 > 0 {
+					zb0003--
+					bts, err = (*z).CompoundMessage.Vote.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array", "Vote")
+						return
+					}
+				}
+				if zb0003 > 0 {
+					zb0003--
+					bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array", "Proposal")
+						return
+					}
+				}
+				if zb0003 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0003)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array")
+						return
+					}
+				}
+			} else {
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
+					return
+				}
+				if zb0004 {
+					(*z).CompoundMessage = compoundMessage{}
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
+						return
+					}
+					switch string(field) {
+					case "Vote":
+						bts, err = (*z).CompoundMessage.Vote.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "Vote")
+							return
+						}
+					case "Proposal":
+						bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "Proposal")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
+							return
+						}
+					}
+				}
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = message{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "MessageHandle":
+				bts, err = (*z).MessageHandle.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MessageHandle")
+					return
+				}
+			case "Tag":
+				bts, err = (*z).Tag.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Tag")
+					return
+				}
+			case "Vote":
+				bts, err = (*z).Vote.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Vote")
+					return
+				}
+			case "Proposal":
+				bts, err = (*z).Proposal.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Proposal")
+					return
+				}
+			case "Bundle":
+				bts, err = (*z).Bundle.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Bundle")
+					return
+				}
+			case "UnauthenticatedVote":
+				bts, err = (*z).UnauthenticatedVote.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UnauthenticatedVote")
+					return
+				}
+			case "UnauthenticatedProposal":
+				bts, err = (*z).UnauthenticatedProposal.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UnauthenticatedProposal")
+					return
+				}
+			case "UnauthenticatedBundle":
+				bts, err = (*z).UnauthenticatedBundle.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UnauthenticatedBundle")
+					return
+				}
+			case "CompoundMessage":
+				var zb0005 int
+				var zb0006 bool
+				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "CompoundMessage")
+						return
+					}
+					if zb0005 > 0 {
+						zb0005--
+						bts, err = (*z).CompoundMessage.Vote.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array", "Vote")
+							return
+						}
+					}
+					if zb0005 > 0 {
+						zb0005--
+						bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array", "Proposal")
+							return
+						}
+					}
+					if zb0005 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0005)
+						if err != nil {
+							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "CompoundMessage")
+						return
+					}
+					if zb0006 {
+						(*z).CompoundMessage = compoundMessage{}
+					}
+					for zb0005 > 0 {
+						zb0005--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "CompoundMessage")
+							return
+						}
+						switch string(field) {
+						case "Vote":
+							bts, err = (*z).CompoundMessage.Vote.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "CompoundMessage", "Vote")
+								return
+							}
+						case "Proposal":
+							bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "CompoundMessage", "Proposal")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "CompoundMessage")
+								return
+							}
+						}
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *message) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*message)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *message) Msgsize() (s int) {
+	s = 1 + 14 + (*z).MessageHandle.Msgsize() + 4 + (*z).Tag.Msgsize() + 5 + (*z).Vote.Msgsize() + 9 + (*z).Proposal.Msgsize() + 7 + (*z).Bundle.Msgsize() + 20 + (*z).UnauthenticatedVote.Msgsize() + 24 + (*z).UnauthenticatedProposal.Msgsize() + 22 + (*z).UnauthenticatedBundle.Msgsize() + 16 + 1 + 5 + (*z).CompoundMessage.Vote.Msgsize() + 9 + (*z).CompoundMessage.Proposal.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *message) MsgIsZero() bool {
+	return ((*z).MessageHandle.MsgIsZero()) && ((*z).Tag.MsgIsZero()) && ((*z).Vote.MsgIsZero()) && ((*z).Proposal.MsgIsZero()) && ((*z).Bundle.MsgIsZero()) && ((*z).UnauthenticatedVote.MsgIsZero()) && ((*z).UnauthenticatedProposal.MsgIsZero()) && ((*z).UnauthenticatedBundle.MsgIsZero()) && (((*z).CompoundMessage.Vote.MsgIsZero()) && ((*z).CompoundMessage.Proposal.MsgIsZero()))
 }
 
 // MarshalMsg implements msgp.Marshaler

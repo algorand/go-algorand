@@ -19,16 +19,17 @@ package agreement
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/msgp/msgp"
 )
 
 // A message represents an internal message which is passed between components
 // of the agreement service.
-//msgp:ignore message
 type message struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:","`
 
-	// explicitly unexport this field since both msgp serialization and reflection randomized testing will fail since MessageHandle is interface{} type
-	MessageHandle `codec:"-"`
+	// explicitly unexport this field since both msgp serialization and reflection randomized testing will fail since messageHandle is interface{} type
+	MessageHandle msgp.Raw
+	messageHandle MessageHandle
 
 	Tag protocol.Tag
 
