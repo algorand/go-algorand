@@ -581,6 +581,7 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	peer := badnode.(*wsPeer)
 	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
+	delete(wn.peersByID, peer.identity)
 }
 
 func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
@@ -1176,12 +1177,20 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
 		identity:          peerPublicKey,
+		identityVerified:  false,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	wn.peersByID[peerPublicKey] = peer
 	wn.log.Infoln("AXELAXEL: KEY MAP: ", wn.peersByID)
+	go func() {
+		time.Sleep(5 * time.Second)
+		if !peer.identityVerified {
+			wn.log.Infoln("AXELAXEL: YER UNVERIFIED")
+			wn.Disconnect(peer)
+		}
+	}()
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -1192,9 +1201,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			InstanceName:  trackedRequest.otherInstanceName,
 		})
 
-	wn.log.Infoln("AXELAXEL: MSG OF INTEREST BACK ATCHA")
 	wn.maybeSendMessagesOfInterest(peer, nil)
-	wn.log.Infoln("AXELAXEL: MSG OF INTEREST DONE")
 
 	peers.Set(float64(wn.NumPeers()))
 	incomingPeers.Set(float64(wn.numIncomingPeers()))
@@ -2136,7 +2143,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		wn.log.Infoln("AXELAXEL: ", idChal.Challenge)
 		return
 	}
-	// now that we have validated the identity challenge, we can proceed and treat this public key as valid
+	// now that we have validated the identity challenge, we can proceed and treat this peer as validated
 	wn.log.Infoln("AXELAXEL: CHAL MATCH!~!!")
 	peerPublicKey := idChalResp.Key
 	// if we already have a verified peer using this key, do not proceed
@@ -2254,7 +2261,9 @@ func (wn *WebsocketNetwork) SetPrioScheme(s NetPrioScheme) {
 
 // called from wsPeer to report that it has closed
 func (wn *WebsocketNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
+	wn.log.Infoln("AXELAXEL: REMOTE DISCO")
 	wn.removePeer(peer, reason)
+	delete(wn.peersByID, peer.identity)
 }
 
 func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {

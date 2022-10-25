@@ -144,3 +144,7 @@ func (i *identityChallengeResponse) SignAndEncodeB64(s *crypto.SignatureSecrets)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	return b64enc
 }
+
+func CheckPeerValidation() {
+	return
+}
