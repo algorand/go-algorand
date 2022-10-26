@@ -339,7 +339,7 @@ func TestParseStateProofVerificationData(t *testing.T) {
 		ProvenWeight:          basics.MicroAlgos{Raw: 100},
 	}
 	wrappedData := catchpointStateProofVerificationData{
-		data: []ledgercore.StateProofVerificationData{verificationData},
+		Data: []ledgercore.StateProofVerificationData{verificationData},
 	}
 	blob := protocol.Encode(&wrappedData)
 
@@ -349,13 +349,16 @@ func TestParseStateProofVerificationData(t *testing.T) {
 	err = catchpointAccessor.CompleteCatchup(ctx)
 	require.NoError(t, err)
 
-	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		trackedStateProofVerificationData, err := stateProofVerificationData(ctx, tx)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(*trackedStateProofVerificationData))
-		require.Equal(t, verificationData, (*trackedStateProofVerificationData)[0])
-		return nil
+	var trackedStateProofVerificationData *[]ledgercore.StateProofVerificationData
+	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		dbData, err := stateProofVerificationData(ctx, tx)
+		trackedStateProofVerificationData = dbData
+		return err
 	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(*trackedStateProofVerificationData))
+	require.Equal(t, verificationData, (*trackedStateProofVerificationData)[0])
 	require.NoError(t, err)
 }
 
