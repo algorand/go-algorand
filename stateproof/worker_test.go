@@ -161,7 +161,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 	return
 }
 
-func (s *testWorkerStubs) RemoveStateProofKeysForExpiredAccounts(currentRound basics.Round) {
+func (s *testWorkerStubs) DeleteStateProofKeysForExpiredAccounts(currentRound basics.Round) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, part := range s.keys {

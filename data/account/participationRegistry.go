@@ -232,7 +232,7 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
-	// DeleteStateProofKeys removes all stateproof keys preceding a given round (excluded)
+	// DeleteStateProofKeys removes all stateproof keys up to, and not including, a given round
 	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
 
 	// Delete removes a record from storage.
