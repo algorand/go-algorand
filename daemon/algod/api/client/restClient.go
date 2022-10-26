@@ -49,6 +49,7 @@ const (
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions":  true,
+	"/v2/transactions":  true,
 	"/v2/teal/dryrun":   true,
 	"/v2/teal/compile":  true,
 	"/v2/participation": true,
@@ -334,7 +335,7 @@ type accountInformationParams struct {
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
-// TODO: Deprecate this function
+// Deprecated: This function is only used in internal tests (stateproofs_test.go, restClient_test.go)
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
@@ -350,6 +351,14 @@ func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (res
 // PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
 func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
+	return
+}
+
+// RawPendingTransactionsByAddrV2 returns all the pending transactions for an addr in raw msgpack format.
+func (client RestClient) RawPendingTransactionsByAddrV2(addr string, max uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsParams{max, "msgpack"})
+	response = blob
 	return
 }
 
@@ -447,6 +456,15 @@ func (client RestClient) PendingTransactionInformationV2(transactionID string) (
 	return
 }
 
+// RawPendingTransactionInformationV2 gets information about a recently issued transaction in msgpack encoded bytes.
+func (client RestClient) RawPendingTransactionInformationV2(transactionID string) (response []byte, err error) {
+	transactionID = stripTransaction(transactionID)
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), rawFormat{Format: "msgpack"})
+	response = blob
+	return
+}
+
 // AccountApplicationInformation gets account information about a given app.
 func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID uint64) (response generatedV2.AccountApplicationResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), nil)
@@ -510,6 +528,7 @@ func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (respo
 }
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
+// Deprecated
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..

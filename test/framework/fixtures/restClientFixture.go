@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 
@@ -237,7 +238,7 @@ func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, accountA
 // WaitForConfirmedTxn waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn v1.Transaction, err error) {
+func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn v2.PreEncodedTxInfo, err error) {
 	client := f.AlgodClient
 	for {
 		// Get current round information
@@ -246,11 +247,17 @@ func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddr
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		txn, err = client.TransactionInformation(accountAddress, txid)
+		var resp []byte
+		resp, err = client.RawPendingTransactionInformationV2(txid)
 		if err == nil {
-			return
+			err = protocol.DecodeReflect(resp, &txn)
+			require.NoError(f.t, err)
 		}
 
+		// Check if transaction was confirmed
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			return
+		}
 		// Check if we should wait a round
 		if curRound > roundTimeout {
 			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
@@ -330,7 +337,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 
 // SendMoneyAndWait uses the rest client to send money and WaitForTxnConfirmation to wait for the send to confirm
 // it adds some extra error checking as well
-func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
+func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v2.PreEncodedTxInfo) {
 	client := f.LibGoalClient
 	wh, err := client.GetUnencryptedWalletHandle()
 	require.NoError(f.t, err, "client should be able to get unencrypted wallet handle")
@@ -339,7 +346,7 @@ func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transaction
 }
 
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
-func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
+func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v2.PreEncodedTxInfo) {
 	client := f.LibGoalClient
 	// use one curRound - 1 in case other nodes are behind
 	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, basics.Round(curRound).SubSaturate(1), 0)

@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -161,7 +161,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
-func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
+func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v2.PreEncodedTxInfo, err error) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	rnd, err := testClient.Status()
 	a.NoError(err)
@@ -170,14 +170,14 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	}
 	timeoutTime := time.Now().Add(timeout)
 	for {
-		tx, err = testClient.TransactionInformation(fromAddress, txID)
-		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
-			tx, err = testClient.PendingTransactionInformation(txID)
-		}
+		// tx, err = testClient.TransactionInformation(fromAddress, txID)
+		// if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
+		tx, err = testClient.ParsedPendingTransaction(txID)
+		// }
 		if err == nil {
 			a.NotEmpty(tx)
 			a.Empty(tx.PoolError)
-			if tx.ConfirmedRound > 0 {
+			if tx.ConfirmedRound != nil && *tx.ConfirmedRound > 0 {
 				return
 			}
 		}
@@ -220,6 +220,7 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	a.NotEmpty(statusResponse)
 }
 
+// Deprecated: This test uses a v1 API feature that is no longer supported by v2.
 func TestTransactionsByAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -466,7 +467,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	a.NoError(err)
 	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
-	a.Equal(note, txStatus.Note)
+	a.Equal(note, txStatus.Txn.Txn)
 }
 
 func TestClientCanGetTransactionStatus(t *testing.T) {

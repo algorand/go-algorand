@@ -776,6 +776,7 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 }
 
 // TransactionInformation takes an address and associated txid and return its information
+// Deprecated: Use PendingTransactionInformationV2
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -786,6 +787,7 @@ func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction,
 
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
+// Deprecated: Use PendingTransactionInformationV2
 func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -800,6 +802,22 @@ func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformationV2(txid)
+	}
+	return
+}
+
+// ParsedPendingTransaction takes a txid and returns the parsed PendingTransaction response.
+func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawPendingTransactionInformationV2(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return
+			}
+		}
 	}
 	return
 }
@@ -975,6 +993,22 @@ func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTrans
 	if err == nil {
 		var resp []byte
 		resp, err = algod.GetRawPendingTransactions(maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+// GetParsedPendingTransactionsByAddress returns the parsed response with pending transactions by address.
+func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint64) (txns PendingTransactionsStruct, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawPendingTransactionsByAddrV2(addr, maxTxns)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txns)
 			if err != nil {

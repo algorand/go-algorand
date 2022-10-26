@@ -34,7 +34,6 @@ import (
 	"github.com/spf13/cobra"
 
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -526,7 +525,7 @@ var pendingTxnsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
 			client := ensureAlgodClient(dataDir)
-			statusTxnPool, err := client.GetPendingTransactions(maxPendingTransactions)
+			statusTxnPool, err := client.GetParsedPendingTransactions(maxPendingTransactions)
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
@@ -542,11 +541,7 @@ var pendingTxnsCmd = &cobra.Command{
 					pendingTxnStr, err := json.MarshalIndent(pendingTxn, "", "    ")
 					if err != nil {
 						// json parsing of the txn failed, so let's just skip printing it
-						pendingTxnObj := transactions.SignedTxn{}
-						if err = json.Unmarshal(pendingTxnStr, &pendingTxnObj); err != nil {
-							reportErrorf(errorNodeStatus, err)
-						}
-						fmt.Printf("Unparseable Transaction %s\n", pendingTxnObj.Txn.ID().String())
+						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.Txn.ID().String())
 						continue
 					}
 					fmt.Printf("%s\n", string(pendingTxnStr))

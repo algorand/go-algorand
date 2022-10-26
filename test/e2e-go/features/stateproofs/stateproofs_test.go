@@ -402,6 +402,7 @@ func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClien
 	curRound, err := fixture.LibGoalClient.CurrentRound()
 	r.NoError(err)
 
+	// Note: This uses a deprecated v1 endpoint, and needs to be rewritten to use a v2 equivalent.
 	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
 	r.NoError(err)
 

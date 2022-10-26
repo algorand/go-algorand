@@ -19,7 +19,6 @@ package pingpong
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -443,28 +442,19 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to 
 }
 
 // waitPendingTransactions waits until all the pending transactions coming from the given
-// accounts map have been cleared out of the transaction pool. A prerequesite for this is that
+// accounts map have been cleared out of the transaction pool. A prerequisite for this is that
 // there is no other source who might be generating transactions that would come from these account
 // addresses.
 func waitPendingTransactions(accounts []string, client *libgoal.Client) error {
 	for _, from := range accounts {
 	repeat:
-		pendingTxns, err := client.GetPendingTransactionsByAddress(from, 0)
+		pendingTxns, err := client.GetParsedPendingTransactionsByAddress(from, 0)
 		if err != nil {
 			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
 			return err
 		}
 		for _, txn := range pendingTxns.TopTransactions {
-			pendingTxn := transactions.SignedTxn{}
-			txnBody, err := json.Marshal(txn)
-			if err != nil {
-				return err
-			}
-			err = json.Unmarshal(txnBody, &pendingTxn)
-			if err != nil {
-				return err
-			}
-			if pendingTxn.Txn.Sender.String() != from {
+			if txn.Txn.Sender.String() != from {
 				// we found a transaction where the receiver was the given account. We don't
 				// care about these.
 				continue

@@ -156,7 +156,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
+	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.Txn.ID().String())
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformationV2(sAccount, false)

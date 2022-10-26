@@ -206,7 +206,8 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	// transfer the funds and close to the new account
 	amountToSend := richBalance - 3*transactionFee - amountToSendInitial - minAcctBalance
 	txn := fixture.SendMoneyAndWait(onlineRound, amountToSend, transactionFee, richAccount, newAccount, newAccount)
-	fundedRound := txn.ConfirmedRound
+	a.NotNil(txn.ConfirmedRound)
+	fundedRound := *txn.ConfirmedRound
 
 	nodeStatus, _ = client.Status()
 	params, err := client.ConsensusParams(nodeStatus.LastRound)
