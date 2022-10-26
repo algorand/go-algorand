@@ -96,7 +96,7 @@ func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.S
 		if part.StateProof != nil && part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetStateProofSecretsForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Errorf("error while loading round secrets from participation registry: %v", err)
+				manager.log.Warnf("could not load state proof keys from participation registry: %v", err)
 				continue
 			}
 			out = append(out, partRndSecrets)
