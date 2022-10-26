@@ -53,6 +53,10 @@ func (s *workerForStateProofMessageTests) DeleteStateProofKey(id account.Partici
 	return s.w.DeleteStateProofKey(id, round)
 }
 
+func (s *workerForStateProofMessageTests) RemoveStateProofKeysForExpiredAccounts(currentRound basics.Round) {
+	s.w.RemoveStateProofKeysForExpiredAccounts(currentRound)
+}
+
 func (s *workerForStateProofMessageTests) Latest() basics.Round {
 	return s.w.Latest()
 }

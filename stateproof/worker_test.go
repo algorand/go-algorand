@@ -149,6 +149,9 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 		if basics.Round(KeyInLifeTime) < s.deletedKeysBeforeRoundMap[part.ID()] {
 			continue
 		}
+		if part.LastValid < rnd {
+			continue
+		}
 		partRecordForRound := account.StateProofSecretsForRound{
 			ParticipationRecord: partRecord,
 			StateProofSecrets:   signerInRound,
@@ -156,6 +159,17 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 		out = append(out, partRecordForRound)
 	}
 	return
+}
+
+func (s *testWorkerStubs) RemoveStateProofKeysForExpiredAccounts(currentRound basics.Round) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, part := range s.keys {
+		if currentRound <= part.LastValid {
+			continue
+		}
+		s.deletedKeysBeforeRoundMap[part.ID()] = currentRound
+	}
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
@@ -623,6 +637,55 @@ func requireDeletedKeysToBeDeletedBefore(t *testing.T, s *testWorkerStubs, thres
 		// minus one because we delete keys up to the round stated in the map but not including!
 		require.Greater(t, threshold, s.deletedKeysBeforeRoundMap[prt.ID()]-1)
 	}
+}
+
+func TestAllKeysRemovedAfterExpiration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	firstExpectedStateproof := basics.Round(proto.StateProofInterval * 2)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKeyWithVersion(t, proto, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	dbs, _ := dbOpenTest(t, true)
+
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	w.Start()
+	defer w.Shutdown()
+
+	advanceRoundsAndStateProofsSlowly(t, s, uint64(firstExpectedStateproof)+(12*proto.StateProofInterval))
+	s.mu.Lock()
+	for _, prt := range s.keys {
+		require.Equal(t, uint64(prt.LastValid)-proto.StateProofInterval, uint64(s.deletedKeysBeforeRoundMap[prt.ID()]))
+	}
+	s.mu.Unlock()
+
+	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
+
+	s.mu.Lock()
+	for _, prt := range s.keys {
+		require.Equal(t, prt.LastValid, s.deletedKeysBeforeRoundMap[prt.ID()])
+	}
+	s.mu.Unlock()
+
+	advanceRoundsAndStateProofsSlowly(t, s, proto.StateProofInterval)
+
+	s.mu.Lock()
+	for _, prt := range s.keys {
+		require.Less(t, prt.LastValid, s.deletedKeysBeforeRoundMap[prt.ID()])
+	}
+	s.mu.Unlock()
 }
 
 func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {

@@ -55,6 +55,7 @@ type Network interface {
 type Accounts interface {
 	StateProofKeys(basics.Round) []account.StateProofSecretsForRound
 	DeleteStateProofKey(id account.ParticipationID, round basics.Round) error
+	RemoveStateProofKeysForExpiredAccounts(currentRound basics.Round)
 }
 
 // BlockHeaderFetcher captures the aspects of the Ledger that is used to fetch block headers
