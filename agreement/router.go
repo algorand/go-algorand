@@ -66,8 +66,6 @@ type router interface {
 }
 
 type rootRouter struct {
-	// don't omit empty because otherwise code proposalManager and voteAggregator are guaranteed to be empty and
-	// which breaks compatibility with reflection won't be included in rootRouter unmarshall methods
 	_struct struct{} `codec:","`
 
 	root         actor    // playerMachine   (not restored: explicitly set on construction)

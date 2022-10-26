@@ -236,3 +236,51 @@ func TestEmptyMapDeserialization(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, v1.Equivocators)
 }
+
+func TestDecodeFailures(t *testing.T) {
+	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	ce := clock.Encode()
+	log := makeServiceLogger(logging.Base())
+	player := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
+	router := makeRootRouter(player)
+	pe := protocol.Encode(&player)
+	re := protocol.Encode(&router)
+
+	// diskState decoding failure
+	{
+		type diskState struct {
+			UnexpectedDiskField int64
+		}
+		uds := diskState{UnexpectedDiskField: 5}
+		udse := protocol.EncodeReflect(uds)
+		_, _, _, _, err := decode(udse, clock, log, false)
+		require.ErrorContains(t, err, "UnexpectedDiskField")
+
+	}
+
+	// player decoding failure
+	{
+		type player struct {
+			UnexpectedPlayerField int64
+		}
+		p := player{UnexpectedPlayerField: 3}
+		pe := protocol.EncodeReflect(p)
+		ds := diskState{Player: pe, Router: re, Clock: ce}
+		dse := protocol.EncodeReflect(ds)
+		_, _, _, _, err := decode(dse, clock, log, false)
+		require.ErrorContains(t, err, "UnexpectedPlayerField")
+	}
+
+	// router decoding failure
+	{
+		type rootRouter struct {
+			UnexpectedRouterField int64
+		}
+		router := rootRouter{UnexpectedRouterField: 5}
+		re := protocol.EncodeReflect(router)
+		ds := diskState{Player: pe, Router: re, Clock: ce}
+		dse := protocol.EncodeReflect(ds)
+		_, _, _, _, err := decode(dse, clock, log, false)
+		require.ErrorContains(t, err, "UnexpectedRouterField")
+	}
+}

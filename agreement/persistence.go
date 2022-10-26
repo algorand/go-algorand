@@ -73,7 +73,6 @@ func encode(t timers.Clock, rr rootRouter, p player, a []action, reflect bool) (
 		raw = protocol.EncodeReflect(s)
 	} else {
 		raw = protocol.Encode(&s)
-
 	}
 	return
 }

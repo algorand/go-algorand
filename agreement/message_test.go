@@ -106,25 +106,27 @@ func TestMessageBackwardCompatibility(t *testing.T) {
 	// result := protocol.EncodeReflect(&msg)
 	// fmt.Println(base64.StdEncoding.EncodeToString(result))
 
-	m1 := message{
-		messageHandle: &messageMetadata{raw: network.IncomingMessage{Tag: protocol.Tag("mytag"), Data: []byte("some data")}},
-		Tag:           protocol.ProposalPayloadTag,
+	// messages for all rounds after this change should not have MessageHandle set so clearing it out and re-encoding/decoding it should yield this
+	targetMessage := message{
+		Tag: protocol.ProposalPayloadTag,
 	}
 
-	// m4 := message{
-	// 	Tag: protocol.ProposalPayloadTag,
-	// }
-
-	var m2 message
-	err = protocol.Decode(encoded, &m2)
+	var m1, m2, m3, m4 message
+	// Both msgp and reflection should decode the message containing old MessageHandle successfully
+	err = protocol.Decode(encoded, &m1)
 	require.NoError(t, err)
-
+	err = protocol.DecodeReflect(encoded, &m2)
+	require.NoError(t, err)
+	// after setting MessageHandle to nil both should re-encode and decode to same values
+	m1.MessageHandle = nil
+	m2.MessageHandle = nil
 	e1 := protocol.Encode(&m1)
-	var m3 message
-
-	err = protocol.Decode(e1, &m3)
+	e2 := protocol.EncodeReflect(&m2)
+	require.Equal(t, e1, e2)
+	err = protocol.DecodeReflect(e1, &m3)
 	require.NoError(t, err)
-
-	//	require.Equal(t, m2, m3)
-	//require.Equal(t, m4, m2) //check that it decoded to a field with MessageHandle
+	err = protocol.Decode(e2, &m4)
+	require.NoError(t, err)
+	require.Equal(t, m3, m4)
+	require.Equal(t, m3, targetMessage)
 }
