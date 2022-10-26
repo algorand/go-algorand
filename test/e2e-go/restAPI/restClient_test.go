@@ -22,6 +22,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -1373,6 +1375,45 @@ end:
 		}
 	}
 
+	// `assertErrorResponse` confirms the _Result limit exceeded_ error response provides expected fields and values.
+	assertErrorResponse := func(err error, expectedCount, requestedMax uint64) {
+		a.Error(err)
+		e := err.(client.HTTPError)
+		a.Equal(400, e.StatusCode)
+
+		var er *generated.ErrorResponse
+		err = protocol.DecodeJSON([]byte(e.ErrorString), &er)
+		a.NoError(err)
+		a.Equal("Result limit exceeded", er.Message)
+		a.Equal(uint64(100000), ((*er.Data)["max-api-box-per-application"]).(uint64))
+		a.Equal(requestedMax, ((*er.Data)["max"]).(uint64))
+		a.Equal(expectedCount, ((*er.Data)["total-boxes"]).(uint64))
+
+		a.Len(*er.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", *er.Data))
+	}
+
+	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
+	assertBoxCount := func(expectedCount uint64) {
+		// Query without client-side limit.
+		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+
+		// Query with requested max < expected expectedCount.
+		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
+		assertErrorResponse(err, expectedCount, expectedCount-1)
+
+		// Query with requested max == expected expectedCount.
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+
+		// Query with requested max > expected expectedCount.
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1)
+		a.NoError(err)
+		a.Len(resp.Boxes, int(expectedCount))
+	}
+
 	// helper function, take operation and a slice of box names
 	// then submit transaction group containing all operations on box names
 	// Then we check these boxes are appropriately created/deleted
@@ -1498,10 +1539,7 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
-	maxBoxNumToGet := uint64(10)
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), maxBoxNumToGet)
-	a.NoError(err)
-	a.Len(resp.Boxes, int(maxBoxNumToGet))
+	assertBoxCount(uint64(len(testingBoxNames)))
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -1545,16 +1583,13 @@ end:
 		a.Equal(boxTest.value, boxResponse.Value)
 	}
 
+	const numberOfBoxesRemaining = uint64(3)
+	assertBoxCount(numberOfBoxesRemaining)
+
 	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
-	numberOfBoxesRemaining := 3
-
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
-	a.NoError(err)
-	a.Len(resp.Boxes, numberOfBoxesRemaining)
-
 	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
 	a.NoError(err)
-	a.Equal(uint64(numberOfBoxesRemaining), appAccountData.TotalBoxes)
+	a.Equal(numberOfBoxesRemaining, appAccountData.TotalBoxes)
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
@@ -1570,8 +1605,5 @@ end:
 	_, err = testClient.ApplicationInformation(uint64(createdAppID))
 	a.ErrorContains(err, "application does not exist")
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
-	a.NoError(err)
-	// upshot - we can still see the orphaned boxes:
-	a.Len(resp.Boxes, numberOfBoxesRemaining)
+	assertBoxCount(numberOfBoxesRemaining)
 }

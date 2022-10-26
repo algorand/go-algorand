@@ -1219,22 +1219,29 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	lastRound := ledger.Latest()
 	keyPrefix := logic.MakeBoxKey(appIdx, "")
 
-	// cast param.Max to zero, if param.Max points to some value, we keep the value
-	castedMax := nilToZero(params.Max)
-	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
-	algodLimitsResults := maxBoxThreshold > 0
+	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
+	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
-	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, applicationBoxesMaxKeys(castedMax, maxBoxThreshold))
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	if max != math.MaxUint64 {
+		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		if record.TotalBoxes > max {
+			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data: &map[string]interface{}{
+					"max-api-box-per-application": algodMax,
+					"max":                         requestedMax,
+					"total-boxes":                 record.TotalBoxes,
+				},
+			})
+		}
 	}
 
-	if algodLimitsResults && uint64(len(boxKeys)) > maxBoxThreshold {
-		v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
-		return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
-			Message: "Result limit exceeded",
-			Data:    nil,
-		})
+	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	prefixLen := len(keyPrefix)

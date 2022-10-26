@@ -1501,14 +1501,14 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, it returns the box names of that application. No particular ordering is guaranteed.",
+        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
         "produces": [
           "application/json"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Get box names for a given application.",
+        "summary": "Get all box names for a given application.",
         "operationId": "GetApplicationBoxes",
         "parameters": [
           {

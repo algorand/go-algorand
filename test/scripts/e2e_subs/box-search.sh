@@ -83,8 +83,8 @@ b64:AQIDBA=="
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
 # Confirm that we can limit the number of boxes returned
-BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 1)
-[ "$(echo "$BOX_LIST" | wc -l)" -eq 1 ] # only one line
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 4)
+[ "$(echo "$BOX_LIST" | wc -l)" -eq 4 ] # only one line
 # shellcheck disable=SC2143
 [ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
 
