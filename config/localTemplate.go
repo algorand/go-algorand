@@ -452,6 +452,10 @@ type Local struct {
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
 	MaxAcctLookback uint64 `version[23]:"4"`
+
+	// EnableUsageLog enables 10Hz log of CPU and RAM usage.
+	// Also adds 'algod_ram_usage` (number of bytes in use) to /metrics
+	EnableUsageLog bool `version[24]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
