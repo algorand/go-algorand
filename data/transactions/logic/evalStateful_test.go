@@ -1562,6 +1562,36 @@ int 1
 	require.Equal(t, uint64(0x79), vd.Uint)
 }
 
+func TestAppLocalGlobalErrorCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := makeSampleEnv()
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
+
+	testApp(t, fmt.Sprintf(`byte "%v"; int 1; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+
+	testApp(t, fmt.Sprintf(`byte "%v"; int 1; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
+
+	ledger.NewLocals(tx.Sender, 888)
+	testApp(t, fmt.Sprintf(`int 0; byte "%v"; int 1; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+
+	testApp(t, fmt.Sprintf(`int 0; byte "%v"; int 1; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
+
+	testApp(t, fmt.Sprintf(`byte "foo"; byte "%v"; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen+1)), ep, "value too long for key")
+
+	testApp(t, fmt.Sprintf(`byte "foo"; byte "%v"; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep)
+
+	testApp(t, fmt.Sprintf(`int 0; byte "foo"; byte "%v"; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen+1)), ep, "value too long for key")
+
+	testApp(t, fmt.Sprintf(`int 0; byte "foo"; byte "%v"; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep)
+
+	ep.Proto.MaxAppSumKeyValueLens = 2 // Override to generate error.
+	testApp(t, `byte "foo"; byte "foo"; app_global_put; int 1`, ep, "key/value total too long for key")
+
+	testApp(t, `int 0; byte "foo"; byte "foo"; app_local_put; int 1`, ep, "key/value total too long for key")
+}
+
 func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
