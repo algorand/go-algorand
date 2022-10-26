@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -125,6 +126,7 @@ func (handler *TxHandler) backlogWorker() {
 	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
 	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
+	util.SetGoroutineLabels("func", "TxHandler.backlogWorker")
 	for {
 		// prioritize the postVerificationQueue
 		select {

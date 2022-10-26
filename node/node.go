@@ -49,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -207,9 +208,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(),
+		execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(),
+		execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
 	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
@@ -384,7 +387,6 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
 	go node.oldKeyDeletionThread(node.ctx.Done())
-
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
 }
@@ -988,6 +990,7 @@ var txPoolGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_coun
 
 func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	util.SetGoroutineLabels("func", "node.txPoolGaugeThread")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
@@ -1027,6 +1030,8 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	util.SetGoroutineLabels("func", "node.oldKeyDeletionThread")
+
 	for {
 		select {
 		case <-done:

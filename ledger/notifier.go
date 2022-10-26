@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/util"
 )
 
 // BlockListener represents an object that needs to get notified on new blocks.
@@ -50,6 +51,7 @@ type blockNotifier struct {
 
 func (bn *blockNotifier) worker() {
 	defer bn.closing.Done()
+	util.SetGoroutineLabels("func", "blockNotifier.worker")
 	bn.mu.Lock()
 
 	for {

@@ -858,6 +858,7 @@ func (wn *WebsocketNetwork) Start() {
 
 func (wn *WebsocketNetwork) httpdThread() {
 	defer wn.wg.Done()
+	util.SetGoroutineLabels("func", "network.httpdThread")
 	var err error
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		err = wn.server.ServeTLS(wn.listener, wn.config.TLSCertFile, wn.config.TLSKeyFile)
@@ -1205,6 +1206,7 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 
 func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
+	util.SetGoroutineLabels("func", "network.messageHandlerThread")
 
 	for {
 		select {
