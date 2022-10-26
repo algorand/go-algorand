@@ -467,7 +467,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	a.NoError(err)
 	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
-	a.Equal(note, txStatus.Txn.Txn)
+	a.Equal(note, txStatus.Txn.Txn.Note)
 }
 
 func TestClientCanGetTransactionStatus(t *testing.T) {

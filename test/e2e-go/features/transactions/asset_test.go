@@ -459,6 +459,7 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
+	// Note: This test uses a deprecated v1 API. The v2 API test is below.
 	info, err := client.AccountInformation(account0)
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
@@ -483,6 +484,7 @@ func TestAssetInformation(t *testing.T) {
 	a.True(confirmed, "creating assets")
 
 	// Check that AssetInformation returns the correct AssetParams
+	// Note: This test uses a deprecated v1 API. The v2 API test is below.
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
 	for idx, cp := range info.AssetParams {
