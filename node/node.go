@@ -941,7 +941,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				renamedFileName := filepath.Join(fullname, ".old")
 				err = os.Rename(fullname, renamedFileName)
 				if err != nil {
-					node.log.Warn("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
 				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
@@ -1070,7 +1070,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 		// Persist participation registry updates to last-used round and voting key changes.
 		err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 		if err != nil {
-			node.log.Warnf("error while flushing the registry: %w", err)
+			node.log.Warnf("error while flushing the registry: %v", err)
 		}
 	}
 }
