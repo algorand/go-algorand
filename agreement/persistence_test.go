@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -217,4 +218,21 @@ func BenchmarkRandomizedDecode(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		decode(ds, clock, log, false)
 	}
+}
+
+func TestEmptyMapDeserialization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var rr, rr1 rootRouter
+	rr.Children = make(map[basics.Round]*roundRouter)
+	e := protocol.Encode(&rr)
+	err := protocol.Decode(e, &rr1)
+	require.NoError(t, err)
+	require.NotNil(t, rr1.Children)
+
+	var v, v1 voteTracker
+	v.Equivocators = make(map[basics.Address]equivocationVote)
+	ve := protocol.Encode(&v)
+	err = protocol.Decode(ve, &v1)
+	require.NoError(t, err)
+	require.NotNil(t, v1.Equivocators)
 }
