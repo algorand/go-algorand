@@ -1231,7 +1231,7 @@ func TestBoxNamesByAppID(t *testing.T) {
 	testClient := localFixture.LibGoalClient
 
 	testClient.WaitForRound(1)
-	
+
 	wh, err := testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
