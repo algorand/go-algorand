@@ -22,6 +22,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -1373,6 +1375,23 @@ end:
 		}
 	}
 
+	// `assertErrorResponse` confirms the _Result limit exceeded_ error response provides expected fields and values.
+	assertErrorResponse := func(err error, expectedCount, requestedMax uint64) {
+		a.Error(err)
+		e := err.(client.HTTPError)
+		a.Equal(400, e.StatusCode)
+
+		var er *generated.ErrorResponse
+		err = protocol.DecodeJSON([]byte(e.ErrorString), &er)
+		a.NoError(err)
+		a.Equal("Result limit exceeded", er.Message)
+		a.Equal(uint64(100000), ((*er.Data)["max-api-box-per-application"]).(uint64))
+		a.Equal(requestedMax, ((*er.Data)["max"]).(uint64))
+		a.Equal(expectedCount, ((*er.Data)["total-boxes"]).(uint64))
+
+		a.Len(*er.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", *er.Data))
+	}
+
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
 	assertBoxCount := func(expectedCount uint64) {
 		// Query without client-side limit.
@@ -1382,7 +1401,7 @@ end:
 
 		// Query with requested max < expected expectedCount.
 		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
-		a.ErrorContains(err, "Result limit exceeded")
+		assertErrorResponse(err, expectedCount, expectedCount-1)
 
 		// Query with requested max == expected expectedCount.
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
