@@ -474,6 +474,8 @@ type VerificationResult struct {
 	Err      error
 }
 
+// StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
+// results through the resultChan
 type StreamVerifier struct {
 	seatReturnChan   chan interface{}
 	resultChan       chan<- VerificationResult
@@ -569,7 +571,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 const waitForNextTxnDuration = 5 * time.Millisecond
 const waitForFirstTxnDuration = 2000 * time.Millisecond
 
-// MakeStream creates a new stream verifier and returns the chans used to send txn groups
+// MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
 func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
 	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
@@ -594,6 +596,8 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 	return sv
 }
 
+// Start is called when the verifier is created and whenever it needs to restart after
+// the ctx is canceled
 func (sv *StreamVerifier) Start() {
 	go sv.batchingLoop()
 }
