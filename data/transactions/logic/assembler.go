@@ -583,6 +583,13 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.Write(scratch[:vlen])
 	return nil
 }
+
+func asmPushInts(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.pending.WriteByte(spec.Opcode)
+	_, err := asmIntImmArgs(ops, args)
+	return err
+}
+
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
@@ -600,6 +607,12 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.Write(scratch[:vlen])
 	ops.pending.Write(val)
 	return nil
+}
+
+func asmPushBytess(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.pending.WriteByte(spec.Opcode)
+	_, err := asmByteImmArgs(ops, args)
+	return err
 }
 
 func base32DecodeAnyPadding(x string) (val []byte, err error) {
@@ -812,8 +825,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.error("Unable to parse method signature")
 }
 
-func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(spec.Opcode)
+func asmIntImmArgs(ops *OpStream, args []string) ([]uint64, error) {
 	ivals := make([]uint64, len(args))
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
@@ -825,9 +837,17 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
-		if !ops.known.deadcode {
-			ivals[i] = cu
-		}
+		ivals[i] = cu
+	}
+
+	return ivals, nil
+}
+
+func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.pending.WriteByte(spec.Opcode)
+	ivals, err := asmIntImmArgs(ops, args)
+	if err != nil {
+		return err
 	}
 	if !ops.known.deadcode {
 		// If we previously processed an `int`, we thought we could insert our
@@ -843,8 +863,7 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(spec.Opcode)
+func asmByteImmArgs(ops *OpStream, args []string) ([][]byte, error) {
 	bvals := make([][]byte, 0, len(args))
 	rest := args
 	for len(rest) > 0 {
@@ -854,7 +873,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 			// intcblock, but parseBinaryArgs would have
 			// to return a useful consumed value even in
 			// the face of errors.  Hard.
-			return ops.error(err)
+			return nil, ops.error(err)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -867,6 +886,17 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(scratch[:l])
 		ops.pending.Write(bv)
 	}
+
+	return bvals, nil
+}
+
+func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.pending.WriteByte(spec.Opcode)
+	bvals, err := asmByteImmArgs(ops, args)
+	if err != nil {
+		return err
+	}
+
 	if !ops.known.deadcode {
 		// If we previously processed a pseudo `byte`, we thought we could
 		// insert our own bytecblock, but now we see a manual one.
@@ -1452,6 +1482,24 @@ func typeDupN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 	}
 
 	return nil, copies, nil
+}
+
+func typePushBytess(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	types := make(StackTypes, len(args))
+	for i := range types {
+		types[i] = StackBytes
+	}
+
+	return nil, types, nil
+}
+
+func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	types := make(StackTypes, len(args))
+	for i := range types {
+		types[i] = StackUint64
+	}
+
+	return nil, types, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -2519,7 +2567,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			out += fmt.Sprintf("0x%s // %s", hex.EncodeToString(constant), guessByteFormat(constant))
 			pc = int(end)
 		case immInts:
-			intc, nextpc, err := parseIntcblock(dis.program, pc)
+			intc, nextpc, err := parseIntImmArgs(dis.program, pc)
 			if err != nil {
 				return "", err
 			}
@@ -2533,7 +2581,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 			pc = nextpc
 		case immBytess:
-			bytec, nextpc, err := parseBytecBlock(dis.program, pc)
+			bytec, nextpc, err := parseByteImmArgs(dis.program, pc)
 			if err != nil {
 				return "", err
 			}
@@ -2590,13 +2638,13 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	return out, nil
 }
 
-var errShortIntcblock = errors.New("intcblock ran past end of program")
-var errTooManyIntc = errors.New("intcblock with too many items")
+var errShortIntImmArgs = errors.New("const int list ran past end of program")
+var errTooManyIntc = errors.New("const int list with too many items")
 
-func parseIntcblock(program []byte, pos int) (intc []uint64, nextpc int, err error) {
+func parseIntImmArgs(program []byte, pos int) (intc []uint64, nextpc int, err error) {
 	numInts, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
-		err = fmt.Errorf("could not decode intcblock size at pc=%d", pos)
+		err = fmt.Errorf("could not decode length of int list at pc=%d", pos)
 		return
 	}
 	pos += bytesUsed
@@ -2607,7 +2655,7 @@ func parseIntcblock(program []byte, pos int) (intc []uint64, nextpc int, err err
 	intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(program) {
-			err = errShortIntcblock
+			err = errShortIntImmArgs
 			return
 		}
 		intc[i], bytesUsed = binary.Uvarint(program[pos:])
@@ -2621,38 +2669,19 @@ func parseIntcblock(program []byte, pos int) (intc []uint64, nextpc int, err err
 	return
 }
 
-func checkIntConstBlock(cx *EvalContext) error {
-	pos := cx.pc + 1
-	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		return fmt.Errorf("could not decode intcblock size at pc=%d", pos)
-	}
-	pos += bytesUsed
-	if numInts > uint64(len(cx.program)) {
-		return errTooManyIntc
-	}
-	//intc = make([]uint64, numInts)
-	for i := uint64(0); i < numInts; i++ {
-		if pos >= len(cx.program) {
-			return errShortIntcblock
-		}
-		_, bytesUsed = binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			return fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-		}
-		pos += bytesUsed
-	}
-	cx.nextpc = pos
-	return nil
+func checkIntImmArgs(cx *EvalContext) error {
+	var err error
+	_, cx.nextpc, err = parseIntImmArgs(cx.program, cx.pc+1)
+	return err
 }
 
-var errShortBytecblock = errors.New("bytecblock ran past end of program")
-var errTooManyItems = errors.New("bytecblock with too many items")
+var errShortByteImmArgs = errors.New("const bytes list ran past end of program")
+var errTooManyItems = errors.New("const bytes list with too many items")
 
-func parseBytecBlock(program []byte, pos int) (bytec [][]byte, nextpc int, err error) {
+func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err error) {
 	numItems, bytesUsed := binary.Uvarint(program[pos:])
 	if bytesUsed <= 0 {
-		err = fmt.Errorf("could not decode bytecblock size at pc=%d", pos)
+		err = fmt.Errorf("could not decode length of bytes list at pc=%d", pos)
 		return
 	}
 	pos += bytesUsed
@@ -2663,7 +2692,7 @@ func parseBytecBlock(program []byte, pos int) (bytec [][]byte, nextpc int, err e
 	bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(program) {
-			err = errShortBytecblock
+			err = errShortByteImmArgs
 			return
 		}
 		itemLen, bytesUsed := binary.Uvarint(program[pos:])
@@ -2673,12 +2702,12 @@ func parseBytecBlock(program []byte, pos int) (bytec [][]byte, nextpc int, err e
 		}
 		pos += bytesUsed
 		if pos >= len(program) {
-			err = errShortBytecblock
+			err = errShortByteImmArgs
 			return
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(program)) || end < uint64(pos) {
-			err = errShortBytecblock
+			err = errShortByteImmArgs
 			return
 		}
 		bytec[i] = program[pos : pos+int(itemLen)]
@@ -2688,38 +2717,10 @@ func parseBytecBlock(program []byte, pos int) (bytec [][]byte, nextpc int, err e
 	return
 }
 
-func checkByteConstBlock(cx *EvalContext) error {
-	pos := cx.pc + 1
-	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
-	if bytesUsed <= 0 {
-		return fmt.Errorf("could not decode bytecblock size at pc=%d", pos)
-	}
-	pos += bytesUsed
-	if numItems > uint64(len(cx.program)) {
-		return errTooManyItems
-	}
-	//bytec = make([][]byte, numItems)
-	for i := uint64(0); i < numItems; i++ {
-		if pos >= len(cx.program) {
-			return errShortBytecblock
-		}
-		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
-		if bytesUsed <= 0 {
-			return fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-		}
-		pos += bytesUsed
-		if pos >= len(cx.program) {
-			return errShortBytecblock
-		}
-		end := uint64(pos) + itemLen
-		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			return errShortBytecblock
-		}
-		//bytec[i] = program[pos : pos+int(itemLen)]
-		pos += int(itemLen)
-	}
-	cx.nextpc = pos
-	return nil
+func checkByteImmArgs(cx *EvalContext) error {
+	var err error
+	_, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	return err
 }
 
 func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
