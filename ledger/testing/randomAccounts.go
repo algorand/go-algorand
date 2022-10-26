@@ -211,7 +211,7 @@ func RandomAppParams() basics.AppParams {
 func RandomAppLocalState() basics.AppLocalState {
 	ls := basics.AppLocalState{
 		Schema: basics.StateSchema{
-			NumUint:      crypto.RandUint64() % 5,
+			NumUint:      crypto.RandUint64()%5 + 1,
 			NumByteSlice: crypto.RandUint64() % 5,
 		},
 		KeyValue: make(map[string]basics.TealValue),
