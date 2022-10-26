@@ -1221,15 +1221,22 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
-	record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-	}
-	if record.TotalBoxes > max {
-		return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
-			Message: fmt.Sprintf("Result limit exceeded: MaxAPIBoxPerApplication=%d, max=%d, TotalBoxes=%d", algodMax, requestedMax, record.TotalBoxes),
-			Data:    nil,
-		})
+
+	if max != math.MaxUint64 {
+		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		if record.TotalBoxes > max {
+			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data: &map[string]interface{}{
+					"max-api-box-per-application": algodMax,
+					"max":                         requestedMax,
+					"total-boxes":                 record.TotalBoxes,
+				},
+			})
+		}
 	}
 
 	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
