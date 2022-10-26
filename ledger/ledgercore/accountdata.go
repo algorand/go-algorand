@@ -131,7 +131,7 @@ func (u *AccountData) ClearOnlineState() {
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParamsVal) (res basics.MicroAlgos) {
+func (u AccountData) MinBalance(proto config.ConsensusParams) (res basics.MicroAlgos) {
 	return basics.MinBalance(
 		proto,
 		uint64(u.TotalAssets),

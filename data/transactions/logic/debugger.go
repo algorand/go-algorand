@@ -72,7 +72,7 @@ type DebugState struct {
 	PCOffset    []PCOffset                     `codec:"pctooffset"`
 	TxnGroup    []transactions.SignedTxnWithAD `codec:"txngroup"`
 	GroupIndex  int                            `codec:"gindex"`
-	Proto       *config.ConsensusParamsVal     `codec:"proto"`
+	Proto       config.ConsensusParams         `codec:"proto"`
 	Globals     []basics.TealValue             `codec:"globals"`
 
 	// fields updated every step

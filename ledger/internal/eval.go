@@ -495,7 +495,7 @@ func (cs *roundCowState) putAccount(addr basics.Address, acct ledgercore.Account
 	return nil
 }
 
-func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParamsVal) (res basics.MicroAlgos, err error) {
+func (cs *roundCowState) MinBalance(addr basics.Address, proto config.ConsensusParams) (res basics.MicroAlgos, err error) {
 	acct, err := cs.lookup(addr) // pending rewards unneeded
 	if err != nil {
 		return
@@ -606,7 +606,7 @@ type EvaluatorOptions struct {
 	Validate            bool
 	Generate            bool
 	MaxTxnBytesPerBlock int
-	ProtoParams         *config.ConsensusParamsVal
+	ProtoParams         config.ConsensusParams
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

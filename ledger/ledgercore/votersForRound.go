@@ -36,7 +36,7 @@ type OnlineAccountsFetcher interface {
 	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 	// balance and address, whose voting keys are valid in voteRnd.  See the
 	// normalization description in AccountData.NormalizedOnlineBalance().
-	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParamsVal, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
+	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular

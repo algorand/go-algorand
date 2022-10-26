@@ -735,7 +735,7 @@ const syncProgramsVersion = 6
 // CheckContractVersions ensures that for syncProgramsVersion and higher, two programs are version
 // matched, and that they are not a downgrade.  If either program version is
 // >= proto.MinInnerApplVersion, downgrade of that program is not allowed.
-func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParamsVal) error {
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto config.ConsensusParams) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {
 		return fmt.Errorf("bad ApprovalProgram: %v", err)

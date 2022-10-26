@@ -655,7 +655,7 @@ repeat:
 	return
 }
 
-var proto *config.ConsensusParamsVal
+var proto config.ConsensusParams
 
 func getProto(client *libgoal.Client) (config.ConsensusParams, error) {
 	if proto == nil {
