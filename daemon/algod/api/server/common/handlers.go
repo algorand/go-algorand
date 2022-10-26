@@ -67,7 +67,7 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(api.SwaggerSpecJSONEmbed))
+	_, _ = w.Write([]byte(api.SwaggerSpecJSONEmbed))
 }
 
 // HealthCheck is an httpHandler for route GET /health
