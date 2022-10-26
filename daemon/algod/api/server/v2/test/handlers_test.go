@@ -208,6 +208,74 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
+func TestGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	err := handler.GetBlockHash(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+}
+
+func TestGetBlockGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+	insertRounds(a, handler, 2)
+
+	type blockResponse struct {
+		Block bookkeeping.Block `codec:"block"`
+	}
+
+	var block1, block2 blockResponse
+	var block1Hash generatedV2.BlockHashResponse
+	format := "json"
+
+	// Get block 1
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1)
+	a.NoError(err)
+
+	// Get block 2
+	c, rec = newReq(t)
+	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: &format})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block2)
+	a.NoError(err)
+
+	// Get block 1 hash
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1Hash)
+	a.NoError(err)
+
+	// Validate that the block returned from GetBlock(1) has the same hash that is returned via GetBlockHash(1)
+	a.Equal(crypto.HashObj(block1.Block.BlockHeader).String(), block1Hash.BlockHash)
+
+	// Validate that the block returned from GetBlock(2) has the same prev-hash that is returned via GetBlockHash(1)
+	hash := block2.Block.Branch.String()
+	a.Equal(fmt.Sprintf("blk-%s", block1Hash.BlockHash), hash)
+
+	// Sanity check that the hashes are not equal (i.e. they are not the default values)
+	a.NotEqual(block1.Block.Branch, block2.Block.Branch)
+}
+
 func TestGetBlockJsonEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/passphrase"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,6 +45,8 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 		go randomDeterministicAccounts(initCfg, out)
 	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
 		go sequentialDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "mnemonic" {
+		go mnemonicDeterministicAccounts(initCfg, out)
 	}
 	return out
 }
@@ -51,7 +54,7 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
 	numAccounts := initCfg.NumPartAccounts
 	totalAccounts := initCfg.GeneratedAccountsCount
-	if totalAccounts < numAccounts*4 {
+	if totalAccounts < uint64(numAccounts)*4 {
 		// simpler rand strategy for smaller totalAccounts
 		order := rand.Perm(int(totalAccounts))[:numAccounts]
 		for _, acct := range order {
@@ -86,6 +89,21 @@ func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.Signatur
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
+	close(out)
+}
+
+func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for _, mnemonic := range initCfg.GeneratedAccountsMnemonics {
+		seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
+			os.Exit(1)
+		}
+		var seed crypto.Seed
+		copy(seed[:], seedbytes)
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+	close(out)
 }
 
 // load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey
@@ -667,28 +685,39 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	// generate new apps
+	// cycle through accts and create apps until the desired quantity is reached
 	var txgroup []transactions.Transaction
 	var senders []string
-	for addr, acct := range pps.accounts {
-		if len(pps.cinfo.AppParams) >= int(pps.cfg.NumApp) {
-			break
-		}
-		var tx transactions.Transaction
-		tx, err = pps.newApp(addr, client)
-		if err != nil {
-			return
-		}
-		acct.addBalance(-int64(pps.cfg.MaxFee))
-		txgroup = append(txgroup, tx)
-		senders = append(senders, addr)
-		if len(txgroup) == int(pps.cfg.GroupSize) {
-			pps.schedule(len(txgroup))
-			err = pps.sendAsGroup(txgroup, client, senders)
+	var newAppAddrs []string
+	appsPerAddr := make(map[string]int)
+	totalAppCnt := len(pps.cinfo.AppParams)
+	for totalAppCnt < int(pps.cfg.NumApp) {
+		for addr, acct := range pps.accounts {
+			if totalAppCnt >= int(pps.cfg.NumApp) {
+				break
+			}
+
+			var tx transactions.Transaction
+			tx, err = pps.newApp(addr, client)
 			if err != nil {
 				return
 			}
-			txgroup = txgroup[:0]
-			senders = senders[:0]
+			newAppAddrs = append(newAppAddrs, addr)
+			acct.addBalance(-int64(pps.cfg.MaxFee))
+			txgroup = append(txgroup, tx)
+			senders = append(senders, addr)
+			if len(txgroup) == int(pps.cfg.GroupSize) {
+				pps.schedule(len(txgroup))
+				err = pps.sendAsGroup(txgroup, client, senders)
+				if err != nil {
+					return
+				}
+				txgroup = txgroup[:0]
+				senders = senders[:0]
+			}
+
+			appsPerAddr[addr]++
+			totalAppCnt++
 		}
 	}
 	if len(txgroup) > 0 {
@@ -699,6 +728,32 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		}
 		txgroup = txgroup[:0]
 		senders = senders[:0]
+	}
+
+	// update pps.cinfo.AppParams to ensure newly created apps are present
+	for _, addr := range newAppAddrs {
+		var ai v1.Account
+		for {
+			ai, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			if len(ai.AppParams) >= appsPerAddr[addr] {
+				break
+			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
+			// TODO : if we fail here for too long, we should re-create new accounts, etc.
+		}
+		ai, err = client.AccountInformation(addr)
+		if err != nil {
+			return
+		}
+
+		for appID, ap := range ai.AppParams {
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+			pps.cinfo.AppParams[appID] = ap
+		}
 	}
 
 	// opt-in more accounts to apps

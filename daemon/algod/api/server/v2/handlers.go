@@ -51,8 +51,14 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
-const maxTealSourceBytes = 1e5
-const maxTealDryrunBytes = 1e5
+// max compiled teal program is currently 8k
+// but we allow for comments, spacing, and repeated consts
+// in the source teal, allow up to 200kb
+const maxTealSourceBytes = 200_000
+
+// With the ability to hold unlimited assets DryrunRequests can
+// become quite large, allow up to 1mb
+const maxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -356,7 +362,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
-			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
+			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
 			extraData := map[string]interface{}{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,
@@ -625,6 +631,25 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	}
 
 	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// GetBlockHash gets the block hash for the given round.
+// (GET /v2/blocks/{round}/hash)
+func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	response := generated.BlockHashResponse{BlockHash: crypto.Digest(block.Hash()).String()}
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // GetTransactionProof generates a Merkle proof for a transaction in a block.
