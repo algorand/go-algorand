@@ -2253,8 +2253,8 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
-			if zb0004 > basics.MaxEncodedAccountDataSize {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(basics.MaxEncodedAccountDataSize))
+			if zb0004 > StateProofVerificationDataPerCatchpointFile {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(StateProofVerificationDataPerCatchpointFile))
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
@@ -2304,8 +2304,8 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 					err = msgp.WrapError(err, "Data")
 					return
 				}
-				if zb0006 > basics.MaxEncodedAccountDataSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(basics.MaxEncodedAccountDataSize))
+				if zb0006 > StateProofVerificationDataPerCatchpointFile {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofVerificationDataPerCatchpointFile))
 					err = msgp.WrapError(err, "Data")
 					return
 				}

@@ -37,6 +37,11 @@ const (
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
 
+	// StateProofVerificationDataPerCatchpointFile defines the maximum number of state proof verification data stored
+	// in the catchpoint file.
+	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
+	StateProofVerificationDataPerCatchpointFile = 70000
+
 	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
 	// 300000 resources * 300B/resource => roughly max 100MB per chunk
 	DefaultMaxResourcesPerChunk = 300000
@@ -97,10 +102,9 @@ type catchpointFileBalancesChunkV6 struct {
 	numAccounts uint64
 }
 
-// TODO: decide on allocbound
 type catchpointStateProofVerificationData struct {
 	_struct struct{}                                `codec:",omitempty,omitemptyarray"`
-	Data    []ledgercore.StateProofVerificationData `codec:"spd,allocbound=basics.MaxEncodedAccountDataSize"`
+	Data    []ledgercore.StateProofVerificationData `codec:"spd,allocbound=StateProofVerificationDataPerCatchpointFile"`
 }
 
 func (data catchpointStateProofVerificationData) ToBeHashed() (protocol.HashID, []byte) {
