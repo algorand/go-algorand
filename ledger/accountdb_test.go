@@ -1286,50 +1286,50 @@ func TestResourcesDataApp(t *testing.T) {
 
 	a := require.New(t)
 
+	rd := resourcesData{}
+	a.False(rd.IsApp())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsApp())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
+	a.True(rd.IsEmpty())
+
+	// check empty
+	appParamsEmpty := basics.AppParams{}
+	rd = resourcesData{}
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+
+	appLocalEmpty := basics.AppLocalState{}
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsApp())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check both empty
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
 	// Since some steps use randomly generated input, the test is run N times
 	// to cover a larger search space of inputs.
 	for i := 0; i < 1000; i++ {
-		rd := resourcesData{}
-		a.False(rd.IsApp())
-		a.True(rd.IsEmpty())
-
-		rd = makeResourcesData(1)
-		a.False(rd.IsApp())
-		a.False(rd.IsHolding())
-		a.False(rd.IsOwning())
-		a.True(rd.IsEmpty())
-
-		// check empty
-		appParamsEmpty := basics.AppParams{}
-		rd = resourcesData{}
-		rd.SetAppParams(appParamsEmpty, false)
-		a.True(rd.IsApp())
-		a.True(rd.IsOwning())
-		a.True(rd.IsEmptyAppFields())
-		a.False(rd.IsEmpty())
-		a.Equal(appParamsEmpty, rd.GetAppParams())
-
-		appLocalEmpty := basics.AppLocalState{}
-		rd = resourcesData{}
-		rd.SetAppLocalState(appLocalEmpty)
-		a.True(rd.IsApp())
-		a.True(rd.IsHolding())
-		a.True(rd.IsEmptyAppFields())
-		a.False(rd.IsEmpty())
-		a.Equal(appLocalEmpty, rd.GetAppLocalState())
-
-		// check both empty
-		rd = resourcesData{}
-		rd.SetAppLocalState(appLocalEmpty)
-		rd.SetAppParams(appParamsEmpty, true)
-		a.True(rd.IsApp())
-		a.True(rd.IsOwning())
-		a.True(rd.IsHolding())
-		a.True(rd.IsEmptyAppFields())
-		a.False(rd.IsEmpty())
-		a.Equal(appParamsEmpty, rd.GetAppParams())
-		a.Equal(appLocalEmpty, rd.GetAppLocalState())
-
 		// check empty states + non-empty params
 		appParams := ledgertesting.RandomAppParams()
 		rd = resourcesData{}
