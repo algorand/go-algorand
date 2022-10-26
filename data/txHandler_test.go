@@ -328,12 +328,6 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 			select {
 			case wi, ok := <-handler.backlogQueue:
 				if !ok {
-					close(handler.streamVerifierChan)
-					// wait until all the pending responses are obtained.
-					// this is not in backlogWorker, maybe should be
-					for wi := range handler.postVerificationQueue {
-						outChan <- wi
-					}
 					return
 				}
 				if handler.checkAlreadyCommitted(wi) {
@@ -398,7 +392,7 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 		randduration := time.Duration(uint64(((1 + rand.Float32()) * 3)))
 		time.Sleep(randduration * time.Microsecond)
 	}
-	close(handler.backlogQueue)
+	handler.Stop()
 	wg.Wait()
 
 	// Report the number of transactions dropped because the backlog was busy
@@ -518,7 +512,9 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
-	defer handler.ctxCancel()
+	// emulate handler.Start() without the backlog
+	go handler.processTxnStreamVerifiedResults()
+	handler.streamVerifier.Start()
 
 	// Prepare the transactions
 	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, 0.001, addresses, secrets)
@@ -533,6 +529,13 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 		groupCounter := 0
 		var txnCounter uint64
 		invalidCounter := 0
+		defer func() {
+			if txnCounter > 0 {
+				b.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+				b.Logf("Time/txn: %d(microsec)\n", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
+				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]\n", groupCounter, invalidCounter, txnCounter)
+			}
+		}()
 		for wi := range outChan {
 			txnCounter = txnCounter + uint64(len(wi.unverifiedTxGroup))
 			groupCounter++
@@ -544,10 +547,11 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 				invalidCounter++
 				require.True(b, inBad, "Error for good signature")
 			}
+			if groupCounter == len(signedTransactionGroups) {
+				// all the benchmark txns processed
+				break
+			}
 		}
-		b.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
-		b.Logf("Time/txn: %d(microsec)\n", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
-		b.Logf("processed total: [%d groups (%d invalid)] [%d txns]\n", groupCounter, invalidCounter, txnCounter)
 	}()
 
 	b.ResetTimer()
@@ -556,8 +560,6 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 		blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
 		handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, Context: &blm}
 	}
-	// shut down to end the test
-	close(handler.streamVerifierChan)
-	close(handler.backlogQueue)
 	wg.Wait()
+	handler.Stop() // cancel the handler ctx
 }

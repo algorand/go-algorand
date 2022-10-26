@@ -862,7 +862,9 @@ func TestStreamVerifier(t *testing.T) {
 
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
-	resultChan := MakeStream(ctx, stxnChan, nil, nbw, verificationPool, cache)
+	resultChan := make(chan VerificationResult)
+	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, nil, nbw, verificationPool, cache)
+	sv.Start()
 
 	badTxnGroups := make(map[crypto.Signature]struct{})
 

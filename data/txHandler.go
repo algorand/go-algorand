@@ -70,7 +70,9 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
+	streamVerifier        *verify.StreamVerifier
 	streamVerifierChan    chan verify.UnverifiedElement
+	streamReturnChan      chan verify.VerificationResult
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -96,12 +98,12 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
 		streamVerifierChan:    make(chan verify.UnverifiedElement, verifierStreamBufferSize),
+		streamReturnChan:      make(chan verify.VerificationResult, verifierStreamBufferSize),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 
 	// prepare the transaction stream verifer
-	var outChan <-chan verify.VerificationResult
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
@@ -110,22 +112,18 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 	nbw := verify.MakeNewBlockWatcher(latestHdr)
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	outChan = verify.MakeStream(handler.ctx, handler.streamVerifierChan,
+	handler.streamVerifier = verify.MakeStreamVerifier(handler.ctx, handler.streamVerifierChan, handler.streamReturnChan,
 		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
-	go handler.processTxnStreamVerifiedResults(outChan)
 	return handler
 }
 
-func (handler *TxHandler) processTxnStreamVerifiedResults(outChan <-chan verify.VerificationResult) {
-	defer close(handler.postVerificationQueue)
+// processTxnStreamVerifiedResults relays the results from the stream verifier to the postVerificationQueue
+// this is needed so that the exec pool never gets blocked when it is pushing out the result
+// if the postVerificationQueue is full, it will be reported to the transactionMessagesDroppedFromPool metric
+func (handler *TxHandler) processTxnStreamVerifiedResults() {
 	for {
 		select {
-		case <-handler.ctx.Done():
-			return
-		case result, ok := <-outChan:
-			if !ok {
-				return
-			}
+		case result := <-handler.streamReturnChan:
 			txBLMsg := result.Context.(*txBacklogMsg)
 			txBLMsg.verificationErr = result.Err
 			select {
@@ -135,6 +133,9 @@ func (handler *TxHandler) processTxnStreamVerifiedResults(outChan <-chan verify.
 				// adding the metric here allows us to monitor how frequently it happens.
 				transactionMessagesDroppedFromPool.Inc(nil)
 			}
+		case <-handler.ctx.Done():
+			return
+
 		}
 	}
 }
@@ -146,6 +147,8 @@ func (handler *TxHandler) Start() {
 	})
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
+	go handler.processTxnStreamVerifiedResults()
+	handler.streamVerifier.Start()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
@@ -176,7 +179,6 @@ func (handler *TxHandler) backlogWorker() {
 				return
 			}
 			handler.postprocessCheckedTxn(wi)
-
 			// restart the loop so that we could empty out the post verification queue.
 			continue
 		default:
@@ -186,16 +188,17 @@ func (handler *TxHandler) backlogWorker() {
 		select {
 		case wi, ok := <-handler.backlogQueue:
 			if !ok {
+				// this is never happening since handler.backlogQueue is never closed
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {
 				continue
 			}
-
 			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
+				// this is never happening since handler.postVerificationQueue is never closed
 				return
 			}
 			handler.postprocessCheckedTxn(wi)
