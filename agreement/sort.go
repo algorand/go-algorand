@@ -28,6 +28,10 @@ import (
 //msgp:sort basics.Address SortAddress
 type SortAddress = basics.SortAddress
 
+// SortUint64 is re-exported from basics since the interface is already defined there
+// canonical encoding of maps in msgpack format.
+type SortUint64 = basics.SortUint64
+
 // SortStep defines SortInterface used by msgp to consistently sort maps with this type as key.
 //msgp:ignore SortStep
 //msgp:sort step SortStep

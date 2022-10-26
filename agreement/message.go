@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
@@ -101,7 +100,3 @@ func decodeProposal(data []byte) (interface{}, error) {
 		Proposal: p.unauthenticatedProposal,
 	}, nil
 }
-
-// SortUint64 implements sorting by uint64 keys for
-// canonical encoding of maps in msgpack format.
-type SortUint64 = basics.SortUint64
