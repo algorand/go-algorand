@@ -275,7 +275,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 	// TODO: Add processing count?
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// TODO: Write catchpoint state?
-		for _, data := range decodedData.data {
+		for _, data := range decodedData.Data {
 			err = writeCatchpointStateProofVerificationData(ctx, tx, &data)
 			if err != nil {
 				return err
@@ -798,7 +798,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		wrappedData := catchpointStateProofVerificationData{data: *rawStateVerificationProofData}
+		wrappedData := catchpointStateProofVerificationData{Data: *rawStateVerificationProofData}
 		stateProofVerificationDataHash = crypto.HashObj(wrappedData)
 
 		return

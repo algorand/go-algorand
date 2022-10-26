@@ -97,10 +97,10 @@ type catchpointFileBalancesChunkV6 struct {
 	numAccounts uint64
 }
 
-// TODO: Add allocbound
+// TODO: decide on allocbound
 type catchpointStateProofVerificationData struct {
 	_struct struct{}                                `codec:",omitempty,omitemptyarray"`
-	data    []ledgercore.StateProofVerificationData `codec:"spd"`
+	Data    []ledgercore.StateProofVerificationData `codec:"spd,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
 func (data catchpointStateProofVerificationData) ToBeHashed() (protocol.HashID, []byte) {
@@ -155,7 +155,7 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 		return crypto.Digest{}, err
 	}
 
-	wrappedData := catchpointStateProofVerificationData{data: *rawData}
+	wrappedData := catchpointStateProofVerificationData{Data: *rawData}
 	encodedData := protocol.Encode(&wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
