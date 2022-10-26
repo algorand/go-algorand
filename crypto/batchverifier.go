@@ -38,6 +38,7 @@ package crypto
 import "C"
 import (
 	"errors"
+	"runtime"
 	"unsafe"
 )
 
@@ -171,6 +172,10 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
+
+	runtime.KeepAlive(messages)
+	runtime.KeepAlive(publicKeys)
+	runtime.KeepAlive(signatures)
 
 	failed = make([]bool, numberOfSignatures)
 	for i := 0; i < numberOfSignatures; i++ {

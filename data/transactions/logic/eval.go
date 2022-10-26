@@ -709,7 +709,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 				errstr += cx.Trace.String()
 			}
 			err = PanicError{x, errstr}
-			cx.EvalParams.log().Errorf("recovered panic in Eval: %w", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %v", err)
 		}
 	}()
 
