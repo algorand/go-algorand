@@ -65,8 +65,9 @@ type Worker struct {
 	shutdown context.CancelFunc
 	wg       sync.WaitGroup
 
-	signed   basics.Round
-	signedCh chan struct{}
+	signed           basics.Round
+	signedCh         chan struct{}
+	LastCleanupRound basics.Round
 }
 
 // NewWorker constructs a new Worker, as used by the node.
