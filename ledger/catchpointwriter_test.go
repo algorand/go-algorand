@@ -285,6 +285,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		_, err = writer.WriteStateProofVerificationData()
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -338,6 +342,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, DefaultMaxResourcesPerChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationData()
 		if err != nil {
 			return err
 		}
