@@ -51,8 +51,14 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
-const maxTealSourceBytes = 1e5
-const maxTealDryrunBytes = 1e5
+// max compiled teal program is currently 8k
+// but we allow for comments, spacing, and repeated consts
+// in the source teal, allow up to 200kb
+const maxTealSourceBytes = 200_000
+
+// With the ability to hold unlimited assets DryrunRequests can
+// become quite large, allow up to 1mb
+const maxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -358,7 +364,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
-			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
+			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
 			extraData := map[string]interface{}{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,

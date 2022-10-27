@@ -64,11 +64,11 @@
         },
         {
           "name": "keyword.control.teal",
-          "match": "^(assert|b|bnz|bury|bz|callsub|cover|dig|dup|dup2|dupn|err|frame_bury|frame_dig|pop|popn|proto|retsub|return|select|swap|switch|uncover)\\b"
+          "match": "^(assert|b|bnz|bury|bz|callsub|cover|dig|dup|dup2|dupn|err|frame_bury|frame_dig|match|pop|popn|proto|retsub|return|select|swap|switch|uncover)\\b"
         },
         {
           "name": "keyword.other.teal",
-          "match": "^(int|byte|addr|arg|arg_0|arg_1|arg_2|arg_3|args|bytec|bytec_0|bytec_1|bytec_2|bytec_3|bytecblock|bzero|gaid|gaids|gload|gloads|gloadss|global|gtxn|gtxna|gtxnas|gtxns|gtxnsa|gtxnsas|intc|intc_0|intc_1|intc_2|intc_3|intcblock|load|loads|pushbytes|pushint|store|stores|txn|txna|txnas)\\b"
+          "match": "^(int|byte|addr|arg|arg_0|arg_1|arg_2|arg_3|args|bytec|bytec_0|bytec_1|bytec_2|bytec_3|bytecblock|bzero|gaid|gaids|gload|gloads|gloadss|global|gtxn|gtxna|gtxnas|gtxns|gtxnsa|gtxnsas|intc|intc_0|intc_1|intc_2|intc_3|intcblock|load|loads|pushbytes|pushbytess|pushint|pushints|store|stores|txn|txna|txnas)\\b"
         },
         {
           "name": "keyword.other.unit.teal",
