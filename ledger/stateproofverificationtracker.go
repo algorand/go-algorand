@@ -20,18 +20,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
-	errStateProofVerificationDataNotFound        = errors.New("requested state proof verification data not found in memory")
-	errStateProofVerificationDataNotYetGenerated = errors.New("requested state proof verification data later than latest data available")
+	errStateProofVerificationDataNotFound = errors.New("requested state proof verification data not found")
 )
 
 type verificationDeleteData struct {
@@ -62,6 +63,9 @@ type stateProofVerificationTracker struct {
 
 	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
 	stateProofVerificationMu deadlock.RWMutex
+
+	// log copied from ledger
+	log logging.Logger
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
@@ -72,22 +76,14 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	spt.dbQueries = *preparedDbQueries
 
-	latestRoundInLedger := l.Latest()
-	latestBlockHeader, err := l.BlockHdr(latestRoundInLedger)
-
-	if err != nil {
-		return err
-	}
-
-	proto := config.Consensus[latestBlockHeader.CurrentProtocol]
+	spt.log = l.trackerLog()
 
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	// Starting from StateProofMaxRecoveryIntervals provides the order of magnitude for expected state proof chain delay,
-	// and is thus a good size to start from.
-	spt.trackedCommitData = make([]verificationCommitData, 0, proto.StateProofMaxRecoveryIntervals)
-	spt.trackedDeleteData = make([]verificationDeleteData, 0, proto.StateProofMaxRecoveryIntervals)
+	const initialDataArraySize = 10
+	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
+	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
 
 	return nil
 }
@@ -98,9 +94,6 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 	if currentStateProofInterval == 0 {
 		return
 	}
-
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
 
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
@@ -129,7 +122,7 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 
 	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
 	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		dcc.stateProofVerificationDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex]
+		dcc.stateProofVerificationEarliestTrackStateProofRound = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex].stateProofNextRound
 	}
 
 	return nil
@@ -142,7 +135,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 	}
 
 	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		err = deleteOldStateProofVerificationData(ctx, tx, dcc.stateProofVerificationDeleteData.stateProofNextRound)
+		err = deleteOldStateProofVerificationData(ctx, tx, dcc.stateProofVerificationEarliestTrackStateProofRound)
 	}
 
 	return err
@@ -175,16 +168,40 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
+	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
+		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
+		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+	}
+
 	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
-		return spt.dbQueries.lookupData(stateProofLastAttestedRound)
+		return spt.lookupDataInDB(stateProofLastAttestedRound)
 	}
 
-	if stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		verificationData, err := spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
-		return &verificationData, err
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
+		stateProofLastAttestedRound,
+		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound,
+		errStateProofVerificationDataNotFound)
+}
+
+func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	for _, commitData := range spt.trackedCommitData {
+		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
+			verificationDataCopy := commitData.verificationData
+			return &verificationDataCopy, nil
+		}
 	}
 
-	return &ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotYetGenerated
+	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
+		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
+}
+
+func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
+	if err != nil {
+		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
+	}
+
+	return verificationData, err
 }
 
 func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
@@ -193,6 +210,8 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(
 	for index, data := range spt.trackedCommitData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
+		} else {
+			break
 		}
 	}
 
@@ -205,26 +224,29 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	for index, data := range spt.trackedDeleteData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
+		} else {
+			break
 		}
 	}
 
 	return latestCommittedDataIndex
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (ledgercore.StateProofVerificationData, error) {
-	for _, commitData := range spt.trackedCommitData {
-		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
-			return commitData.verificationData, nil
+func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
+	if len(spt.trackedCommitData) > 0 {
+		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
+		if blk.Round() <= lastCommitConfirmedRound {
+			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
+				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
 		}
 	}
 
-	return ledgercore.StateProofVerificationData{}, errStateProofVerificationDataNotFound
-}
-
-func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
 	verificationData := ledgercore.StateProofVerificationData{
 		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		ProvenWeight:          blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
 	}
 
@@ -232,13 +254,26 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 		confirmedRound:   blk.Round(),
 		verificationData: verificationData,
 	}
+
 	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
 }
 
 func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
+	if len(spt.trackedDeleteData) > 0 {
+		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
+		if blk.Round() <= lastDeleteConfirmedRound {
+			spt.log.Panicf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
+				"delete data, round: %d, last confirmed delete data round: %d", blk.Round(), lastDeleteConfirmedRound)
+		}
+	}
+
 	deletionData := verificationDeleteData{
 		confirmedRound:      blk.Round(),
 		stateProofNextRound: delta.StateProofNext,
 	}
+
 	spt.trackedDeleteData = append(spt.trackedDeleteData, deletionData)
 }

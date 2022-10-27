@@ -17,15 +17,17 @@
 package stateproof
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-var schema = []string{
+const (
 	// sigs tracks signatures used to build a state proofs, for
 	// rounds that have not formed a state proofs yet.
 	//
@@ -35,31 +37,67 @@ var schema = []string{
 	//
 	// Signatures produced by this node are special because we broadcast
 	// them early; other signatures are retransmitted later on.
-	`CREATE TABLE IF NOT EXISTS sigs (
+	createSigsTable = `CREATE TABLE IF NOT EXISTS sigs (
 		sprnd integer,
 		signer blob,
 		sig blob,
 		from_this_node integer,
-		UNIQUE (sprnd, signer))`,
+		UNIQUE (sprnd, signer))`
 
-	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
+	createSigsIdx = `CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`
+
+	// builders table stored a serialization of each BuilderForRound data, without the sigs (stored separately)
+	// This table is only used when the TODO flag is specified in startup (relay nodes only)
+	createBuildersTable = `CREATE TABLE IF NOT EXISTS builders (
+    	round INTEGER PRIMARY KEY NOT NULL,
+    	builder BLOB NOT NULL
+    )`
+
+	insertBuilderForRound = `INSERT INTO builders (round,builder) VALUES (?,?)`
+
+	selectBuilderForRound = `SELECT builder FROM builders WHERE round=?`
+
+	deleteBuilderForRound = `DELETE FROM builders WHERE round<?`
+)
+
+// dbSchemaUpgrade0 initialize the tables.
+func dbSchemaUpgrade0(_ context.Context, tx *sql.Tx, _ bool) error {
+	_, err := tx.Exec(createSigsTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(createSigsIdx)
+
+	return err
 }
+
+func dbSchemaUpgrade1(_ context.Context, tx *sql.Tx, _ bool) error {
+	_, err := tx.Exec(createBuildersTable)
+
+	return err
+}
+
+func makeStateProofDB(accessor db.Accessor) error {
+	migrations := []db.Migration{
+		dbSchemaUpgrade0,
+		dbSchemaUpgrade1,
+	}
+
+	err := db.Initialize(accessor, migrations)
+	if err != nil {
+		return fmt.Errorf("unable to initialize participation registry database: %w", err)
+	}
+
+	return nil
+}
+
+//#region Sig Operations
 
 type pendingSig struct {
 	signer       basics.Address
 	sig          merklesignature.Signature
 	fromThisNode bool
-}
-
-func initDB(tx *sql.Tx) error {
-	for i, tableCreate := range schema {
-		_, err := tx.Exec(tableCreate)
-		if err != nil {
-			return fmt.Errorf("could not state proof table %d: %v", i, err)
-		}
-	}
-
-	return nil
 }
 
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
@@ -86,6 +124,20 @@ func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 	return rowsToPendingSigs(rows)
 }
 
+func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) {
+	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE sprnd=?", rnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tmpmap, err := rowsToPendingSigs(rows)
+	if err != nil {
+		return nil, err
+	}
+	return tmpmap[rnd], nil
+
+}
+
 func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE from_this_node=1")
 	if err != nil {
@@ -94,6 +146,17 @@ func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, erro
 	defer rows.Close()
 
 	return rowsToPendingSigs(rows)
+}
+
+func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
+	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
+
+	exists := 0
+	if err := row.Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists != 0, nil
 }
 
 func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
@@ -121,3 +184,61 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 	return res, rows.Err()
 }
+
+//#endregion
+
+//#region Builders Operations
+func persistBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
+	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
+	return err
+}
+
+func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
+	row := tx.QueryRow(selectBuilderForRound, rnd)
+	var rawBuilder []byte
+	err := row.Scan(&rawBuilder)
+	if err != nil {
+		return builder{}, fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
+	}
+	var bldr builder
+	err = protocol.Decode(rawBuilder, &bldr)
+	if err != nil {
+		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
+	}
+
+	// Stored Builder is corrupted...
+	if bldr.Builder == nil {
+		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
+	}
+
+	bldr.Builder.AllocSigs()
+
+	return bldr, nil
+}
+
+// deleteBuilders deletes all builders before (but not including) the given rnd
+func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
+	_, err := tx.Exec(deleteBuilderForRound, rnd)
+	return err
+}
+
+func getSignatureRounds(tx *sql.Tx) ([]basics.Round, error) {
+	var rnds []basics.Round
+	rows, err := tx.Query("SELECT DISTINCT sprnd FROM sigs")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rnd basics.Round
+	for rows.Next() {
+		err := rows.Scan(&rnd)
+		if err != nil {
+			return nil, err
+		}
+		rnds = append(rnds, rnd)
+	}
+	return rnds, nil
+}
+
+//#endregion

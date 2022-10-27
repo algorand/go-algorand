@@ -198,7 +198,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+minRound)/catchpointInterval + 1) * catchpointInterval
 	targetRound := uint64(targetCatchpointRound) + 1
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
 	for {
 		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
@@ -378,7 +377,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			currentRound := uint64(1)
 			targetRound := uint64(21)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-			primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 			log.Infof("Building ledger history..")
 			for {
 				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)

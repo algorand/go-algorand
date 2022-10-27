@@ -31,6 +31,6 @@ type StateProofVerificationData struct {
 	// VotersCommitment is the vector commitment root of the top N accounts to sign the next state proof.
 	VotersCommitment crypto.GenericDigest `codec:"vc"`
 
-	// ProvenWeight is the total amount of stake attesting to the next state proof.
-	ProvenWeight basics.MicroAlgos `codec:"pw"`
+	// OnlineTotalWeight is the total amount of stake attesting to the next state proof.
+	OnlineTotalWeight basics.MicroAlgos `codec:"pw"`
 }

@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -34,8 +35,78 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// makeBuilderForRound not threadsafe, should be called in a lock environment
-func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
+// loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
+// this function fills the builder with all the available signatures
+func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder, error) {
+	b, err := spw.loadOrCreateBuilder(rnd)
+	if err != nil {
+		return builder{}, err
+	}
+
+	if err := spw.loadSignaturesIntoBuilder(&b); err != nil {
+		return builder{}, err
+	}
+	return b, nil
+}
+
+func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
+	buildr, err := spw.loadBuilderFromDB(rnd)
+	if err == nil {
+		return buildr, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
+		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
+	}
+
+	buildr, err = spw.createBuilder(rnd)
+	if err != nil {
+		return builder{}, err
+	}
+
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &buildr)
+	})
+	if err != nil {
+		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
+	}
+
+	return buildr, nil
+}
+
+// loadBuilderFromDB loads a builder from disk.
+func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
+	var buildr builder
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		buildr, err2 = getBuilder(tx, rnd)
+		return err2
+	})
+	if err != nil {
+		return builder{}, err
+	}
+
+	return buildr, nil
+}
+
+func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
+	var sigs []pendingSig
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		sigs, err2 = getPendingSigsForRound(tx, basics.Round(buildr.Round))
+		return err2
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, sig := range sigs {
+		spw.insertSigToBuilder(buildr, &sig)
+	}
+	return nil
+}
+
+func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -72,9 +143,9 @@ func (spw *Worker) makeBuilderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	var res builder
-	res.votersHdr = votersHdr
-	res.voters = voters
-	res.message = msg
+	res.VotersHdr = votersHdr
+	res.AddrToPos = voters.AddrToPos
+	res.Message = msg
 	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
 		uint64(hdr.Round),
 		provenWeight,
@@ -92,58 +163,64 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	var roundSigs map[basics.Round][]pendingSig
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
-		return
-	})
+	rnds, err := spw.getAllRounds()
 	if err != nil {
-		spw.log.Warnf("initBuilders: getPendingSigs: %w", err)
+		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)
 		return
 	}
 
-	for rnd, sigs := range roundSigs {
+	for _, rnd := range rnds {
 		if _, ok := spw.builders[rnd]; ok {
 			spw.log.Warnf("initBuilders: round %d already present", rnd)
 			continue
 		}
-		spw.addSigsToBuilder(sigs, rnd)
+
+		buildr, err := spw.loadOrCreateBuilderWithSignatures(rnd)
+		if err != nil {
+			spw.log.Warnf("initBuilders: failed to load builder for round %d", rnd)
+			continue
+		}
+		spw.builders[rnd] = buildr
 	}
 }
 
-func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := spw.makeBuilderForRound(rnd)
-	if err != nil {
-		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
+func (spw *Worker) getAllRounds() ([]basics.Round, error) {
+	// Some state proof databases might only contain a signature table. For that reason, when trying to create builders for possible state proof
+	// rounds we search the signature table and not the builder table
+	var rnds []basics.Round
+	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		var err error
+		rnds, err = getSignatureRounds(tx)
+		return err
+	})
+	return rnds, err
+}
+
+func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig) {
+	rnd := builderForRound.Round
+	pos, ok := builderForRound.AddrToPos[sig.signer]
+	if !ok {
+		spw.log.Warnf("insertSigToBuilder: cannot find %v in round %d", sig.signer, rnd)
 		return
 	}
-	spw.builders[rnd] = builderForRound
 
-	for _, sig := range sigs {
-		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
-		if !ok {
-			spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
-			continue
-		}
+	isPresent, err := builderForRound.Present(pos)
+	if err != nil {
+		spw.log.Warnf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+		return
+	}
+	if isPresent {
+		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+		return
+	}
 
-		isPresent, err := builderForRound.Present(pos)
-		if err != nil {
-			spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
-			continue
-		}
-		if isPresent {
-			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
-			continue
-		}
-
-		if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
-			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
-			continue
-		}
-		if err := builderForRound.Add(pos, sig.sig); err != nil {
-			spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
-			continue
-		}
+	if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
+		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
+		return
+	}
+	if err := builderForRound.Add(pos, sig.sig); err != nil {
+		spw.log.Warnf("insertSigToBuilder: error while adding sig. inner error: %w", err)
+		return
 	}
 }
 
@@ -201,7 +278,13 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 				sfa.Round, proto.StateProofInterval)
 		}
 
-		builderForRound, err = spw.makeBuilderForRound(sfa.Round)
+		if sfa.Round > latest {
+			// avoiding an inspection in DB in case we haven't reached the round.
+			// Avoiding disconnecting the peer, since it might've been sent to this node while it recovers.
+			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
+		}
+
+		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
@@ -211,7 +294,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		spw.log.Infof("spw.handleSig: starts gathering signatures for round %d", sfa.Round)
 	}
 
-	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
+	pos, ok := builderForRound.AddrToPos[sfa.SignerAddress]
 	if !ok {
 		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.SignerAddress, sfa.Round)
 	}
@@ -244,6 +327,16 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
+func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bool, error) {
+	var exists bool
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		res, err := isPendingSigExist(tx, round, account)
+		exists = res
+		return err
+	})
+	return exists, err
+}
+
 func (spw *Worker) builder(latest basics.Round) {
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
@@ -273,8 +366,7 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		}
 
-		spw.deleteOldSigs(&hdr)
-		spw.deleteOldBuilders(&hdr)
+		spw.deleteStaleStateProofBuildData(&hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -357,27 +449,63 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (spw *Worker) deleteOldSigs(currentHdr *bookkeeping.BlockHeader) {
-	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
+func (spw *Worker) deleteStaleStateProofBuildData(currentHdr *bookkeeping.BlockHeader) {
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
+		return
+	}
 
+	if spw.LastCleanupRound == stateProofNextRound {
+		return
+	}
+
+	spw.deleteStaleSigs(stateProofNextRound)
+	spw.deleteStaleKeys(stateProofNextRound)
+	spw.deleteStaleBuilders(stateProofNextRound)
+	spw.LastCleanupRound = stateProofNextRound
+}
+
+func (spw *Worker) deleteStaleSigs(retainRound basics.Round) {
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
+		return deletePendingSigsBeforeRound(tx, retainRound)
 	})
 	if err != nil {
-		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", oldestRoundToRemove, err)
+		spw.log.Warnf("deleteStaleSigs(%d): %v", retainRound, err)
 	}
 }
 
-func (spw *Worker) deleteOldBuilders(currentHdr *bookkeeping.BlockHeader) {
-	oldestRoundToRemove := GetOldestExpectedStateProof(currentHdr)
+func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
+	keys := spw.accts.StateProofKeys(retainRound)
+	for _, key := range keys {
+		firstRoundAtKeyLifeTime, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
+		if err != nil {
+			spw.log.Errorf("deleteStaleKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+			continue
+		}
+		err = spw.accts.DeleteStateProofKey(key.ParticipationID, basics.Round(firstRoundAtKeyLifeTime))
+		if err != nil {
+			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %s: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+		}
+	}
+	spw.accts.DeleteStateProofKeysForExpiredAccounts(retainRound)
+}
 
+func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
 	for rnd := range spw.builders {
-		if rnd < oldestRoundToRemove {
+		if rnd < retainRound {
 			delete(spw.builders, rnd)
 		}
+	}
+
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return deleteBuilders(tx, retainRound)
+	})
+	if err != nil {
+		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
 	}
 }
 
@@ -394,7 +522,7 @@ func (spw *Worker) tryBroadcast() {
 	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
 		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
-		acceptableWeight := verify.AcceptableStateProofWeight(&b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := verify.AcceptableStateProofWeight(&b.VotersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
 			continue
@@ -416,11 +544,11 @@ func (spw *Worker) tryBroadcast() {
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
-		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
+		stxn.Txn.LastValid = firstValid + basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofTxnFields.StateProof = *sp
-		stxn.Txn.StateProofTxnFields.Message = b.message
+		stxn.Txn.StateProofTxnFields.Message = b.Message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: broadcasting state proof txn for %d: %v", rnd, err)

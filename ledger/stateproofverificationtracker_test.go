@@ -153,26 +153,22 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 	a := require.New(t)
 
 	finalTargetStateProofRound := startRound + basics.Round((dataAmount-1)*stateProofInterval)
-	for targetStateProofRound := startRound; targetStateProofRound <= finalTargetStateProofRound; targetStateProofRound += basics.Round(stateProofInterval) {
 
+	for targetStateProofRound := startRound; targetStateProofRound <= finalTargetStateProofRound; targetStateProofRound += basics.Round(stateProofInterval) {
 		var err error
-		var expectedNotFoundErr error
 		switch trackingLocation {
 		case any:
 			_, err = spt.LookupVerificationData(targetStateProofRound)
-			expectedNotFoundErr = sql.ErrNoRows
 		case trackerDB:
-			_, err = spt.dbQueries.lookupData(targetStateProofRound)
-			expectedNotFoundErr = sql.ErrNoRows
+			_, err = spt.lookupDataInDB(targetStateProofRound)
 		case trackerMemory:
 			_, err = spt.lookupDataInTrackedMemory(targetStateProofRound)
-			expectedNotFoundErr = errStateProofVerificationDataNotFound
 		}
 
 		if dataPresenceExpected {
 			a.NoError(err)
 		} else {
-			a.ErrorIs(err, expectedNotFoundErr)
+			a.ErrorIs(err, errStateProofVerificationDataNotFound)
 		}
 	}
 }
@@ -426,11 +422,13 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	mockCommit(t, spt, ml, 0, basics.Round(defaultStateProofInterval*expectedDataInDbNum))
 
 	_, err := spt.LookupVerificationData(basics.Round(0))
-	a.ErrorIs(err, sql.ErrNoRows)
+	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "no rows")
 
 	lastStateProofRound := basics.Round(defaultStateProofInterval + dataToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationData(lastStateProofRound + basics.Round(defaultStateProofInterval))
-	a.ErrorIs(err, errStateProofVerificationDataNotYetGenerated)
+	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "greater than maximum")
 
 	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
@@ -447,4 +445,21 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "memory lookup failed")
+}
+
+func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ml, spt := initializeLedgerSpt(t)
+	defer ml.Close()
+	defer spt.close()
+
+	dataToAdd := uint64(1)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+
+	pastBlock := randomBlock(0)
+	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
 }

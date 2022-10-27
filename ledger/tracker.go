@@ -270,8 +270,8 @@ type deferredCommitContext struct {
 	updateStats bool
 
 	// state proof verification deletion information
-	stateProofVerificationLatestDeleteDataIndex int
-	stateProofVerificationDeleteData            verificationDeleteData
+	stateProofVerificationLatestDeleteDataIndex        int
+	stateProofVerificationEarliestTrackStateProofRound basics.Round
 
 	// state proof verification commit information
 	stateProofVerificationCommitData []verificationCommitData

@@ -469,6 +469,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	err = accessor.BuildMerkleTrie(context.Background(), nil)
+	require.NoError(t, err)
+
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
@@ -490,7 +493,7 @@ func TestStateProofVerificationDataWrite(t *testing.T) {
 	verificationData := ledgercore.StateProofVerificationData{
 		TargetStateProofRound: 120,
 		VotersCommitment:      nil,
-		ProvenWeight:          basics.MicroAlgos{Raw: 100},
+		OnlineTotalWeight:     basics.MicroAlgos{Raw: 100},
 	}
 
 	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{verificationData})
@@ -519,6 +522,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 
 	accts := ledgertesting.RandomAccounts(1, false)
 	// force acct to have overflowing number of resources
+	assetIndex := 1000
 	for addr, acct := range accts {
 		if acct.AssetParams == nil {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
@@ -526,7 +530,8 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		}
 		for i := uint64(0); i < 20; i++ {
 			ap := ledgertesting.RandomAssetParams()
-			acct.AssetParams[basics.AssetIndex(i+100)] = ap
+			acct.AssetParams[basics.AssetIndex(assetIndex)] = ap
+			assetIndex++
 		}
 	}
 
@@ -761,6 +766,9 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		err = accessor.ProgressStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
+
+	err = accessor.BuildMerkleTrie(context.Background(), nil)
+	require.NoError(t, err)
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)

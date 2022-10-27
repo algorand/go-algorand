@@ -168,7 +168,7 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
-const createStateProofVerificationTable = `
+const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
 	targetstateproofround integer primary key NOT NULL,
 	verificationdata blob NOT NULL)`
@@ -336,7 +336,6 @@ type compactOnlineAccountDeltas struct {
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
-// TODO: Add states of my own?
 const (
 	// catchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
 	catchpointStateLastCatchpoint = catchpointState("lastCatchpoint")
@@ -382,6 +381,8 @@ type normalizedAccountBalance struct {
 	normalizedBalance uint64
 	// encodedResources provides the encoded form of the resources
 	encodedResources map[basics.CreatableIndex][]byte
+	// partial balance indicates that the original account balance was split into multiple parts in catchpoint creation time
+	partialBalance bool
 }
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
@@ -438,12 +439,22 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].accountData.MicroAlgos,
 			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
-		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		curHashIdx := 0
+		if balance.ExpectingMoreEntries {
+			// There is a single chunk in the catchpoint file with ExpectingMoreEntries
+			// set to false for this account. There may be multiple chunks with
+			// ExpectingMoreEntries set to true. In this case, we do not have to add the
+			// account's own hash to accountHashes.
+			normalizedAccountBalances[i].accountHashes = make([][]byte, len(balance.Resources))
+			normalizedAccountBalances[i].partialBalance = true
+		} else {
+			normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
+			normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+			curHashIdx++
+		}
 		if len(balance.Resources) > 0 {
 			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
 			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
-			resIdx := 0
 			for cidx, res := range balance.Resources {
 				var resData resourcesData
 				err = protocol.Decode(res, &resData)
@@ -458,10 +469,10 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				} else {
 					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
 				}
-				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+				normalizedAccountBalances[i].accountHashes[curHashIdx] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
-				resIdx++
+				curHashIdx++
 			}
 		}
 	}
@@ -1405,8 +1416,8 @@ func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Execu
 	return err
 }
 
-func accountsCreateStateProofVerificationTable(ctx context.Context, e db.Executable) error {
-	_, err := e.ExecContext(ctx, createStateProofVerificationTable)
+func createStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTableQuery)
 	return err
 }
 
@@ -4805,7 +4816,7 @@ func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
 // before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
 // happened before the other.
 func (pac *persistedOnlineAccountData) before(other *persistedOnlineAccountData) bool {
-	return pac.round < other.round
+	return pac.updRound < other.updRound
 }
 
 // txTailRoundLease is used as part of txTailRound for storing
@@ -5103,9 +5114,9 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	return nil
 }
 
-func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, stateProofNextRound basics.Round) error {
+func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
 	f := func() error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", stateProofNextRound)
+		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
 		return err
 	}
 	return db.Retry(f)

@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
@@ -117,8 +116,6 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-	ids := make([]account.ParticipationID, 0, len(keys))
-	usedSigners := make([]*merklesignature.Signer, 0, len(keys))
 
 	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
 	if err != nil {
@@ -137,6 +134,13 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
+		exists, err := spw.sigExistsInDB(hdr.Round, key.Account)
+		if err != nil {
+			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", hdr.Round, err)
+		} else if exists {
+			continue
+		}
+
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
 			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
@@ -148,30 +152,15 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			Round:         hdr.Round,
 			Sig:           sig,
 		})
-		ids = append(ids, key.ParticipationID)
-		usedSigners = append(usedSigners, key.StateProofSecrets)
 	}
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
-	for i, sfa := range sigs {
+	for _, sfa := range sigs {
 		if _, err := spw.handleSig(sfa, nil); err != nil {
 			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", hdr.Round, err)
 			continue
 		}
 
 		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", hdr.Round, sfa.SignerAddress)
-		firstRoundInKeyLifetime, err := usedSigners[i].FirstRoundInKeyLifetime() // Calculate first round of the key in order to delete all previous keys (and keep the current one for now)
-		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): Signer.FirstRoundInKeyLifetime: %v", hdr.Round, err)
-			continue
-		}
-		if firstRoundInKeyLifetime == 0 {
-			continue // No previous keys to delete (also underflows when subtracting 1)
-		}
-
-		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
-		if err := spw.accts.DeleteStateProofKey(ids[i], basics.Round(firstRoundInKeyLifetime-1)); err != nil { // Subtract 1 to delete all keys up to this one
-			spw.log.Warnf("spw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
-		}
 	}
 }

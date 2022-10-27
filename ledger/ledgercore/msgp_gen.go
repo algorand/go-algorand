@@ -952,7 +952,7 @@ func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).ProvenWeight.MsgIsZero() {
+	if (*z).OnlineTotalWeight.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -970,7 +970,7 @@ func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "pw"
 			o = append(o, 0xa2, 0x70, 0x77)
-			o = (*z).ProvenWeight.MarshalMsg(o)
+			o = (*z).OnlineTotalWeight.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "spround"
@@ -1022,9 +1022,9 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ProvenWeight.UnmarshalMsg(bts)
+			bts, err = (*z).OnlineTotalWeight.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProvenWeight")
+				err = msgp.WrapError(err, "struct-from-array", "OnlineTotalWeight")
 				return
 			}
 		}
@@ -1064,9 +1064,9 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 					return
 				}
 			case "pw":
-				bts, err = (*z).ProvenWeight.UnmarshalMsg(bts)
+				bts, err = (*z).OnlineTotalWeight.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProvenWeight")
+					err = msgp.WrapError(err, "OnlineTotalWeight")
 					return
 				}
 			default:
@@ -1089,11 +1089,11 @@ func (_ *StateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StateProofVerificationData) Msgsize() (s int) {
-	s = 1 + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).ProvenWeight.Msgsize()
+	s = 1 + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).OnlineTotalWeight.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *StateProofVerificationData) MsgIsZero() bool {
-	return ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).ProvenWeight.MsgIsZero())
+	return ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero())
 }

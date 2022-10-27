@@ -18,7 +18,6 @@ package stateproof
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -27,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -35,11 +33,13 @@ import (
 )
 
 type builder struct {
-	*stateproof.Builder
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	voters    *ledgercore.VotersForRound
-	votersHdr bookkeeping.BlockHeader
-	message   stateproofmsg.Message
+	*stateproof.Builder `codec:"bldr"`
+
+	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.VotersAllocBound"`
+	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
+	Message   stateproofmsg.Message   `codec:"msg"`
 }
 
 // Worker builds state proofs, by broadcasting
@@ -65,8 +65,9 @@ type Worker struct {
 	shutdown context.CancelFunc
 	wg       sync.WaitGroup
 
-	signed   basics.Round
-	signedCh chan struct{}
+	signed           basics.Round
+	signedCh         chan struct{}
+	LastCleanupRound basics.Round
 }
 
 // NewWorker constructs a new Worker, as used by the node.
@@ -89,9 +90,7 @@ func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initDB(tx)
-	})
+	err := makeStateProofDB(spw.db)
 	if err != nil {
 		spw.log.Warnf("spw.Start(): initDB: %v", err)
 		return
@@ -119,3 +118,10 @@ func (spw *Worker) Shutdown() {
 	spw.wg.Wait()
 	spw.db.Close()
 }
+
+// SortAddress implements sorting by Address keys for
+// canonical encoding of maps in msgpack format.
+type SortAddress = basics.SortAddress
+
+// Address is required for the msgpack sort binding, since it looks for Address and not basics.Address
+type Address = basics.Address
