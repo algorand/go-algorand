@@ -534,7 +534,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas)
+	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.oldBase, dcc.newBase)
 	if err != nil {
 		return err
 	}
@@ -925,7 +925,7 @@ func (ct *catchpointTracker) close() {
 }
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
-func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas) (err error) {
+func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas, oldBase basics.Round, newBase basics.Round) (err error) {
 	if !ct.catchpointEnabled() {
 		return nil
 	}
@@ -1020,6 +1020,19 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		_, err = ct.balancesTrie.Commit()
 	}
 
+	if ct.log.GetTelemetryEnabled() {
+		root, rootErr := ct.balancesTrie.RootHash()
+		if rootErr != nil {
+			ct.log.Infof("accountsUpdateBalances: error retrieving balances trie root: %v", rootErr)
+			return
+		}
+		ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointRootUpdateEvent, telemetryspec.CatchpointRootUpdateEventDetails{
+			Root:    root.String(),
+			OldBase: uint64(oldBase),
+			NewBase: uint64(newBase),
+		})
+
+	}
 	return
 }
 
