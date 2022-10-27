@@ -177,6 +177,11 @@ type wsPeer struct {
 	// peer, or zero if no message is being written.
 	intermittentOutgoingMessageEnqueueTime int64
 
+	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
+	// to filter that it had already sent before.
+	// this needs to be 64-bit aligned for use with atomic.AddInt64 on 32-bit platforms.
+	duplicateFilterCount int64
+
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
 
@@ -203,9 +208,6 @@ type wsPeer struct {
 
 	incomingMsgFilter *messageFilter
 	outgoingMsgFilter *messageFilter
-	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
-	// to filter that it had already sent before.
-	duplicateFilterCount int64
 
 	processed chan struct{}
 
