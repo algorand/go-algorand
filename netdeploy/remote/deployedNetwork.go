@@ -633,6 +633,9 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 func createSignedTx(src basics.Address, round basics.Round, params config.ConsensusParams, bootstrappedNet *netState) ([]transactions.SignedTxn, error) {
 
 	if bootstrappedNet.nApplications == 0 && bootstrappedNet.nAccounts == 0 && bootstrappedNet.nAssets == 0 {
+		if !bootstrappedNet.accountsCreated {
+			bootstrappedNet.log.Infof("done creating accounts, have %d", len(bootstrappedNet.accounts))
+		}
 		bootstrappedNet.accountsCreated = true
 	}
 	var sgtxns []transactions.SignedTxn
@@ -646,7 +649,6 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 	}
 
 	if bootstrappedNet.txnState == protocol.PaymentTx {
-		var accounts []basics.Address
 		bootstrappedNet.appsPerAcct = 0
 		bootstrappedNet.assetPerAcct = 0
 		n := bootstrappedNet.nAccounts
@@ -658,7 +660,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			for i := uint64(0); i < n; i++ {
 				secretDst := keypair()
 				dst := basics.Address(secretDst.SignatureVerifier)
-				accounts = append(accounts, dst)
+				bootstrappedNet.accounts = append(bootstrappedNet.accounts, dst)
 
 				header.Sender = src
 
@@ -674,7 +676,6 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 				sgtxns = append(sgtxns, t)
 			}
 			bootstrappedNet.nAccounts -= uint64(len(sgtxns))
-			bootstrappedNet.accounts = accounts
 			if bootstrappedNet.nAssets > 0 {
 				bootstrappedNet.log.Info("switch to acfg mode")
 				bootstrappedNet.txnState = protocol.AssetConfigTx
