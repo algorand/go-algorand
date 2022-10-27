@@ -5,6 +5,7 @@ package generated
 
 import (
 	"encoding/json"
+	"time"
 )
 
 const (
@@ -13,9 +14,40 @@ const (
 
 // Defines values for AccountSigType.
 const (
-	Lsig AccountSigType = "lsig"
-	Msig AccountSigType = "msig"
-	Sig  AccountSigType = "sig"
+	AccountSigTypeLsig AccountSigType = "lsig"
+	AccountSigTypeMsig AccountSigType = "msig"
+	AccountSigTypeSig  AccountSigType = "sig"
+)
+
+// Defines values for AddressRole.
+const (
+	FreezeTarget AddressRole = "freeze-target"
+	Receiver     AddressRole = "receiver"
+	Sender       AddressRole = "sender"
+)
+
+// Defines values for Format.
+const (
+	Json    Format = "json"
+	Msgpack Format = "msgpack"
+)
+
+// Defines values for SigType.
+const (
+	SigTypeLsig SigType = "lsig"
+	SigTypeMsig SigType = "msig"
+	SigTypeSig  SigType = "sig"
+)
+
+// Defines values for TxType.
+const (
+	Acfg   TxType = "acfg"
+	Afrz   TxType = "afrz"
+	Appl   TxType = "appl"
+	Axfer  TxType = "axfer"
+	Keyreg TxType = "keyreg"
+	Pay    TxType = "pay"
+	Stpf   TxType = "stpf"
 )
 
 // Account information at a given round.
@@ -277,6 +309,16 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// BuildVersion defines model for BuildVersion.
+type BuildVersion struct {
+	Branch      string `json:"branch"`
+	BuildNumber uint64 `json:"build_number"`
+	Channel     string `json:"channel"`
+	CommitHash  string `json:"commit_hash"`
+	Major       uint64 `json:"major"`
+	Minor       uint64 `json:"minor"`
+}
+
 // Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	Accounts []Account     `json:"accounts"`
@@ -384,6 +426,33 @@ type LightBlockHeaderProof struct {
 	Treedepth uint64 `json:"treedepth"`
 }
 
+// Represents a participation key used by the node.
+type ParticipationKey struct {
+	// Address the key was generated for.
+	Address string `json:"address"`
+
+	// When registered, this is the first round it may be used.
+	EffectiveFirstValid *uint64 `json:"effective-first-valid,omitempty"`
+
+	// When registered, this is the last round it may be used.
+	EffectiveLastValid *uint64 `json:"effective-last-valid,omitempty"`
+
+	// The key's ParticipationID.
+	Id string `json:"id"`
+
+	// AccountParticipation describes the parameters used by this account in consensus protocol.
+	Key AccountParticipation `json:"key"`
+
+	// Round when this key was last used to propose a block.
+	LastBlockProposal *uint64 `json:"last-block-proposal,omitempty"`
+
+	// Round when this key was last used to generate a state proof.
+	LastStateProof *uint64 `json:"last-state-proof,omitempty"`
+
+	// Round when this key was last used to vote.
+	LastVote *uint64 `json:"last-vote,omitempty"`
+}
+
 // Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 type PendingTransactionResponse struct {
 	// The application index if the transaction was found and it created an application.
@@ -481,6 +550,321 @@ type TealValue struct {
 	// \[ui\] uint value.
 	Uint uint64 `json:"uint"`
 }
+
+// algod version information.
+type Version struct {
+	Build          BuildVersion `json:"build"`
+	GenesisHashB64 []byte       `json:"genesis_hash_b64"`
+	GenesisId      string       `json:"genesis_id"`
+	Versions       []string     `json:"versions"`
+}
+
+// AccountId defines model for account-id.
+type AccountId = string
+
+// Address defines model for address.
+type Address = string
+
+// AddressRole defines model for address-role.
+type AddressRole string
+
+// AfterTime defines model for after-time.
+type AfterTime = time.Time
+
+// AssetId defines model for asset-id.
+type AssetId uint64
+
+// BeforeTime defines model for before-time.
+type BeforeTime = time.Time
+
+// Catchpoint defines model for catchpoint.
+type Catchpoint = string
+
+// CurrencyGreaterThan defines model for currency-greater-than.
+type CurrencyGreaterThan uint64
+
+// CurrencyLessThan defines model for currency-less-than.
+type CurrencyLessThan uint64
+
+// ExcludeCloseTo defines model for exclude-close-to.
+type ExcludeCloseTo = bool
+
+// Format defines model for format.
+type Format string
+
+// Limit defines model for limit.
+type Limit uint64
+
+// Max defines model for max.
+type Max uint64
+
+// MaxRound defines model for max-round.
+type MaxRound uint64
+
+// MinRound defines model for min-round.
+type MinRound uint64
+
+// Next defines model for next.
+type Next = string
+
+// NotePrefix defines model for note-prefix.
+type NotePrefix = string
+
+// Round defines model for round.
+type Round uint64
+
+// RoundNumber defines model for round-number.
+type RoundNumber uint64
+
+// SigType defines model for sig-type.
+type SigType string
+
+// TxId defines model for tx-id.
+type TxId = string
+
+// TxType defines model for tx-type.
+type TxType string
+
+// AccountApplicationResponse defines model for AccountApplicationResponse.
+type AccountApplicationResponse struct {
+	// Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// Stores the global information associated with an application.
+	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
+// AccountAssetResponse defines model for AccountAssetResponse.
+type AccountAssetResponse struct {
+	// Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
+// Account information at a given round.
+//
+// Definition:
+// data/basics/userBalance.go : AccountData
+type AccountResponse = Account
+
+// Application index and its parameters
+type ApplicationResponse = Application
+
+// Specifies both the unique identifier and the parameters for an asset
+type AssetResponse = Asset
+
+// BlockHashResponse defines model for BlockHashResponse.
+type BlockHashResponse struct {
+	// Block header hash.
+	BlockHash string `json:"blockHash"`
+}
+
+// BlockResponse defines model for BlockResponse.
+type BlockResponse struct {
+	// Block header data.
+	Block map[string]interface{} `json:"block"`
+
+	// Optional certificate object. This is only included when the format is set to message pack.
+	Cert *map[string]interface{} `json:"cert,omitempty"`
+}
+
+// An catchpoint abort response.
+type CatchpointAbortResponse struct {
+	// Catchup abort response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// An catchpoint start response.
+type CatchpointStartResponse struct {
+	// Catchup start response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// CompileResponse defines model for CompileResponse.
+type CompileResponse struct {
+	// base32 SHA512_256 of program bytes (Address style)
+	Hash string `json:"hash"`
+
+	// base64 encoded program bytes
+	Result string `json:"result"`
+
+	// JSON of the source map
+	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
+}
+
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
+	// disassembled Teal code
+	Result string `json:"result"`
+}
+
+// DryrunResponse defines model for DryrunResponse.
+type DryrunResponse struct {
+	Error string `json:"error"`
+
+	// Protocol version is the protocol version Dryrun was operated under.
+	ProtocolVersion string            `json:"protocol-version"`
+	Txns            []DryrunTxnResult `json:"txns"`
+}
+
+// Proof of membership and position of a light block header.
+type LightBlockHeaderProofResponse = LightBlockHeaderProof
+
+// NodeStatus contains the information about a node status
+type NodeStatusResponse struct {
+	// The current catchpoint that is being caught up to
+	Catchpoint *string `json:"catchpoint,omitempty"`
+
+	// The number of blocks that have already been obtained by the node as part of the catchup
+	CatchpointAcquiredBlocks *uint64 `json:"catchpoint-acquired-blocks,omitempty"`
+
+	// The number of accounts from the current catchpoint that have been processed so far as part of the catchup
+	CatchpointProcessedAccounts *uint64 `json:"catchpoint-processed-accounts,omitempty"`
+
+	// The total number of accounts included in the current catchpoint
+	CatchpointTotalAccounts *uint64 `json:"catchpoint-total-accounts,omitempty"`
+
+	// The total number of blocks that are required to complete the current catchpoint catchup
+	CatchpointTotalBlocks *uint64 `json:"catchpoint-total-blocks,omitempty"`
+
+	// The number of accounts from the current catchpoint that have been verified so far as part of the catchup
+	CatchpointVerifiedAccounts *uint64 `json:"catchpoint-verified-accounts,omitempty"`
+
+	// CatchupTime in nanoseconds
+	CatchupTime uint64 `json:"catchup-time"`
+
+	// The last catchpoint seen by the node
+	LastCatchpoint *string `json:"last-catchpoint,omitempty"`
+
+	// LastRound indicates the last round seen
+	LastRound uint64 `json:"last-round"`
+
+	// LastVersion indicates the last consensus version supported
+	LastVersion string `json:"last-version"`
+
+	// NextVersion of consensus protocol to use
+	NextVersion string `json:"next-version"`
+
+	// NextVersionRound is the round at which the next consensus version will apply
+	NextVersionRound uint64 `json:"next-version-round"`
+
+	// NextVersionSupported indicates whether the next consensus version is supported by this node
+	NextVersionSupported bool `json:"next-version-supported"`
+
+	// StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress
+	StoppedAtUnsupportedRound bool `json:"stopped-at-unsupported-round"`
+
+	// TimeSinceLastRound in nanoseconds
+	TimeSinceLastRound uint64 `json:"time-since-last-round"`
+}
+
+// Represents a participation key used by the node.
+type ParticipationKeyResponse = ParticipationKey
+
+// ParticipationKeysResponse defines model for ParticipationKeysResponse.
+type ParticipationKeysResponse = []ParticipationKey
+
+// PendingTransactions is an array of signed transactions exactly as they were submitted.
+type PendingTransactionsResponse struct {
+	// An array of signed transaction objects.
+	TopTransactions []map[string]interface{} `json:"top-transactions"`
+
+	// Total number of transactions in the pool.
+	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostParticipationResponse defines model for PostParticipationResponse.
+type PostParticipationResponse struct {
+	// encoding of the participation ID.
+	PartId string `json:"partId"`
+}
+
+// PostTransactionsResponse defines model for PostTransactionsResponse.
+type PostTransactionsResponse struct {
+	// encoding of the transaction hash.
+	TxId string `json:"txId"`
+}
+
+// Represents a state proof and its corresponding message
+type StateProofResponse = StateProof
+
+// Supply represents the current supply of MicroAlgos in the system
+type SupplyResponse struct {
+	// Round
+	CurrentRound uint64 `json:"current_round"`
+
+	// OnlineMoney
+	OnlineMoney uint64 `json:"online-money"`
+
+	// TotalMoney
+	TotalMoney uint64 `json:"total-money"`
+}
+
+// TransactionParams contains the parameters that help a client construct
+// a new transaction.
+type TransactionParametersResponse struct {
+	// ConsensusVersion indicates the consensus protocol version
+	// as of LastRound.
+	ConsensusVersion string `json:"consensus-version"`
+
+	// Fee is the suggested transaction fee
+	// Fee is in units of micro-Algos per byte.
+	// Fee may fall to zero but transactions must still have a fee of
+	// at least MinTxnFee for the current network protocol.
+	Fee uint64 `json:"fee"`
+
+	// GenesisHash is the hash of the genesis block.
+	GenesisHash []byte `json:"genesis-hash"`
+
+	// GenesisID is an ID listed in the genesis block.
+	GenesisId string `json:"genesis-id"`
+
+	// LastRound indicates the last round seen
+	LastRound uint64 `json:"last-round"`
+
+	// The minimum transaction fee (not per byte) required for the
+	// txn to validate for the current network protocol.
+	MinFee uint64 `json:"min-fee"`
+}
+
+// TransactionProofResponse defines model for TransactionProofResponse.
+type TransactionProofResponse struct {
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype TransactionProofResponseHashtype `json:"hashtype"`
+
+	// Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
+}
+
+// algod version information.
+type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
