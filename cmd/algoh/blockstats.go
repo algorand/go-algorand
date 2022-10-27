@@ -19,7 +19,6 @@ package main
 import (
 	"time"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -47,9 +46,9 @@ func (stats *blockstats) onBlock(block rpcs.EncodedBlockCert) {
 	}
 
 	// Grab unique users.
-	users := make(map[basics.Address]bool)
+	users := make(map[string]bool)
 	for _, tx := range block.Block.Payset {
-		users[tx.Txn.Sender] = true
+		users[tx.Txn.Sender.String()] = true
 	}
 
 	duration := now.Sub(stats.lastBlockTime)
@@ -60,7 +59,7 @@ func (stats *blockstats) onBlock(block rpcs.EncodedBlockCert) {
 
 	stats.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockStatsEvent, telemetryspec.BlockStatsEventDetails{
 		Hash:                block.Block.Hash().String(),
-		OriginalProposer:    block.Certificate.Proposal.OriginalProposer.GetUserAddress(), // v2 API no longer returns the Block Proposer; we need to decode a raw block and retrieve proposer from block certificate.
+		OriginalProposer:    block.Certificate.Proposal.OriginalProposer.String(), // v2 API no longer returns the Block Proposer; we need to decode a raw block and retrieve proposer from block certificate.
 		Round:               uint64(blockHeader.Round),
 		Transactions:        uint64(len(block.Block.Payset)),
 		ActiveUsers:         uint64(len(users)),
