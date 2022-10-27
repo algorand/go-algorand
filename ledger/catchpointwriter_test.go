@@ -49,6 +49,11 @@ func makeString(len int) string {
 	return s
 }
 
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
 func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	er := encodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
@@ -155,6 +160,63 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	return er
 }
 
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
+}
+
+func readCatchpointDataFile(t *testing.T, catchpointDataPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointDataPath)
+	require.NoError(t, err)
+
+	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+
+	tarReader := tar.NewReader(compressorReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointPath)
+	require.NoError(t, err)
+
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	defer gzipReader.Close()
+
+	tarReader := tar.NewReader(gzipReader)
+	return readCatchpointContent(t, tarReader)
+}
+
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -232,45 +294,14 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
-	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(fileName)
-	require.NoError(t, err)
-	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	defer compressorReader.Close()
-	tarReader := tar.NewReader(compressorReader)
-
-	header, err := tarReader.Next()
-	require.NoError(t, err)
-
-	balancesBlockBytes := make([]byte, header.Size)
-	readComplete := int64(0)
-
-	for readComplete < header.Size {
-		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-		readComplete += int64(bytesRead)
-		if err != nil {
-			if err == io.EOF {
-				if readComplete == header.Size {
-					break
-				}
-				require.NoError(t, err)
-			}
-			break
-		}
-	}
-
-	require.Equal(t, "balances.1.1.msgpack", header.Name)
+	catchpointContent := readCatchpointDataFile(t, fileName)
+	require.Equal(t, "balances.1.1.msgpack", catchpointContent[0].headerName)
 
 	var balances catchpointFileBalancesChunkV6
-	err = protocol.Decode(balancesBlockBytes, &balances)
+	err = protocol.Decode(catchpointContent[0].data, &balances)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
-
-	_, err = tarReader.Next()
-	require.Equal(t, io.EOF, err)
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
@@ -357,40 +388,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 	err = accessor.ResetStagingBalances(context.Background(), true)
 	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(catchpointFilePath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
 	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+	catchpointContent := readCatchpointFile(t, catchpointFilePath)
+	for _, catchpointData := range catchpointContent {
+		err = accessor.ProgressStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
 
@@ -662,40 +663,10 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	err = accessor.ResetStagingBalances(context.Background(), true)
 	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(catchpointFilePath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
 	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+	catchpointContent := readCatchpointFile(t, catchpointFilePath)
+	for _, catchpointData := range catchpointContent {
+		err = accessor.ProgressStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
 
