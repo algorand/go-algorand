@@ -395,6 +395,9 @@ type ConsensusParams struct {
 	// their account balances.
 	StateProofExcludeTotalWeightWithRewards bool
 
+	// StateProofUseTrackerVerification specifies whether the node will use the state proof verification tracker.
+	StateProofUseTrackerVerification bool
+
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
@@ -1214,6 +1217,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.StateProofUseTrackerVerification = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
