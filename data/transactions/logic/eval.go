@@ -709,7 +709,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 				errstr += cx.Trace.String()
 			}
 			err = PanicError{x, errstr}
-			cx.EvalParams.log().Errorf("recovered panic in Eval: %w", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %v", err)
 		}
 	}()
 
@@ -1124,6 +1124,15 @@ func (cx *EvalContext) checkStep() (int, error) {
 		}
 	}
 	return opcost, nil
+}
+
+func (cx *EvalContext) ensureStackCap(targetCap int) {
+	if cap(cx.stack) < targetCap {
+		// Let's grow all at once, plus a little slack.
+		newStack := make([]stackValue, len(cx.stack), targetCap+4)
+		copy(newStack, cx.stack)
+		cx.stack = newStack
+	}
 }
 
 func opErr(cx *EvalContext) error {
@@ -1855,7 +1864,7 @@ func opBytesZero(cx *EvalContext) error {
 
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc+1)
+	cx.intc, cx.nextpc, err = parseIntImmArgs(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1895,9 +1904,24 @@ func opPushInt(cx *EvalContext) error {
 	return nil
 }
 
+func opPushInts(cx *EvalContext) error {
+	intc, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return err
+	}
+	finalLen := len(cx.stack) + len(intc)
+	cx.ensureStackCap(finalLen)
+	for _, cint := range intc {
+		sv := stackValue{Uint: cint}
+		cx.stack = append(cx.stack, sv)
+	}
+	cx.nextpc = nextpc
+	return nil
+}
+
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc+1)
+	cx.bytec, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1939,6 +1963,21 @@ func opPushBytes(cx *EvalContext) error {
 	sv := stackValue{Bytes: cx.program[pos:end]}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = int(end)
+	return nil
+}
+
+func opPushBytess(cx *EvalContext) error {
+	cbytess, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return err
+	}
+	finalLen := len(cx.stack) + len(cbytess)
+	cx.ensureStackCap(finalLen)
+	for _, cbytes := range cbytess {
+		sv := stackValue{Bytes: cbytes}
+		cx.stack = append(cx.stack, sv)
+	}
+	cx.nextpc = nextpc
 	return nil
 }
 
@@ -2112,6 +2151,44 @@ func opSwitch(cx *EvalContext) error {
 
 	cx.stack = cx.stack[:last]
 	target, err := switchTarget(cx, branchIdx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opMatch(cx *EvalContext) error {
+	n := int(cx.program[cx.pc+1])
+	// stack contains the n sized match list and the single match value
+	if n+1 > len(cx.stack) {
+		return fmt.Errorf("match expects %d stack args while stack only contains %d", n+1, len(cx.stack))
+	}
+
+	last := len(cx.stack) - 1
+	matchVal := cx.stack[last]
+	cx.stack = cx.stack[:last]
+
+	argBase := len(cx.stack) - n
+	matchList := cx.stack[argBase:]
+	cx.stack = cx.stack[:argBase]
+
+	matchedIdx := n
+	for i, stackArg := range matchList {
+		if stackArg.argType() != matchVal.argType() {
+			continue
+		}
+
+		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+			matchedIdx = i
+			break
+		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+			matchedIdx = i
+			break
+		}
+	}
+
+	target, err := switchTarget(cx, uint64(matchedIdx))
 	if err != nil {
 		return err
 	}

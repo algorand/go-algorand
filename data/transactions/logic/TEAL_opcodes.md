@@ -242,7 +242,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intcblock uint ...
 
-- Opcode: 0x20 {varuint length} [{varuint value}, ...]
+- Opcode: 0x20 {varuint count} [{varuint value}, ...]
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
 
@@ -280,7 +280,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint length} [({varuint value length} bytes), ...]
+- Opcode: 0x26 {varuint count} [({varuint value length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -1048,6 +1048,24 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## pushbytess bytes ...
+
+- Opcode: 0x82 {varuint count} [({varuint value length} bytes), ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequences of immediate byte arrays to stack (first byte array being deepest)
+- Availability: v8
+
+pushbytess args are not added to the bytecblock during assembly processes
+
+## pushints uint ...
+
+- Opcode: 0x83 {varuint count} [{varuint value}, ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequence of immediate uints to stack in the order they appear (first uint being deepest)
+- Availability: v8
+
+pushints args are not added to the intcblock during assembly processes
+
 ## ed25519verify_bare
 
 - Opcode: 0x84
@@ -1103,6 +1121,15 @@ Fails unless the last instruction executed was a `callsub`.
 - Stack: ..., A: uint64 &rarr; ...
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
 - Availability: v8
+
+## match target ...
+
+- Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., [A1, A2, ..., AN], B &rarr; ...
+- given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
+- Availability: v8
+
+`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
 
 ## shl
 
