@@ -62,7 +62,8 @@ func TestProposalTableMsgpEncoding(t *testing.T) {
 	msgMsgp.Input.MessageHandle = nil
 	msgReflect.Input.MessageHandle = nil
 	require.Equal(t, msgMsgp, msgReflect)
-	// Check that the only other field that's set on the message is still the same
+	// Check that the other fields we have manually set are still the same
 	require.Equal(t, msgMsgp.Input.Tag, protocol.ProposalPayloadTag)
+	require.Equal(t, msgMsgp.TaskIndex, uint64(63))
 
 }
