@@ -45,6 +45,11 @@ type verificationCommitData struct {
 	verificationData ledgercore.StateProofVerificationData
 }
 
+type verificationCommitUpdateData struct {
+	confirmedRound basics.Round
+	version        protocol.ConsensusVersion
+}
+
 // stateProofVerificationTracker is in charge of tracking data required to verify state proofs until such a time
 // as the data is no longer needed.
 type stateProofVerificationTracker struct {
@@ -60,6 +65,9 @@ type stateProofVerificationTracker struct {
 	// trackedDeleteData represents the data required to delete committed state proof verification data from the
 	// database.
 	trackedDeleteData []verificationDeleteData
+
+	// trackedUpdateData represents additional data that needs to be added to the commitment verification data.
+	trackedUpdateData []verificationCommitUpdateData
 
 	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
 	stateProofVerificationMu deadlock.RWMutex
@@ -84,6 +92,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	const initialDataArraySize = 10
 	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
 	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
+	spt.trackedUpdateData = make([]verificationCommitUpdateData, 0, initialDataArraySize)
 
 	return nil
 }
@@ -97,6 +106,7 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
+		spt.updatePrevCommitData(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
@@ -120,6 +130,10 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	dcc.stateProofVerificationCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
 	copy(dcc.stateProofVerificationCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
 
+	lastDataToUpdateIndex := spt.committedRoundToLatestUpdateDataIndex(dcc.newBase)
+	dcc.stateProofVerificationUpdateCommitData = make([]verificationCommitUpdateData, lastDataToUpdateIndex+1)
+	copy(dcc.stateProofVerificationUpdateCommitData, spt.trackedUpdateData[:lastDataToUpdateIndex+1])
+
 	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
 	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
 		dcc.stateProofVerificationEarliestTrackStateProofRound = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex].stateProofNextRound
@@ -130,6 +144,11 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
 	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
+	if err != nil {
+		return err
+	}
+
+	err = updateStateProofVerificationData(ctx, tx, dcc.stateProofVerificationUpdateCommitData)
 	if err != nil {
 		return err
 	}
@@ -147,6 +166,7 @@ func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *def
 	defer spt.stateProofVerificationMu.Unlock()
 
 	spt.trackedCommitData = spt.trackedCommitData[len(dcc.stateProofVerificationCommitData):]
+	spt.trackedUpdateData = spt.trackedUpdateData[len(dcc.stateProofVerificationUpdateCommitData):]
 	spt.trackedDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex+1:]
 }
 
@@ -204,6 +224,20 @@ func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedR
 	return verificationData, err
 }
 
+func (spt *stateProofVerificationTracker) committedRoundToLatestUpdateDataIndex(committedRound basics.Round) int {
+	latestCommittedUpdateIndex := -1
+
+	for index, data := range spt.trackedUpdateData {
+		if data.confirmedRound <= committedRound {
+			latestCommittedUpdateIndex = index
+		} else {
+			break
+		}
+	}
+
+	return latestCommittedUpdateIndex
+}
+
 func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
 	latestCommittedDataIndex := -1
 
@@ -230,6 +264,26 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	}
 
 	return latestCommittedDataIndex
+}
+
+func (spt *stateProofVerificationTracker) updatePrevCommitData(blk *bookkeeping.Block) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
+	if len(spt.trackedUpdateData) > 0 {
+		lastUpdateRound := spt.trackedUpdateData[len(spt.trackedUpdateData)-1].confirmedRound
+		if blk.Round() <= lastUpdateRound {
+			spt.log.Panicf("stateProofVerificationTracker: attempted to update commit data related to earlier than latest"+
+				"update, round: %d, last update round: %d", blk.Round(), lastUpdateRound)
+		}
+	}
+
+	update := verificationCommitUpdateData{
+		confirmedRound: blk.Round(),
+		version:        blk.CurrentProtocol,
+	}
+
+	spt.trackedUpdateData = append(spt.trackedUpdateData, update)
 }
 
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {

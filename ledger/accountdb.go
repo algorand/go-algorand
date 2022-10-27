@@ -171,7 +171,8 @@ const createUnfinishedCatchpointsTable = `
 const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
 	targetstateproofround integer primary key NOT NULL,
-	verificationdata blob NOT NULL)`
+	verificationdata blob NOT NULL,
+	version TEXT)`
 
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
@@ -5053,13 +5054,39 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
+func updateStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitUpdateData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	updateStmt, err := tx.PrepareContext(ctx, "update stateproofverification SET version = ? WHERE targetstateproofround = ?")
+	if err != nil {
+		return err
+	}
+
+	defer updateStmt.Close()
+
+	for _, commitUpdate := range data {
+		f := func() error {
+			_, err = updateStmt.ExecContext(ctx, commitUpdate.version, commitUpdate.confirmedRound)
+			return err
+		}
+
+		err = db.Retry(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
 	if len(data) == 0 {
 		return nil
 	}
 
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
-
 	if err != nil {
 		return err
 	}
@@ -5094,7 +5121,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	var err error
 	qs := &stateProofVerificationDbQueries{}
 
-	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata, version FROM stateproofverification WHERE targetstateproofround=?")
 	if err != nil {
 		return nil, err
 	}
@@ -5107,7 +5134,8 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 	queryFunc := func() error {
 		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
 		var buf []byte
-		err := row.Scan(&buf)
+		var version string
+		err := row.Scan(&buf, &version)
 		if err != nil {
 			return err
 		}
@@ -5115,6 +5143,7 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 		if err != nil {
 			return err
 		}
+		data.Version = protocol.ConsensusVersion(version)
 		return nil
 	}
 

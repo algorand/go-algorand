@@ -275,6 +275,9 @@ type deferredCommitContext struct {
 
 	// state proof verification commit information
 	stateProofVerificationCommitData []verificationCommitData
+
+	// state proof verification update information
+	stateProofVerificationUpdateCommitData []verificationCommitUpdateData
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
@@ -657,7 +660,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(maxAcctLookback) < lastestBlockRound)
+		loadCompleted := lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(maxAcctLookback) < lastestBlockRound
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)

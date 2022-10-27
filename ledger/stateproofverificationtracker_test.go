@@ -19,15 +19,18 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 const defaultStateProofInterval = uint64(256)
@@ -104,6 +107,17 @@ func genesisBlock() *blockEntry {
 	return &block
 }
 
+func createMockedStateProofCommitmentOnBlock(blk *blockEntry, stateTracking *bookkeeping.StateProofTrackingData) {
+	if uint64(blk.block.Round())%config.Consensus[blk.block.CurrentProtocol].StateProofInterval != 0 {
+		return
+	}
+
+	var commitment [stateproof.HashSize]byte
+	rand.Read(commitment[:])
+	stateTracking.StateProofVotersCommitment = commitment[:]
+	stateTracking.StateProofOnlineTotalWeight = basics.MicroAlgos{Raw: rand.Uint64()}
+}
+
 func blockStateProofsEnabled(prevBlock *blockEntry, stateProofInterval uint64, stuckStateProofs bool) blockEntry {
 	round := prevBlock.block.Round() + 1
 	prevBlockLastAttestedRound := prevBlock.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
@@ -116,7 +130,7 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stateProofInterval uint64, s
 	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 	var stateTracking bookkeeping.StateProofTrackingData
-	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	createMockedStateProofCommitmentOnBlock(&block, &stateTracking)
 
 	if !stuckStateProofs && round > prevBlockLastAttestedRound {
 		stateTracking.StateProofNextRound = prevBlockLastAttestedRound + basics.Round(block.block.ConsensusProtocol().StateProofInterval)
@@ -124,6 +138,7 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stateProofInterval uint64, s
 		stateTracking.StateProofNextRound = prevBlockLastAttestedRound
 	}
 
+	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	return block
 }
