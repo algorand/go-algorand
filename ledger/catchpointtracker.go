@@ -74,7 +74,6 @@ const (
 	// This version introduced accounts and resources separation. The first catchpoint
 	// round of this version is >= `reenableCatchpointsRound`.
 	CatchpointFileVersionV6 = uint64(0201)
-	// TODO: Introduce a new catchpoint file version?
 )
 
 // TrieMemoryConfig is the memory configuration setup used for the merkle trie.

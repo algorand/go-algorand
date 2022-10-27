@@ -263,7 +263,6 @@ func (c *CatchpointCatchupAccessorImpl) ProgressStagingBalances(ctx context.Cont
 
 // processStagingStateProofVerificationData deserialize the given bytes as a temporary staging state proof verification data
 func (c *CatchpointCatchupAccessorImpl) processStagingStateProofVerificationData(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
-	// TODO: Add seen header?
 	var decodedData catchpointStateProofVerificationData
 	err = protocol.Decode(bytes, &decodedData)
 	if err != nil {
@@ -272,9 +271,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 
 	wdb := c.ledger.trackerDB().Wdb
 	// TODO: Add timer?
-	// TODO: Add processing count?
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		// TODO: Write catchpoint state?
 		for _, data := range decodedData.Data {
 			err = writeCatchpointStateProofVerificationData(ctx, tx, &data)
 			if err != nil {
