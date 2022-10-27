@@ -229,7 +229,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 
 	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, DefaultMaxResourcesPerChunk)
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err
 		}
@@ -290,7 +290,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	var accountsRnd basics.Round
 	var totals ledgercore.AccountTotals
 	err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, DefaultMaxResourcesPerChunk)
+		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err
 		}

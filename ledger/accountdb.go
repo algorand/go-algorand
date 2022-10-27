@@ -372,6 +372,14 @@ const (
 	catchpointStateCatchpointLookback = catchpointState("catchpointLookback")
 )
 
+// MaxEncodedBaseAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the base account data serialized.
+// this number is verified by the TestEncodedBaseAccountDataSize function.
+const MaxEncodedBaseAccountDataSize = 350
+
+// MaxEncodedBaseResourceDataSize is a rough estimate for the worst-case scenario we're going to have of the base resource data serialized.
+// this number is verified by the TestEncodedResourceDateSize function.
+const MaxEncodedBaseResourceDataSize = 20000
+
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
 	// The public key address to which the account belongs.

@@ -36,9 +36,10 @@ const (
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
 
-	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
-	// 300000 resources * 300B/resource => roughly max 100MB per chunk
-	DefaultMaxResourcesPerChunk = 300000
+	// ResourcesPerCatchpointFileChunk defines the max number of resources that go in a singular chunk
+	// 300,000 resources * 20KB/resource => roughly max 6GB per chunk if all of them are max'ed out apps.
+	// In reality most entries are asset holdings, and they are very small.
+	ResourcesPerCatchpointFileChunk = 300_000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -68,7 +69,7 @@ type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	AccountData msgp.Raw       `codec:"ad"`
 }
 
 type catchpointFileBalancesChunkV5 struct {
@@ -84,8 +85,8 @@ type encodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
+	AccountData msgp.Raw            `codec:"b"`
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=ResourcesPerCatchpointFileChunk"`
 
 	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`

@@ -2761,8 +2761,8 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				err = msgp.WrapError(err, "struct-from-array", "Resources")
 				return
 			}
-			if zb0005 > basics.MaxEncodedAccountDataSize {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(basics.MaxEncodedAccountDataSize))
+			if zb0005 > ResourcesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(ResourcesPerCatchpointFileChunk))
 				err = msgp.WrapError(err, "struct-from-array", "Resources")
 				return
 			}
@@ -2839,8 +2839,8 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					err = msgp.WrapError(err, "Resources")
 					return
 				}
-				if zb0007 > basics.MaxEncodedAccountDataSize {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(basics.MaxEncodedAccountDataSize))
+				if zb0007 > ResourcesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(ResourcesPerCatchpointFileChunk))
 					err = msgp.WrapError(err, "Resources")
 					return
 				}
