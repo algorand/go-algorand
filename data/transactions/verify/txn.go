@@ -578,7 +578,9 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 	cache VerifiedTransactionCache) (sv *StreamVerifier) {
 
 	// limit the number of tasks queued to the execution pool
-	numberOfExecPoolSeats := verificationPool.GetParallelism() * 10
+	// the purpose of this parameter is to create bigger batches
+	// instead of having many smaller batching waiting in the execution pool
+	numberOfExecPoolSeats := verificationPool.GetParallelism() * 2
 
 	sv = &StreamVerifier{
 		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
@@ -632,7 +634,20 @@ func (sv *StreamVerifier) batchingLoop() {
 			uel.elementList = append(uel.elementList, stx)
 			if numberOfSigsInCurrent > txnPerWorksetThreshold {
 				// enough transaction in the batch to efficiently verify
-				added = sv.processBatch(uel)
+
+				if numberOfSigsInCurrent > 4*txnPerWorksetThreshold {
+					// do not consider adding more txns to this batch.
+					// bypass the seat count and block if the exec pool is busy
+					// this is to prevent creation of very large batches
+					err := sv.addVerificationTaskToThePool(uel, false)
+					// if the pool is already terminated
+					if err != nil {
+						return
+					}
+					added = true
+				} else {
+					added = sv.processBatch(uel)
+				}
 				if added {
 					numberOfSigsInCurrent = 0
 					uel = makeUnverifiedElementList(sv.nbw, sv.ledger)

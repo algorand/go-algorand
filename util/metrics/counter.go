@@ -111,6 +111,11 @@ func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]stri
 	counter.AddUint64(uint64(time.Since(t).Microseconds()), labels)
 }
 
+// GetValue returns the value of the counter.
+func (counter *Counter) GetValue() (x uint64) {
+	return atomic.LoadUint64(&counter.intValue)
+}
+
 func (counter *Counter) fastAddUint64(x uint64) {
 	if atomic.AddUint64(&counter.intValue, x) == x {
 		// What we just added is the whole value, this

@@ -48,7 +48,7 @@ var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.Transact
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 
 // verifierStreamBufferSize is the number of txn that coult be accumulated before the verifier stream consumes them
-var verifierStreamBufferSize = 1000
+var verifierStreamBufferSize = 0
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
