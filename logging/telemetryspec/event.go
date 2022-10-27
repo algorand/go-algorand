@@ -301,7 +301,7 @@ type PeerConnectionDetails struct {
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
-	DuplicateFilterCount int64
+	DuplicateFilterCount uint64
 }
 
 // CatchpointGenerationEvent event
