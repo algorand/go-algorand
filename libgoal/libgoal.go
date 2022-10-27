@@ -649,6 +649,7 @@ func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 }
 
 // AccountInformation takes an address and returns its information
+// Deprecated
 func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -724,6 +725,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 }
 
 // AssetInformation takes an asset's index and returns its information
+// Deprecated: Use AssetInformationV2
 func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {

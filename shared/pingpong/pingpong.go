@@ -32,7 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -42,8 +42,8 @@ import (
 
 // CreatablesInfo has information about created assets, apps and opting in
 type CreatablesInfo struct {
-	AssetParams map[uint64]v1.AssetParams
-	AppParams   map[uint64]v1.AppParams
+	AssetParams map[uint64]generated.AssetParams
+	AppParams   map[uint64]generated.ApplicationParams
 	OptIns      map[uint64][]string
 }
 
@@ -267,7 +267,7 @@ func (pps *WorkerState) scheduleAction() bool {
 		pps.refreshPos = 0
 	}
 	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformation(addr)
+	ai, err := pps.client.AccountInformationV2(addr, true)
 	if err == nil {
 		ppa := pps.accounts[addr]
 
