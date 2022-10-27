@@ -1352,7 +1352,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			logic.MakeBoxKey(appID, boxName): ledgercore.KvValueDelta{},
+			logic.MakeBoxKey(appID, boxName): {},
 		})
 		auCommitSync(t, currentRound, au, ml)
 

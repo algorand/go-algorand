@@ -1756,7 +1756,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 			au.log.Panicf("inconsistency: flushed %d changes to key %s, but not in au.kvStore", cnt, key)
 		}
 		if cnt > mval.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to key %d, but au.kvStore had %d", cnt, key, mval.ndeltas)
+			au.log.Panicf("inconsistency: flushed %d changes to key %s, but au.kvStore had %d", cnt, key, mval.ndeltas)
 		} else if cnt == mval.ndeltas {
 			delete(au.kvStore, key)
 		} else {

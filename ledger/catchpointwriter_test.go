@@ -746,7 +746,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		defer l.Close()
 		_, _, algos, err := l.LookupLatest(last)
 		require.NoError(t, err)
-		require.Equal(t, basics.MicroAlgos{0}, algos)
+		require.Equal(t, basics.MicroAlgos{}, algos)
 	}
 
 	for i := 0; i < 40; i++ { // Advance so catchpoint sees the txns
@@ -768,7 +768,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		// That's why the assertion ignores rewards and does _not_ use `LookupLatest`.
 		ad, _, err := l.LookupWithoutRewards(0, last)
 		require.NoError(t, err)
-		require.Equal(t, basics.MicroAlgos{100_000}, ad.MicroAlgos)
+		require.Equal(t, basics.MicroAlgos{Raw: 100_000}, ad.MicroAlgos)
 	}
 }
 
