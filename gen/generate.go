@@ -340,9 +340,9 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		fmt.Fprintln(verboseOut, protoVersion, protoParams.MinBalance)
 	}
 
-	if rewardsBalance == 0 {
+	if rewardsBalance < protoParams.MinBalance {
 		// Needs to at least have min balance
-		rewardsBalance += protoParams.MinBalance
+		rewardsBalance += protoParams.MinBalance - rewardsBalance
 	}
 
 	records["FeeSink"] = basics.AccountData{
