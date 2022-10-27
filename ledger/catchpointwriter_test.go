@@ -217,6 +217,72 @@ func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpoint
 	return readCatchpointContent(t, tarReader)
 }
 
+func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.StateProofVerificationData) {
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory := t.TempDir()
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	accts := ledgertesting.RandomAccounts(300, false)
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf)
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join(temporaryDirectory, "15.data")
+
+	mockCommitData := make([]verificationCommitData, 0)
+	for _, element := range data {
+		mockCommitData = append(mockCommitData, verificationCommitData{verificationData: element})
+	}
+
+	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return insertStateProofVerificationData(ctx, tx, mockCommitData)
+	})
+
+	require.NoError(t, err)
+
+	readDb := ml.trackerDB().Rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, DefaultMaxResourcesPerChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationData()
+		if err != nil {
+			return err
+		}
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		return
+	})
+
+	catchpointData := readCatchpointDataFile(t, fileName)
+	require.Equal(t, "stateProofVerificationData.msgpack", catchpointData[0].headerName)
+	var wrappedData catchpointStateProofVerificationData
+	err = protocol.Decode(catchpointData[0].data, &wrappedData)
+	require.NoError(t, err)
+
+	for index, verificationData := range wrappedData.Data {
+		require.Equal(t, data[index], verificationData)
+	}
+}
+
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -300,10 +366,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	})
 
 	catchpointContent := readCatchpointDataFile(t, fileName)
-	require.Equal(t, "balances.1.1.msgpack", catchpointContent[0].headerName)
+	require.Equal(t, "balances.1.1.msgpack", catchpointContent[1].headerName)
 
 	var balances catchpointFileBalancesChunkV6
-	err = protocol.Decode(catchpointContent[0].data, &balances)
+	err = protocol.Decode(catchpointContent[1].data, &balances)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 }
@@ -416,6 +482,24 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}
+}
+
+func TestStateProofVerificationDataWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	verificationData := ledgercore.StateProofVerificationData{
+		TargetStateProofRound: 120,
+		VotersCommitment:      nil,
+		ProvenWeight:          basics.MicroAlgos{Raw: 100},
+	}
+
+	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{verificationData})
+}
+
+func TestEmptyStateProofVerificationDataWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
