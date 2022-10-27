@@ -136,8 +136,8 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 type vtCache struct{}
 
 func (vtCache) Add(txgroup []transactions.SignedTxn, groupCtx *verify.GroupContext) {}
-func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) error {
-	return nil
+func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) {
+	return 
 }
 func (vtCache) GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return nil
@@ -252,11 +252,19 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
+// TestIncomingTxHandle checks the correctness with single txns
 func TestIncomingTxHandle(t *testing.T) {
-	numberOfTransactionGroups := 100
+	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
 }
 
+// TestIncomingTxHandle checks the correctness with txn groups
+func TestIncomingTxGroupHandle(t *testing.T) {
+	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
+	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
+}
+
+// TestIncomingTxHandleDrops accounts for the dropped txns when the verifier/exec pool is saturated
 func TestIncomingTxHandleDrops(t *testing.T) {
 	// use smaller backlog size to test the message drops
 	origValue := txBacklogSize
@@ -267,11 +275,6 @@ func TestIncomingTxHandleDrops(t *testing.T) {
 
 	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
-}
-
-func TestIncomingTxGroupHandle(t *testing.T) {
-	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
-	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
 }
 
 // incomingTxHandlerProcessing is a comprehensive transaction handling test
@@ -394,7 +397,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 			t.Logf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
 			handler.Stop() // cancel the handler ctx
 		}()
-		timer := time.NewTicker(25 * time.Millisecond)
+		timer := time.NewTicker(250 * time.Millisecond)
 		for {
 			select {
 			case wi := <-outChan:
@@ -415,7 +418,8 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 					// all the benchmark txns processed
 					return
 				}
-				time.Sleep(25 * time.Millisecond)
+				time.Sleep(250 * time.Millisecond)
+				timer.Reset(250 * time.Millisecond)
 			}
 		}
 	}()

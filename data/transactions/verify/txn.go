@@ -562,13 +562,12 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
-// wait time for another txn should satisfy the following inequality:
-// [validation time added to the group by one more txn] + [wait time] <= [validation time of a single txn]
-// since these are difficult to estimate, the simplified version could be to assume:
-// [validation time added to the group by one more txn] = [validation time of a single txn] / 2
-// This gives us:
-// [wait time] <= [validation time of a single txn] / 2
-const waitForNextTxnDuration = 5 * time.Millisecond
+// waitForNextTxnDuration is the time to wait before sending the batch for evaluation.
+// this does not mean that every batch will wait this long. when the load level is high,
+// the batch will fill up quickly and will be sent for evaluation before this timeout
+const waitForNextTxnDuration = 1 * time.Millisecond
+
+// waitForFirstTxnDuration is the time to wait for the first transaction in the batch
 const waitForFirstTxnDuration = 2000 * time.Millisecond
 
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
@@ -615,6 +614,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			isFirstInBatch := numberOfSigsInCurrent == 0
 			numberOfBatchableSigsInGroup, err := getNumberOfBatchableSigsInGroup(stx.TxnGroup)
 			if err != nil {
+				// wrong number of signatures
 				sv.sendResult(stx.TxnGroup, stx.Context, err)
 				continue
 			}
@@ -624,9 +624,9 @@ func (sv *StreamVerifier) batchingLoop() {
 				// no point in blocking and waiting for a seat here, let it wait in the exec pool
 				err := sv.addVerificationTaskToThePool(makeSingleUnverifiedElement(sv.nbw, sv.ledger, stx), false)
 				if err != nil {
-					sv.sendResult(stx.TxnGroup, stx.Context, err)
+					continue // pool is terminated. nothing to report to the txn sender
 				}
-				continue
+				continue // stx is handled, continue
 			}
 
 			// add this txngrp to the list of batchable txn groups
@@ -640,9 +640,8 @@ func (sv *StreamVerifier) batchingLoop() {
 					// bypass the seat count and block if the exec pool is busy
 					// this is to prevent creation of very large batches
 					err := sv.addVerificationTaskToThePool(uel, false)
-					// if the pool is already terminated
 					if err != nil {
-						return
+						continue // pool is terminated.
 					}
 					added = true
 				} else {
@@ -684,9 +683,8 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfSigsInCurrent > 0 {
 				// send the current accumulated transactions to the pool
 				err := sv.addVerificationTaskToThePool(uel, false)
-				// if the pool is already terminated
 				if err != nil {
-					return
+					continue // pool is terminated.
 				}
 			}
 			// wait for the pending tasks, then close the result chan
@@ -703,19 +701,9 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veCont
 		Err:      err,
 	}
 	// send the txn result out the pipe
+	// this should never block. the receiver end of this channel will drop transactions if the
+	// postVerificationQueue is blocked
 	sv.resultChan <- vr
-	/*
-		select {
-		case sv.resultChan <- vr:
-
-				// if the channel is not accepting, should not block here
-				// report dropped txn. caching is fine, if it comes back in the block
-				default:
-					fmt.Println("skipped!!")
-					//TODO: report this
-
-		}
-	*/
 }
 
 func (sv *StreamVerifier) processBatch(uel unverifiedElementList) (added bool) {
@@ -743,18 +731,18 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uel unverifiedElementList
 		defer sv.pendingTasksWg.Done()
 
 		if sv.ctx.Err() != nil {
-			return sv.ctx.Err()
+			return struct{}{}
 		}
 
 		uel := arg.(*unverifiedElementList)
 		batchVerifier := crypto.MakeBatchVerifier()
 
 		bl := makeBatchLoad()
-		// TODO: separate operations here, and get the sig verification inside LogicSig outside
+		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 		for _, ue := range uel.elementList {
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, uel.nbw.getBlockHeader(), uel.ledger, batchVerifier)
 			if err != nil {
-				// verification failed, cannot go to the batch. return here.
+				// verification failed, no need to add the sig to the batch, report the error
 				sv.sendResult(ue.TxnGroup, ue.Context, err)
 				continue
 			}
@@ -763,11 +751,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uel unverifiedElementList
 		}
 
 		failed, err := batchVerifier.VerifyWithFeedback()
-		if err != nil && err != crypto.ErrBatchHasFailedSigs {
-			fmt.Println(err)
-			// something bad happened
-			// TODO:  report error and discard the batch
-		}
+		// this error can only be crypto.ErrBatchHasFailedSigs
 
 		verifiedTxnGroups := make([][]transactions.SignedTxn, len(bl.txnGroups))
 		verifiedGroupCtxs := make([]*GroupContext, len(bl.groupCtxs))
@@ -796,13 +780,11 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uel unverifiedElementList
 			sv.sendResult(bl.txnGroups[txgIdx], bl.elementContext[txgIdx], result)
 		}
 		// loading them all at once by locking the cache once
-		err = sv.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
-		if err != nil {
-			// TODO: handle the error
-			fmt.Println(err)
-		}
+		sv.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
 		return struct{}{}
 	}
+
+	// if the task has an allocated seat, should release it
 	var retChan chan interface{}
 	if returnSeat {
 		retChan = sv.seatReturnChan

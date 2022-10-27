@@ -337,6 +337,11 @@ func TestDecodeNil(t *testing.T) {
 func TestPaysetGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
+
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
 	blkHdr := createDummyBlockHeader()
 
