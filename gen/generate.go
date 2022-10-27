@@ -165,7 +165,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		feeSink               = genData.FeeSink
 		rewardsPool           = genData.RewardsPool
 		devmode               = genData.DevMode
-		noRewards             = genData.NoInitialRewards
+		rewardsBalance        = genData.RewardsPoolBalance
 		comment               = genData.Comment
 
 		genesisAddrs = make(map[string]basics.Address)
@@ -340,9 +340,9 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		fmt.Fprintln(verboseOut, protoVersion, protoParams.MinBalance)
 	}
 
-	rewardBalance := defaultIncentivePoolBalanceAtInception
-	if noRewards {
-		rewardBalance = protoParams.MinBalance
+	if rewardsBalance == 0 {
+		// Needs to at least have min balance
+		rewardsBalance += protoParams.MinBalance
 	}
 
 	records["FeeSink"] = basics.AccountData{
@@ -351,7 +351,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	}
 	records["RewardsPool"] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: rewardBalance},
+		MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
 	}
 
 	sinkAcct := genesisAllocation{
@@ -361,7 +361,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	}
 	poolAcct := genesisAllocation{
 		Name:   "RewardsPool",
-		Stake:  rewardBalance,
+		Stake:  rewardsBalance,
 		Online: basics.NotParticipating,
 	}
 
