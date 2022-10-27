@@ -177,9 +177,8 @@ type AccountDeltas struct {
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
 	return StateDelta{
-		Accts:    MakeAccountDeltas(hint),
-		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
-		Txleases: make(map[Txlease]basics.Round),
+		Accts: MakeAccountDeltas(hint),
+		Txids: make(map[transactions.Txid]IncludedTransactions, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
@@ -194,9 +193,6 @@ func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
-
-		appResourcesCache:   make(map[AccountApp]int),
-		assetResourcesCache: make(map[AccountAsset]int),
 	}
 }
 
@@ -386,6 +382,22 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 		ad.assetResourcesCache = make(map[AccountAsset]int)
 	}
 	ad.assetResourcesCache[key] = last
+}
+
+// UpsertTxLease adds a new TxLease to the StateDelta
+func (sd *StateDelta) UpsertTxLease(txLease Txlease, expired basics.Round) {
+	if sd.Txleases == nil {
+		sd.Txleases = make(map[Txlease]basics.Round)
+	}
+	sd.Txleases[txLease] = expired
+}
+
+// UpsertCreatable adds a new Creatable to the StateDelta
+func (sd *StateDelta) UpsertCreatable(idx basics.CreatableIndex, creatable ModifiedCreatable) {
+	if sd.Creatables == nil {
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
+	}
+	sd.Creatables[idx] = creatable
 }
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity

@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -94,6 +95,25 @@ func TestAccountDeltas(t *testing.T) {
 	address, data = ad.GetByIdx(1)
 	a.Equal(addr1, address)
 	a.Equal(sample1, data)
+}
+
+func TestRangeOverNilMap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	sd := StateDelta{}
+	for txl, expires := range sd.Txleases {
+		fmt.Printf("txl:%v, expires%v", txl, expires)
+	}
+	sd2 := StateDelta{}
+	require.Nil(t, sd2.Txleases)
+	sdSlice := []map[Txlease]basics.Round{}
+	require.Equal(t, 0, len(sdSlice))
+	sdSlice2 := []map[Txlease]basics.Round{}
+	sd2.Txleases = make(map[Txlease]basics.Round)
+	sdSlice = append(sdSlice, sd2.Txleases)
+	sdSlice2 = append(sdSlice2, sd2.Txleases)
+	require.Equal(t, sdSlice, sdSlice2)
+
 }
 
 func BenchmarkMakeStateDelta(b *testing.B) {
