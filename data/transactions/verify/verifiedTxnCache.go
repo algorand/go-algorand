@@ -112,7 +112,6 @@ func (v *verifiedTransactionCache) AddPayset(txgroup [][]transactions.SignedTxn,
 	for i := range txgroup {
 		v.add(txgroup[i], groupCtxs[i])
 	}
-	return
 }
 
 // GetUnverifiedTransactionGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
@@ -268,8 +267,7 @@ func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupConte
 	return
 }
 
-func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext)  {
-	return
+func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
 }
 
 func (v *mockedCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
