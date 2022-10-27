@@ -5121,7 +5121,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	var err error
 	qs := &stateProofVerificationDbQueries{}
 
-	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata, version FROM stateproofverification WHERE targetstateproofround=?")
+	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata, COALESCE(version, '') FROM stateproofverification WHERE targetstateproofround=?")
 	if err != nil {
 		return nil, err
 	}

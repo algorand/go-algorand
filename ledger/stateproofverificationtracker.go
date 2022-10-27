@@ -207,12 +207,22 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 	for _, commitData := range spt.trackedCommitData {
 		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
 			verificationDataCopy := commitData.verificationData
+			spt.updateCommitData(&verificationDataCopy, commitData.verificationData.TargetStateProofRound)
 			return &verificationDataCopy, nil
 		}
 	}
 
 	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
 		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
+}
+
+func (spt *stateProofVerificationTracker) updateCommitData(commitData *ledgercore.StateProofVerificationData, round basics.Round) {
+	for _, element := range spt.trackedUpdateData {
+		if element.confirmedRound == round {
+			commitData.Version = element.version
+			return
+		}
+	}
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {

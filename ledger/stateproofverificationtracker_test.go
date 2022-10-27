@@ -445,16 +445,23 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "greater than maximum")
 
-	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
+	dbDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum-1)*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
 	a.NoError(err)
 	a.Equal(dbDataRound, dbData.TargetStateProofRound)
+	a.Equal(protocol.ConsensusCurrentVersion, dbData.Version)
+
+	dbDataRound = basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
+	dbData, err = spt.LookupVerificationData(dbDataRound)
+	a.NoError(err)
+	a.Equal(dbDataRound, dbData.TargetStateProofRound)
+	a.Equal(protocol.ConsensusVersion(""), dbData.Version)
 
 	memoryDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
-
 	memoryData, err := spt.LookupVerificationData(memoryDataRound)
 	a.NoError(err)
 	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
+	a.Equal(protocol.ConsensusCurrentVersion, memoryData.Version)
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
