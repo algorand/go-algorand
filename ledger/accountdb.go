@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -4422,18 +4423,16 @@ type orderedAccountsIter struct {
 	pendingBaseRow     pendingBaseRow
 	pendingResourceRow pendingResourceRow
 	accountCount       int
-	resourceCount      int
 	insertStmt         *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, resourceCount int) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:            tx,
-		accountCount:  accountCount,
-		resourceCount: resourceCount,
-		step:          oaiStepStartup,
+		tx:           tx,
+		accountCount: accountCount,
+		step:         oaiStepStartup,
 	}
 }
 
@@ -4831,7 +4830,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		count, iterator.pendingBaseRow, iterator.pendingResourceRow, err = processAllBaseAccountRecords(
 			iterator.accountBaseRows, iterator.resourcesRows,
 			baseCb, resCb,
-			iterator.pendingBaseRow, iterator.pendingResourceRow, iterator.accountCount, iterator.resourceCount,
+			iterator.pendingBaseRow, iterator.pendingResourceRow, iterator.accountCount, math.MaxInt,
 		)
 		if err != nil {
 			iterator.Close(ctx)

@@ -534,6 +534,77 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath)
+	
+	l := testNewLedgerFromCatchpoint(t, catchpointFilePath)
+	defer l.Close()
+
+	// verify that the account data aligns with what we originally stored :
+	for addr, acct := range accts {
+		acctData, validThrough, _, err := l.LookupLatest(addr)
+		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
+		require.Equal(t, acct, acctData)
+		require.Equal(t, basics.Round(0), validThrough)
+
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	// now manually construct the MT and ensure the reading makeOrderedAccountsIter works as expected:
+	// no errors on read, hashes match
+	ctx := context.Background()
+	tx, err := l.trackerDBs.Wdb.Handle.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	// save the existing hash
+	committer, err := MakeMerkleCommitter(tx, false)
+	require.NoError(t, err)
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
+	require.NoError(t, err)
+
+	h1, err := trie.RootHash()
+	require.NoError(t, err)
+	require.NotEmpty(t, h1)
+
+	// reset hashes
+	err = resetAccountHashes(ctx, tx)
+	require.NoError(t, err)
+
+	// rebuild the MT
+	committer, err = MakeMerkleCommitter(tx, false)
+	require.NoError(t, err)
+	trie, err = merkletrie.MakeTrie(committer, TrieMemoryConfig)
+	require.NoError(t, err)
+
+	h, err := trie.RootHash()
+	require.NoError(t, err)
+	require.Zero(t, h)
+
+	iter := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+	defer iter.Close(ctx)
+	for {
+		accts, _, err := iter.Next(ctx)
+		if err == sql.ErrNoRows {
+			// the account builder would return sql.ErrNoRows when no more data is available.
+			err = nil
+			break
+		} else if err != nil {
+			require.NoError(t, err)
+		}
+
+		if len(accts) > 0 {
+			for _, acct := range accts {
+				added, err := trie.Add(acct.digest)
+				require.NoError(t, err)
+				require.True(t, added)
+			}
+		}
+	}
+	require.NoError(t, err)
+	h2, err := trie.RootHash()
+	require.NoError(t, err)
+	require.NotEmpty(t, h2)
+
+	require.Equal(t, h1, h2)
 }
 
 func testNewLedgerFromCatchpoint(t *testing.T, filepath string) *Ledger {
