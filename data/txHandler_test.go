@@ -137,7 +137,7 @@ type vtCache struct{}
 
 func (vtCache) Add(txgroup []transactions.SignedTxn, groupCtx *verify.GroupContext) {}
 func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) {
-	return 
+	return
 }
 func (vtCache) GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return nil
