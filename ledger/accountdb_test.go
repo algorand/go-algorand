@@ -1572,6 +1572,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 
 func TestResourcesDataApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1616,161 +1617,176 @@ func TestResourcesDataApp(t *testing.T) {
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check empty states + non-empty params
-	appParams := ledgertesting.RandomAppParams()
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+	// Since some steps use randomly generated input, the test is run N times
+	// to cover a larger search space of inputs.
+	for i := 0; i < 1000; i++ {
+		// check empty states + non-empty params
+		appParams := ledgertesting.RandomAppParams()
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	appState := ledgertesting.RandomAppLocalState()
-	rd.SetAppLocalState(appState)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appState, rd.GetAppLocalState())
+		appState := ledgertesting.RandomAppLocalState()
+		rd.SetAppLocalState(appState)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appState, rd.GetAppLocalState())
 
-	// check ClearAppLocalState
-	rd.ClearAppLocalState()
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check ClearAppLocalState
+		rd.ClearAppLocalState()
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check ClearAppParams
-	rd.SetAppLocalState(appState)
-	rd.ClearAppParams()
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appState, rd.GetAppLocalState())
+		// check ClearAppParams
+		rd.SetAppLocalState(appState)
+		rd.ClearAppParams()
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appState, rd.GetAppLocalState())
 
-	// check both clear
-	rd.ClearAppLocalState()
-	a.False(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check both clear
+		rd.ClearAppLocalState()
+		a.False(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check params clear when non-empty params and empty holding
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	rd.ClearAppParams()
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check params clear when non-empty params and empty holding
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		rd.ClearAppParams()
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsApp())
-	a.False(rd.IsEmpty())
-	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
-	rd.ClearAppLocalState()
-	a.False(rd.IsApp())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsApp())
+		a.False(rd.IsEmpty())
+		a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
+		rd.ClearAppLocalState()
+		a.False(rd.IsApp())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+		a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 
-	// check migration flow (accountDataResources)
-	// 1. both exist and empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParamsEmpty, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// check migration flow (accountDataResources)
+		// 1. both exist and empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParamsEmpty, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 2. both exist and not empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 2. both exist and not empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 3. both exist: holding not empty, param is empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	rd.SetAppParams(appParamsEmpty, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 3. both exist: holding not empty, param is empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		rd.SetAppParams(appParamsEmpty, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
 
-	// 4. both exist: holding empty, param is not empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 4. both exist: holding empty, param is not empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 5. holding does not exist and params is empty
-	rd = makeResourcesData(0)
-	rd.SetAppParams(appParamsEmpty, false)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 5. holding does not exist and params is empty
+		rd = makeResourcesData(0)
+		rd.SetAppParams(appParamsEmpty, false)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 6. holding does not exist and params is not empty
-	rd = makeResourcesData(0)
-	rd.SetAppParams(appParams, false)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 6. holding does not exist and params is not empty
+		rd = makeResourcesData(0)
+		rd.SetAppParams(appParams, false)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 7. holding exist and not empty and params does not exist
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 7. holding exist and not empty and params does not exist
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
 
-	// 8. both do not exist
-	rd = makeResourcesData(0)
-	a.False(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-
+		// 8. both do not exist
+		rd = makeResourcesData(0)
+		a.False(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+	}
 }
 
 func TestResourcesDataAsset(t *testing.T) {

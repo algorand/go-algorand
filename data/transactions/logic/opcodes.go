@@ -451,13 +451,13 @@ var OpSpecs = []OpSpec{
 	{0x1e, "addw", opAddw, proto("ii:ii"), 2, detDefault()},
 	{0x1f, "divmodw", opDivModw, proto("iiii:iiii"), 4, costly(20)},
 
-	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntConstBlock, "uint ...", immInts)},
+	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntImmArgs, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, proto(":i"), 1, immediates("i").assembler(asmIntC)},
 	{0x22, "intc_0", opIntConst0, proto(":i"), 1, detDefault()},
 	{0x23, "intc_1", opIntConst1, proto(":i"), 1, detDefault()},
 	{0x24, "intc_2", opIntConst2, proto(":i"), 1, detDefault()},
 	{0x25, "intc_3", opIntConst3, proto(":i"), 1, detDefault()},
-	{0x26, "bytecblock", opByteConstBlock, proto(":"), 1, constants(asmByteCBlock, checkByteConstBlock, "bytes ...", immBytess)},
+	{0x26, "bytecblock", opByteConstBlock, proto(":"), 1, constants(asmByteCBlock, checkByteImmArgs, "bytes ...", immBytess)},
 	{0x27, "bytec", opByteConstLoad, proto(":b"), 1, immediates("i").assembler(asmByteC)},
 	{0x28, "bytec_0", opByteConst0, proto(":b"), 1, detDefault()},
 	{0x29, "bytec_1", opByteConst1, proto(":b"), 1, detDefault()},
@@ -555,6 +555,8 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, proto(":i"), 3, constants(asmPushInt, opPushInt, "uint", immInt)},
+	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]"), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
+	{0x83, "pushints", opPushInts, proto(":", "", "[N items]"), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i"), 7, costly(1900)},
 
@@ -566,7 +568,7 @@ var OpSpecs = []OpSpec{
 	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
 	{0x8c, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	// 0x8e will likely be a switch on pairs of values/targets, called `match`
+	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", ""), 8, detSwitch().trust()},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},

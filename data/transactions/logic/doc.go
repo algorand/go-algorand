@@ -75,6 +75,7 @@ var opDocByName = map[string]string{
 	"intc_2":     "constant 2 from intcblock",
 	"intc_3":     "constant 3 from intcblock",
 	"pushint":    "immediate UINT",
+	"pushints":   "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
 	"bytecblock": "prepare block of byte-array constants for use by bytec",
 	"bytec":      "Ith constant from bytecblock",
 	"bytec_0":    "constant 0 from bytecblock",
@@ -82,6 +83,7 @@ var opDocByName = map[string]string{
 	"bytec_2":    "constant 2 from bytecblock",
 	"bytec_3":    "constant 3 from bytecblock",
 	"pushbytes":  "immediate BYTES",
+	"pushbytess": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
 
 	"bzero":   "zero filled byte-array of length A",
 	"arg":     "Nth LogicSig argument",
@@ -197,6 +199,7 @@ var opDocByName = map[string]string{
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
 
 	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+	"match":  "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
 
 	"frame_dig":  "Nth (signed) value from the frame pointer.",
 	"frame_bury": "replace the Nth (signed) value from the frame pointer in the stack with A",
@@ -217,12 +220,14 @@ func OpDoc(opName string) string {
 }
 
 var opcodeImmediateNotes = map[string]string{
-	"intcblock":  "{varuint length} [{varuint value}, ...]",
+	"intcblock":  "{varuint count} [{varuint value}, ...]",
 	"intc":       "{uint8 int constant index}",
 	"pushint":    "{varuint int}",
-	"bytecblock": "{varuint length} [({varuint value length} bytes), ...]",
+	"pushints":   "{varuint count} [{varuint value}, ...]",
+	"bytecblock": "{varuint count} [({varuint value length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
 	"pushbytes":  "{varuint length} {bytes}",
+	"pushbytess": "{varuint count} [({varuint value length} bytes), ...]",
 
 	"arg":    "{uint8 arg index N}",
 	"global": "{uint8 global field index}",
@@ -280,6 +285,7 @@ var opcodeImmediateNotes = map[string]string{
 	"block":      "{uint8 block field}",
 
 	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
 
 	"proto":      "{uint8 arguments} {uint8 return values}",
 	"frame_dig":  "{int8 frame slot}",
@@ -326,7 +332,9 @@ var opDocExtras = map[string]string{
 	"btoi":                "`btoi` fails if the input is longer than 8 bytes.",
 	"concat":              "`concat` fails if the result would be greater than 4096 bytes.",
 	"pushbytes":           "pushbytes args are not added to the bytecblock during assembly processes",
+	"pushbytess":          "pushbytess args are not added to the bytecblock during assembly processes",
 	"pushint":             "pushint args are not added to the intcblock during assembly processes",
+	"pushints":            "pushints args are not added to the intcblock during assembly processes",
 	"getbit":              "see explanation of bit ordering in setbit",
 	"setbit":              "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
 	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
@@ -351,6 +359,8 @@ var opDocExtras = map[string]string{
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
 
+	"match": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
+
 	"box_create": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
 	"box_get":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
 	"box_put":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
@@ -369,8 +379,8 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch"},
+	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
 	"Box Access":              {"box_create", "box_extract", "box_replace", "box_del", "box_len", "box_get", "box_put"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},

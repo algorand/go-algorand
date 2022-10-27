@@ -370,7 +370,7 @@
       "Size": 0,
       "Doc": "prepare block of uint64 constants for use by intc",
       "DocExtra": "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
-      "ImmediateNote": "{varuint length} [{varuint value}, ...]",
+      "ImmediateNote": "{varuint count} [{varuint value}, ...]",
       "Groups": [
         "Loading Values"
       ]
@@ -432,7 +432,7 @@
       "Size": 0,
       "Doc": "prepare block of byte-array constants for use by bytec",
       "DocExtra": "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
-      "ImmediateNote": "{varuint length} [({varuint value length} bytes), ...]",
+      "ImmediateNote": "{varuint count} [({varuint value length} bytes), ...]",
       "Groups": [
         "Loading Values"
       ]
@@ -1586,6 +1586,28 @@
       ]
     },
     {
+      "Opcode": 130,
+      "Name": "pushbytess",
+      "Size": 0,
+      "Doc": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
+      "DocExtra": "pushbytess args are not added to the bytecblock during assembly processes",
+      "ImmediateNote": "{varuint count} [({varuint value length} bytes), ...]",
+      "Groups": [
+        "Loading Values"
+      ]
+    },
+    {
+      "Opcode": 131,
+      "Name": "pushints",
+      "Size": 0,
+      "Doc": "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
+      "DocExtra": "pushints args are not added to the intcblock during assembly processes",
+      "ImmediateNote": "{varuint count} [{varuint value}, ...]",
+      "Groups": [
+        "Loading Values"
+      ]
+    },
+    {
       "Opcode": 132,
       "Name": "ed25519verify_bare",
       "Args": "BBB",
@@ -1656,6 +1678,17 @@
       "Args": "U",
       "Size": 0,
       "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+      "Groups": [
+        "Flow Control"
+      ]
+    },
+    {
+      "Opcode": 142,
+      "Name": "match",
+      "Size": 0,
+      "Doc": "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
+      "DocExtra": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
       "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
       "Groups": [
         "Flow Control"

@@ -3034,7 +3034,7 @@ func TestShortBytecblock(t *testing.T) {
 				program := fullops.Program[:i]
 				t.Run(hex.EncodeToString(program), func(t *testing.T) {
 					testLogicBytes(t, program, defaultEvalParams(),
-						"bytecblock", "bytecblock")
+						"bytes list", "bytes list")
 				})
 			}
 		})
@@ -3055,7 +3055,7 @@ func TestShortBytecblock2(t *testing.T) {
 		t.Run(src, func(t *testing.T) {
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
-			testLogicBytes(t, program, defaultEvalParams(), "bytecblock", "bytecblock")
+			testLogicBytes(t, program, defaultEvalParams(), "const bytes list", "const bytes list")
 		})
 	}
 }
@@ -5707,5 +5707,205 @@ switch done1 done2; done1: ; done2: ;
 int 1
 int 88
 switch done1 done2; done1: ; done2: ;
+`, 8)
+}
+
+func TestMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// take the 0th label with int cases
+	testAccepts(t, `
+int 99
+int 100
+int 99
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 0th label with bytes cases
+	testAccepts(t, `
+byte "0"
+byte "1"
+byte "0"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label with int cases
+	testRejects(t, `
+int 99
+int 100
+int 100
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// take the 1th label with bytes cases
+	testRejects(t, `
+byte "0"
+byte "1"
+byte "1"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	// same, but jumping to end of program
+	testAccepts(t, `
+int 1; int 99; int 100; int 100
+match zero one
+zero: err
+one:
+`, 8)
+
+	// no match
+	testAccepts(t, `
+int 99
+int 100
+int 101
+match zero one
+int 1; return // falls through to here
+zero: int 0; return
+one:  int 0; return
+`, 8)
+
+	// jump forward and backward
+	testAccepts(t, `
+int 99
+start:
+int 1
++
+int 100
+int 101
+dig 2
+match start end
+err
+end:
+int 101
+==
+assert
+int 1
+`, 8)
+
+	// 0 labels are allowed, but weird!
+	testAccepts(t, `
+int 0
+match
+int 1
+`, 8)
+
+	testPanics(t, notrack("match; int 1"), 8)
+
+	// make the match the final instruction
+	testAccepts(t, `
+int 1
+int 100
+int 99
+int 100
+match done1 done2; done1: ; done2: ;
+`, 8)
+
+	// make the switch the final instruction, and don't match
+	testAccepts(t, `
+int 1
+int 1
+int 2
+int 88
+match done1 done2; done1: ; done2: ;
+`, 8)
+
+	// allow mixed types for match cases
+	testAccepts(t, `
+int 1
+int 100
+byte "101"
+byte "101"
+match done1 done2; done1: ; done2: ;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+int 1
+byte "0"
+match zero one
+err
+zero: int 1; return
+one:  int 0;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+int 1
+int 1
+match zero one
+err
+one: int 1; return
+zero: int 0;
+`, 8)
+
+	testAccepts(t, `
+byte "0"
+byte "1"
+int 1
+match zero one
+int 1; return
+zero: int 0;
+one:  int 0;
+`, 8)
+}
+
+func TestPushConsts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testAccepts(t, `
+pushints 1 2
+int 2
+==
+assert
+int 1
+==
+assert
+int 1
+`, 8)
+
+	testAccepts(t, `
+pushbytess "1" "2"
+byte "2"
+==
+assert
+byte "1"
+==
+assert
+int 1
+`, 8)
+
+	valsStr := make([]string, 256)
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("%d", i)
+	}
+	source := fmt.Sprintf(`pushints %s`, strings.Join(valsStr, " "))
+	testAccepts(t, source+`
+popn 255
+pop
+int 1
+`, 8)
+
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("\"%d\"", i)
+	}
+	source = fmt.Sprintf(`pushbytess %s`, strings.Join(valsStr, " "))
+	testAccepts(t, source+`
+popn 255
+pop
+int 1
 `, 8)
 }
