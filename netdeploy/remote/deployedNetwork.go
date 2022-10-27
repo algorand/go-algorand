@@ -17,6 +17,7 @@
 package remote
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -685,8 +686,8 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			}
 		} else {
 			//send payments to created accounts randomly
-			accti := rand.Intn(len(bootstrappedNet.accounts))
 			for i := uint64(0); i < n; i++ {
+				accti := rand.Intn(len(bootstrappedNet.accounts))
 				header.Sender = src
 				tx := transactions.Transaction{
 					Type:   protocol.PaymentTx,
@@ -696,6 +697,8 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 						Amount:   basics.MicroAlgos{Raw: 0},
 					},
 				}
+				tx.Header.Note = make([]byte, 8)
+				binary.LittleEndian.PutUint64(tx.Header.Note, bootstrappedNet.roundTxnCnt+i)
 				t := transactions.SignedTxn{Txn: tx}
 				sgtxns = append(sgtxns, t)
 			}
