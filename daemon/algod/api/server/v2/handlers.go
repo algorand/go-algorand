@@ -676,7 +676,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
-	hashtype := generated.Sha256 // default hash type for proof
+	hashtype := generated.Sha512256 // default hash type for proof
 	if params.Hashtype != nil {
 		hashtype = generated.TransactionProofResponseHashtype(*params.Hashtype)
 	}

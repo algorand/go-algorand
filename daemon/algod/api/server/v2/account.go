@@ -41,14 +41,14 @@ func AccountDataToAccount(
 		// longer fetch the creator
 		holding := generated.AssetHolding{
 			Amount:   holding.Amount,
-			AssetId:  uint64(curid),
+			AssetID:  uint64(curid),
 			IsFrozen: holding.Frozen,
 		}
 
 		assets = append(assets, holding)
 	}
 	sort.Slice(assets, func(i, j int) bool {
-		return assets[i].AssetId < assets[j].AssetId
+		return assets[i].AssetID < assets[j].AssetID
 	})
 
 	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
@@ -279,7 +279,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.Assets != nil && len(*a.Assets) > 0 {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
-			assets[basics.AssetIndex(h.AssetId)] = basics.AssetHolding{
+			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
 				Amount: h.Amount,
 				Frozen: h.IsFrozen,
 			}
