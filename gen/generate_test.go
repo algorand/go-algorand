@@ -123,7 +123,7 @@ func TestGenesisRoundoff(t *testing.T) {
 
 // `TestGenesisJsonCreation` defends against regressions to `genesis.json` generation by comparing a known, valid `genesis.json` against a version generated during test invocation.
 //
-// * For each `testCase`, there is a corresponding `genesis.json` in `gen/resources representing the known, valid output.
+// * For each `testCase`, there is a corresponding `genesis.json` in `gen/resources` representing the known, valid output.
 // * When adding test cases, it's assumed folks peer review new artifacts in `gen/resources`.
 // * Since _some_ `genesis.json` values are non-deterministic, the test replaces these values with static values to facilitate equality checks.
 func TestGenesisJsonCreation(t *testing.T) {
