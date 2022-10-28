@@ -50,6 +50,12 @@ const (
 	Stpf   TxType = "stpf"
 )
 
+// Defines values for TransactionProofResponseHashtype.
+const (
+	Sha256    TransactionProofResponseHashtype = "sha256"
+	Sha512256 TransactionProofResponseHashtype = "sha512_256"
+)
+
 // Account information at a given round.
 //
 // Definition:
@@ -862,6 +868,11 @@ type TransactionProofResponse struct {
 	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// The type of hash function used to create the proof, must be one of:
+// * sha512_256
+// * sha256
+type TransactionProofResponseHashtype string
 
 // algod version information.
 type VersionsResponse = Version
