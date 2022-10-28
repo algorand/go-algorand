@@ -425,7 +425,7 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
-// TODO: Deprecate this function
+// Deprecated
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
@@ -508,7 +508,6 @@ func (client RestClient) SuggestedParams() (response v1.TransactionParams, err e
 }
 
 // SuggestedParamsV2 gets the suggested transaction parameters
-// Deprecated
 func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
 	return
