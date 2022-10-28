@@ -1016,8 +1016,9 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	}
 
 	// write it all to disk.
+	var cstats merkletrie.CommitStats
 	if accumulatedChanges > 0 {
-		_, err = ct.balancesTrie.Commit()
+		cstats, err = ct.balancesTrie.Commit()
 	}
 
 	if ct.log.GetTelemetryEnabled() {
@@ -1027,9 +1028,17 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			return
 		}
 		ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointRootUpdateEvent, telemetryspec.CatchpointRootUpdateEventDetails{
-			Root:    root.String(),
-			OldBase: uint64(oldBase),
-			NewBase: uint64(newBase),
+			Root:                        root.String(),
+			OldBase:                     uint64(oldBase),
+			NewBase:                     uint64(newBase),
+			NewPageCount:                cstats.NewPageCount,
+			NewNodeCount:                cstats.NewNodeCount,
+			UpdatedPageCount:            cstats.UpdatedPageCount,
+			UpdatedNodeCount:            cstats.UpdatedNodeCount,
+			DeletedPageCount:            cstats.DeletedPageCount,
+			FanoutReallocatedNodeCount:  cstats.FanoutReallocatedNodeCount,
+			PackingReallocatedNodeCount: cstats.PackingReallocatedNodeCount,
+			LoadedPages:                 cstats.LoadedPages,
 		})
 
 	}
