@@ -26,11 +26,6 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
-// SortAddress re-export this sort, which is implemented in basics, and being used by the msgp when
-// encoding the resources map below.
-// SortAddress implements sorting by Address keys for
-// canonical encoding of maps in msgpack format.
-
 type proposalVoteCounter struct {
 	_struct struct{} `codec:","`
 
