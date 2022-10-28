@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -199,18 +198,19 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 }
 
 // getCodecHandle converts a format string into the encoder + content type
-func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
-	format := "json"
+func getCodecHandle(formatPtr *generated.Format) (codec.Handle, string, error) {
+	format := generated.Json
 	if formatPtr != nil {
-		format = strings.ToLower(*formatPtr)
+		format = *formatPtr
 	}
 
 	switch format {
-	case "json":
+	case generated.Json:
 		return protocol.JSONStrictHandle, "application/json", nil
-	case "msgpack":
+	case generated.Msgpack:
 		fallthrough
 	case "msgp":
+		// Can this actually ever happen?
 		return protocol.CodecHandle, "application/msgpack", nil
 	default:
 		return nil, "", fmt.Errorf("invalid format: %s", format)

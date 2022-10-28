@@ -331,7 +331,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
 func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -476,7 +476,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 // AccountAssetInformation gets account information about a given asset.
 // (GET /v2/accounts/{address}/assets/{asset-id})
 func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params generated.AccountAssetInformationParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -518,7 +518,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 	if record.AssetHolding != nil {
 		response.AssetHolding = &generated.AssetHolding{
 			Amount:   record.AssetHolding.Amount,
-			AssetId:  uint64(assetID),
+			AssetID:  uint64(assetID),
 			IsFrozen: record.AssetHolding.Frozen,
 		}
 	}
@@ -529,7 +529,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 // AccountApplicationInformation gets account information about a given app.
 // (GET /v2/accounts/{address}/applications/{application-id})
 func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params generated.AccountApplicationInformationParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -586,7 +586,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -676,9 +676,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
-	hashtype := "sha512_256" // default hash type for proof
+	hashtype := generated.Sha256 // default hash type for proof
 	if params.Hashtype != nil {
-		hashtype = *params.Hashtype
+		hashtype = generated.TransactionProofResponseHashtype(*params.Hashtype)
 	}
 	if hashtype == "sha256" && !proto.EnableSHA256TxnCommitmentHeader {
 		return badRequest(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
@@ -698,13 +698,13 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 		var stibhash crypto.Digest
 
 		switch hashtype {
-		case "sha256":
+		case generated.Sha256:
 			tree, err = block.TxnMerkleTreeSHA256()
 			if err != nil {
 				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 			}
 			stibhash = block.Payset[idx].HashSHA256()
-		case "sha512_256":
+		case generated.Sha512256:
 			tree, err = block.TxnMerkleTree()
 			if err != nil {
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
@@ -1032,7 +1032,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.Inners = convertInners(&txn)
 	}
 
-	handle, contentType, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1066,7 +1066,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		addrPtr = &addr
 	}
 
-	handle, contentType, err := getCodecHandle(format)
+	handle, contentType, err := getCodecHandle((*generated.Format)(format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1166,7 +1166,7 @@ func (v2 *Handlers) abortCatchup(ctx echo.Context, catchpoint string) error {
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
 func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
-	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
+	return v2.getPendingTransactions(ctx, params.Max, (*string)(params.Format), nil)
 }
 
 // GetApplicationByID returns application information by app idx.
@@ -1229,7 +1229,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 // GetPendingTransactionsByAddress takes an Algorand address and returns its associated list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
-	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+	return v2.getPendingTransactions(ctx, params.Max, (*string)(params.Format), &addr)
 }
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint
