@@ -50,7 +50,7 @@ type GenesisData struct {
 	Wallets            []WalletData
 	FeeSink            basics.Address
 	RewardsPool        basics.Address
-	RewardsPoolBalance uint64
+	RewardsPoolBalance uint64 // Values < `ConsensusParams.MinBalance` are adjusted to `ConsensusParams.MinBalance`
 	DevMode            bool
 	Comment            string
 }
