@@ -180,7 +180,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 		}
 	}
 
-	saveGeneratedGenesisJson := func(filename, artifactName string) {
+	saveGeneratedGenesisJSON := func(filename, artifactName string) {
 		src, err := os.Open(filename)
 		require.NoError(t, err)
 		defer src.Close()
@@ -198,7 +198,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 	// Since `t.TempDir` deletes the generated dir, retain generated `genesis.json` on test failure.
 	saveOnFailure := func(result bool, generatedFilename, artifactName string) {
 		if !result {
-			saveGeneratedGenesisJson(generatedFilename, artifactName)
+			saveGeneratedGenesisJSON(generatedFilename, artifactName)
 			t.FailNow()
 		}
 	}
