@@ -48,7 +48,7 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions":  true,
+	"/v1/transactions":  true, // Deprecated path
 	"/v2/transactions":  true,
 	"/v2/teal/dryrun":   true,
 	"/v2/teal/compile":  true,

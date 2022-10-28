@@ -24,7 +24,8 @@ printf 'int 1' > "${TEMPDIR}/simplev1.teal"
 # Fail in creating app with v1 approval program
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simplev1.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
-if [[ $RES != *"${EXPERROR}"* ]]; then
+EXPERRORUNICODE='program version must be \u003e= 2 for this transaction group'
+if [[ $RES != *"${EXPERROR}"* && $RES != *"${EXPERRORUNICODE}"* ]]; then
     date '+app-create-test FAIL should fail to create app with v1 approval program %Y%m%d_%H%M%S'
     false
 fi
@@ -32,7 +33,8 @@ fi
 # Fail in creating app with v1 clearstate program
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simplev1.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
-if [[ $RES != *"${EXPERROR}"* ]]; then
+EXPERRORUNICODE='program version must be \u003e= 2 for this transaction group'
+if [[ $RES != *"${EXPERROR}"* && $RES != *"${EXPERRORUNICODE}"* ]]; then
     date '+app-create-test FAIL should fail to create app with v1 clearstate program %Y%m%d_%H%M%S'
     false
 fi

@@ -1087,7 +1087,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 				// ignore the returned error (most of the time will be error)
 				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
 				require.Error(t, err)
-				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
+				require.Equal(t, "HTTP 400 Bad Request: {\"message\":\"TransactionPool.checkPendingQueueSize: transaction pool have reached capacity\"}", err.Error())
 				time.Sleep(25 * time.Millisecond)
 			}
 		}(uint64(txnSpam + 1))
