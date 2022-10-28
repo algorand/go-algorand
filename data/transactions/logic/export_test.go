@@ -16,6 +16,8 @@
 
 package logic
 
+import "github.com/algorand/go-algorand/data/basics"
+
 // Export for testing only.  See
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
 // nice explanation. tl;dr: Since some of our testing is in logic_test package,
@@ -28,6 +30,18 @@ func NewExpect(l int, s string) Expect {
 
 func (ep *EvalParams) Reset() {
 	ep.reset()
+}
+
+// Inefficient (hashing), just a testing convenience
+func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
+	l.NewBox(app, name, make([]byte, size), app.Address())
+}
+
+// Inefficient (hashing), just a testing convenience
+func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
+	for _, n := range names {
+		l.DelBox(app, n, app.Address())
+	}
 }
 
 var MakeSampleEnv = makeSampleEnv

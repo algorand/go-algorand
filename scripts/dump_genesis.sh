@@ -76,6 +76,9 @@ for LEDGER in $LEDGERS; do
       unfinishedcatchpoints)
         SORT=round
         ;;
+      kvstore)
+        SORT=key
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

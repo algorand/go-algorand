@@ -50,6 +50,8 @@ type accountsDbQueries struct {
 	lookupStmt             *sql.Stmt
 	lookupResourcesStmt    *sql.Stmt
 	lookupAllResourcesStmt *sql.Stmt
+	lookupKvPairStmt       *sql.Stmt
+	lookupKeysByRangeStmt  *sql.Stmt
 	lookupCreatorStmt      *sql.Stmt
 }
 
@@ -129,6 +131,12 @@ var createResourcesTable = []string{
 		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
+var createBoxTable = []string{
+	`CREATE TABLE IF NOT EXISTS kvstore (
+		key blob primary key,
+		value blob)`,
+}
+
 var createOnlineAccountsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineaccounts (
 		address BLOB NOT NULL,
@@ -168,6 +176,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
+	`DROP TABLE IF EXISTS kvstore`,
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
@@ -183,7 +192,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(7)
+var accountDBVersion = int32(8)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -260,6 +269,15 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 		}
 	}
 	return ret
+}
+
+//msgp:ignore persistedKVData
+type persistedKVData struct {
+	// kv value
+	value []byte
+	// the round number that is associated with the kv value. This field is the corresponding one to the round field
+	// in persistedAccountData, and serves the same purpose.
+	round basics.Round
 }
 
 // resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
@@ -1096,19 +1114,49 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []nor
 			if resData.IsOwning() {
 				// determine if it's an asset
 				if resData.IsAsset() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AssetCreatable)
 					if err != nil {
 						return err
 					}
 				}
 				// determine if it's an application
 				if resData.IsApp() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AppCreatable)
 					if err != nil {
 						return err
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// writeCatchpointStagingKVs inserts all the KVs in the provided array into the
+// catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
+func writeCatchpointStagingKVs(ctx context.Context, tx *sql.Tx, kvrs []encodedKVRecordV6) error {
+	insertKV, err := tx.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertKV.Close()
+
+	insertHash, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+	defer insertHash.Close()
+
+	for _, kvr := range kvrs {
+		_, err := insertKV.ExecContext(ctx, kvr.Key, kvr.Value)
+		if err != nil {
+			return err
+		}
+
+		hash := kvHashBuilderV6(string(kvr.Key), kvr.Value)
+		_, err = insertHash.ExecContext(ctx, hash)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1121,6 +1169,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointkvstore",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1141,6 +1190,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
@@ -1164,11 +1215,13 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"DROP TABLE IF EXISTS assetcreators",
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
+		"DROP TABLE IF EXISTS kvstore",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
 	}
 
 	for _, stmt := range stmts {
@@ -1353,6 +1406,26 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// accountsCreateBoxTable creates the KVStore table for box-storage in the database.
+func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
+	if err == nil {
+		// already exists
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	for _, stmt := range createBoxTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
 		_, err = tx.ExecContext(ctx, stmt)
@@ -1418,6 +1491,8 @@ type baseAccountData struct {
 	TotalAssets                uint64            `codec:"j"`
 	TotalAppParams             uint64            `codec:"k"`
 	TotalAppLocalStates        uint64            `codec:"l"`
+	TotalBoxes                 uint64            `codec:"m"`
+	TotalBoxBytes              uint64            `codec:"n"`
 
 	baseVotingData
 
@@ -1442,6 +1517,8 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAssets == 0 &&
 		ba.TotalAppParams == 0 &&
 		ba.TotalAppLocalStates == 0 &&
+		ba.TotalBoxes == 0 &&
+		ba.TotalBoxBytes == 0 &&
 		ba.baseVotingData.IsEmpty()
 }
 
@@ -1462,6 +1539,8 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalAssets = ad.TotalAssets
 	ba.TotalAppParams = ad.TotalAppParams
 	ba.TotalAppLocalStates = ad.TotalAppLocalStates
+	ba.TotalBoxes = ad.TotalBoxes
+	ba.TotalBoxBytes = ad.TotalBoxBytes
 
 	ba.baseVotingData.SetCoreAccountData(ad)
 }
@@ -1479,6 +1558,8 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAssets = uint64(len(ad.Assets))
 	ba.TotalAppParams = uint64(len(ad.AppParams))
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
+	ba.TotalBoxes = ad.TotalBoxes
+	ba.TotalBoxBytes = ad.TotalBoxBytes
 
 	ba.baseVotingData.VoteID = ad.VoteID
 	ba.baseVotingData.SelectionID = ad.SelectionID
@@ -1511,6 +1592,8 @@ func (ba *baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 		TotalAppLocalStates: ba.TotalAppLocalStates,
 		TotalAssetParams:    ba.TotalAssetParams,
 		TotalAssets:         ba.TotalAssets,
+		TotalBoxes:          ba.TotalBoxes,
+		TotalBoxBytes:       ba.TotalBoxBytes,
 	}
 }
 
@@ -1537,6 +1620,8 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
 		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
+		TotalBoxes:         ba.TotalBoxes,
+		TotalBoxBytes:      ba.TotalBoxBytes,
 
 		VoteID:          ba.VoteID,
 		SelectionID:     ba.SelectionID,
@@ -2526,6 +2611,16 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
+	qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2582,6 +2677,108 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 			copy(cl.Creator[:], buf)
 			cl.Type = ctype
 			results = append(results, cl)
+		}
+		return nil
+	})
+	return
+}
+
+// sql.go has the following contradictory comments:
+
+// Reference types such as []byte are only valid until the next call to Scan
+// and should not be retained. Their underlying memory is owned by the driver.
+// If retention is necessary, copy their values before the next call to Scan.
+
+// If a dest argument has type *[]byte, Scan saves in that argument a
+// copy of the corresponding data. The copy is owned by the caller and
+// can be modified and held indefinitely. The copy can be avoided by
+// using an argument of type *RawBytes instead; see the documentation
+// for RawBytes for restrictions on its use.
+
+// After check source code, a []byte slice destination is definitely cloned.
+
+func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedKVData, err error) {
+	err = db.Retry(func() error {
+		var val []byte
+		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
+		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.round, &val)
+		if err != nil {
+			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
+			if err == sql.ErrNoRows {
+				// Return the zero value of data
+				err = fmt.Errorf("unable to query value for key %v : %w", key, err)
+			}
+			return err
+		}
+		if val != nil { // We got a non-null value, so it exists
+			pv.value = val
+			return nil
+		}
+		// we don't have that key, just return pv with the database round (pv.value==nil)
+		return nil
+	})
+	return
+}
+
+// keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
+// Such DB query was designed this way, to trigger the binary search optimization in SQLITE3.
+// The DB comparison for blob typed primary key is lexicographic, i.e., byte by byte.
+// In this way, we can introduce an interval that a primary key should be >= some prefix, < some prefix increment.
+// A corner case to consider is that, the prefix has last byte 0xFF, or the prefix is full of 0xFF.
+// - The first case can be solved by carrying, e.g., prefix = 0x1EFF -> interval being >= 0x1EFF and < 0x1F
+// - The second case can be solved by disregarding the upper limit, i.e., prefix = 0xFFFF -> interval being >= 0xFFFF
+// Another corner case to consider is empty byte, []byte{} or nil.
+// - In both cases, the results are interval >= "", i.e., returns []byte{} for prefix, and nil for prefixIncr.
+func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
+	if prefix == nil {
+		prefix = []byte{}
+	}
+	prefixIncr := make([]byte, len(prefix))
+	copy(prefixIncr, prefix)
+	for i := len(prefix) - 1; i >= 0; i-- {
+		currentByteIncr := int(prefix[i]) + 1
+		if currentByteIncr > 0xFF {
+			prefixIncr = prefixIncr[:len(prefixIncr)-1]
+			continue
+		}
+		prefixIncr[i] = byte(currentByteIncr)
+		return prefix, prefixIncr
+	}
+	return prefix, nil
+}
+
+func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+	if end == nil {
+		// Not an expected use case, it's asking for all keys, or all keys
+		// prefixed by some number of 0xFF bytes.
+		return 0, fmt.Errorf("Lookup by strange prefix %#v", prefix)
+	}
+	err = db.Retry(func() error {
+		var rows *sql.Rows
+		rows, err = qs.lookupKeysByRangeStmt.Query(start, end)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var v sql.NullString
+
+		for rows.Next() {
+			if resultCount == maxKeyNum {
+				return nil
+			}
+			err = rows.Scan(&round, &v)
+			if err != nil {
+				return err
+			}
+			if v.Valid {
+				if _, ok := results[v.String]; ok {
+					continue
+				}
+				results[v.String] = true
+				resultCount++
+			}
 		}
 		return nil
 	})
@@ -2919,6 +3116,8 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
+		&qs.lookupKvPairStmt,
+		&qs.lookupKeysByRangeStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
@@ -3131,6 +3330,9 @@ type accountsWriter interface {
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
 	updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error)
 
+	upsertKvPair(key string, value []byte) error
+	deleteKvPair(key string) error
+
 	insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error)
 	deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error)
 
@@ -3147,6 +3349,7 @@ type accountsSQLWriter struct {
 	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
 	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
 	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
+	deleteKvPairStmt, upsertKvPairStmt                         *sql.Stmt
 }
 
 type onlineAccountsSQLWriter struct {
@@ -3154,38 +3357,21 @@ type onlineAccountsSQLWriter struct {
 }
 
 func (w *accountsSQLWriter) close() {
-	if w.deleteByRowIDStmt != nil {
-		w.deleteByRowIDStmt.Close()
-		w.deleteByRowIDStmt = nil
+	// Formatted to match the type definition above
+	preparedStmts := []**sql.Stmt{
+		&w.insertCreatableIdxStmt, &w.deleteCreatableIdxStmt,
+		&w.deleteByRowIDStmt, &w.insertStmt, &w.updateStmt,
+		&w.deleteResourceStmt, &w.insertResourceStmt, &w.updateResourceStmt,
+		&w.deleteKvPairStmt, &w.upsertKvPairStmt,
 	}
-	if w.insertStmt != nil {
-		w.insertStmt.Close()
-		w.insertStmt = nil
+
+	for _, stmt := range preparedStmts {
+		if (*stmt) != nil {
+			(*stmt).Close()
+			*stmt = nil
+		}
 	}
-	if w.updateStmt != nil {
-		w.updateStmt.Close()
-		w.updateStmt = nil
-	}
-	if w.deleteResourceStmt != nil {
-		w.deleteResourceStmt.Close()
-		w.deleteResourceStmt = nil
-	}
-	if w.insertResourceStmt != nil {
-		w.insertResourceStmt.Close()
-		w.insertResourceStmt = nil
-	}
-	if w.updateResourceStmt != nil {
-		w.updateResourceStmt.Close()
-		w.updateResourceStmt = nil
-	}
-	if w.insertCreatableIdxStmt != nil {
-		w.insertCreatableIdxStmt.Close()
-		w.insertCreatableIdxStmt = nil
-	}
-	if w.deleteCreatableIdxStmt != nil {
-		w.deleteCreatableIdxStmt.Close()
-		w.deleteCreatableIdxStmt = nil
-	}
+
 }
 
 func (w *onlineAccountsSQLWriter) close() {
@@ -3195,7 +3381,7 @@ func (w *onlineAccountsSQLWriter) close() {
 	}
 }
 
-func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
 	if hasAccounts {
@@ -3227,6 +3413,18 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 		}
 
 		w.updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+		if err != nil {
+			return
+		}
+	}
+
+	if hasKvPairs {
+		w.upsertKvPairStmt, err = tx.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+		if err != nil {
+			return
+		}
+
+		w.deleteKvPairStmt, err = tx.Prepare("DELETE FROM kvstore WHERE key=?")
 		if err != nil {
 			return
 		}
@@ -3300,6 +3498,31 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
+func (w accountsSQLWriter) upsertKvPair(key string, value []byte) error {
+	// NOTE! If we are passing in `string`, then for `BoxKey` case,
+	// we might contain 0-byte in boxKey, coming from uint64 appID.
+	// The consequence would be DB key write in be cut off after such 0-byte.
+	// Casting `string` to `[]byte` avoids such trouble, and test:
+	// - `TestBoxNamesByAppIDs` in `acctupdates_test`
+	// relies on such modification.
+	result, err := w.upsertKvPairStmt.Exec([]byte(key), value)
+	if err != nil {
+		return err
+	}
+	_, err = result.LastInsertId()
+	return err
+}
+
+func (w accountsSQLWriter) deleteKvPair(key string) error {
+	// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
+	result, err := w.deleteKvPairStmt.Exec([]byte(key))
+	if err != nil {
+		return err
+	}
+	_, err = result.RowsAffected()
+	return err
+}
+
 func (w accountsSQLWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
 	result, err := w.insertCreatableIdxStmt.Exec(cidx, creator, ctype)
 	if err != nil {
@@ -3348,20 +3571,21 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
 	tx *sql.Tx,
-	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
+	hasKvPairs := len(kvPairs) > 0
 	hasCreatables := len(creatables) > 0
 
-	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
+	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 	if err != nil {
 		return
 	}
 	defer writer.close()
 
-	return accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+	return accountsNewRoundImpl(writer, updates, resources, kvPairs, creatables, proto, lastUpdateRound)
 }
 
 func onlineAccountsNewRound(
@@ -3385,10 +3609,9 @@ func onlineAccountsNewRound(
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRoundImpl(
 	writer accountsWriter,
-	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
-
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, updatedKVs map[string]persistedKVData, err error) {
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
@@ -3586,16 +3809,28 @@ func accountsNewRoundImpl(
 		}
 	}
 
-	if len(creatables) > 0 {
-		for cidx, cdelta := range creatables {
-			if cdelta.Created {
-				_, err = writer.insertCreatable(cidx, cdelta.Ctype, cdelta.Creator[:])
-			} else {
-				_, err = writer.deleteCreatable(cidx, cdelta.Ctype)
-			}
-			if err != nil {
-				return
-			}
+	updatedKVs = make(map[string]persistedKVData, len(kvPairs))
+	for key, value := range kvPairs {
+		if value.data != nil {
+			err = writer.upsertKvPair(key, value.data)
+			updatedKVs[key] = persistedKVData{value: value.data, round: lastUpdateRound}
+		} else {
+			err = writer.deleteKvPair(key)
+			updatedKVs[key] = persistedKVData{value: nil, round: lastUpdateRound}
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	for cidx, cdelta := range creatables {
+		if cdelta.Created {
+			_, err = writer.insertCreatable(cidx, cdelta.Ctype, cdelta.Creator[:])
+		} else {
+			_, err = writer.deleteCreatable(cidx, cdelta.Ctype)
+		}
+		if err != nil {
+			return
 		}
 	}
 
@@ -3941,6 +4176,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+//
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -4111,8 +4347,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		iterator.Close()
 		return
 	}
-	// we just finished reading the table.
-	iterator.Close()
+	// Do not Close() the iterator here.  It is the caller's responsibility to
+	// do so, signalled by the return of an empty chunk. If we Close() here, the
+	// next call to Next() will start all over!
 	return
 }
 
@@ -4129,6 +4366,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
+//
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 
@@ -4767,6 +5005,12 @@ func (pac *persistedAccountData) before(other *persistedAccountData) bool {
 // before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
 // happened before the other.
 func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
+	return prd.round < other.round
+}
+
+// before compares the round numbers of two persistedKVData and determines if the current persistedKVData
+// happened before the other.
+func (prd persistedKVData) before(other *persistedKVData) bool {
 	return prd.round < other.round
 }
 

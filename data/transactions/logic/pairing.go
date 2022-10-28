@@ -110,7 +110,6 @@ func opBn256Pairing(cx *EvalContext) error {
 		return errors.New("pairing failed")
 	}
 	cx.stack = cx.stack[:last]
-	cx.stack[prev].Uint = boolToUint(ok)
-	cx.stack[prev].Bytes = nil
+	cx.stack[prev] = boolToSV(ok)
 	return nil
 }

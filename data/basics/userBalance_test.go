@@ -248,6 +248,7 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
 			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
+		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
 	}
 }
 
