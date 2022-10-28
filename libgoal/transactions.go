@@ -165,11 +165,11 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	if err != nil {
 		return
 	}
-	resp, err := algod.SendRawTransaction(stx)
+	resp, err := algod.SendRawTransactionV2(stx)
 	if err != nil {
 		return
 	}
-	return resp.TxID, nil
+	return resp.TxId, nil
 }
 
 // BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
@@ -178,7 +178,7 @@ func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) err
 	if err != nil {
 		return err
 	}
-	return algod.SendRawTransactionGroup(txgroup)
+	return algod.SendRawTransactionGroupV2(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it

@@ -269,6 +269,20 @@ func TestAssetConfig(t *testing.T) {
 		a.True(strings.Contains(err.Error(), "too many assets in account:"))
 	}
 
+	// Helper methods for dereferencing asset fields
+	derefString := func(sp *string) string {
+		if sp != nil {
+			return *sp
+		}
+		return ""
+	}
+	derefByteArray := func(ba *[]byte) []byte {
+		if ba != nil {
+			return *ba
+		}
+		return []byte{}
+	}
+
 	// Check that assets are visible
 	info, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
@@ -279,14 +293,14 @@ func TestAssetConfig(t *testing.T) {
 		idx := asset.Index
 		cp := asset.Params
 		assets = append(assets, assetIDParams{idx, cp})
-		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
-		a.Equal(cp.Name, fmt.Sprintf("testname%d", cp.Total-1))
-		a.Equal(cp.Manager, manager)
-		a.Equal(cp.Reserve, reserve)
-		a.Equal(cp.Freeze, freeze)
-		a.Equal(cp.Clawback, clawback)
-		a.Equal(cp.MetadataHash, assetMetadataHash)
-		a.Equal(cp.Url, assetURL)
+		a.Equal(derefString(cp.UnitName), fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(derefString(cp.Name), fmt.Sprintf("testname%d", cp.Total-1))
+		a.Equal(derefString(cp.Manager), manager)
+		a.Equal(derefString(cp.Reserve), reserve)
+		a.Equal(derefString(cp.Freeze), freeze)
+		a.Equal(derefString(cp.Clawback), clawback)
+		a.Equal(derefByteArray(cp.MetadataHash), assetMetadataHash)
+		a.Equal(derefString(cp.Url), assetURL)
 	}
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -345,37 +359,37 @@ func TestAssetConfig(t *testing.T) {
 	for _, asset := range *info.CreatedAssets {
 		idx := asset.Index
 		cp := asset.Params
-		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
-		a.Equal(cp.Name, fmt.Sprintf("testname%d", cp.Total-1))
+		a.Equal(derefString(cp.UnitName), fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(derefString(cp.Name), fmt.Sprintf("testname%d", cp.Total-1))
 
 		if idx == assets[0].idx {
-			a.Equal(cp.Manager, account0)
+			a.Equal(derefString(cp.Manager), account0)
 		} else {
-			a.Equal(cp.Manager, manager)
+			a.Equal(derefString(cp.Manager), manager)
 		}
 
 		if idx == assets[1].idx {
-			a.Equal(cp.Reserve, account0)
+			a.Equal(derefString(cp.Reserve), account0)
 		} else if idx == assets[4].idx {
-			a.Equal(cp.Reserve, "")
+			a.Equal(derefString(cp.Reserve), "")
 		} else {
-			a.Equal(cp.Reserve, reserve)
+			a.Equal(derefString(cp.Reserve), reserve)
 		}
 
 		if idx == assets[2].idx {
-			a.Equal(cp.Freeze, account0)
+			a.Equal(derefString(cp.Freeze), account0)
 		} else if idx == assets[5].idx {
-			a.Equal(cp.Freeze, "")
+			a.Equal(derefString(cp.Freeze), "")
 		} else {
-			a.Equal(cp.Freeze, freeze)
+			a.Equal(derefString(cp.Freeze), freeze)
 		}
 
 		if idx == assets[3].idx {
-			a.Equal(cp.Clawback, account0)
+			a.Equal(derefString(cp.Clawback), account0)
 		} else if idx == assets[6].idx {
-			a.Equal(cp.Clawback, "")
+			a.Equal(derefString(cp.Clawback), "")
 		} else {
-			a.Equal(cp.Clawback, clawback)
+			a.Equal(derefString(cp.Clawback), clawback)
 		}
 	}
 

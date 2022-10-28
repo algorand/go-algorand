@@ -85,7 +85,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, fixture *fixtures.RestClient
 		if stxn == nil {
 			break
 		}
-		_, err := fixture.AlgodClient.SendRawTransaction(*stxn)
+		_, err := fixture.AlgodClient.SendRawTransactionV2(*stxn)
 		if err != nil {
 			handleError(err, "Error broadcastTransactions", errChan)
 		}
@@ -101,7 +101,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, fixture *fixtures.RestC
 		}
 		var err error
 
-		err = fixture.AlgodClient.SendRawTransactionGroup(stxns)
+		err = fixture.AlgodClient.SendRawTransactionGroupV2(stxns)
 		if err != nil {
 			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
@@ -1051,7 +1051,7 @@ func signAndBroadcastTransaction(
 		return err
 	}
 
-	_, err = fixture.AlgodClient.SendRawTransaction(stxn)
+	_, err = fixture.AlgodClient.SendRawTransactionV2(stxn)
 	if err != nil {
 		return err
 	}
