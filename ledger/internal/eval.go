@@ -832,11 +832,9 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
 	}
 
-	cow := eval.state
-
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.TestTransaction(txn, cow)
+		err := eval.TestTransaction(txn)
 		if err != nil {
 			return err
 		}
@@ -871,7 +869,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, cow *roundCowState) error {
+func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.block)
 	if err != nil {
@@ -885,7 +883,7 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, cow *rou
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	err = eval.state.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
