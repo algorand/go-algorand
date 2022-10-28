@@ -884,7 +884,7 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn, cow *rou
 	}
 
 	// Transaction already in the ledger?
-	txid := txn.ID()
+	txid := txn.Txn.CacheID()
 	err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err

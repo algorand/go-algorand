@@ -98,6 +98,10 @@ type Transaction struct {
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
 	StateProofTxnFields
+
+	// The transaction's Txid is computed when we decode,
+	// and cached here, to avoid needlessly recomputing it.
+	cachedTxid *Txid
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -176,8 +180,27 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+// CacheID sets the cached transaction ID cache inside this transaction, and returns
+// its value. It should only be used in a concurrency-safe context (e.g., after
+// decoding a transaction).
+func (tx *Transaction) CacheID() Txid {
+	if tx.cachedTxid != nil {
+		return *tx.cachedTxid
+	}
+	ret := tx.computeID()
+	tx.cachedTxid = &ret
+	return ret
+}
+
 // ID returns the Txid (i.e., hash) of the transaction.
 func (tx Transaction) ID() Txid {
+	if tx.cachedTxid != nil {
+		return *tx.cachedTxid
+	}
+	return tx.computeID()
+}
+
+func (tx *Transaction) computeID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
