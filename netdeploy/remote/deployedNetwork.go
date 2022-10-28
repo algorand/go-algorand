@@ -385,7 +385,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		}
 
 		accounts[addr] = alloc.State
-
 	}
 
 	//initial state
@@ -425,8 +424,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	max := fileCfgs.BalanceRange[1]
 	bal := rand.Int63n(max-min) + min
 	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bal)}
-	totalFunds := accounts[src].MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
-	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
+	srcAcct := accounts[src]
+	srcAcct.MicroAlgos.Raw += bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
+	accounts[src] = srcAcct
 
 	//init block
 	initState, err := generateInitState(accounts, &bootstrappedNet)
