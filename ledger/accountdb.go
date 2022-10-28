@@ -2258,12 +2258,23 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
 
-		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
-		deeperBlockHistory := basics.Round(config.Consensus[latestHdr.CurrentProtocol].DeeperBlockHeaderHistory)
-		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
+		proto := config.Consensus[latestHdr.CurrentProtocol]
+		maxTxnLife := basics.Round(proto.MaxTxnLife)
+		deeperBlockHistory := basics.Round(proto.DeeperBlockHeaderHistory)
+		// firstRound is either maxTxnLife + deeperBlockHistory back from the latest for regular init
+		// or maxTxnLife + deeperBlockHistory + CatchpointLookback back for catchpoint apply.
+		// Try to check the earliest available and start from there.
+		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory + basics.Round(proto.CatchpointLookback))
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
 			firstRound++
+		}
+		if _, err := blockGet(blockTx, firstRound); err != nil {
+			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
+			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
+			if firstRound == basics.Round(0) {
+				firstRound++
+			}
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
