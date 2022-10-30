@@ -147,11 +147,13 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 	}
 }
 
-func initializeTestCatchupAccessor(t *testing.T, l *Ledger, ctx context.Context, accountsCount uint64) (CatchpointCatchupAccessor, CatchpointCatchupAccessorProgress) {
+func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64) (CatchpointCatchupAccessor, CatchpointCatchupAccessorProgress) {
 	log := logging.TestingLog(t)
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
 	var progress CatchpointCatchupAccessorProgress
+
+	ctx := context.Background()
 
 	// We do this to create catchpoint staging tables.
 	err := catchpointAccessor.ResetStagingBalances(ctx, true)
@@ -191,8 +193,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 		l.Close()
 	}()
 
-	ctx := context.Background()
-	catchpointAccessor, progress := initializeTestCatchupAccessor(t, l, ctx, uint64(len(initkeys)))
+	catchpointAccessor, progress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
 
 	require.NoError(t, err)
 
@@ -201,6 +202,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	}
 	blob := protocol.Encode(&wrappedData)
 
+	ctx := context.Background()
 	err = catchpointAccessor.ProgressStagingBalances(ctx, "stateProofVerificationData.msgpack", blob, &progress)
 	require.NoError(t, err)
 
