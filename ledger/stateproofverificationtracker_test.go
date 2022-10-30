@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"math/rand"
 	"testing"
 
@@ -173,11 +174,14 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 		var err error
 		switch trackingLocation {
 		case any:
-			_, err = spt.LookupVerificationData(targetStateProofRound)
+			_, err = spt.lookupFirstStage(targetStateProofRound)
 		case trackerDB:
-			_, err = spt.lookupDataInDB(targetStateProofRound)
+			_, err = spt.dbQueries.lookupFirstStageStateProofVerification(targetStateProofRound)
+			if err != nil && errors.Is(err, sql.ErrNoRows) {
+				err = errStateProofVerificationDataNotFound
+			}
 		case trackerMemory:
-			_, err = spt.lookupDataInTrackedMemory(targetStateProofRound)
+			_, err = spt.lookupFirstStageDataInTrackedMemory(targetStateProofRound)
 		}
 
 		if dataPresenceExpected {
@@ -231,7 +235,7 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
 }
 
-func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
+func TestStateProofVerificationTracker_CommitFullDbFlush(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ml, spt := initializeLedgerSpt(t)
@@ -438,22 +442,26 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 
 	_, err := spt.LookupVerificationData(basics.Round(0))
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "no rows")
 
 	lastStateProofRound := basics.Round(defaultStateProofInterval + dataToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationData(lastStateProofRound + basics.Round(defaultStateProofInterval))
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "greater than maximum")
 
-	dbDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum-1)*defaultStateProofInterval)
+	// First stage is taken from disk second stage taken from memory
+	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
 	a.NoError(err)
 	a.Equal(dbDataRound, dbData.TargetStateProofRound)
 	a.Equal(protocol.ConsensusCurrentVersion, dbData.Version)
 
-	dbDataRound = basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
+	// First and second stage taken from disk
+	dbDataRound = basics.Round(defaultStateProofInterval + (expectedDataInDbNum-1)*defaultStateProofInterval)
 	dbData, err = spt.LookupVerificationData(dbDataRound)
 	a.NoError(err)
 	a.Equal(dbDataRound, dbData.TargetStateProofRound)
-	a.Equal(protocol.ConsensusVersion(""), dbData.Version)
+	a.Equal(protocol.ConsensusCurrentVersion, dbData.Version)
 
 	memoryDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
 	memoryData, err := spt.LookupVerificationData(memoryDataRound)
@@ -461,17 +469,18 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
 	a.Equal(protocol.ConsensusCurrentVersion, memoryData.Version)
 
+	// First stage data should be in memory. Second stage didn't happen yet.
 	memoryDataRound = basics.Round((dataToAdd + 1) * defaultStateProofInterval)
 	memoryData, err = spt.LookupVerificationData(memoryDataRound)
-	a.NoError(err)
-	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
-	a.Equal(protocol.ConsensusVersion(""), memoryData.Version)
+	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "second stage data ")
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	memoryDataRound = basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
-	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
+	spt.trackedFirstStageData[0].firstStageVerificationData.TargetStateProofRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
+	a.ErrorContains(err, "memory lookup failed")
 }
 
 func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) {
@@ -487,5 +496,5 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 		defaultStateProofInterval, true)
 
 	pastBlock := randomBlock(0)
-	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
+	a.Panics(func() { spt.insertFirstStageCommitData(&pastBlock.block) })
 }

@@ -22,8 +22,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// StateProofVerificationData represents the data provided by the ledger to verify a state proof transaction.
-type StateProofVerificationData struct {
+// StateProofFirstStageVerificationData represents the data collected by the ledger when a state proof commitment appears on chain.
+type StateProofFirstStageVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// TargetStateProofRound is the last attested round of the state proof verified using this data.
@@ -34,7 +34,18 @@ type StateProofVerificationData struct {
 
 	// OnlineTotalWeight is the total amount of stake attesting to the next state proof.
 	OnlineTotalWeight basics.MicroAlgos `codec:"pw"`
+}
+
+// StateProofSecondStageVerificationData represents the data collected by the ledger when the state proof is written on chain.
+type StateProofSecondStageVerificationData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Version is the protocol version which is being use for the state proof
-	Version protocol.ConsensusVersion
+	Version protocol.ConsensusVersion `codec:"v"`
+}
+
+// StateProofVerificationData represents the data provided by the ledger to verify a state proof transaction.
+type StateProofVerificationData struct {
+	StateProofFirstStageVerificationData
+	StateProofSecondStageVerificationData
 }

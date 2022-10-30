@@ -194,6 +194,126 @@ func BenchmarkUnmarshalOnlineRoundParamsData(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalStateProofFirstStageVerificationData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := StateProofFirstStageVerificationData{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingStateProofFirstStageVerificationData(t *testing.T) {
+	protocol.RunEncodingTest(t, &StateProofFirstStageVerificationData{})
+}
+
+func BenchmarkMarshalMsgStateProofFirstStageVerificationData(b *testing.B) {
+	v := StateProofFirstStageVerificationData{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgStateProofFirstStageVerificationData(b *testing.B) {
+	v := StateProofFirstStageVerificationData{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalStateProofFirstStageVerificationData(b *testing.B) {
+	v := StateProofFirstStageVerificationData{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalStateProofSecondStageVerificationData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := StateProofSecondStageVerificationData{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingStateProofSecondStageVerificationData(t *testing.T) {
+	protocol.RunEncodingTest(t, &StateProofSecondStageVerificationData{})
+}
+
+func BenchmarkMarshalMsgStateProofSecondStageVerificationData(b *testing.B) {
+	v := StateProofSecondStageVerificationData{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgStateProofSecondStageVerificationData(b *testing.B) {
+	v := StateProofSecondStageVerificationData{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalStateProofSecondStageVerificationData(b *testing.B) {
+	v := StateProofSecondStageVerificationData{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalStateProofVerificationData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := StateProofVerificationData{}

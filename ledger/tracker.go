@@ -274,10 +274,10 @@ type deferredCommitContext struct {
 	stateProofVerificationEarliestTrackStateProofRound basics.Round
 
 	// state proof verification commit information
-	stateProofVerificationCommitData []verificationCommitData
+	stateProofFirstStageCommitData []verificationCommitData
 
 	// state proof verification update information
-	stateProofVerificationUpdateCommitData []verificationCommitUpdateData
+	stateProofSecondStageCommitData []verificationCommitUpdateData
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")

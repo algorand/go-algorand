@@ -60,7 +60,8 @@ type onlineAccountsDbQueries struct {
 }
 
 type stateProofVerificationDbQueries struct {
-	lookupStateProofVerificationData *sql.Stmt
+	lookupStateProofFirstStageData  *sql.Stmt
+	lookupStateProofSecondStageData *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -171,8 +172,8 @@ const createUnfinishedCatchpointsTable = `
 const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
 	targetstateproofround integer primary key NOT NULL,
-	verificationdata blob NOT NULL,
-	version TEXT)`
+	firststageverificationdata blob NOT NULL,
+	secondstageverificationdata blob)`
 
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
@@ -5054,21 +5055,39 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-func updateStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitUpdateData) error {
+func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
+	var err error
+	qs := &stateProofVerificationDbQueries{}
+
+	qs.lookupStateProofFirstStageData, err = r.Prepare("SELECT firststageverificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupStateProofSecondStageData, err = r.Prepare("SELECT secondstageverificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	if err != nil {
+		qs.lookupStateProofFirstStageData.Close()
+		return nil, err
+	}
+
+	return qs, nil
+}
+
+func insertFirstStageStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
 	if len(data) == 0 {
 		return nil
 	}
 
-	updateStmt, err := tx.PrepareContext(ctx, "update stateproofverification SET version = ? WHERE targetstateproofround = ?")
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, firststageverificationdata) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
 
-	defer updateStmt.Close()
+	defer insertStmt.Close()
 
-	for _, commitUpdate := range data {
+	for _, commitData := range data {
 		f := func() error {
-			_, err = updateStmt.ExecContext(ctx, commitUpdate.version, commitUpdate.confirmedRound)
+			_, err = insertStmt.ExecContext(ctx, commitData.firstStageVerificationData.TargetStateProofRound, protocol.Encode(&commitData.firstStageVerificationData))
 			return err
 		}
 
@@ -5081,22 +5100,22 @@ func updateStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	return nil
 }
 
-func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
+func insertSecondStageStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitUpdateData) error {
 	if len(data) == 0 {
 		return nil
 	}
 
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+	insertSecondStageStmt, err := tx.PrepareContext(ctx, "update stateproofverification SET secondstageverificationdata = ? WHERE targetstateproofround = ?")
 	if err != nil {
 		return err
 	}
 
-	defer insertStmt.Close()
+	defer insertSecondStageStmt.Close()
 
-	for _, commitData := range data {
-		verificationData := commitData.verificationData
+	// todo should we make sure that the record exists and panic?
+	for _, commitUpdate := range data {
 		f := func() error {
-			_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+			_, err = insertSecondStageStmt.ExecContext(ctx, protocol.Encode(&commitUpdate.secondStageVerificationData), commitUpdate.confirmedRound)
 			return err
 		}
 
@@ -5117,34 +5136,36 @@ func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earlie
 	return db.Retry(f)
 }
 
-func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
-	var err error
-	qs := &stateProofVerificationDbQueries{}
+func (qs *stateProofVerificationDbQueries) lookupFirstStageStateProofVerification(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofFirstStageVerificationData, error) {
+	data := ledgercore.StateProofFirstStageVerificationData{}
+	queryFunc := func() error {
+		row := qs.lookupStateProofFirstStageData.QueryRow(stateProofLastAttestedRound)
+		var buf []byte
 
-	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata, COALESCE(version, '') FROM stateproofverification WHERE targetstateproofround=?")
-	if err != nil {
-		return nil, err
+		err := row.Scan(&buf)
+		if err != nil {
+			return err
+		}
+
+		return protocol.Decode(buf, &data)
 	}
 
-	return qs, nil
+	err := db.Retry(queryFunc)
+	return &data, err
 }
 
-func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	data := ledgercore.StateProofVerificationData{}
+func (qs *stateProofVerificationDbQueries) lookupSecondStageStateProofVerification(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofSecondStageVerificationData, error) {
+	data := ledgercore.StateProofSecondStageVerificationData{}
 	queryFunc := func() error {
-		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
+		row := qs.lookupStateProofSecondStageData.QueryRow(stateProofLastAttestedRound)
 		var buf []byte
-		var version string
-		err := row.Scan(&buf, &version)
+
+		err := row.Scan(&buf)
 		if err != nil {
 			return err
 		}
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return err
-		}
-		data.Version = protocol.ConsensusVersion(version)
-		return nil
+
+		return protocol.Decode(buf, &data)
 	}
 
 	err := db.Retry(queryFunc)

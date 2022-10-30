@@ -41,13 +41,13 @@ type verificationDeleteData struct {
 }
 
 type verificationCommitData struct {
-	confirmedRound   basics.Round
-	verificationData ledgercore.StateProofVerificationData
+	confirmedRound             basics.Round
+	firstStageVerificationData ledgercore.StateProofFirstStageVerificationData
 }
 
 type verificationCommitUpdateData struct {
-	confirmedRound basics.Round
-	version        protocol.ConsensusVersion
+	confirmedRound              basics.Round
+	secondStageVerificationData ledgercore.StateProofSecondStageVerificationData
 }
 
 // stateProofVerificationTracker is in charge of tracking data required to verify state proofs until such a time
@@ -57,19 +57,19 @@ type stateProofVerificationTracker struct {
 	// to lookup state proof verification data.
 	dbQueries stateProofVerificationDbQueries
 
-	// trackedCommitData represents the part of the tracked verification data currently in memory. Each element in this
+	// trackedFirstStageData represents the part of the tracked verification data currently in memory. Each element in this
 	// array contains both the data required to verify a single state proof and data to decide whether it's possible to
 	// commit the verification data to the database.
-	trackedCommitData []verificationCommitData
+	trackedFirstStageData []verificationCommitData
 
 	// trackedDeleteData represents the data required to delete committed state proof verification data from the
 	// database.
 	trackedDeleteData []verificationDeleteData
 
-	// trackedUpdateData represents additional data that needs to be added to the commitment verification data.
-	trackedUpdateData []verificationCommitUpdateData
+	// trackedSecondStageData represents additional data that needs to be added to the commitment verification data.
+	trackedSecondStageData []verificationCommitUpdateData
 
-	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
+	// stateProofVerificationMu protects trackedFirstStageData and trackedDeleteData.
 	stateProofVerificationMu deadlock.RWMutex
 
 	// log copied from ledger
@@ -90,9 +90,9 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	defer spt.stateProofVerificationMu.Unlock()
 
 	const initialDataArraySize = 10
-	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
+	spt.trackedFirstStageData = make([]verificationCommitData, 0, initialDataArraySize)
 	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
-	spt.trackedUpdateData = make([]verificationCommitUpdateData, 0, initialDataArraySize)
+	spt.trackedSecondStageData = make([]verificationCommitUpdateData, 0, initialDataArraySize)
 
 	return nil
 }
@@ -105,8 +105,8 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 	}
 
 	if blk.Round()%currentStateProofInterval == 0 {
-		spt.insertCommitData(&blk)
-		spt.updatePrevCommitData(&blk)
+		spt.insertFirstStageCommitData(&blk)
+		spt.insertSecondStageCommitData(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
@@ -127,12 +127,12 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	defer spt.stateProofVerificationMu.RUnlock()
 
 	lastDataToCommitIndex := spt.committedRoundToLatestCommitDataIndex(dcc.newBase)
-	dcc.stateProofVerificationCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
-	copy(dcc.stateProofVerificationCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
+	dcc.stateProofFirstStageCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
+	copy(dcc.stateProofFirstStageCommitData, spt.trackedFirstStageData[:lastDataToCommitIndex+1])
 
-	lastDataToUpdateIndex := spt.committedRoundToLatestUpdateDataIndex(dcc.newBase)
-	dcc.stateProofVerificationUpdateCommitData = make([]verificationCommitUpdateData, lastDataToUpdateIndex+1)
-	copy(dcc.stateProofVerificationUpdateCommitData, spt.trackedUpdateData[:lastDataToUpdateIndex+1])
+	lastDataToUpdateIndex := spt.committedRoundToLatestSecondStageDataIndex(dcc.newBase)
+	dcc.stateProofSecondStageCommitData = make([]verificationCommitUpdateData, lastDataToUpdateIndex+1)
+	copy(dcc.stateProofSecondStageCommitData, spt.trackedSecondStageData[:lastDataToUpdateIndex+1])
 
 	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
 	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
@@ -143,12 +143,12 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
+	err = insertFirstStageStateProofVerificationData(ctx, tx, dcc.stateProofFirstStageCommitData)
 	if err != nil {
 		return err
 	}
 
-	err = updateStateProofVerificationData(ctx, tx, dcc.stateProofVerificationUpdateCommitData)
+	err = insertSecondStageStateProofVerificationData(ctx, tx, dcc.stateProofSecondStageCommitData)
 	if err != nil {
 		return err
 	}
@@ -165,8 +165,8 @@ func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *def
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	spt.trackedCommitData = spt.trackedCommitData[len(dcc.stateProofVerificationCommitData):]
-	spt.trackedUpdateData = spt.trackedUpdateData[len(dcc.stateProofVerificationUpdateCommitData):]
+	spt.trackedFirstStageData = spt.trackedFirstStageData[len(dcc.stateProofFirstStageCommitData):]
+	spt.trackedSecondStageData = spt.trackedSecondStageData[len(dcc.stateProofSecondStageCommitData):]
 	spt.trackedDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex+1:]
 }
 
@@ -179,8 +179,12 @@ func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitC
 }
 
 func (spt *stateProofVerificationTracker) close() {
-	if spt.dbQueries.lookupStateProofVerificationData != nil {
-		spt.dbQueries.lookupStateProofVerificationData.Close()
+	if spt.dbQueries.lookupStateProofFirstStageData != nil {
+		spt.dbQueries.lookupStateProofFirstStageData.Close()
+	}
+
+	if spt.dbQueries.lookupStateProofSecondStageData != nil {
+		spt.dbQueries.lookupStateProofSecondStageData.Close()
 	}
 }
 
@@ -188,56 +192,90 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
-	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
-		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+	firstStage, err := spt.lookupFirstStage(stateProofLastAttestedRound)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
-		return spt.lookupDataInDB(stateProofLastAttestedRound)
+	secondStage, err := spt.lookupSecondStage(stateProofLastAttestedRound)
+	if err != nil {
+		return nil, err
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
+	return &ledgercore.StateProofVerificationData{
+		StateProofFirstStageVerificationData:  *firstStage,
+		StateProofSecondStageVerificationData: *secondStage,
+	}, nil
+
+}
+
+func (spt *stateProofVerificationTracker) lookupFirstStage(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofFirstStageVerificationData, error) {
+	if len(spt.trackedFirstStageData) > 0 && stateProofLastAttestedRound >= spt.trackedFirstStageData[0].firstStageVerificationData.TargetStateProofRound &&
+		stateProofLastAttestedRound <= spt.trackedFirstStageData[len(spt.trackedFirstStageData)-1].firstStageVerificationData.TargetStateProofRound {
+		return spt.lookupFirstStageDataInTrackedMemory(stateProofLastAttestedRound)
+	}
+
+	if len(spt.trackedFirstStageData) == 0 || stateProofLastAttestedRound < spt.trackedFirstStageData[0].firstStageVerificationData.TargetStateProofRound {
+		verificationData, err := spt.dbQueries.lookupFirstStageStateProofVerification(stateProofLastAttestedRound)
+		if err != nil {
+			return &ledgercore.StateProofFirstStageVerificationData{}, fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
+		}
+		return verificationData, nil
+	}
+
+	return &ledgercore.StateProofFirstStageVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
 		stateProofLastAttestedRound,
-		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound,
+		spt.trackedFirstStageData[len(spt.trackedFirstStageData)-1].firstStageVerificationData.TargetStateProofRound,
 		errStateProofVerificationDataNotFound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	for _, commitData := range spt.trackedCommitData {
-		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
-			verificationDataCopy := commitData.verificationData
-			spt.updateCommitData(&verificationDataCopy, commitData.verificationData.TargetStateProofRound)
+func (spt *stateProofVerificationTracker) lookupSecondStage(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofSecondStageVerificationData, error) {
+	if len(spt.trackedSecondStageData) > 0 && stateProofLastAttestedRound >= spt.trackedSecondStageData[0].confirmedRound &&
+		stateProofLastAttestedRound <= spt.trackedSecondStageData[len(spt.trackedSecondStageData)-1].confirmedRound {
+		return spt.lookupSecondStageDataInTrackedMemory(stateProofLastAttestedRound)
+	}
+
+	if len(spt.trackedSecondStageData) == 0 || stateProofLastAttestedRound < spt.trackedSecondStageData[0].confirmedRound {
+		secondStageData, err := spt.dbQueries.lookupSecondStageStateProofVerification(stateProofLastAttestedRound)
+		if err != nil {
+			return &ledgercore.StateProofSecondStageVerificationData{}, fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
+		}
+		return secondStageData, nil
+	}
+
+	return &ledgercore.StateProofSecondStageVerificationData{}, fmt.Errorf("requested second stage data for round %d could not be found: %w",
+		stateProofLastAttestedRound,
+		errStateProofVerificationDataNotFound)
+}
+
+func (spt *stateProofVerificationTracker) lookupFirstStageDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofFirstStageVerificationData, error) {
+	for _, commitData := range spt.trackedFirstStageData {
+		if commitData.firstStageVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
+			verificationDataCopy := commitData.firstStageVerificationData
 			return &verificationDataCopy, nil
 		}
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
+	return &ledgercore.StateProofFirstStageVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
 		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
 }
 
-func (spt *stateProofVerificationTracker) updateCommitData(commitData *ledgercore.StateProofVerificationData, round basics.Round) {
-	for _, element := range spt.trackedUpdateData {
-		if element.confirmedRound == round {
-			commitData.Version = element.version
-			return
+func (spt *stateProofVerificationTracker) lookupSecondStageDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofSecondStageVerificationData, error) {
+	for _, commitData := range spt.trackedSecondStageData {
+		if commitData.confirmedRound == stateProofLastAttestedRound {
+			secondStageDataCopy := commitData.secondStageVerificationData
+			return &secondStageDataCopy, nil
 		}
 	}
+
+	return &ledgercore.StateProofSecondStageVerificationData{}, fmt.Errorf("%w for round %d: second stage memory lookup failed",
+		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
-	if err != nil {
-		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
-	}
-
-	return verificationData, err
-}
-
-func (spt *stateProofVerificationTracker) committedRoundToLatestUpdateDataIndex(committedRound basics.Round) int {
+func (spt *stateProofVerificationTracker) committedRoundToLatestSecondStageDataIndex(committedRound basics.Round) int {
 	latestCommittedUpdateIndex := -1
 
-	for index, data := range spt.trackedUpdateData {
+	for index, data := range spt.trackedSecondStageData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedUpdateIndex = index
 		} else {
@@ -251,7 +289,7 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestUpdateDataIndex(
 func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
 	latestCommittedDataIndex := -1
 
-	for index, data := range spt.trackedCommitData {
+	for index, data := range spt.trackedFirstStageData {
 		if data.confirmedRound <= committedRound {
 			latestCommittedDataIndex = index
 		} else {
@@ -276,12 +314,38 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	return latestCommittedDataIndex
 }
 
-func (spt *stateProofVerificationTracker) updatePrevCommitData(blk *bookkeeping.Block) {
+func (spt *stateProofVerificationTracker) insertFirstStageCommitData(blk *bookkeeping.Block) {
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	if len(spt.trackedUpdateData) > 0 {
-		lastUpdateRound := spt.trackedUpdateData[len(spt.trackedUpdateData)-1].confirmedRound
+	if len(spt.trackedFirstStageData) > 0 {
+		lastCommitConfirmedRound := spt.trackedFirstStageData[len(spt.trackedFirstStageData)-1].confirmedRound
+		if blk.Round() <= lastCommitConfirmedRound {
+			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
+				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
+		}
+	}
+
+	verificationData := ledgercore.StateProofFirstStageVerificationData{
+		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
+	}
+
+	commitData := verificationCommitData{
+		confirmedRound:             blk.Round(),
+		firstStageVerificationData: verificationData,
+	}
+
+	spt.trackedFirstStageData = append(spt.trackedFirstStageData, commitData)
+}
+
+func (spt *stateProofVerificationTracker) insertSecondStageCommitData(blk *bookkeeping.Block) {
+	spt.stateProofVerificationMu.Lock()
+	defer spt.stateProofVerificationMu.Unlock()
+
+	if len(spt.trackedSecondStageData) > 0 {
+		lastUpdateRound := spt.trackedSecondStageData[len(spt.trackedSecondStageData)-1].confirmedRound
 		if blk.Round() <= lastUpdateRound {
 			spt.log.Panicf("stateProofVerificationTracker: attempted to update commit data related to earlier than latest"+
 				"update, round: %d, last update round: %d", blk.Round(), lastUpdateRound)
@@ -289,37 +353,11 @@ func (spt *stateProofVerificationTracker) updatePrevCommitData(blk *bookkeeping.
 	}
 
 	update := verificationCommitUpdateData{
-		confirmedRound: blk.Round(),
-		version:        blk.CurrentProtocol,
+		confirmedRound:              blk.Round(),
+		secondStageVerificationData: ledgercore.StateProofSecondStageVerificationData{Version: blk.CurrentProtocol},
 	}
 
-	spt.trackedUpdateData = append(spt.trackedUpdateData, update)
-}
-
-func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
-
-	if len(spt.trackedCommitData) > 0 {
-		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
-		if blk.Round() <= lastCommitConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
-				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
-		}
-	}
-
-	verificationData := ledgercore.StateProofVerificationData{
-		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-	}
-
-	commitData := verificationCommitData{
-		confirmedRound:   blk.Round(),
-		verificationData: verificationData,
-	}
-
-	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
+	spt.trackedSecondStageData = append(spt.trackedSecondStageData, update)
 }
 
 func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
