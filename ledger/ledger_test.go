@@ -3036,7 +3036,7 @@ func TestStateProofVerificationTracker(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	numOfStateProofs := uint64(3)
+	numOfStateProofs := uint64(4)
 	firstStateProofDataConfirmedRound := proto.StateProofInterval
 	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
 
@@ -3050,14 +3050,14 @@ func TestStateProofVerificationTracker(t *testing.T) {
 		protocol.StateProofBasic: sp,
 	}
 
-	for i := uint64(0); i < firstStateProofDataConfirmedRound-1; i++ {
+	for i := uint64(0); i < firstStateProofDataTargetRound-1; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
 		1, proto.StateProofInterval, false, any)
 
 	blk.BlockHeader.Round++
@@ -3065,10 +3065,10 @@ func TestStateProofVerificationTracker(t *testing.T) {
 	err = l.AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
-	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
-	for i := firstStateProofDataConfirmedRound; i < lastStateProofDataConfirmedRound; i++ {
+	for i := firstStateProofDataTargetRound; i < lastStateProofDataConfirmedRound; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -3085,6 +3085,12 @@ func TestStateProofVerificationTracker(t *testing.T) {
 
 	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true, any)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound+proto.StateProofInterval),
+		1, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound+(2*proto.StateProofInterval)),
+		1, proto.StateProofInterval, true, trackerMemory)
 
 	var stateProofReceived bookkeeping.StateProofTrackingData
 	stateProofReceived.StateProofNextRound = basics.Round(firstStateProofDataTargetRound + proto.StateProofInterval)
@@ -3116,6 +3122,11 @@ func TestStateProofVerificationTracker(t *testing.T) {
 		1, proto.StateProofInterval, false, any)
 	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound+proto.StateProofInterval),
 		numOfStateProofs-1, proto.StateProofInterval, true, any)
+
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		1, proto.StateProofInterval, false, any)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound+proto.StateProofInterval),
+		1, proto.StateProofInterval, true, any)
 }
 
 func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
@@ -3161,6 +3172,10 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
 	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-2, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound-proto.StateProofInterval),
+		1, proto.StateProofInterval, true, trackerMemory)
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -3168,5 +3183,9 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
 	verifyStateProofVerificationTrackingFirstStage(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound),
+		1, proto.StateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numOfStateProofs-2, proto.StateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, &l.stateProofVerification, basics.Round(lastStateProofDataTargetRound-proto.StateProofInterval),
 		1, proto.StateProofInterval, true, trackerMemory)
 }

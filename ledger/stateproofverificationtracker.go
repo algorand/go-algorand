@@ -344,6 +344,8 @@ func (spt *stateProofVerificationTracker) insertSecondStageCommitData(blk *bookk
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
+	// todo this code will be triggered on the first state proof where it is not needed the update will not update anything
+
 	if len(spt.trackedSecondStageData) > 0 {
 		lastUpdateRound := spt.trackedSecondStageData[len(spt.trackedSecondStageData)-1].confirmedRound
 		if blk.Round() <= lastUpdateRound {
