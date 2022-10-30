@@ -147,24 +147,14 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 	}
 }
 
-func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledgercore.StateProofVerificationData) {
-	// setup boilerplate
+func initializeTestCatchupAccessor(t *testing.T, l *Ledger, ctx context.Context, accountsCount uint64) (CatchpointCatchupAccessor, CatchpointCatchupAccessorProgress) {
 	log := logging.TestingLog(t)
-	dbBaseFileName := t.Name()
-	const inMem = true
-	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
-	require.NoError(t, err, "could not open ledger")
-	defer func() {
-		l.Close()
-	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
-	ctx := context.Background()
+
 	var progress CatchpointCatchupAccessorProgress
 
 	// We do this to create catchpoint staging tables.
-	err = catchpointAccessor.ResetStagingBalances(ctx, true)
+	err := catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err)
 
 	// We do this to initialize the catchpointblocks table. Needed to be able to use CompleteCatchup.
@@ -172,7 +162,6 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	require.NoError(t, err)
 
 	// We do this to initialize the accounttotals table. Needed to be able to use CompleteCatchup.
-	accountsCount := uint64(len(initkeys))
 	fileHeader := CatchpointFileHeader{
 		Version:           CatchpointFileVersionV6,
 		BalancesRound:     basics.Round(0),
@@ -185,6 +174,26 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
 	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+
+	return catchpointAccessor, progress
+}
+
+func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledgercore.StateProofVerificationData) {
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+
+	ctx := context.Background()
+	catchpointAccessor, progress := initializeTestCatchupAccessor(t, l, ctx, uint64(len(initkeys)))
+
 	require.NoError(t, err)
 
 	wrappedData := catchpointStateProofVerificationData{
