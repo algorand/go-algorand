@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -80,30 +79,6 @@ func (ec *nodeExitErrorCollector) Print() {
 	for i, err := range ec.errors {
 		require.NoError(ec.t, err, ec.messages[i])
 	}
-}
-
-// awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
-func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
-	s, err := client.Status()
-	if err != nil {
-		return generatedV2.NodeStatusResponse{}, err
-	}
-
-	if len(*s.LastCatchpoint) > 0 {
-		return s, nil
-
-	}
-
-	if roundWaitCount-1 > 0 {
-		err = fixture.ClientWaitForRound(client, s.LastRound+1, 10*time.Second)
-		if err != nil {
-			return generatedV2.NodeStatusResponse{}, err
-		}
-
-		return awaitCatchpointCreation(client, fixture, roundWaitCount-1)
-	}
-
-	return generatedV2.NodeStatusResponse{}, fmt.Errorf("No catchpoint exists")
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
