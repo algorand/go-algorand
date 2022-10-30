@@ -438,12 +438,10 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 
 	_, err := spt.LookupVerificationData(basics.Round(0))
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
-	a.ErrorContains(err, "no rows")
 
 	lastStateProofRound := basics.Round(defaultStateProofInterval + dataToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationData(lastStateProofRound + basics.Round(defaultStateProofInterval))
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
-	a.ErrorContains(err, "greater than maximum")
 
 	dbDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum-1)*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
@@ -463,11 +461,17 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
 	a.Equal(protocol.ConsensusCurrentVersion, memoryData.Version)
 
+	memoryDataRound = basics.Round((dataToAdd + 1) * defaultStateProofInterval)
+	memoryData, err = spt.LookupVerificationData(memoryDataRound)
+	a.NoError(err)
+	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
+	a.Equal(protocol.ConsensusVersion(""), memoryData.Version)
+
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
+	memoryDataRound = basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
-	a.ErrorContains(err, "memory lookup failed")
 }
 
 func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) {
