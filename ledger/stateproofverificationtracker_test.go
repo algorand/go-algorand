@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/algorand/msgp/msgp"
 	"math/rand"
 	"testing"
 
@@ -144,6 +145,12 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stateProofInterval uint64, s
 	return block
 }
 
+func feedBlocksUp(spt *stateProofVerificationTracker, prevBlock *blockEntry, numberOfBlocks uint64,
+	stateProofInterval uint64, stuckStateProofs bool) *blockEntry {
+	endBlock := prevBlock.block.Round() + basics.Round(numberOfBlocks)
+	return feedBlocksUpToRound(spt, prevBlock, endBlock, stateProofInterval, stuckStateProofs)
+}
+
 func feedBlocksUpToRound(spt *stateProofVerificationTracker, prevBlock *blockEntry, targetRound basics.Round,
 	stateProofInterval uint64, stuckStateProofs bool) *blockEntry {
 	for i := prevBlock.block.Round(); i < targetRound; i++ {
@@ -164,7 +171,7 @@ func feedBlocksUpToRound(spt *stateProofVerificationTracker, prevBlock *blockEnt
 	return prevBlock
 }
 
-func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificationTracker,
+func verifyStateProofVerificationTrackingFirstStage(t *testing.T, spt *stateProofVerificationTracker,
 	startRound basics.Round, dataAmount uint64, stateProofInterval uint64, dataPresenceExpected bool, trackingLocation StateProofTrackingLocation) {
 	a := require.New(t)
 
@@ -192,6 +199,34 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 	}
 }
 
+func verifyStateProofVerificationTrackingSecondStage(t *testing.T, spt *stateProofVerificationTracker,
+	startRound basics.Round, dataAmount uint64, stateProofInterval uint64, dataPresenceExpected bool, trackingLocation StateProofTrackingLocation) {
+	a := require.New(t)
+
+	finalTargetStateProofRound := startRound + basics.Round((dataAmount-1)*stateProofInterval)
+
+	for targetStateProofRound := startRound; targetStateProofRound <= finalTargetStateProofRound; targetStateProofRound += basics.Round(stateProofInterval) {
+		var err error
+		switch trackingLocation {
+		case any:
+			_, err = spt.LookupVerificationData(targetStateProofRound)
+		case trackerDB:
+			_, err = spt.dbQueries.lookupSecondStageStateProofVerification(targetStateProofRound)
+			if err != nil && (errors.Is(err, msgp.ErrShortBytes) || errors.Is(err, sql.ErrNoRows)) {
+				err = errStateProofVerificationDataNotFound
+			}
+		case trackerMemory:
+			_, err = spt.lookupSecondStageDataInTrackedMemory(targetStateProofRound)
+		}
+
+		if dataPresenceExpected {
+			a.NoError(err)
+		} else {
+			a.ErrorIs(err, errStateProofVerificationDataNotFound)
+		}
+	}
+}
+
 func TestStateProofVerificationTracker_StateProofsDisabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -209,7 +244,7 @@ func TestStateProofVerificationTracker_StateProofsDisabled(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, roundsAmount)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, uint64(roundsAmount)/defaultStateProofInterval, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, uint64(roundsAmount)/defaultStateProofInterval, defaultStateProofInterval, false, any)
 }
 
 func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
@@ -227,12 +262,15 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
 	expectedRemainingDataNum := expectedDataNum - 1
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedRemainingDataNum, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, expectedRemainingDataNum, defaultStateProofInterval, false, any)
 
 	lastStateProofTargetRound := defaultFirstStateProofDataRound + basics.Round(expectedRemainingDataNum*defaultStateProofInterval)
 	// The last verification data should still be tracked since the round with the state proof transaction it is used
 	// to verify has not yet been committed.
-	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+
+	lastBlock = feedBlocksUp(spt, lastBlock, defaultStateProofInterval, defaultStateProofInterval, false)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
 }
 
 func TestStateProofVerificationTracker_CommitFullDbFlush(t *testing.T) {
@@ -249,8 +287,11 @@ func TestStateProofVerificationTracker_CommitFullDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, false, trackerMemory)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, false, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, expectedDataNum-1, defaultStateProofInterval, false, trackerMemory)
+
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, expectedDataNum-1, defaultStateProofInterval, true, trackerDB)
 }
 
 func TestStateProofVerificationTracker_CommitPartialDbFlush(t *testing.T) {
@@ -269,12 +310,17 @@ func TestStateProofVerificationTracker_CommitPartialDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, basics.Round(defaultStateProofInterval*expectedDataInDbNum))
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum, defaultStateProofInterval, true, trackerDB)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum, defaultStateProofInterval, false, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum, defaultStateProofInterval, false, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum-1, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum-1, defaultStateProofInterval, false, trackerMemory)
 
 	firstNonFlushedDataTargetRound := defaultFirstStateProofDataRound + basics.Round(expectedDataInDbNum*defaultStateProofInterval)
-	verifyStateProofVerificationTracking(t, spt, firstNonFlushedDataTargetRound, expectedDataInMemoryNum, defaultStateProofInterval, false, trackerDB)
-	verifyStateProofVerificationTracking(t, spt, firstNonFlushedDataTargetRound, expectedDataInMemoryNum, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, firstNonFlushedDataTargetRound, expectedDataInMemoryNum, defaultStateProofInterval, false, trackerDB)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, firstNonFlushedDataTargetRound, expectedDataInMemoryNum, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, firstNonFlushedDataTargetRound-basics.Round(defaultStateProofInterval), expectedDataInMemoryNum, defaultStateProofInterval, false, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, firstNonFlushedDataTargetRound-basics.Round(defaultStateProofInterval), expectedDataInMemoryNum, defaultStateProofInterval, true, trackerMemory)
+
 }
 
 func TestStateProofVerificationTracker_CommitNoDbFlush(t *testing.T) {
@@ -290,8 +336,10 @@ func TestStateProofVerificationTracker_CommitNoDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, basics.Round(defaultStateProofInterval-1))
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, false, trackerDB)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, false, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, false, trackerDB)
 }
 
 func TestStateProofVerificationTracker_CommitFullDbPruning(t *testing.T) {
@@ -309,16 +357,21 @@ func TestStateProofVerificationTracker_CommitFullDbPruning(t *testing.T) {
 	lastBlock := feedBlocksUpToRound(spt, lastStuckBlock, lastStuckBlock.block.Round()+basics.Round(maxStateProofsToGenerate),
 		defaultStateProofInterval, false)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, true, trackerMemory)
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, maxStateProofsToGenerate, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, maxStateProofsToGenerate, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, maxStateProofsToGenerate, defaultStateProofInterval, false, any)
 
 	lastStateProofTargetRound := defaultFirstStateProofDataRound + basics.Round(maxStateProofsToGenerate*defaultStateProofInterval)
 	// The last verification data should still be tracked since the round with the state proof transaction it is used
 	// to verify has not yet been committed.
-	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+
+	lastBlock = feedBlocksUp(spt, lastBlock, defaultStateProofInterval, defaultStateProofInterval, false)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
 }
 
 func TestStateProofVerificationTracker_CommitPartialDbPruning(t *testing.T) {
@@ -338,13 +391,18 @@ func TestStateProofVerificationTracker_CommitPartialDbPruning(t *testing.T) {
 		lastStuckBlock.block.Round()+basics.Round(maxStateProofsToGenerate*defaultStateProofInterval),
 		defaultStateProofInterval, false)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, true, trackerMemory)
 
 	mockCommit(t, spt, ml, 0, lastStuckBlock.block.Round()+basics.Round(dataToRemove))
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToRemove, defaultStateProofInterval, false, any)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound+basics.Round(dataToRemove*defaultStateProofInterval),
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToRemove, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound+basics.Round(dataToRemove*defaultStateProofInterval),
 		dataToAdd-dataToRemove, defaultStateProofInterval, true, trackerDB)
+
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToRemove, defaultStateProofInterval, false, any)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound+basics.Round(dataToRemove*defaultStateProofInterval),
+		dataToAdd-dataToRemove-1, defaultStateProofInterval, true, trackerDB)
 }
 
 func TestStateProofVerificationTracker_CommitNoDbPruning(t *testing.T) {
@@ -372,11 +430,13 @@ func TestStateProofVerificationTracker_CommitNoDbPruning(t *testing.T) {
 
 	_ = feedBlocksUpToRound(spt, &block, block.block.Round()+basics.Round(maxStateProofsToGenerate), defaultStateProofInterval, false)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerMemory)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, true, trackerMemory)
 
 	mockCommit(t, spt, ml, 0, lastStuckBlockRound)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, dataToAdd, defaultStateProofInterval, true, trackerDB)
+	verifyStateProofVerificationTrackingSecondStage(t, spt, defaultFirstStateProofDataRound, dataToAdd-1, defaultStateProofInterval, true, trackerDB)
 	a.Equal(maxStateProofsToGenerate, uint64(len(spt.trackedDeleteData)))
 }
 
@@ -397,10 +457,10 @@ func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
 	lastStuckBlock := feedBlocksUpToRound(spt, lastOldIntervalBlock, lastOldIntervalBlock.block.Round()+basics.Round(newIntervalData*newStateProofInterval),
 		newStateProofInterval, true)
 
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, oldIntervalData, defaultStateProofInterval,
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, oldIntervalData, defaultStateProofInterval,
 		true, any)
 	firstNewIntervalStateProofRound := lastOldIntervalBlock.block.Round() + basics.Round(defaultStateProofInterval)
-	verifyStateProofVerificationTracking(t, spt, firstNewIntervalStateProofRound, newIntervalData,
+	verifyStateProofVerificationTrackingFirstStage(t, spt, firstNewIntervalStateProofRound, newIntervalData,
 		newStateProofInterval, true, any)
 
 	newIntervalRemovedStateProofs := newIntervalData - (newIntervalData / 2)
@@ -416,11 +476,11 @@ func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
 
 	firstRemainingStateProofRound := firstNewIntervalStateProofRound +
 		basics.Round(newIntervalRemovedStateProofs*newStateProofInterval)
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, oldIntervalData, defaultStateProofInterval,
+	verifyStateProofVerificationTrackingFirstStage(t, spt, defaultFirstStateProofDataRound, oldIntervalData, defaultStateProofInterval,
 		false, any)
-	verifyStateProofVerificationTracking(t, spt, firstNewIntervalStateProofRound,
+	verifyStateProofVerificationTrackingFirstStage(t, spt, firstNewIntervalStateProofRound,
 		newIntervalRemovedStateProofs, newStateProofInterval, false, any)
-	verifyStateProofVerificationTracking(t, spt, firstRemainingStateProofRound, newIntervalData-newIntervalRemovedStateProofs,
+	verifyStateProofVerificationTrackingFirstStage(t, spt, firstRemainingStateProofRound, newIntervalData-newIntervalRemovedStateProofs,
 		newStateProofInterval, true, any)
 }
 
@@ -497,4 +557,5 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 
 	pastBlock := randomBlock(0)
 	a.Panics(func() { spt.insertFirstStageCommitData(&pastBlock.block) })
+	a.Panics(func() { spt.insertSecondStageCommitData(&pastBlock.block) })
 }
