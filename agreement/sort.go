@@ -77,10 +77,6 @@ func (a SortProposalValue) Less(i, j int) bool {
 	if cmp != 0 {
 		return cmp < 0
 	}
-	cmp = bytes.Compare(a[i].BlockDigest[:], a[j].BlockDigest[:])
-	if cmp != 0 {
-		return cmp < 0
-	}
 	cmp = bytes.Compare(a[i].EncodingDigest[:], a[j].EncodingDigest[:])
 	return cmp < 0
 }
