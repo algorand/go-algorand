@@ -753,8 +753,8 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uel unverifiedElementList
 		failed, err := batchVerifier.VerifyWithFeedback()
 		// this error can only be crypto.ErrBatchHasFailedSigs
 
-		verifiedTxnGroups := make([][]transactions.SignedTxn, len(bl.txnGroups))
-		verifiedGroupCtxs := make([]*GroupContext, len(bl.groupCtxs))
+		verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
+		verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
 		failedSigIdx := 0
 		for txgIdx := range bl.txnGroups {
 			txGroupSigFailed := false

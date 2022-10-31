@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -850,7 +851,7 @@ func BenchmarkTxn(b *testing.B) {
 func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numOfTxns := 10000
+	numOfTxns := 4000
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
 	blkHdr := createDummyBlockHeader()
 
@@ -882,8 +883,14 @@ func TestStreamVerifier(t *testing.T) {
 		}
 	}
 
+	wg := sync.WaitGroup{}
+
+	var badSigResultCounter int
+	var goodSigResultCounter int
 	errChan := make(chan error)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer close(errChan)
 		// process the results
 		for x := 0; x < numOfTxnGroups; x++ {
@@ -891,12 +898,13 @@ func TestStreamVerifier(t *testing.T) {
 			case result := <-resultChan:
 
 				if _, has := badTxnGroups[result.TxnGroup[0].Sig]; has {
-					delete(badTxnGroups, result.TxnGroup[0].Sig)
+					badSigResultCounter++
 					if result.Err == nil {
 						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
 						errChan <- err
 					}
 				} else {
+					goodSigResultCounter++
 					if result.Err != nil {
 						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
 						errChan <- err
@@ -908,8 +916,10 @@ func TestStreamVerifier(t *testing.T) {
 		}
 	}()
 
+	wg.Add(1)
 	// send txn groups to be verified
 	go func() {
+		defer wg.Done()
 		for _, tg := range txnGroups {
 			select {
 			case <-ctx.Done():
@@ -924,5 +934,21 @@ func TestStreamVerifier(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.Equal(t, 0, len(badTxnGroups))
+	wg.Wait()
+
+	// check if all txns have been checked.
+	require.Equal(t, len(txnGroups), badSigResultCounter+goodSigResultCounter)
+	require.Equal(t, len(badTxnGroups), badSigResultCounter)
+
+	// check the cached transactions
+	// note that the result of each verified txn group is send before the batch is added to the cache
+	// the test does not know if the batch is not added to the cache yet, so some elts might be missing from the cache
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	require.GreaterOrEqual(t, len(unverifiedGroups), badSigResultCounter)
+	for _, txn := range unverifiedGroups {
+		if _, has := badTxnGroups[txn[0].Sig]; has {
+			delete(badTxnGroups, txn[0].Sig)
+		}
+	}
+	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
 }
