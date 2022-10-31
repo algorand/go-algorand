@@ -63,6 +63,8 @@ func encode(t timers.Clock, rr rootRouter, p player, a []action, reflect bool) (
 		s.Player = protocol.Encode(&p)
 	}
 	s.Clock = t.Encode()
+	s.ActionTypes = make([]actionType, len(a))
+	s.Actions = make([][]byte, len(a))
 	for _, act := range a {
 		s.ActionTypes = append(s.ActionTypes, act.t())
 
