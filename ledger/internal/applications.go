@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -30,28 +29,6 @@ import (
 
 /* This file adds functions to roundCowState that make it more palatable for use
    outside of the ledger package. The LedgerForLogic interface expects them. */
-
-type cowForLogicLedger interface {
-	Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error)
-	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
-	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
-	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
-	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
-
-	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
-	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
-
-	round() basics.Round
-	prevTimestamp() int64
-	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
-	txnCounter() uint64
-	incTxnCount()
-
-	// The method should use the txtail to ensure MaxTxnLife+1 headers back are available
-	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
-}
 
 func (cs *roundCowState) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
 	record, err := cs.Get(addr, true)

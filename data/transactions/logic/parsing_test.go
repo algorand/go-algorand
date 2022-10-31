@@ -21,10 +21,11 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/avm-abi/abi"
-	"github.com/algorand/go-algorand/data/basics"
 	"math"
 	"testing"
+
+	"github.com/algorand/avm-abi/abi"
+	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -75,18 +76,6 @@ func TestNewAppCallBytes(t *testing.T) {
 				r, err := acb.Raw()
 				require.NoError(t, err)
 				require.Equal(t, ve, base64.StdEncoding.EncodeToString(r))
-			})
-		}
-	}
-
-	for _, v := range []uint64{1, 0, math.MaxUint64} {
-		for _, e := range []string{"int", "integer"} {
-			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
-				require.NoError(t, err)
-				r, err := acb.Raw()
-				require.NoError(t, err)
-				require.Equal(t, v, binary.BigEndian.Uint64(r))
 			})
 		}
 	}

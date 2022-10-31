@@ -898,11 +898,6 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 	}
 }
 
-// Get() through allocated() implement cowForLogicLedger, so we should
-// be able to make logicLedger with this inside.  That let's us to
-// write tests and then poke around and see how the balance table
-// inside is affected.
-
 // Get returns the AccountData of an address. This test ledger does
 // not handle rewards, so the pening rewards flag is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
