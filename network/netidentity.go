@@ -32,9 +32,20 @@ const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
 // minimumProtocolVersion is used to evaluate if a peer's supported protocol
 // should include identityChallenge exchange
-//const minimumProtocolVersionNums = [2]int64{2, 2}
+var minimumProtocolVersion = [2]int64{2, 2}
 
 func shouldSupportIdentityChallenge(v string) bool {
+	fmt.Println("HUHHHHH")
+	maj, min, err := versionToMajorMinor(v)
+	if err != nil {
+		return false
+	}
+	if maj < minimumProtocolVersion[0] {
+		return false
+	}
+	if min < minimumProtocolVersion[1] {
+		return false
+	}
 	return true
 }
 
@@ -175,15 +186,10 @@ func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 // peer's assigned challenge
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer := message.Sender.(*wsPeer)
-	peer.net.log.Infoln("AXELAXEL: HANDLING VERIFY")
 	sig := crypto.Signature{}
 	copy(sig[:], message.Data[:64])
-	peer.net.log.Infoln("AXELAXEL: SIG", sig)
-	peer.net.log.Infoln("AXELAXEL: PEERCHAL", peer.identityChallenge)
-	peer.net.log.Infoln("AXELAXEL: PEERKEY", peer.identity)
 	verified := peer.identity.VerifyBytes(peer.identityChallenge[:], sig)
 	if verified {
-		peer.net.log.Infoln("AXELAXEL: VERIFIED")
 		peer.IdentityVerified()
 	}
 	return OutgoingMessage{}

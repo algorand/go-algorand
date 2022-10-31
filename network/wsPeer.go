@@ -964,6 +964,7 @@ func (wp *wsPeer) waitForIdentityVerify() {
 			wp.Close(time.Now())
 		}
 	}()
+}
 
 func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
