@@ -40,7 +40,7 @@ func TestAgreementSerialization(t *testing.T) {
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
 	router := makeRootRouter(status)
-	a := []action{}
+	a := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
 	encodedBytes := encode(clock, router, status, a, false)
 
