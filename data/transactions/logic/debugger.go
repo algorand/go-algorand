@@ -96,8 +96,8 @@ type DebuggerHook interface {
 	// BeforeLogicEval is called before an app or LogicSig is evaluated.
 	BeforeLogicEval(cx *EvalContext) error
 
-	// AfterInnerTxnGroup is called after an inner transaction group has been executed.
-	AfterInnerTxnGroup(ep *EvalParams) error
+	// AfterLogicEval is called after an app or LogicSig is evaluated.
+	AfterLogicEval(cx *EvalContext, evalError error) error
 
 	// BeforeTealOp is called before the op is evaluated
 	BeforeTealOp(cx *EvalContext) error
@@ -105,13 +105,13 @@ type DebuggerHook interface {
 	// AfterTealOp is called after the op has been evaluated
 	AfterTealOp(cx *EvalContext, evalError error) error
 
-	// AfterLogicEval is called after an app or LogicSig is evaluated.
-	AfterLogicEval(cx *EvalContext, evalError error) error
-
 	// BeforeInnerTxnGroup is called before an inner transaction group is executed.
 	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
 	// in the lifecycle diagram.
 	BeforeInnerTxnGroup(ep *EvalParams) error
+
+	// AfterInnerTxnGroup is called after an inner transaction group has been executed.
+	AfterInnerTxnGroup(ep *EvalParams) error
 }
 
 // NullDebuggerHook implements DebuggerHook, but all of its hook methods do nothing
