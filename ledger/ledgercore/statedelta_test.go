@@ -17,7 +17,6 @@
 package ledgercore
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -97,22 +96,25 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(sample1, data)
 }
 
-func TestRangeOverNilMap(t *testing.T) {
+func TestMakeStateDeltaMaps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	sd := StateDelta{}
-	for txl, expires := range sd.Txleases {
-		fmt.Printf("txl:%v, expires%v", txl, expires)
-	}
-	sd2 := StateDelta{}
-	require.Nil(t, sd2.Txleases)
-	sdSlice := []map[Txlease]basics.Round{}
-	require.Equal(t, 0, len(sdSlice))
-	sdSlice2 := []map[Txlease]basics.Round{}
-	sd2.Txleases = make(map[Txlease]basics.Round)
-	sdSlice = append(sdSlice, sd2.Txleases)
-	sdSlice2 = append(sdSlice2, sd2.Txleases)
-	require.Equal(t, sdSlice, sdSlice2)
+	sd := MakeStateDelta(nil, 0, 23000, basics.Round(2))
+	require.Nil(t, sd.Txleases)
+	require.Nil(t, sd.Creatables)
+
+	sd.UpsertTxLease(Txlease{}, basics.Round(10))
+	require.Equal(t, 1, len(sd.Txleases))
+	sd.UpsertCreatable(basics.CreatableIndex(5), ModifiedCreatable{})
+	require.Equal(t, 1, len(sd.Creatables))
+
+	txLeaseMap := make(map[Txlease]basics.Round)
+	txLeaseMap[Txlease{}] = basics.Round(10)
+	require.Equal(t, sd.Txleases, txLeaseMap)
+
+	creatableMap := make(map[basics.CreatableIndex]ModifiedCreatable)
+	creatableMap[basics.CreatableIndex(5)] = ModifiedCreatable{}
+	require.Equal(t, sd.Creatables, creatableMap)
 
 }
 
