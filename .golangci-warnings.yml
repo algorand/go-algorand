@@ -8,8 +8,8 @@ linters:
     - deadcode
     - partitiontest
     - structcheck
-    - typecheck
     - varcheck
+    - unconvert
     - unused
 
 
@@ -52,24 +52,19 @@ issues:
     # be more lenient with test code
     - path: _test\.go
       linters:
-        - staticcheck
-        - structcheck
-        - typecheck
-        - varcheck
         - deadcode
-        - gosimple
+        - structcheck
+        - varcheck
+        - unconvert
         - unused
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:
-        - staticcheck
-        - structcheck
-        - typecheck
-        - varcheck
         - deadcode
-        - gosimple
+        - structcheck
+        - varcheck
+        - unconvert
         - unused
-        - partitiontest
     - path: crypto/secp256k1/secp256_test\.go
       linters:
         - partitiontest
