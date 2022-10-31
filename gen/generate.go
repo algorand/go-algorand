@@ -355,14 +355,10 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	}
 
 	sinkAcct := genesisAllocation{
-		Name:   "FeeSink",
-		Stake:  protoParams.MinBalance,
-		Online: basics.NotParticipating,
+		Name: "FeeSink",
 	}
 	poolAcct := genesisAllocation{
-		Name:   "RewardsPool",
-		Stake:  rewardsBalance,
-		Online: basics.NotParticipating,
+		Name: "RewardsPool",
 	}
 
 	alloc2 := make([]genesisAllocation, 0, len(allocation)+2)

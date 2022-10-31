@@ -17,7 +17,13 @@
 package gen
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/stretchr/testify/assert"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -113,4 +119,117 @@ func TestGenesisRoundoff(t *testing.T) {
 	_, _, _, err := setupGenerateGenesisFiles(&genesisData, config.Consensus, &verbosity)
 	require.NoError(t, err)
 	require.True(t, strings.Contains(verbosity.String(), "roundoff"))
+}
+
+// `TestGenesisJsonCreation` defends against regressions to `genesis.json` generation by comparing a known, valid `genesis.json` against a version generated during test invocation.
+//
+// * For each `testCase`, there is a corresponding `genesis.json` in `gen/resources` representing the known, valid output.
+// * When adding test cases, it's assumed folks peer review new artifacts in `gen/resources`.
+// * Since _some_ `genesis.json` values are non-deterministic, the test replaces these values with static values to facilitate equality checks.
+func TestGenesisJsonCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type testCase struct {
+		name string
+		gd   GenesisData
+	}
+
+	// `base` is a canonical test confirming `devnet.json` generates the intended `genesis.json`.
+	base := func() testCase {
+		jsonBytes, err := os.ReadFile("devnet.json")
+		require.NoError(t, err)
+
+		gd := DefaultGenesis
+		err = json.Unmarshal(jsonBytes, &gd)
+		require.NoError(t, err)
+
+		return testCase{"base", gd}
+	}
+
+	// `balance` extends `base` to confirm overriding the rewards pool balance works.
+	balance := func() testCase {
+		gd := base().gd
+		gd.RewardsPoolBalance = 0 // Expect generated balance == MinBalance
+		return testCase{"balance", gd}
+	}
+
+	// `blotOutRandomValues` replaces random values with static values to support equality checks.
+	blotOutRandomValues := func(as []bookkeeping.GenesisAllocation) {
+		deterministicAddresses := []string{"FeeSink", "RewardsPool"}
+
+		isNondeterministicAddress := func(name string) bool {
+			for _, address := range deterministicAddresses {
+				if name == address {
+					return false
+				}
+			}
+			return true
+		}
+
+		for i := range as {
+			require.Len(t, as[i].State.VoteID, 32)
+			as[i].State.VoteID = crypto.OneTimeSignatureVerifier{}
+			require.Len(t, as[i].State.VoteID, 32)
+			as[i].State.SelectionID = crypto.VRFVerifier{}
+
+			if isNondeterministicAddress(as[i].Comment) {
+				require.Len(t, as[i].Address, 58)
+				as[i].Address = ""
+			}
+		}
+	}
+
+	saveGeneratedGenesisJSON := func(filename, artifactName string) {
+		src, err := os.Open(filename)
+		require.NoError(t, err)
+		defer src.Close()
+
+		dst, err := os.CreateTemp("", "*-"+artifactName)
+		require.NoError(t, err)
+		defer dst.Close()
+
+		_, err = io.Copy(dst, src)
+		require.NoError(t, err)
+
+		t.Log("generated genesis.json = " + dst.Name())
+	}
+
+	// Since `t.TempDir` deletes the generated dir, retain generated `genesis.json` on test failure.
+	saveOnFailure := func(result bool, generatedFilename, artifactName string) {
+		if !result {
+			saveGeneratedGenesisJSON(generatedFilename, artifactName)
+			t.FailNow()
+		}
+	}
+
+	for _, tc := range []testCase{
+		base(),
+		balance(),
+	} {
+		t.Run(fmt.Sprintf("name=%v", tc.name), func(t *testing.T) {
+			gd := tc.gd
+			gd.LastPartKeyRound = 10 // Ensure quick test execution by reducing rounds.
+
+			outDir := t.TempDir()
+			err := GenerateGenesisFiles(gd, config.Consensus, outDir, nil)
+			require.NoError(t, err)
+
+			artifactName := fmt.Sprintf("genesis-%v.json", tc.name)
+			generatedFilename := fmt.Sprintf("%v/genesis.json", outDir)
+			saveOnFailure := func(result bool) {
+				saveOnFailure(result, generatedFilename, artifactName)
+			}
+
+			roundtrip, err := bookkeeping.LoadGenesisFromFile(generatedFilename)
+			require.NoError(t, err)
+
+			expected, err := bookkeeping.LoadGenesisFromFile("resources/" + artifactName)
+			saveOnFailure(assert.NoError(t, err))
+
+			blotOutRandomValues(expected.Allocation)
+			blotOutRandomValues(roundtrip.Allocation)
+			saveOnFailure(assert.Equal(t, expected, roundtrip))
+		})
+	}
 }
