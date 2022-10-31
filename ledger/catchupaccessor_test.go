@@ -211,7 +211,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 
 	var trackedStateProofVerificationData *[]ledgercore.StateProofVerificationData
 	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		dbData, err := stateProofVerificationData(ctx, tx)
+		dbData, err := stateProofVerification(ctx, tx)
 		trackedStateProofVerificationData = dbData
 		return err
 	})

@@ -5154,11 +5154,12 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 	return &data, err
 }
 
-// stateProofVerificationData returns all verification data currently committed to the database.
-func stateProofVerificationData(ctx context.Context, tx *sql.Tx) (*[]ledgercore.StateProofVerificationData, error) {
+// stateProofVerificationTable returns all verification data currently committed to the given table.
+func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName string) (*[]ledgercore.StateProofVerificationData, error) {
 	var result []ledgercore.StateProofVerificationData
 	queryFunc := func() error {
-		rows, err := tx.QueryContext(ctx, "SELECT verificationdata FROM stateproofverification")
+		selectQuery := fmt.Sprintf("SELECT verificationdata FROM %s", tableName)
+		rows, err := tx.QueryContext(ctx, selectQuery)
 
 		if err != nil {
 			return err
@@ -5187,4 +5188,12 @@ func stateProofVerificationData(ctx context.Context, tx *sql.Tx) (*[]ledgercore.
 
 	err := db.Retry(queryFunc)
 	return &result, err
+}
+
+func stateProofVerification(ctx context.Context, tx *sql.Tx) (*[]ledgercore.StateProofVerificationData, error) {
+	return stateProofVerificationTable(ctx, tx, "stateProofVerification")
+}
+
+func catchpointStateProofVerification(ctx context.Context, tx *sql.Tx) (*[]ledgercore.StateProofVerificationData, error) {
+	return stateProofVerificationTable(ctx, tx, "catchpointStateProofVerification")
 }

@@ -103,6 +103,10 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// We would like state proof verification data to be present in the catchpoint.
+	catchpointCatchupProtocol.StateProofInterval = 10
+
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	catchpointCatchupProtocol.SeedLookback = 2
