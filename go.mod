@@ -26,7 +26,7 @@ require (
 	github.com/gorilla/mux v1.6.2
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/usb v0.0.2
-	github.com/labstack/echo/v4 v4.1.17
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27
 	github.com/olivere/elastic v6.2.14+incompatible
@@ -42,20 +42,20 @@ require (
 require (
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/labstack/gommon v0.3.0 // indirect
+	github.com/labstack/gommon v0.3.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.7 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-colorable v0.1.11 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
@@ -68,6 +68,7 @@ require (
 	github.com/valyala/fasttemplate v1.2.1 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
+	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
