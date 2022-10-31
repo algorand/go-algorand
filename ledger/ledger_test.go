@@ -3231,8 +3231,7 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
 
 	relCatchpointFilePath := filepath.Join(CatchpointDirName, makeCatchpointFilePath(basics.Round(cfg.CatchpointInterval)))
-	absCatchpointFilePath := filepath.Join(l.catchpoint.dbDirectory, relCatchpointFilePath)
-	catchpointData := readCatchpointFile(t, absCatchpointFilePath)
+	catchpointData := readCatchpointFile(t, relCatchpointFilePath)
 
 	err = catchpointAccessor.ProgressStagingBalances(context.Background(), catchpointData[1].headerName, catchpointData[1].data, &accessorProgress)
 	require.NoError(t, err)
