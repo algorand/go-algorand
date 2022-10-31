@@ -307,7 +307,10 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 	}
 
 	wdb := c.ledger.trackerDB().Wdb
-	// TODO: Add timer?
+
+	// 6 months of stuck state proofs should lead to about 1.2 MB of data, so we avoid redundant timers
+	// and progress reports.
+
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, data := range decodedData.Data {
 			err = writeCatchpointStateProofVerificationData(ctx, tx, &data)
@@ -317,8 +320,6 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 		}
 		return
 	})
-	// TODO: Finish timer?
-	// TODO: Progress?
 	// TODO: Set synchronous mode in db?
 	return err
 }
