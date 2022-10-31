@@ -37,9 +37,14 @@ const (
 	BalancesPerCatchpointFileChunk = 512
 
 	// ResourcesPerCatchpointFileChunk defines the max number of resources that go in a singular chunk
-	// 300,000 resources * 20KB/resource => roughly max 6GB per chunk if all of them are max'ed out apps.
+	// 100,000 resources * 20KB/resource => roughly max 2GB per chunk if all of them are max'ed out apps.
 	// In reality most entries are asset holdings, and they are very small.
-	ResourcesPerCatchpointFileChunk = 300_000
+	ResourcesPerCatchpointFileChunk = 100_000
+
+	// resourcesPerCatchpointFileChunkBackwardCompatible is the old value for ResourcesPerCatchpointFileChunk.
+	// Size of a single resource entry was underestimated to 300 bytes that holds only for assets and not for apps.
+	// It is safe to remove after April, 2023 since we are only supporting catchpoint that are 6 months old.
+	resourcesPerCatchpointFileChunkBackwardCompatible = 300_000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -85,7 +90,7 @@ type encodedBalanceRecordV6 struct {
 
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
 	AccountData msgp.Raw            `codec:"b"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=ResourcesPerCatchpointFileChunk"`
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"`
 
 	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`
