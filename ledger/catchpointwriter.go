@@ -56,7 +56,6 @@ type catchpointWriter struct {
 	compressor           io.WriteCloser
 	chunk                catchpointFileChunkV6
 	chunkNum             uint64
-	numAccountsProcessed uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
