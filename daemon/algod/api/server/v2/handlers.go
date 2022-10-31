@@ -1218,7 +1218,7 @@ func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 
 // GetApplicationBoxes returns the box names of an application
 // (GET /v2/applications/{application-id}/boxes)
-func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxesParams) error {
+func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params model.GetApplicationBoxesParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
@@ -1233,7 +1233,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 		}
 		if record.TotalBoxes > max {
-			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+			return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
 				Message: "Result limit exceeded",
 				Data: &map[string]interface{}{
 					"max-api-box-per-application": algodMax,
@@ -1250,19 +1250,19 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	}
 
 	prefixLen := len(keyPrefix)
-	responseBoxes := make([]generated.BoxDescriptor, len(boxKeys))
+	responseBoxes := make([]model.BoxDescriptor, len(boxKeys))
 	for i, boxKey := range boxKeys {
-		responseBoxes[i] = generated.BoxDescriptor{
+		responseBoxes[i] = model.BoxDescriptor{
 			Name: []byte(boxKey[prefixLen:]),
 		}
 	}
-	response := generated.BoxesResponse{Boxes: responseBoxes}
+	response := model.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
 }
 
 // GetApplicationBoxByName returns the value of an application's box
 // (GET /v2/applications/{application-id}/box)
-func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxByNameParams) error {
+func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, params model.GetApplicationBoxByNameParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
@@ -1285,7 +1285,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
 	}
 
-	response := generated.BoxResponse{
+	response := model.BoxResponse{
 		Name:  boxName,
 		Value: value,
 	}

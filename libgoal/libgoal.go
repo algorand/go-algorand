@@ -775,7 +775,7 @@ func (c *Client) ApplicationInformation(index uint64) (resp model.Application, e
 }
 
 // ApplicationBoxes takes an app's index and returns the names of boxes under it
-func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generatedV2.BoxesResponse, err error) {
+func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
@@ -785,7 +785,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generate
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
 // The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
-func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp generatedV2.BoxResponse, err error) {
+func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetApplicationBoxByName(index, name)
