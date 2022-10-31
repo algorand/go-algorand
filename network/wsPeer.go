@@ -923,3 +923,15 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 func (wp *wsPeer) IdentityVerified() {
 	wp.identityVerified = true
 }
+
+// waitForIdentityVerify starts a goroutine to wait and check that the
+// identity verification bit has been set for the peer.
+// if it is not verified in time, the peer closes itself.
+func (wp *wsPeer) waitForIdentityVerify() {
+	go func() {
+		time.Sleep(5 * time.Second)
+		if !wp.identityVerified {
+			wp.Close(time.Now())
+		}
+	}()
+}

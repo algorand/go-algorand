@@ -339,7 +339,8 @@ type WebsocketNetwork struct {
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
 	peersByID          map[crypto.PublicKey]*wsPeer // peersByID maps a Public Identification Key to a given peer
-	peersChangeCounter int32                        // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersByIDLock      deadlock.RWMutex
+	peersChangeCounter int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
@@ -581,6 +582,8 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	peer := badnode.(*wsPeer)
 	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
+	wn.peersByIDLock.Lock()
+	defer wn.peersByIDLock.Unlock()
 	delete(wn.peersByID, peer.identity)
 }
 
@@ -593,6 +596,8 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 func (wn *WebsocketNetwork) DisconnectPeers() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	wn.peersByIDLock.Lock()
+	defer wn.peersByIDLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
@@ -770,6 +775,9 @@ func (wn *WebsocketNetwork) setup() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
 
+	// identityHandlers are internal to the WS Network itself, and can be set without condition
+	wn.RegisterHandlers(identityHandlers)
+
 	if wn.config.NetworkProtocolVersion != "" {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
@@ -816,7 +824,6 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
-	wn.RegisterHandlers(identityHandlers)
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -1141,9 +1148,16 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	idChal := IdentityChallengeFromB64(idChalB64)
 	peerPublicKey := idChal.Key
 	// if we already have a verified peer using this key, do not proceed
+	wn.peersByIDLock.Lock()
+	defer wn.peersByIDLock.Unlock()
 	if wn.peersByID[peerPublicKey] != nil &&
 		wn.peersByID[peerPublicKey].identityVerified {
 		wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
+		response.WriteHeader(http.StatusPreconditionFailed)
+		n, err := response.Write([]byte("already connected"))
+		if err != nil {
+			wn.log.Warnf("ws failed to write already connected response '%s' : n = %d err = %v", n, err)
+		}
 		return
 	}
 	idChalResp := NewIdentityChallengeResponse((crypto.PublicKey)(wn.identityKeys.SignatureVerifier), idChal)
@@ -1179,13 +1193,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	wn.peersByID[peerPublicKey] = peer
-	// start a thread to disconnect the peer if it has not verified its identity in time
-	go func() {
-		time.Sleep(5 * time.Second)
-		if !peer.identityVerified {
-			wn.Disconnect(peer)
-		}
-	}()
+	peer.waitForIdentityVerify()
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2247,6 +2255,8 @@ func (wn *WebsocketNetwork) SetPrioScheme(s NetPrioScheme) {
 // called from wsPeer to report that it has closed
 func (wn *WebsocketNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	wn.removePeer(peer, reason)
+	wn.peersByIDLock.Lock()
+	defer wn.peersByIDLock.Unlock()
 	delete(wn.peersByID, peer.identity)
 }
 

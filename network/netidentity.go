@@ -27,13 +27,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// ProtocolConectionIdentityChallengeHeader is used to exchange IdentityChallenges
 const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
 type identityChallenge struct {
-	Nonce     int              `codec:"n"`
 	Key       crypto.PublicKey `codec:"pk"`
 	Challenge [32]byte         `codec:"c"`
-	Signature crypto.Signature `coded:"s"`
+	Signature crypto.Signature `codec:"s"`
 }
 
 type identityChallengeResponse struct {
@@ -41,9 +41,9 @@ type identityChallengeResponse struct {
 	ResponseChallenge [32]byte `codec:"rc"`
 }
 
+// NewIdentityChallenge creates an IdentityChallenge with randomized 32byte Challenge
 func NewIdentityChallenge(p crypto.PublicKey) identityChallenge {
 	c := identityChallenge{
-		Nonce:     1,
 		Key:       p,
 		Challenge: [32]byte{},
 	}
@@ -53,7 +53,6 @@ func NewIdentityChallenge(p crypto.PublicKey) identityChallenge {
 
 func (i identityChallenge) signableBytes() []byte {
 	return bytes.Join([][]byte{
-		[]byte(fmt.Sprintf("%d", i.Nonce)),
 		i.Challenge[:],
 		i.Key[:],
 	},
@@ -89,14 +88,17 @@ func IdentityChallengeFromB64(i string) identityChallenge {
 		return identityChallenge{}
 	}
 	ret := identityChallenge{}
-	protocol.DecodeReflect(msg, &ret)
+	err = protocol.DecodeReflect(msg, &ret)
+	if err != nil {
+		return identityChallenge{}
+	}
 	return ret
 }
 
+// NewIdentityChallengeResponse creates an IdentityChallengeResponse from a received identityChallenge
 func NewIdentityChallengeResponse(p crypto.PublicKey, id identityChallenge) identityChallengeResponse {
 	c := identityChallengeResponse{
 		identityChallenge: identityChallenge{
-			Nonce:     2,
 			Key:       p,
 			Challenge: id.Challenge,
 		},
@@ -108,7 +110,6 @@ func NewIdentityChallengeResponse(p crypto.PublicKey, id identityChallenge) iden
 
 func (i identityChallengeResponse) signableBytes() []byte {
 	return bytes.Join([][]byte{
-		[]byte(fmt.Sprintf("%d", i.Nonce)),
 		i.Challenge[:],
 		i.ResponseChallenge[:],
 		i.Key[:],
@@ -129,13 +130,17 @@ func (i identityChallengeResponse) verify() error {
 	return nil
 }
 
+// IdentityChallengeResponseFromB64 will return an Identity Challenge Response from the B64 header string
 func IdentityChallengeResponseFromB64(i string) identityChallengeResponse {
 	msg, err := base64.StdEncoding.DecodeString(i)
 	if err != nil {
 		return identityChallengeResponse{}
 	}
 	ret := identityChallengeResponse{}
-	protocol.DecodeReflect(msg, &ret)
+	err = protocol.DecodeReflect(msg, &ret)
+	if err != nil {
+		return identityChallengeResponse{}
+	}
 	return ret
 }
 

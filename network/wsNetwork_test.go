@@ -123,6 +123,8 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
+	// tests may expect to have no handlers, but setup may have loaded default ones
+	wn.ClearHandlers()
 	wn.eventualReadyDelay = time.Second
 	return wn
 }
