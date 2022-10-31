@@ -1144,24 +1144,29 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
 
-	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
-	idChal := IdentityChallengeFromB64(idChalB64)
-	peerPublicKey := idChal.Key
-	// if we already have a verified peer using this key, do not proceed
-	wn.peersByIDLock.Lock()
-	defer wn.peersByIDLock.Unlock()
-	if wn.peersByID[peerPublicKey] != nil &&
-		wn.peersByID[peerPublicKey].identityVerified {
-		wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
-		response.WriteHeader(http.StatusPreconditionFailed)
-		n, err := response.Write([]byte("already connected"))
-		if err != nil {
-			wn.log.Warnf("ws failed to write already connected response '%s' : n = %d err = %v", n, err)
+	var peerPublicKey crypto.PublicKey
+	var peerIDChallenge [32]byte
+	if shouldSupportIdentityChallenge(matchingVersion) {
+		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
+		idChal := IdentityChallengeFromB64(idChalB64)
+		peerPublicKey = idChal.Key
+		// if we already have a verified peer using this key, do not proceed
+		wn.peersByIDLock.Lock()
+		defer wn.peersByIDLock.Unlock()
+		if wn.peersByID[peerPublicKey] != nil &&
+			wn.peersByID[peerPublicKey].identityVerified {
+			wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
+			response.WriteHeader(http.StatusPreconditionFailed)
+			n, err := response.Write([]byte("already connected"))
+			if err != nil {
+				wn.log.Warnf("ws failed to write already connected response '%s' : n = %d err = %v", n, err)
+			}
+			return
 		}
-		return
+		idChalResp := NewIdentityChallengeResponse((crypto.PublicKey)(wn.identityKeys.SignatureVerifier), idChal)
+		peerIDChallenge = idChalResp.ResponseChallenge
+		responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalResp.SignAndEncodeB64(wn.identityKeys))
 	}
-	idChalResp := NewIdentityChallengeResponse((crypto.PublicKey)(wn.identityKeys.SignatureVerifier), idChal)
-	responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalResp.SignAndEncodeB64(wn.identityKeys))
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
@@ -1185,8 +1190,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
 		identity:          peerPublicKey,
-		// record the challenge we gave to the initiating peer so we can verify
-		identityChallenge: idChalResp.ResponseChallenge,
+		identityChallenge: peerIDChallenge,
 		identityVerified:  false,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
@@ -2120,27 +2124,31 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
-	if idChalRespB64 == "" {
-		wn.log.Warnf("ws connect(%s) no identification challenge", gossipAddr)
-	}
-	idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
-	// if the identification challenge response is not correctly signed, do not proceed
-	if err = idChalResp.verify(); err != nil {
-		wn.log.Warnf("ws connect(%s) failed identification challenge signature: %s", gossipAddr, err.Error())
-	}
-	// if the signed challenge does not return our original challenge, do not proceed
-	if idChalResp.Challenge != idChal.Challenge {
-		wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChal.Challenge)
-		return
-	}
-	// now that we have validated the identity challenge, we can proceed and treat this peer as validated
-	peerPublicKey := idChalResp.Key
-	// if we already have a verified peer using this key, do not proceed
-	if wn.peersByID[peerPublicKey] != nil &&
-		wn.peersByID[peerPublicKey].identityVerified {
-		wn.log.Warnf("ws connect(%s) already connected", gossipAddr)
-		return
+	var peerPublicKey crypto.PublicKey
+	var idChalResp identityChallengeResponse
+	if shouldSupportIdentityChallenge(matchingVersion) {
+		idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
+		if idChalRespB64 == "" {
+			wn.log.Warnf("ws connect(%s) no identification challenge", gossipAddr)
+		}
+		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
+		// if the identification challenge response is not correctly signed, do not proceed
+		if err = idChalResp.verify(); err != nil {
+			wn.log.Warnf("ws connect(%s) failed identification challenge signature: %s", gossipAddr, err.Error())
+		}
+		// if the signed challenge does not return our original challenge, do not proceed
+		if idChalResp.Challenge != idChal.Challenge {
+			wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChal.Challenge)
+			return
+		}
+		// now that we have validated the identity challenge, we can proceed and treat this peer as validated
+		peerPublicKey = idChalResp.Key
+		// if we already have a verified peer using this key, do not proceed
+		if wn.peersByID[peerPublicKey] != nil &&
+			wn.peersByID[peerPublicKey].identityVerified {
+			wn.log.Warnf("ws connect(%s) already connected", gossipAddr)
+			return
+		}
 	}
 
 	throttledConnection := false
@@ -2179,10 +2187,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	sig := wn.identityKeys.SignBytes(idChalResp.ResponseChallenge[:])
-	err = SendIdentityChallengeVerification(peer, sig)
-	if err != nil {
-		wn.log.With("remote", addr).With("local", localAddr).Warnf(err.Error())
+	if shouldSupportIdentityChallenge(matchingVersion) {
+		sig := wn.identityKeys.SignBytes(idChalResp.ResponseChallenge[:])
+		err = SendIdentityChallengeVerification(peer, sig)
+		if err != nil {
+			wn.log.With("remote", addr).With("local", localAddr).Warnf(err.Error())
+		}
 	}
 
 	peers.Set(float64(wn.NumPeers()))
