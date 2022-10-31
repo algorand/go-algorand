@@ -65,11 +65,11 @@ func encode(t timers.Clock, rr rootRouter, p player, a []action, reflect bool) (
 	s.Clock = t.Encode()
 	s.ActionTypes = make([]actionType, len(a))
 	s.Actions = make([][]byte, len(a))
-	for _, act := range a {
-		s.ActionTypes = append(s.ActionTypes, act.t())
+	for i, act := range a {
+		s.ActionTypes[i] = act.t()
 
 		// still use reflection for actions since action is an interface and we can't define marshaller methods on it
-		s.Actions = append(s.Actions, protocol.EncodeReflect(act))
+		s.Actions[i] = protocol.EncodeReflect(act)
 	}
 	if reflect {
 		raw = protocol.EncodeReflect(s)
