@@ -82,9 +82,11 @@ type StateDelta struct {
 	Txids map[transactions.Txid]IncludedTransactions
 
 	// new txleases for the txtail mapped to expiration
+	// not pre-allocated so use .UpsertTxleases to modify instead of direct assignment
 	Txleases map[Txlease]basics.Round
 
 	// new creatables creator lookup table
+	// not pre-allocated so use .UpsertCreatables to modify instead of direct assignment
 	Creatables map[basics.CreatableIndex]ModifiedCreatable
 
 	// new block header; read-only
@@ -166,9 +168,11 @@ type AccountDeltas struct {
 	// AppResources deltas. If app params or local state is deleted, there is a nil value in AppResources.Params or AppResources.State and Deleted flag set
 	AppResources []AppResourceRecord
 	// caches for {addr, app id} to app params delta resolution
+	// not preallocated - use UpsertAppResource instead of inserting directly
 	appResourcesCache map[AccountApp]int
 
-	AssetResources      []AssetResourceRecord
+	AssetResources []AssetResourceRecord
+	// not preallocated - use UpsertAssertResource instead of inserting directly
 	assetResourcesCache map[AccountAsset]int
 }
 
