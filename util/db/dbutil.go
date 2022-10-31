@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -232,7 +233,7 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 				buf := make([]byte, 16*1024)
 				stlen := runtime.Stack(buf, false)
 				errstr := string(buf[:stlen])
-				fmt.Printf("recovered panic in atomic: %s", errstr)
+				fmt.Fprintf(os.Stderr, "recovered panic in atomic: %s", errstr)
 
 			}
 		}()
