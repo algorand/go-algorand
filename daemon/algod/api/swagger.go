@@ -14,37 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package client
+package api
 
-import (
-	"net/http"
-	"time"
-)
+import _ "embed"
 
-const (
-	timeoutSecs = 120
-)
-
-// KMDClient is the client used to interact with the kmd API over its socket
-type KMDClient struct {
-	httpClient http.Client
-	apiToken   string
-	address    string
-}
-
-func makeHTTPClient() http.Client {
-	client := http.Client{
-		Timeout: timeoutSecs * time.Second,
-	}
-	return client
-}
-
-// MakeKMDClient instantiates a KMDClient for the given sockFile and apiToken
-func MakeKMDClient(address string, apiToken string) (KMDClient, error) {
-	kcl := KMDClient{
-		httpClient: makeHTTPClient(),
-		apiToken:   apiToken,
-		address:    address,
-	}
-	return kcl, nil
-}
+// SwaggerSpecJSONEmbed is a string that is pulled from algod.oas2.json via go-embed
+// for use with the GET /swagger.json endpoint
+//go:embed algod.oas2.json
+var SwaggerSpecJSONEmbed string
