@@ -532,7 +532,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas)
+	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.oldBase, dcc.newBase)
 	if err != nil {
 		return err
 	}
@@ -928,7 +928,7 @@ func (ct *catchpointTracker) close() {
 }
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
-func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas, kvDeltas map[string]modifiedKvValue) (err error) {
+func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas, kvDeltas map[string]modifiedKvValue, oldBase basics.Round, newBase basics.Round) (err error) {
 	if !ct.catchpointEnabled() {
 		return nil
 	}
@@ -1045,10 +1045,32 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	}
 
 	// write it all to disk.
+	var cstats merkletrie.CommitStats
 	if accumulatedChanges > 0 {
-		_, err = ct.balancesTrie.Commit()
+		cstats, err = ct.balancesTrie.Commit()
 	}
 
+	if ct.log.GetTelemetryEnabled() {
+		root, rootErr := ct.balancesTrie.RootHash()
+		if rootErr != nil {
+			ct.log.Infof("accountsUpdateBalances: error retrieving balances trie root: %v", rootErr)
+			return
+		}
+		ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointRootUpdateEvent, telemetryspec.CatchpointRootUpdateEventDetails{
+			Root:                        root.String(),
+			OldBase:                     uint64(oldBase),
+			NewBase:                     uint64(newBase),
+			NewPageCount:                cstats.NewPageCount,
+			NewNodeCount:                cstats.NewNodeCount,
+			UpdatedPageCount:            cstats.UpdatedPageCount,
+			UpdatedNodeCount:            cstats.UpdatedNodeCount,
+			DeletedPageCount:            cstats.DeletedPageCount,
+			FanoutReallocatedNodeCount:  cstats.FanoutReallocatedNodeCount,
+			PackingReallocatedNodeCount: cstats.PackingReallocatedNodeCount,
+			LoadedPages:                 cstats.LoadedPages,
+		})
+
+	}
 	return
 }
 

@@ -327,6 +327,25 @@ type CatchpointGenerationEventDetails struct {
 	CatchpointLabel string
 }
 
+// CatchpointRootUpdateEvent event
+const CatchpointRootUpdateEvent Event = "CatchpointRoot"
+
+// CatchpointRootUpdateEventDetails is generated when the catchpoint merkle trie root is updated, when
+// account updates for rounds are flushed to disk.
+type CatchpointRootUpdateEventDetails struct {
+	Root                        string
+	OldBase                     uint64
+	NewBase                     uint64
+	NewPageCount                int `json:"npc"`
+	NewNodeCount                int `json:"nnc"`
+	UpdatedPageCount            int `json:"upc"`
+	UpdatedNodeCount            int `json:"unc"`
+	DeletedPageCount            int `json:"dpc"`
+	FanoutReallocatedNodeCount  int `json:"frnc"`
+	PackingReallocatedNodeCount int `json:"prnc"`
+	LoadedPages                 int `json:"lp"`
+}
+
 // BalancesAccountVacuumEvent event
 const BalancesAccountVacuumEvent Event = "VacuumBalances"
 
