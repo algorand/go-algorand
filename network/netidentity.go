@@ -35,13 +35,15 @@ const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 var minimumProtocolVersion = [2]int64{2, 2}
 
 func shouldSupportIdentityChallenge(v string) bool {
-	fmt.Println("HUHHHHH")
 	maj, min, err := versionToMajorMinor(v)
 	if err != nil {
 		return false
 	}
 	if maj < minimumProtocolVersion[0] {
 		return false
+	}
+	if maj > minimumProtocolVersion[0] {
+		return true
 	}
 	if min < minimumProtocolVersion[1] {
 		return false
@@ -176,7 +178,7 @@ func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 	mbytes := append([]byte(protocol.NetIDVerificationTag), sig[:]...)
 	sent := wp.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 	if !sent {
-		return fmt.Errorf("could not send challenge verification")
+		return fmt.Errorf("could not send identity challenge verification")
 	}
 	return nil
 }
