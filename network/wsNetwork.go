@@ -1178,7 +1178,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			response.WriteHeader(http.StatusPreconditionFailed)
 			n, err := response.Write([]byte("already connected"))
 			if err != nil {
-				wn.log.Warnf("ws failed to write already connected response '%s' : n = %s err = %v", n, err)
+				wn.log.Warnf("ws failed to write already connected response: n = %d err = %v", n, err)
 			}
 			return
 		}
