@@ -1369,9 +1369,9 @@ int 1`)
 				},
 				Accounts: []generated.Account{
 					{
-						Address: sender.String(),
-						Status:  "Online",
-						Amount:  10000000,
+						Address:                     (appIdx + 2).Address().String(),
+						Status:                      "Online",
+						AmountWithoutPendingRewards: 105_000,
 					},
 				},
 			}
@@ -1379,29 +1379,19 @@ int 1`)
 			var response generated.DryrunResponse
 			doDryrunRequest(&dr, &response)
 			require.Empty(t, response.Error)
-			require.Equal(t, 3, len(response.Txns))
+			require.Len(t, response.Txns, 3)
 
 			for i, txn := range response.Txns {
 				messages := *txn.AppCallMessages
-				require.GreaterOrEqual(t, len(messages), 1)
-				cost := int64(*txn.BudgetConsumed) - int64(*txn.BudgetAdded)
-				require.NotNil(t, cost)
-				require.Equal(t, expectedCosts[i], cost)
-				require.Equal(t, expectedBudgetAdded[i], *txn.BudgetAdded)
-				statusMatches := false
-				costExceedFound := false
-				for _, msg := range messages {
-					if strings.Contains(msg, "cost budget exceeded") {
-						costExceedFound = true
-					}
-					if msg == test.msg {
-						statusMatches = true
-					}
-				}
+				require.Contains(t, messages, test.msg, "Wrong result") // PASS or REJECT
+
 				if test.msg == "REJECT" {
-					require.True(t, costExceedFound, "budget error not found in messages")
+					require.Contains(t, messages[2], "cost budget exceeded", "Failed for a surprise reason")
 				}
-				require.True(t, statusMatches, "expected status not found in messages")
+
+				cost := int64(*txn.BudgetConsumed) - int64(*txn.BudgetAdded)
+				require.Equal(t, expectedCosts[i], cost, "txn %d cost", i)
+				require.Equal(t, expectedBudgetAdded[i], *txn.BudgetAdded, "txn %d added", i)
 			}
 		})
 	}

@@ -99,6 +99,15 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
 		}
 
+		// Confirm that there is no box-related state in the account
+		if rec.TotalBoxes > 0 {
+			return fmt.Errorf("cannot close: %d outstanding boxes", rec.TotalBoxes)
+		}
+		if rec.TotalBoxBytes > 0 {
+			// This should be impossible because every box byte comes from the existence of a box.
+			return fmt.Errorf("cannot close: %d outstanding box bytes", rec.TotalBoxBytes)
+		}
+
 		// Can't have created apps remaining either
 		totalAppParams := rec.TotalAppParams
 		if totalAppParams > 0 {

@@ -136,6 +136,8 @@ func AccountDataToAccount(
 		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
+		TotalBoxes:                  numOrNil(record.TotalBoxes),
+		TotalBoxBytes:               numOrNil(record.TotalBoxBytes),
 		MinBalance:                  minBalance.Raw,
 	}, nil
 }
@@ -330,6 +332,16 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalExtraPages = uint32(*a.AppsTotalExtraPages)
 	}
 
+	var totalBoxes uint64
+	if a.TotalBoxes != nil {
+		totalBoxes = *a.TotalBoxes
+	}
+
+	var totalBoxBytes uint64
+	if a.TotalBoxBytes != nil {
+		totalBoxBytes = *a.TotalBoxBytes
+	}
+
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -350,6 +362,8 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
 		TotalExtraAppPages: totalExtraPages,
+		TotalBoxes:         totalBoxes,
+		TotalBoxBytes:      totalBoxBytes,
 	}
 
 	if a.AuthAddr != nil {

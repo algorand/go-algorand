@@ -159,7 +159,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
@@ -214,7 +214,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -293,7 +293,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
