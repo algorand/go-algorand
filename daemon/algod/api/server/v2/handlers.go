@@ -676,9 +676,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
-	hashtype := generated.Sha512256 // default hash type for proof
+	hashtype := "sha512_256" // default hash type for proof
 	if params.Hashtype != nil {
-		hashtype = generated.TransactionProofResponseHashtype(*params.Hashtype)
+		hashtype = string(*params.Hashtype)
 	}
 	if hashtype == "sha256" && !proto.EnableSHA256TxnCommitmentHeader {
 		return badRequest(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
@@ -698,13 +698,13 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 		var stibhash crypto.Digest
 
 		switch hashtype {
-		case generated.Sha256:
+		case "sha256":
 			tree, err = block.TxnMerkleTreeSHA256()
 			if err != nil {
 				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 			}
 			stibhash = block.Payset[idx].HashSHA256()
-		case generated.Sha512256:
+		case "sha512_256":
 			tree, err = block.TxnMerkleTree()
 			if err != nil {
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
@@ -724,7 +724,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
 			Treedepth: uint64(proof.TreeDepth),
-			Hashtype:  hashtype,
+			Hashtype:  generated.TransactionProofResponseHashtype(hashtype),
 		}
 
 		return ctx.JSON(http.StatusOK, response)

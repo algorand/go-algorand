@@ -201,7 +201,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 func getCodecHandle(formatPtr *generated.Format) (codec.Handle, string, error) {
 	format := generated.Json
 	if formatPtr != nil {
-		format = *formatPtr
+		format = generated.PendingTransactionInformationParamsFormat(*formatPtr)
 	}
 
 	switch format {
