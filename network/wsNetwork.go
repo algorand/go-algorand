@@ -1167,7 +1167,16 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	var peerIDChallenge [32]byte
 	if shouldSupportIdentityChallenge(matchingVersion) {
 		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
+		if idChalB64 == "" {
+			wn.log.Warnf("ws connect(%s) no identification challenge")
+			return
+		}
 		idChal := IdentityChallengeFromB64(idChalB64)
+		// if the identification challenge response is not correctly signed, do not proceed
+		if err := idChal.verify(); err != nil {
+			wn.log.Warnf("ws connect(%s) failed identification challenge signature: err=%v", err.Error())
+			return
+		}
 		peerPublicKey = idChal.Key
 		// if we already have a verified peer using this key, do not proceed
 		wn.peersByIDLock.Lock()
@@ -2209,11 +2218,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
 		if idChalRespB64 == "" {
 			wn.log.Warnf("ws connect(%s) no identification challenge", gossipAddr)
+			return
 		}
 		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
 		// if the identification challenge response is not correctly signed, do not proceed
 		if err = idChalResp.verify(); err != nil {
 			wn.log.Warnf("ws connect(%s) failed identification challenge signature: %s", gossipAddr, err.Error())
+			return
 		}
 		// if the signed challenge does not return our original challenge, do not proceed
 		if idChalResp.Challenge != idChal.Challenge {
