@@ -23,6 +23,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
@@ -66,7 +67,7 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(lib.SwaggerSpecJSON))
+	_, _ = w.Write([]byte(api.SwaggerSpecJSONEmbed))
 }
 
 // HealthCheck is an httpHandler for route GET /health

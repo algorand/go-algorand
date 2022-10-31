@@ -53,6 +53,32 @@ var spec = transactions.SpecialAddresses{
 	RewardsPool: poolAddr,
 }
 
+func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+	batchVerifier := crypto.MakeBatchVerifier()
+
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+		return err
+	}
+	return batchVerifier.Verify()
+}
+
+type DummyLedgerForSignature struct {
+}
+
+func (d *DummyLedgerForSignature) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}, nil
+}
+
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
@@ -60,18 +86,98 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testing.T) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	secrets, addresses, pks, multiAddress := generateMultiSigAccounts(t, numAccs)
+
+	numMultiSigAcct := len(multiAddress)
 	txs := make([]transactions.Transaction, numTxs)
 	signed := make([]transactions.SignedTxn, numTxs)
+
+	var iss, exp int
+	u := uint64(0)
+
+	for i := 0; i < numTxs; i++ {
+		s := rand.Intn(numMultiSigAcct)
+		r := rand.Intn(numMultiSigAcct)
+		a := rand.Intn(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10)) + u
+		if blockRound == 0 {
+			iss = 50 + rand.Intn(30)
+			exp = iss + 10
+		} else {
+			iss = int(blockRound) / 2
+			exp = int(blockRound) + rand.Intn(30)
+		}
+
+		txs[i] = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      multiAddress[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: multiAddress[r],
+				Amount:   basics.MicroAlgos{Raw: uint64(a)},
+			},
+		}
+		signed[i].Txn = txs[i]
+
+		// create multi sig that 2 out of 3 has signed the txn
+		var sigs [2]crypto.MultisigSig
+		for j := 0; j < 2; j++ {
+			msig, err := crypto.MultisigSign(txs[i], crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
+			require.NoError(t, err)
+			sigs[j] = msig
+		}
+		msig, err := crypto.MultisigAssemble(sigs[:])
+		require.NoError(t, err)
+		signed[i].Msig = msig
+		u += 100
+	}
+
+	return txs, signed, secrets, addresses
+}
+
+func generateMultiSigAccounts(t *testing.T, numAccs int) ([]*crypto.SignatureSecrets, []basics.Address, []crypto.PublicKey, []basics.Address) {
+	require.Equal(t, numAccs%3, 0, "numAccs should be multiple of 3 to create multiaccounts")
+
+	numMultiSigAcct := numAccs / 3
+	secrets, addresses, pks := generateAccounts(numAccs)
+
+	multiAddress := make([]basics.Address, numMultiSigAcct)
+
+	// create multiAccounts
+	for i := 0; i < numAccs; i += 3 {
+		multiSigAdd, err := crypto.MultisigAddrGen(1, 2, pks[i:i+3])
+		require.NoError(t, err)
+		multiAddress[i/3] = basics.Address(multiSigAdd)
+	}
+	return secrets, addresses, pks, multiAddress
+}
+
+func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address, []crypto.PublicKey) {
 	secrets := make([]*crypto.SignatureSecrets, numAccs)
 	addresses := make([]basics.Address, numAccs)
+	pks := make([]crypto.PublicKey, numAccs)
 
 	for i := 0; i < numAccs; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
+		pks[i] = secret.SignatureVerifier
 	}
+	return secrets, addresses, pks
+}
+
+func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	txs := make([]transactions.Transaction, numTxs)
+	signed := make([]transactions.SignedTxn, numTxs)
+	secrets, addresses, _ := generateAccounts(numAccs)
+
 	var iss, exp int
 	u := uint64(0)
 	for i := 0; i < numTxs; i++ {
@@ -119,14 +225,14 @@ func TestSignedPayment(t *testing.T) {
 	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
 	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, Txn(&stxn, 0, groupCtx), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, verifyTxn(&stxn, 0, groupCtx), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, Txn(&stxn2, 0, groupCtx), "verify succeeded with bad sig")
+	require.Error(t, verifyTxn(&stxn2, 0, groupCtx), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -139,7 +245,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
-		if Txn(&txn, 0, groupCtx) != nil {
+		if verifyTxn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -147,7 +253,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if Txn(&signedTx, 0, groupCtx) != nil {
+		if verifyTxn(&signedTx, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -161,14 +267,14 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
 		require.NoError(t, err)
-		if Txn(&txn, 0, groupCtx) != nil {
+		if verifyTxn(&txn, 0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
 		txn.Sig = crypto.Signature{}
 		txn.Msig = crypto.MultisigSig{}
 		txn.Lsig = transactions.LogicSig{}
-		if Txn(&txn, 0, groupCtx) == nil {
+		if verifyTxn(&txn, 0, groupCtx) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
@@ -207,13 +313,13 @@ func TestTxnValidationStateProof(t *testing.T) {
 	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil)
 	require.NoError(t, err)
 
-	err = Txn(&stxn, 0, groupCtx)
+	err = verifyTxn(&stxn, 0, groupCtx)
 	require.NoError(t, err, "state proof txn %#v did not verify", stxn)
 
 	stxn2 := stxn
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
@@ -221,28 +327,28 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
 	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
-	err = Txn(&stxn2, 0, groupCtx)
+	err = verifyTxn(&stxn2, 0, groupCtx)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 }
 
@@ -260,7 +366,7 @@ func TestDecodeNil(t *testing.T) {
 		// This used to panic when run on a zero value of SignedTxn.
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil)
 		require.NoError(t, err)
-		Txn(&st, 0, groupCtx)
+		verifyTxn(&st, 0, groupCtx)
 	}
 }
 
@@ -405,17 +511,7 @@ func TestPaysetGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
@@ -485,17 +581,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 		b.N = 2000
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
-	blkHdr := bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}
+	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
@@ -508,6 +594,82 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, cache, nil)
 	require.NoError(b, err)
 	b.StopTimer()
+}
+
+func TestTxnGroupMixedSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 50)
+	blkHdr := createDummyBlockHeader()
+
+	// add a simple logic that verifies this condition:
+	// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
+	op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+	require.NoError(t, err)
+
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+
+	dummyLedger := DummyLedgerForSignature{}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	///// no sig
+	tmpSig := txnGroups[0][0].Sig
+	txnGroups[0][0].Sig = crypto.Signature{}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "has no sig")
+	txnGroups[0][0].Sig = tmpSig
+
+	///// Sig + multiSig
+	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Msig.Subsigs = nil
+
+	///// Sig + logic
+	txnGroups[0][0].Lsig.Logic = op.Program
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Lsig.Logic = []byte{}
+
+	///// MultiSig + logic
+	txnGroups[0][0].Sig = crypto.Signature{}
+	txnGroups[0][0].Lsig.Logic = op.Program
+	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	txnGroups[0][0].Lsig.Logic = []byte{}
+	txnGroups[0][0].Sig = tmpSig
+	txnGroups[0][0].Msig.Subsigs = nil
+
+	/////  logic with sig and multi sig
+	txnGroups[0][0].Sig = crypto.Signature{}
+	txnGroups[0][0].Lsig.Logic = op.Program
+	txnGroups[0][0].Lsig.Sig = tmpSig
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
+
 }
 
 func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
@@ -539,6 +701,296 @@ func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*c
 	return txnGroups
 }
 
+func TestTxnGroupCacheUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
+	blkHdr := createDummyBlockHeader()
+
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Sig[0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Sig[0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+}
+
+// TestTxnGroupCacheUpdateMultiSig makes sure that a payment transaction signed with multisig
+// is valid (and added to the cache) only if all signatures in the multisig are correct
+func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, _, _ := generateMultiSigTxn(100, 30, 50, t)
+	blkHdr := createDummyBlockHeader()
+
+	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = signedTxn[i]
+	}
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Msig.Subsigs[0].Sig[0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Msig.Subsigs[0].Sig[0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+}
+
+// TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
+// is valid (and added to the cache) only if logic passes
+func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
+	blkHdr := createDummyBlockHeader()
+
+	// sign the transcation with logic
+	for i := 0; i < len(signedTxn); i++ {
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
+		op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+		require.NoError(t, err)
+		signedTxn[i].Lsig.Logic = op.Program
+		program := logic.Program(op.Program)
+		signedTxn[i].Txn.Sender = basics.Address(crypto.HashObj(&program))
+		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+		signedTxn[i].Sig = crypto.Signature{}
+	}
+
+	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = signedTxn[i]
+	}
+
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+
+}
+
+// TestTxnGroupCacheUpdateLogicWithSig makes sure that a payment transaction contains logicsig signed with single signature is valid (and added to the cache) only
+// if the logic passes and the signature is correct.
+// for this, we will break the signature and make sure that txn verification fails.
+func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 50)
+	blkHdr := createDummyBlockHeader()
+
+	for i := 0; i < len(signedTxn); i++ {
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
+		op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+		require.NoError(t, err)
+
+		s := rand.Intn(len(secrets))
+		signedTxn[i].Sig = crypto.Signature{}
+		signedTxn[i].Txn.Sender = addresses[s]
+		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+		signedTxn[i].Lsig.Logic = op.Program
+		program := logic.Program(op.Program)
+		signedTxn[i].Lsig.Sig = secrets[s].Sign(program)
+
+	}
+
+	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = signedTxn[i]
+	}
+
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Sig[0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Sig[0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+
+	// signature is correct and logic fails
+	breakSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]++
+	}
+	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+}
+
+// TestTxnGroupCacheUpdateLogicWithMultiSig makes sure that a payment transaction contains logicsig signed with multisig is valid
+// if the logic passes and the multisig is correct.
+// for this, we will break one of the multisig and the logic and make sure that txn verification fails.
+func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, _, pks, multiAddress := generateMultiSigAccounts(t, 30)
+	blkHdr := createDummyBlockHeader()
+
+	const numOfTxn = 20
+	signedTxn := make([]transactions.SignedTxn, numOfTxn)
+
+	numMultiSigAcct := len(multiAddress)
+	for i := 0; i < numOfTxn; i++ {
+		s := rand.Intn(numMultiSigAcct)
+		r := rand.Intn(numMultiSigAcct)
+		a := rand.Intn(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
+
+		signedTxn[i].Txn = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      multiAddress[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(1),
+				LastValid:   basics.Round(100),
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: multiAddress[r],
+				Amount:   basics.MicroAlgos{Raw: uint64(a)},
+			},
+		}
+		// add a simple logic that verifies this condition:
+		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
+		op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+		require.NoError(t, err)
+
+		signedTxn[i].Sig = crypto.Signature{}
+		signedTxn[i].Txn.Sender = multiAddress[s]
+		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+		signedTxn[i].Lsig.Logic = op.Program
+		program := logic.Program(op.Program)
+
+		// create multi sig that 2 out of 3 has signed the txn
+		var sigs [2]crypto.MultisigSig
+		for j := 0; j < 2; j++ {
+			msig, err := crypto.MultisigSign(program, crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
+			require.NoError(t, err)
+			sigs[j] = msig
+		}
+		msig, err := crypto.MultisigAssemble(sigs[:])
+		require.NoError(t, err)
+		signedTxn[i].Lsig.Msig = msig
+	}
+
+	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = signedTxn[i]
+	}
+
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Msig.Subsigs[0].Sig[0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Lsig.Msig.Subsigs[0].Sig[0]--
+	}
+
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	// signature is correct and logic fails
+	breakSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]++
+	}
+	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
+		txn.Lsig.Args[0][0]--
+	}
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+}
+
+func createDummyBlockHeader() bookkeeping.BlockHeader {
+	return bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+	}
+}
+
+// verifyGroup uses TxnGroup to verify txns and add them to the
+// cache. Then makes sure that only the valid txns are verified and added to
+// the cache.
+func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
+	cache := MakeVerifiedTransactionCache(1000)
+
+	breakSig(&txnGroups[0][0])
+
+	dummeyLedger := DummyLedgerForSignature{}
+	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummeyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), errorString)
+
+	// The txns should not be in the cache
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, protocol.ConsensusCurrentVersion)
+	require.Len(t, unverifiedGroups, 1)
+
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Len(t, unverifiedGroups, 2)
+
+	_, err = TxnGroup(txnGroups[1], blkHdr, cache, &dummeyLedger)
+	require.NoError(t, err)
+
+	// Only the second txn should be in the cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Len(t, unverifiedGroups, 1)
+
+	restoreSig(&txnGroups[0][0])
+
+	_, err = TxnGroup(txnGroups[0], blkHdr, cache, &dummeyLedger)
+	require.NoError(t, err)
+
+	// Both transactions should be in the cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	require.Len(t, unverifiedGroups, 0)
+
+	cache = MakeVerifiedTransactionCache(1000)
+	// Break a random signature
+	txgIdx := rand.Intn(len(txnGroups))
+	txIdx := rand.Intn(len(txnGroups[txgIdx]))
+	breakSig(&txnGroups[txgIdx][txIdx])
+
+	numFailed := 0
+
+	// Add them to the cache by verifying them
+	for _, txng := range txnGroups {
+		_, err = TxnGroup(txng, blkHdr, cache, &dummeyLedger)
+		if err != nil {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), errorString)
+			numFailed++
+		}
+	}
+	require.Equal(t, 1, numFailed)
+
+	// Only one transaction should not be in cache
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	require.Len(t, unverifiedGroups, 1)
+
+	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])
+	restoreSig(&txnGroups[txgIdx][txIdx])
+}
+
 func BenchmarkTxn(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
@@ -564,7 +1016,7 @@ func BenchmarkTxn(b *testing.B) {
 		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
-			err := Txn(&txn, i, groupCtx)
+			err := verifyTxn(&txn, i, groupCtx)
 			require.NoError(b, err)
 		}
 	}

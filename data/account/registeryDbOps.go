@@ -85,7 +85,7 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 	})
 
 	if err != nil {
-		db.log.Warnf("participationDB unable to delete stateProof key: %w", err)
+		db.log.Warnf("participationDB unable to delete stateProof key: %v", err)
 	}
 	return err
 }

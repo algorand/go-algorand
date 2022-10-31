@@ -14,15 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package api
 
-// Export for testing only.  See
-// https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
-// nice explanation. tl;dr: Since some of our testing is in logic_test package,
-// we export some extra things to make testing easier there. But we do it in a
-// _test.go file, so they are only exported during testing.
+import _ "embed"
 
-// In order to generate a block
-func (eval *BlockEvaluator) SetGenerate(g bool) {
-	eval.generate = g
-}
+// SwaggerSpecJSONEmbed is a string that is pulled from algod.oas2.json via go-embed
+// for use with the GET /swagger.json endpoint
+//go:embed algod.oas2.json
+var SwaggerSpecJSONEmbed string
