@@ -33,6 +33,8 @@ linters-settings:
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).error
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
+    # We do this 121 times and never check the error.
+    - (*github.com/spf13/cobra.Command).MarkFlagRequired
   govet:
     settings:
       printf:

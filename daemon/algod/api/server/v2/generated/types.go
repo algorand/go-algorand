@@ -199,6 +199,12 @@ type Account struct {
 	// TotalAssetsOptedIn The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
 	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
+	// TotalBoxBytes \[tbxb\] The total number of bytes used by this account's app's box keys and values.
+	TotalBoxBytes *uint64 `json:"total-box-bytes,omitempty"`
+
+	// TotalBoxes \[tbx\] The number of existing boxes created by this account's app.
+	TotalBoxes *uint64 `json:"total-boxes,omitempty"`
+
 	// TotalCreatedApps The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
 
@@ -375,6 +381,21 @@ type AssetParams struct {
 
 	// UrlB64 Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// Box Box name and its content.
+type Box struct {
+	// Name \[name\] box name, base64 encoded
+	Name []byte `json:"name"`
+
+	// Value \[value\] box value, base64 encoded.
+	Value []byte `json:"value"`
+}
+
+// BoxDescriptor Box descriptor describes a Box.
+type BoxDescriptor struct {
+	// Name Base64 encoded box name
+	Name []byte `json:"name"`
 }
 
 // BuildVersion defines model for BuildVersion.
@@ -752,6 +773,14 @@ type BlockResponse struct {
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
+// BoxResponse Box name and its content.
+type BoxResponse = Box
+
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+	Boxes []BoxDescriptor `json:"boxes"`
+}
+
 // CatchpointAbortResponse An catchpoint abort response.
 type CatchpointAbortResponse struct {
 	// CatchupMessage Catchup abort response string
@@ -983,6 +1012,18 @@ type GetPendingTransactionsByAddressParams struct {
 
 // GetPendingTransactionsByAddressParamsFormat defines parameters for GetPendingTransactionsByAddress.
 type GetPendingTransactionsByAddressParamsFormat string
+
+// GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
+type GetApplicationBoxByNameParams struct {
+	// Name A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
+	Name string `form:"name" json:"name"`
+}
+
+// GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParams struct {
+	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
+	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+}
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {

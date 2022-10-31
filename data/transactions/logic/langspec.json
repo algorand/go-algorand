@@ -1033,7 +1033,7 @@
       "Name": "bury",
       "Args": ".",
       "Size": 2,
-      "Doc": "Replace the Nth value from the top of the stack. bury 0 fails.",
+      "Doc": "replace the Nth value from the top of the stack with A. bury 0 fails.",
       "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
@@ -1043,7 +1043,7 @@
       "Opcode": 70,
       "Name": "popn",
       "Size": 2,
-      "Doc": "Remove N values from the top of the stack",
+      "Doc": "remove N values from the top of the stack",
       "ImmediateNote": "{uint8 stack depth}",
       "Groups": [
         "Flow Control"
@@ -1342,7 +1342,7 @@
       "Args": ".",
       "Returns": "U",
       "Size": 1,
-      "Doc": "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
+      "Doc": "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
@@ -1531,9 +1531,18 @@
       "ArgEnum": [
         "AcctBalance",
         "AcctMinBalance",
-        "AcctAuthAddr"
+        "AcctAuthAddr",
+        "AcctTotalNumUint",
+        "AcctTotalNumByteSlice",
+        "AcctTotalExtraAppPages",
+        "AcctTotalAppsCreated",
+        "AcctTotalAppsOptedIn",
+        "AcctTotalAssetsCreated",
+        "AcctTotalAssets",
+        "AcctTotalBoxes",
+        "AcctTotalBoxBytes"
       ],
-      "ArgEnumTypes": "UUB",
+      "ArgEnumTypes": "UUBUUUUUUUUU",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "Groups": [
@@ -1546,7 +1555,7 @@
       "Args": ".",
       "Returns": "U",
       "Size": 1,
-      "Doc": "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
+      "Doc": "minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
@@ -1657,7 +1666,7 @@
       "Name": "frame_bury",
       "Args": ".",
       "Size": 2,
-      "Doc": "Replace the Nth (signed) value from the frame pointer in the stack",
+      "Doc": "replace the Nth (signed) value from the frame pointer in the stack with A",
       "ImmediateNote": "{int8 frame slot}",
       "Groups": [
         "Flow Control"
@@ -2273,6 +2282,84 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Inner Transactions"
+      ]
+    },
+    {
+      "Opcode": 185,
+      "Name": "box_create",
+      "Args": "BU",
+      "Returns": "U",
+      "Size": 1,
+      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 186,
+      "Name": "box_extract",
+      "Args": "BUU",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 187,
+      "Name": "box_replace",
+      "Args": "BUB",
+      "Size": 1,
+      "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 188,
+      "Name": "box_del",
+      "Args": "B",
+      "Returns": "U",
+      "Size": 1,
+      "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 189,
+      "Name": "box_len",
+      "Args": "B",
+      "Returns": "UU",
+      "Size": 1,
+      "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 190,
+      "Name": "box_get",
+      "Args": "B",
+      "Returns": "BU",
+      "Size": 1,
+      "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 191,
+      "Name": "box_put",
+      "Args": "BB",
+      "Size": 1,
+      "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "Box Access"
       ]
     },
     {

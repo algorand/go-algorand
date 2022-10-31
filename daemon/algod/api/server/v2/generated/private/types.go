@@ -137,6 +137,12 @@ type Account struct {
 	// TotalAssetsOptedIn The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
 	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
+	// TotalBoxBytes \[tbxb\] The total number of bytes used by this account's app's box keys and values.
+	TotalBoxBytes *uint64 `json:"total-box-bytes,omitempty"`
+
+	// TotalBoxes \[tbx\] The number of existing boxes created by this account's app.
+	TotalBoxes *uint64 `json:"total-boxes,omitempty"`
+
 	// TotalCreatedApps The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
 
@@ -313,6 +319,21 @@ type AssetParams struct {
 
 	// UrlB64 Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// Box Box name and its content.
+type Box struct {
+	// Name \[name\] box name, base64 encoded
+	Name []byte `json:"name"`
+
+	// Value \[value\] box value, base64 encoded.
+	Value []byte `json:"value"`
+}
+
+// BoxDescriptor Box descriptor describes a Box.
+type BoxDescriptor struct {
+	// Name Base64 encoded box name
+	Name []byte `json:"name"`
 }
 
 // BuildVersion defines model for BuildVersion.
@@ -688,6 +709,14 @@ type BlockResponse struct {
 
 	// Cert Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
+}
+
+// BoxResponse Box name and its content.
+type BoxResponse = Box
+
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+	Boxes []BoxDescriptor `json:"boxes"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
