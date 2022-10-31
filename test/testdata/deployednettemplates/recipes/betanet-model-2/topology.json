@@ -1,0 +1,384 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1-betanet-model-2",
+      "Template": "AWS-US-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "R2-betanet-model-2",
+      "Template": "AWS-US-WEST-1-c5d.4xl"
+    },
+    {
+      "Name": "R3-betanet-model-2",
+      "Template": "AWS-SA-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "R4-betanet-model-2",
+      "Template": "AWS-EU-NORTH-1-c5d.4xl"
+    },
+    {
+      "Name": "R5-betanet-model-2",
+      "Template": "AWS-US-EAST-1-c5d.4xl"
+    },
+    {
+      "Name": "N1-betanet-model-2",
+      "Template": "AWS-US-EAST-2-c5d.2xl"
+    },
+    {
+      "Name": "N2-betanet-model-2",
+      "Template": "AWS-US-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N3-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-c5d.2xl"
+    },
+    {
+      "Name": "N4-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N5-betanet-model-2",
+      "Template": "AWS-US-EAST-2-c5d.2xl"
+    },
+    {
+      "Name": "N6-betanet-model-2",
+      "Template": "AWS-US-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N7-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-c5d.2xl"
+    },
+    {
+      "Name": "N8-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N9-betanet-model-2",
+      "Template": "AWS-US-EAST-2-c5d.2xl"
+    },
+    {
+      "Name": "N10-betanet-model-2",
+      "Template": "AWS-US-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N11-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-c5d.2xl"
+    },
+    {
+      "Name": "N12-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N13-betanet-model-2",
+      "Template": "AWS-US-EAST-2-c5d.2xl"
+    },
+    {
+      "Name": "N14-betanet-model-2",
+      "Template": "AWS-US-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N15-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-c5d.2xl"
+    },
+    {
+      "Name": "N16-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N17-betanet-model-2",
+      "Template": "AWS-US-EAST-2-c5d.2xl"
+    },
+    {
+      "Name": "N18-betanet-model-2",
+      "Template": "AWS-US-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "N19-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-c5d.2xl"
+    },
+    {
+      "Name": "N20-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-c5d.2xl"
+    },
+    {
+      "Name": "NPN1-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPN2-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPN3-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPN4-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPN5-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPN6-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPN7-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPN8-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPN9-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPN10-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPN11-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPN12-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPN13-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPN14-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPN15-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPN16-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPN17-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPN18-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPN19-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPN20-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX1-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX2-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX3-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX4-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX5-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX6-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX7-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX8-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX9-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX10-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX11-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX12-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX13-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX14-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX15-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX16-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX17-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX18-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX19-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX20-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX21-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX22-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX23-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX24-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX25-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX26-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX27-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX28-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX29-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX30-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX31-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX32-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX33-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX34-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX35-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX36-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX37-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX38-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX39-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX40-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX41-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX42-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX43-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX44-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX45-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX46-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    },
+    {
+      "Name": "NPX47-betanet-model-2",
+      "Template": "AWS-CA-CENTRAL-1-Small"
+    },
+    {
+      "Name": "NPX48-betanet-model-2",
+      "Template": "AWS-EU-WEST-2-Small"
+    },
+    {
+      "Name": "NPX49-betanet-model-2",
+      "Template": "AWS-US-EAST-2-Small"
+    },
+    {
+      "Name": "NPX50-betanet-model-2",
+      "Template": "AWS-US-WEST-2-Small"
+    }
+  ]
+}

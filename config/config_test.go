@@ -23,8 +23,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -300,7 +302,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		modified, err := migrate(c)
 		a.NoError(err)
-		a.Equal(defaultLocal, modified)
+		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
@@ -344,21 +346,35 @@ func TestConsensusUpgrades(t *testing.T) {
 	currentVersionName := protocol.ConsensusV7
 	latestVersionName := protocol.ConsensusCurrentVersion
 
-	leadsTo := consensusUpgradesTo(a, currentVersionName, latestVersionName)
+	leadsTo := consensusUpgradesTo(a, currentVersionName, latestVersionName, checkConsensusVersionName)
 	a.True(leadsTo, "Consensus protocol must have upgrade path from %v to %v", currentVersionName, latestVersionName)
 }
 
-func consensusUpgradesTo(a *require.Assertions, currentName, targetName protocol.ConsensusVersion) bool {
+func checkConsensusVersionName(a *require.Assertions, name string) {
+	// ensure versions come from official specs repo
+	prefix1 := "https://github.com/algorandfoundation/specs/tree/"
+	prefix2 := "https://github.com/algorand/spec/tree/"
+
+	whitelist := map[string]bool{"v7": true, "v8": true, "v9": true, "v10": true, "v11": true, "v12": true}
+	if !whitelist[name] {
+		a.True(strings.HasPrefix(name, prefix1) || strings.HasPrefix(name, prefix2),
+			"Consensus version %s does not start with allowed prefix", name)
+	}
+}
+
+func consensusUpgradesTo(a *require.Assertions, currentName, targetName protocol.ConsensusVersion, nameCheckFn func(*require.Assertions, string)) bool {
+	nameCheckFn(a, string(currentName))
 	if currentName == targetName {
 		return true
 	}
 	currentVersion, has := Consensus[currentName]
 	a.True(has, "Consensus map should contain all references consensus versions: Missing '%v'", currentName)
 	for upgrade := range currentVersion.ApprovedUpgrades {
+		nameCheckFn(a, string(upgrade))
 		if upgrade == targetName {
 			return true
 		}
-		return consensusUpgradesTo(a, upgrade, targetName)
+		return consensusUpgradesTo(a, upgrade, targetName, nameCheckFn)
 	}
 	return false
 }
@@ -470,7 +486,7 @@ func TestLocalStructTags(t *testing.T) {
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
-	require.True(t, true, ok)
+	require.True(t, ok)
 	ver := 0
 	versionTags := []string{}
 	for {
@@ -487,7 +503,7 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
-		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// the field named "Version" is tested separately in TestLocalVersionField, so we'll be skipping
 		// it on this test.
 		if field.Name == "Version" {
 			continue
@@ -535,4 +551,32 @@ func TestLocalVersionField(t *testing.T) {
 	}
 	expectedTag = expectedTag[:len(expectedTag)-1]
 	require.Equal(t, expectedTag, string(field.Tag))
+}
+
+func TestGetNonDefaultConfigValues(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	// set 4 non-default values
+	cfg.AgreementIncomingBundlesQueueLength = 2
+	cfg.AgreementIncomingProposalsQueueLength = 200
+	cfg.TxPoolSize = 30
+	cfg.Archival = true
+
+	// ask for 2 of them
+	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
+
+	// assert correct
+	expected := map[string]interface{}{
+		"AgreementIncomingBundlesQueueLength": uint64(2),
+		"TxPoolSize":                          int(30),
+	}
+	assert.Equal(t, expected, ndmap)
+
+	// ask for field that doesn't exist: should skip
+	assert.Equal(t, expected, GetNonDefaultConfigValues(cfg, []string{"Blah", "AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+
+	// check unmodified defaults
+	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
 }

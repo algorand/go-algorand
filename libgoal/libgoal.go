@@ -55,13 +55,15 @@ const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
 
 // Client represents the entry point for all libgoal functions
 type Client struct {
-	nc                   nodecontrol.NodeController
-	kmdStartArgs         nodecontrol.KMDStartArgs
-	dataDir              string
-	cacheDir             string
-	consensus            config.ConsensusProtocols
-	algodVersionAffinity algodclient.APIVersion
-	kmdVersionAffinity   kmdclient.APIVersion
+	nc           nodecontrol.NodeController
+	kmdStartArgs nodecontrol.KMDStartArgs
+	dataDir      string
+	cacheDir     string
+	consensus    config.ConsensusProtocols
+
+	suggestedParamsCache  v1.TransactionParams
+	suggestedParamsExpire time.Time
+	suggestedParamsMaxAge time.Duration
 }
 
 // ClientConfig is data to configure a Client
@@ -144,8 +146,6 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
-	c.algodVersionAffinity = algodclient.APIVersionV1
-	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -200,7 +200,6 @@ func (c *Client) ensureAlgodClient() (*algodclient.RestClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	algod.SetAPIVersionAffinity(c.algodVersionAffinity)
 	return &algod, err
 }
 
@@ -513,7 +512,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 // 		 M     |     M     | error
 //
 func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -576,7 +575,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -776,6 +775,25 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 	return
 }
 
+// ApplicationBoxes takes an app's index and returns the names of boxes under it
+func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generatedV2.BoxesResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
+	}
+	return
+}
+
+// GetApplicationBoxByName takes an app's index and box name and returns its value.
+// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
+func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp generatedV2.BoxResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.GetApplicationBoxByName(index, name)
+	}
+	return
+}
+
 // TransactionInformation takes an address and associated txid and return its information
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -920,6 +938,23 @@ func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
 	return
 }
 
+// SetSuggestedParamsCacheAge sets the maximum age for an internal cached version of SuggestedParams() used internally to many libgoal Client functions.
+func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
+	c.suggestedParamsMaxAge = maxAge
+}
+
+func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error) {
+	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
+		params, err = c.SuggestedParams()
+		if err == nil && c.suggestedParamsMaxAge != 0 {
+			c.suggestedParamsCache = params
+			c.suggestedParamsExpire = time.Now().Add(c.suggestedParamsMaxAge)
+		}
+		return
+	}
+	return c.suggestedParamsCache, nil
+}
+
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
@@ -1032,12 +1067,6 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	return params, nil
 }
 
-// SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
-func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
-	c.algodVersionAffinity = algodVersionAffinity
-	c.kmdVersionAffinity = kmdVersionAffinity
-}
-
 // AbortCatchup aborts the currently running catchup
 func (c *Client) AbortCatchup() error {
 	algod, err := c.ensureAlgodClient()
@@ -1045,7 +1074,6 @@ func (c *Client) AbortCatchup() error {
 		return err
 	}
 	// we need to ensure we're using the v2 status so that we would get the catchpoint information.
-	algod.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	resp, err := algod.Status()
 	if err != nil {
 		return err

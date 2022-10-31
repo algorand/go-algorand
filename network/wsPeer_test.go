@@ -18,12 +18,15 @@ package network
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,14 +93,90 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	}
 }
 
-// TestAtomicVariablesAligment ensures that the 64-bit atomic variables
+// TestAtomicVariablesAlignment ensures that the 64-bit atomic variables
 // offsets are 64-bit aligned. This is required due to go atomic library
 // limitation.
-func TestAtomicVariablesAligment(t *testing.T) {
+func TestAtomicVariablesAlignment(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	p := wsPeer{}
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.duplicateFilterCount)%8) == 0)
+}
+
+func TestTagCounterFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tagCounterTags := map[string]*metrics.TagCounter{
+		"networkSentBytesByTag":       networkSentBytesByTag,
+		"networkReceivedBytesByTag":   networkReceivedBytesByTag,
+		"networkMessageReceivedByTag": networkMessageReceivedByTag,
+		"networkMessageSentByTag":     networkMessageSentByTag,
+	}
+	for name, tag := range tagCounterTags {
+		t.Run(name, func(t *testing.T) {
+			require.NotZero(t, len(tag.AllowedTags))
+			tag.Add("TEST_TAG", 1)
+			b := strings.Builder{}
+			tag.WriteMetric(&b, "")
+			result := b.String()
+			require.Contains(t, result, "_UNK")
+			require.NotContains(t, result, "TEST_TAG")
+		})
+	}
+}
+
+func TestVersionToMajorMinor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ma, mi, err := versionToMajorMinor("1.2")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), ma)
+	require.Equal(t, int64(2), mi)
+
+	ma, mi, err = versionToMajorMinor("1.2.3")
+	require.Error(t, err)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+
+	ma, mi, err = versionToMajorMinor("1")
+	require.Error(t, err)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+
+	ma, mi, err = versionToMajorMinor("a.b")
+	require.Error(t, err)
+	require.Zero(t, ma)
+	require.Zero(t, mi)
+}
+
+func TestVersionToFeature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		ver      string
+		hdr      string
+		expected peerFeatureFlag
+	}{
+		{"1.2", "", peerFeatureFlag(0)},
+		{"1.2.3", "", peerFeatureFlag(0)},
+		{"a.b", "", peerFeatureFlag(0)},
+		{"2.1", "", peerFeatureFlag(0)},
+		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.2", "", peerFeatureFlag(0)},
+		{"2.2", "test", peerFeatureFlag(0)},
+		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
+		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
+		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			f := decodePeerFeatures(test.ver, test.hdr)
+			require.Equal(t, test.expected, f)
+		})
+	}
 }

@@ -84,10 +84,10 @@ if { [catch {
 
     # Wait until the primary node reaches round 37. At that point, the catchpoint for round 36 is already done.
     # The rationale is the following:
-    # 1. MaxTxnLife = 33 so catchup would load blocks 3..36
+    # 1. MaxTxnLife = 23 and CatchpointLookback = 8 so catchup would load blocks 36-8-23..36 = 5..36
     # 2. Loading block 2 is blocked by the catchpoint proxy
-    # 3. Next block is 37 that would require balances from round 37-MaxBalLookback = 5 to be accessed, and this is
-    # within the expected range of 3...36
+    # 3. Next block is 37 that would require balances from round 37-MaxBalLookback = 29 to be accessed, and this is
+    # within the expected range of 5...36
     ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
 
     # Get primary node listening address:

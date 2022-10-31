@@ -89,7 +89,7 @@ return
 
 	// create app 1 with 1 extra page
 	app1ExtraPages := uint32(1)
-	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, app1ExtraPages)
+	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app1ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -110,7 +110,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
 
 	// update app 1 and ensure the extra page still works
-	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, bigProgram, smallProgram)
+	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, nil, bigProgram, smallProgram)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -130,7 +130,7 @@ return
 
 	// create app 2 with 2 extra pages
 	app2ExtraPages := uint32(2)
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, app2ExtraPages)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app2ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -151,7 +151,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
 
 	// delete app 1
-	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -170,7 +170,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
 
 	// delete app 2
-	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)

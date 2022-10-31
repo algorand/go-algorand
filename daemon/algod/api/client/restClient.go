@@ -46,16 +46,6 @@ const (
 	maxRawResponseBytes = 50e6
 )
 
-// APIVersion is used to define which server side API version would be used when making http requests to the server
-type APIVersion string
-
-const (
-	// APIVersionV1 suggests that the RestClient would use v1 calls whenever it's available for the given request.
-	APIVersionV1 APIVersion = "v1"
-	// APIVersionV2 suggests that the RestClient would use v2 calls whenever it's available for the given request.
-	APIVersionV2 APIVersion = "v2"
-)
-
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions":  true,
@@ -91,25 +81,16 @@ func (e HTTPError) Error() string {
 
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
-	serverURL       url.URL
-	apiToken        string
-	versionAffinity APIVersion
+	serverURL url.URL
+	apiToken  string
 }
 
 // MakeRestClient is the factory for constructing a RestClient for a given endpoint
 func MakeRestClient(url url.URL, apiToken string) RestClient {
 	return RestClient{
-		serverURL:       url,
-		apiToken:        apiToken,
-		versionAffinity: APIVersionV1,
+		serverURL: url,
+		apiToken:  apiToken,
 	}
-}
-
-// SetAPIVersionAffinity sets the client affinity to use a specific version of the API
-func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAffinity APIVersion) {
-	previousAffinity = client.versionAffinity
-	client.versionAffinity = affinity
-	return
 }
 
 // filterASCII filter out the non-ascii printable characters out of the given input string.
@@ -251,31 +232,13 @@ func (client RestClient) post(response interface{}, path string, request interfa
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
 func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, "/v2/status", nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, "/v1/status", nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
+	err = client.get(&response, "/v2/status", nil)
 	return
 }
 
 // WaitForBlock returns the node status after waiting for the given round.
 func (client RestClient) WaitForBlock(round basics.Round) (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d/", round), nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
+	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
 	return
 }
 
@@ -302,17 +265,7 @@ func fillNodeStatusResponse(nodeStatus v1.NodeStatus) generatedV2.NodeStatusResp
 // blocks on the node end
 // Not supported
 func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2.NodeStatusResponse, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
-	default:
-		var nodeStatus v1.NodeStatus
-		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
-		if err == nil {
-			response = fillNodeStatusResponse(nodeStatus)
-		}
-	}
-
+	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
 
@@ -418,6 +371,26 @@ func (client RestClient) ApplicationInformation(index uint64) (response generate
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
+	return
+}
+
+type applicationBoxesParams struct {
+	Max uint64 `url:"max,omitempty"`
+}
+
+// ApplicationBoxes gets the BoxesResponse associated with the passed application ID
+func (client RestClient) ApplicationBoxes(appID uint64, maxBoxNum uint64) (response generatedV2.BoxesResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
+	return
+}
+
+type applicationBoxByNameParams struct {
+	Name string `url:"name"`
+}
+
+// GetApplicationBoxByName gets the BoxResponse associated with the passed application ID and box name
+func (client RestClient) GetApplicationBoxByName(appID uint64, name string) (response generatedV2.BoxResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/box", appID), applicationBoxByNameParams{name})
 	return
 }
 
@@ -546,16 +519,9 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 
 // RawBlock gets the encoded, raw msgpack block for the given round
 func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
-	switch client.versionAffinity {
-	case APIVersionV2:
-		var blob Blob
-		err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
-		response = blob
-	default:
-		var raw v1.RawBlock
-		err = client.getRaw(&raw, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
-		response = raw
-	}
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 

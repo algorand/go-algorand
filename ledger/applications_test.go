@@ -36,7 +36,7 @@ import (
 // commitRound schedules a commit for known offset and dbRound
 // and waits for completion
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
-	commitRoundLookback(dbRound+basics.Round(offset), l)
+	commitRoundLookback(l.Latest().SubSaturate(dbRound+basics.Round(offset)), l)
 }
 
 func commitRoundLookback(lookback basics.Round, l *Ledger) {
@@ -44,7 +44,7 @@ func commitRoundLookback(lookback basics.Round, l *Ledger) {
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	l.trackers.scheduleCommit(l.Latest(), l.Latest()-lookback)
+	l.trackers.scheduleCommit(l.Latest(), lookback)
 	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
 	// use that as an indicator.
 	for {

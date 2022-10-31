@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -36,6 +37,8 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/msgp/msgp"
 )
 
 func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]byte, last64KIndex int) {
@@ -52,18 +55,21 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
-		var balances catchpointFileBalancesChunkV6
-		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		var chunk catchpointFileChunkV6
+		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecordV6
 			accountData := baseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
-			crypto.RandBytes(randomAccount.Address[:])
+			// have the first account be the zero address
+			if i > 0 {
+				crypto.RandBytes(randomAccount.Address[:])
+			}
 			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
-			balances.Balances[i] = randomAccount
+			chunk.Balances[i] = randomAccount
 		}
-		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&balances))
+		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&chunk))
 		accounts += chunkSize
 	}
 	return
@@ -104,7 +110,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(b, err)
 
 	// pre-create all encoded chunks.
@@ -120,7 +126,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			last64KStart = time.Now()
 		}
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(b, err)
 		last64KIndex--
 	}
@@ -163,7 +169,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLedgerDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
-	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLastestBlockDownload)
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLatestBlockDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateBlocksDownload)
 	require.NoError(t, err, "catchpointAccessor.SetState")
@@ -234,16 +240,16 @@ func TestBuildMerkleTrie(t *testing.T) {
 	progressCallCount = 0
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
-	// TODO: catchpointAccessor.ProgressStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
+	// TODO: catchpointAccessor.ProcessStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
 	var blob []byte = nil // TODO: content!
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "ignoredContent", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "ignoredContent", blob, &progress)
 	require.NoError(t, err)
 	// this shouldn't work yet
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 	// this needs content
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// content.msgpack from this:
@@ -259,14 +265,14 @@ func TestBuildMerkleTrie(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(t, err)
 	// shouldn't work a second time
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.Error(t, err)
 
 	// This should still fail, but slightly different coverage path
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// create some catchpoint data
@@ -274,7 +280,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 
 	for _, encodedAccounts := range encodedAccountChunks {
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(t, err)
 	}
 
@@ -368,4 +374,197 @@ func TestVerifyCatchpoint(t *testing.T) {
 	err = catchpointAccessor.CompleteCatchup(ctx)
 	require.Error(t, err)
 	//require.NoError(t, err)
+}
+
+func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	var progress CatchpointCatchupAccessorProgress
+	ctx := context.Background()
+
+	// content.msgpack from this:
+	fileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     basics.Round(0),
+		BlocksRound:       basics.Round(0),
+		Totals:            ledgercore.AccountTotals{},
+		TotalAccounts:     1,
+		TotalChunks:       1,
+		Catchpoint:        "",
+		BlockHeaderDigest: crypto.Digest{},
+	}
+	encodedFileHeader := protocol.Encode(&fileHeader)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	require.NoError(t, err)
+
+	var balances catchpointFileChunkV6
+	balances.Balances = make([]encodedBalanceRecordV6, 1)
+	var randomAccount encodedBalanceRecordV6
+	accountData := baseAccountData{}
+	accountData.MicroAlgos.Raw = crypto.RandUint63()
+	accountData.TotalAppParams = 1
+	randomAccount.AccountData = protocol.Encode(&accountData)
+	crypto.RandBytes(randomAccount.Address[:])
+	binary.LittleEndian.PutUint64(randomAccount.Address[:], 0)
+	balances.Balances[0] = randomAccount
+	encodedAccounts := protocol.Encode(&balances)
+
+	// expect error since there is a resource count mismatch
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.XX.msgpack", encodedAccounts, &progress)
+	require.Error(t, err)
+}
+
+type testStagingWriter struct {
+	t      *testing.T
+	hashes map[[4 + crypto.DigestSize]byte]int
+}
+
+func (w *testStagingWriter) writeBalances(ctx context.Context, balances []normalizedAccountBalance) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []normalizedAccountBalance) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encodedKVRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+	for _, bal := range balances {
+		for _, hash := range bal.accountHashes {
+			var key [4 + crypto.DigestSize]byte
+			require.Len(w.t, hash, 4+crypto.DigestSize)
+			copy(key[:], hash)
+			w.hashes[key] = w.hashes[key] + 1
+		}
+	}
+	return nil
+}
+
+func (w *testStagingWriter) isShared() bool {
+	return false
+}
+
+// makeTestCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
+func makeTestCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger, writer stagingWriter) *catchpointCatchupAccessorImpl {
+	return &catchpointCatchupAccessorImpl{
+		ledger:        ledger,
+		stagingWriter: writer,
+		log:           log,
+	}
+}
+
+func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+	writer := &testStagingWriter{t: t, hashes: make(map[[4 + crypto.DigestSize]byte]int)}
+	l := Ledger{
+		log:             log,
+		genesisProto:    config.Consensus[protocol.ConsensusCurrentVersion],
+		synchronousMode: db.SynchronousMode(100), // non-existing in order to skip the underlying db call in ledger.setSynchronousMode
+	}
+	catchpointAccessor := makeTestCatchpointCatchupAccessor(&l, log, writer)
+
+	randomSimpleBaseAcct := func() baseAccountData {
+		accountData := baseAccountData{
+			RewardsBase: crypto.RandUint63(),
+			MicroAlgos:  basics.MicroAlgos{Raw: crypto.RandUint63()},
+			AuthAddr:    ledgertesting.RandomAddress(),
+		}
+		return accountData
+	}
+
+	encodedBalanceRecordFromBase := func(addr basics.Address, base baseAccountData, resources map[uint64]msgp.Raw, more bool) encodedBalanceRecordV6 {
+		ebr := encodedBalanceRecordV6{
+			Address:              addr,
+			AccountData:          protocol.Encode(&base),
+			Resources:            resources,
+			ExpectingMoreEntries: more,
+		}
+		return ebr
+	}
+
+	const numAccounts = 5
+	const acctXNumRes = 13
+	const expectHashes = numAccounts + acctXNumRes
+	progress := CatchpointCatchupAccessorProgress{
+		TotalAccounts: numAccounts,
+		TotalChunks:   2,
+		SeenHeader:    true,
+		Version:       CatchpointFileVersionV6,
+	}
+
+	// create some walking gentlemen
+	acctA := randomSimpleBaseAcct()
+	acctB := randomSimpleBaseAcct()
+	acctC := randomSimpleBaseAcct()
+	acctD := randomSimpleBaseAcct()
+
+	// prepare chunked account
+	addrX := ledgertesting.RandomAddress()
+	acctX := randomSimpleBaseAcct()
+	acctX.TotalAssets = acctXNumRes
+	acctXRes1 := make(map[uint64]msgp.Raw, acctXNumRes/2+1)
+	acctXRes2 := make(map[uint64]msgp.Raw, acctXNumRes/2)
+	emptyRes := resourcesData{ResourceFlags: resourceFlagsEmptyAsset}
+	emptyResEnc := protocol.Encode(&emptyRes)
+	for i := 0; i < acctXNumRes; i++ {
+		if i <= acctXNumRes/2 {
+			acctXRes1[rand.Uint64()] = emptyResEnc
+		} else {
+			acctXRes2[rand.Uint64()] = emptyResEnc
+		}
+	}
+
+	// make chunks
+	chunks := []catchpointFileChunkV6{
+		{
+			Balances: []encodedBalanceRecordV6{
+				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctA, nil, false),
+				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctB, nil, false),
+				encodedBalanceRecordFromBase(addrX, acctX, acctXRes1, true),
+			},
+		},
+		{
+			Balances: []encodedBalanceRecordV6{
+				encodedBalanceRecordFromBase(addrX, acctX, acctXRes2, false),
+				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctC, nil, false),
+				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctD, nil, false),
+			},
+		},
+	}
+
+	// process chunks
+	ctx := context.Background()
+	progress.SeenHeader = true
+	for _, chunk := range chunks {
+		blob := protocol.Encode(&chunk)
+		err := catchpointAccessor.processStagingBalances(ctx, blob, &progress)
+		require.NoError(t, err)
+	}
+
+	// compare account counts and hashes
+	require.Equal(t, progress.TotalAccounts, progress.ProcessedAccounts)
+
+	// ensure no duplicate hashes
+	require.Equal(t, uint64(expectHashes), progress.TotalAccountHashes)
+	require.Equal(t, expectHashes, len(writer.hashes))
+	for _, count := range writer.hashes {
+		require.Equal(t, 1, count)
+	}
 }

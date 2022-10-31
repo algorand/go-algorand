@@ -27,40 +27,6 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 make gen SHORT_PART_PERIOD=1
 
-function runGoFmt() {
-    unformatted=$(gofmt -l .)
-    [ -z "$unformatted" ] && return 0
-
-    # Some files are not gofmt'd. Print message and fail.
-
-    echo >&2 "Go files must be formatted with gofmt. Please run:"
-    for fn in $unformatted; do
-        echo >&2 "  gofmt -w $PWD/$fn"
-    done
-
-    return 1
-}
-
-function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golangci-lint -c .golangci.yml | wc -l | tr -d ' ')
-    if [ "${warningCount}" = "0" ]; then
-        return 0
-    fi
-
-    echo >&2 "golangci-lint must be clean.  Please run the following to list issues(${warningCount}):"
-    echo >&2 " make lint"
-
-    # run the linter again to output the actual issues
-    "$GOPATH"/bin/golangci-lint -c .golangci.yml >&2
-    return 1
-}
-
-echo "Running gofmt..."
-runGoFmt
-
-echo "Running golangci-lint..."
-runGoLint
-
 echo "Running check_license..."
 ./scripts/check_license.sh
 

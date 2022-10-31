@@ -88,7 +88,7 @@ done
 
 mkdir ${PKG_ROOT}/genesis
 
-genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
 for dir in "${genesis_dirs[@]}"; do
     mkdir -p ${PKG_ROOT}/genesis/${dir}
     if [ -f "${REPO_DIR}/gen/${dir}/genesis.json" ]; then

@@ -18,7 +18,6 @@ package ledgercore
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -26,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -36,7 +36,7 @@ type OnlineAccountsFetcher interface {
 	// TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 	// balance and address, whose voting keys are valid in voteRnd.  See the
 	// normalization description in AccountData.NormalizedOnlineBalance().
-	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
+	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
@@ -113,7 +113,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 	// using the balances from round r.
 	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters)
+	top, totalOnlineWeight, err := onlineAccountsFetcher.TopOnlineAccounts(r, stateProofRound, tr.Proto.StateProofTopVoters, &tr.Proto, hdr.RewardsLevel)
 	if err != nil {
 		return err
 	}

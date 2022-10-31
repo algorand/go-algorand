@@ -125,7 +125,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
     # Please update as necessary.
-    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
+    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.17.0
 
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
