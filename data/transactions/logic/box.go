@@ -154,7 +154,7 @@ func opBoxExtract(cx *EvalContext) error {
 		return fmt.Errorf("no such box %#v", name)
 	}
 
-	bytes, err := extractCarefully([]byte(contents), start, length)
+	bytes, err := extractCarefully(contents, start, length)
 	cx.stack[pprev].Bytes = bytes
 	cx.stack = cx.stack[:prev]
 	return err
@@ -182,7 +182,7 @@ func opBoxReplace(cx *EvalContext) error {
 		return fmt.Errorf("no such box %#v", name)
 	}
 
-	bytes, err := replaceCarefully([]byte(contents), replacement, start)
+	bytes, err := replaceCarefully(contents, replacement, start)
 	if err != nil {
 		return err
 	}
