@@ -1168,13 +1168,13 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	if shouldSupportIdentityChallenge(matchingVersion) {
 		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
 		if idChalB64 == "" {
-			wn.log.Warnf("ws connect(%s) no identification challenge")
+			wn.log.Warnf("ws connect no identification challenge")
 			return
 		}
 		idChal := IdentityChallengeFromB64(idChalB64)
 		// if the identification challenge response is not correctly signed, do not proceed
 		if err := idChal.verify(); err != nil {
-			wn.log.Warnf("ws connect(%s) failed identification challenge signature: err=%v", err.Error())
+			wn.log.Warnf("ws connect failed identification challenge signature: err=%v", err.Error())
 			return
 		}
 		peerPublicKey = idChal.Key
