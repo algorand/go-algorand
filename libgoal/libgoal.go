@@ -26,13 +26,12 @@ import (
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/rpcs"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
@@ -640,7 +639,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) Status() (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -658,7 +657,7 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 }
 
 // AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
+func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp model.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountInformationV2(account, includeCreatables)
@@ -667,7 +666,7 @@ func (c *Client) AccountInformationV2(account string, includeCreatables bool) (r
 }
 
 // AccountApplicationInformation gets account information about a given app.
-func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp generatedV2.AccountApplicationResponse, err error) {
+func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountApplicationInformation(accountAddress, applicationID)
@@ -689,7 +688,7 @@ func (c *Client) RawAccountApplicationInformation(accountAddress string, applica
 }
 
 // AccountAssetInformation gets account information about a given asset.
-func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
+func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp model.AccountAssetResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
@@ -733,14 +732,14 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 }
 
 // AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
+func (c *Client) AssetInformationV2(index uint64) (resp model.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
 	resp, err = algod.AssetInformationV2(index)
 	if err != nil {
-		return generatedV2.Asset{}, err
+		return model.Asset{}, err
 	}
 
 	byteLen := func(p *[]byte) int {
@@ -767,7 +766,7 @@ func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err e
 }
 
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Application, err error) {
+func (c *Client) ApplicationInformation(index uint64) (resp model.Application, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationInformation(index)
@@ -815,7 +814,7 @@ func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction
 
 // PendingTransactionInformationV2 returns information about a recently issued
 // transaction based on its txid.
-func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
+func (c *Client) PendingTransactionInformationV2(txid string) (resp model.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformationV2(txid)
@@ -869,7 +868,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) WaitForRound(round uint64) (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)
@@ -1001,7 +1000,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
-func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
+func (c *Client) AddParticipationKey(keyfile string) (resp model.PostParticipationResponse, err error) {
 	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return
@@ -1016,7 +1015,7 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 }
 
 // GetParticipationKeys gets the currently installed participation keys.
-func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+func (c *Client) GetParticipationKeys() (resp model.ParticipationKeysResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeys()
@@ -1025,7 +1024,7 @@ func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysRespons
 }
 
 // GetParticipationKeyByID looks up a specific participation key by its participationID.
-func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+func (c *Client) GetParticipationKeyByID(id string) (resp model.ParticipationKeyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeyByID(id)
@@ -1108,7 +1107,7 @@ const defaultAppIdx = 1380011588
 func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
 	switch format {
 	case "json":
-		var gdr generatedV2.DryrunRequest
+		var gdr model.DryrunRequest
 		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 		if err == nil {
 			result = protocol.EncodeJSON(&gdr)
@@ -1135,8 +1134,8 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 	return v2.DryrunRequestFromGenerated(&gdr)
 }
 
-// MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
+// MakeDryrunStateGenerated function creates model.DryrunRequest data structure
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {
@@ -1171,16 +1170,16 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
-				var appParams generatedV2.ApplicationParams
+				var appParams model.ApplicationParams
 				if appIdx == 0 {
 					// if it is an app create txn then use params from the txn
 					appParams.ApprovalProgram = tx.ApprovalProgram
 					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+					appParams.GlobalStateSchema = &model.ApplicationStateSchema{
 						NumUint:      tx.GlobalStateSchema.NumUint,
 						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
 					}
-					appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+					appParams.LocalStateSchema = &model.ApplicationStateSchema{
 						NumUint:      tx.LocalStateSchema.NumUint,
 						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
 					}
@@ -1189,21 +1188,21 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 					appIdx = defaultAppIdx
 				} else {
 					// otherwise need to fetch app state
-					var app generatedV2.Application
+					var app model.Application
 					if app, err = client.ApplicationInformation(uint64(appIdx)); err != nil {
 						return
 					}
 					appParams = app.Params
 					accounts = append(accounts, appIdx.Address())
 				}
-				dr.Apps = append(dr.Apps, generatedV2.Application{
+				dr.Apps = append(dr.Apps, model.Application{
 					Id:     uint64(appIdx),
 					Params: appParams,
 				})
 			}
 
 			for _, acc := range accounts {
-				var info generatedV2.Account
+				var info model.Account
 				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
@@ -1226,7 +1225,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 }
 
 // Dryrun takes an app's index and returns its information
-func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error) {
+func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		data, err = algod.RawDryrun(data)
@@ -1239,7 +1238,7 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.TransactionProofResponse, err error) {
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp model.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.TransactionProof(txid, round, hashType)
@@ -1248,7 +1247,7 @@ func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.Has
 }
 
 // LightBlockHeaderProof returns a Merkle proof for a block.
-func (c *Client) LightBlockHeaderProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
+func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeaderProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)

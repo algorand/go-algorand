@@ -72,8 +72,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/public"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -147,7 +147,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Log:      logger,
 		Shutdown: shutdown,
 	}
-	generated.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	public.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	private.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
 	return e

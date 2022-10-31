@@ -29,7 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -1205,7 +1205,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			return
 		}
 
-		stackToString := func(stack []generatedV2.TealValue) string {
+		stackToString := func(stack []model.TealValue) string {
 			result := make([]string, len(stack))
 			for i, sv := range stack {
 				if sv.Type == uint64(basics.TealBytesType) {
@@ -1219,7 +1219,7 @@ var dryrunRemoteCmd = &cobra.Command{
 		if len(resp.Txns) > 0 {
 			for i, txnResult := range resp.Txns {
 				var msgs []string
-				var trace []generatedV2.DryrunState
+				var trace []model.DryrunState
 				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
 					msgs = *txnResult.AppCallMessages
 					if txnResult.AppCallTrace != nil {

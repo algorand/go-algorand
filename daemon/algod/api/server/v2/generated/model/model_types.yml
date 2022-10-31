@@ -1,11 +1,8 @@
-package: generated
+package: model
 generate:
   models: true
 output-options:
-  exclude-tags:
-  - private
-  - common
   type-mappings:
     integer: uint64
   skip-prune: true
-output: ./server/v2/generated/types.go
+output: ./server/v2/generated/model/types.go
