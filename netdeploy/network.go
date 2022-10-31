@@ -74,7 +74,6 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 				template.Nodes[0].IsRelay = false
 			}
 		}
-
 		err = template.Validate()
 	}
 	if err != nil {
