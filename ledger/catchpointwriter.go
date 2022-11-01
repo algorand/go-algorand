@@ -36,9 +36,15 @@ const (
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
 
-	// DefaultMaxResourcesPerChunk defines the max number of resources that go in a singular chunk
-	// 300000 resources * 300B/resource => roughly max 100MB per chunk
-	DefaultMaxResourcesPerChunk = 300000
+	// ResourcesPerCatchpointFileChunk defines the max number of resources that go in a singular chunk
+	// 100,000 resources * 20KB/resource => roughly max 2GB per chunk if all of them are max'ed out apps.
+	// In reality most entries are asset holdings, and they are very small.
+	ResourcesPerCatchpointFileChunk = 100_000
+
+	// resourcesPerCatchpointFileChunkBackwardCompatible is the old value for ResourcesPerCatchpointFileChunk.
+	// Size of a single resource entry was underestimated to 300 bytes that holds only for assets and not for apps.
+	// It is safe to remove after April, 2023 since we are only supporting catchpoint that are 6 months old.
+	resourcesPerCatchpointFileChunkBackwardCompatible = 300_000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -55,7 +61,6 @@ type catchpointWriter struct {
 	compressor           io.WriteCloser
 	chunk                catchpointFileChunkV6
 	chunkNum             uint64
-	numAccountsProcessed uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
 	accountsIterator     encodedAccountsBatchIter
@@ -68,7 +73,7 @@ type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	AccountData msgp.Raw       `codec:"ad"`
 }
 
 type catchpointFileBalancesChunkV5 struct {
@@ -84,8 +89,8 @@ type encodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b,allocbound=basics.MaxEncodedAccountDataSize"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=basics.MaxEncodedAccountDataSize"`
+	AccountData msgp.Raw            `codec:"b"`
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"`
 
 	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`
@@ -98,6 +103,10 @@ const (
 
 	// For boxes: MaxBoxSize
 	encodedKVRecordV6MaxValueLength = 32768
+
+	// MaxEncodedKVDataSize is the max size of serialized KV entry, checked with TestEncodedKVDataSize.
+	// Exact value is 32906 that is 10 bytes more than 32768 + 128
+	MaxEncodedKVDataSize = 33000
 )
 
 type encodedKVRecordV6 struct {
