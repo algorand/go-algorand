@@ -194,7 +194,7 @@ const ConsensusV35 = ConsensusVersion(
 
 // ConsensusV36 adds box storage
 const ConsensusV36 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/commit/44fa607d6051730f5264526bf3c108d51f0eadb6",
+	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
