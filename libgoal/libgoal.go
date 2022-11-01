@@ -983,14 +983,14 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
-// PendingTransactionsStruct represents a parsed PendingTransactionsResponse struct.
-type PendingTransactionsStruct struct {
+// PendingTransactions represents a parsed PendingTransactionsResponse struct.
+type PendingTransactions struct {
 	TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
 	TotalTransactions uint64                   `json:"total-transactions"`
 }
 
 // GetParsedPendingTransactions returns the parsed response with pending transactions.
-func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTransactionsStruct, err error) {
+func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTransactions, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
@@ -1006,7 +1006,7 @@ func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTrans
 }
 
 // GetParsedPendingTransactionsByAddress returns the parsed response with pending transactions by address.
-func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint64) (txns PendingTransactionsStruct, err error) {
+func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint64) (txns PendingTransactions, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
