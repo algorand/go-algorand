@@ -217,7 +217,6 @@ func getCodecHandle(formatPtr *generated.Format) (codec.Handle, string, error) {
 	case generated.Msgpack:
 		fallthrough
 	case "msgp":
-		// Can this actually ever happen?
 		return protocol.CodecHandle, "application/msgpack", nil
 	default:
 		return nil, "", fmt.Errorf("invalid format: %s", format)
