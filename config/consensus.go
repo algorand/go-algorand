@@ -1241,7 +1241,7 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV36] = v36
 
-	v35.ApprovedUpgrades[protocol.ConsensusV36] = 10000
+	v35.ApprovedUpgrades[protocol.ConsensusV36] = 140000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
