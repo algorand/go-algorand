@@ -78,7 +78,7 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 // txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
 // if unexpected transaction type is encountered, an error is returned. The caller is expected to ignore the returned
 // transaction when error is non-nil.
-func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
+func txEncode(tx *transactions.Transaction, ad transactions.ApplyData) (v1.Transaction, error) {
 	var res v1.Transaction
 	switch tx.Type {
 	case protocol.PaymentTx:
@@ -121,7 +121,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	return res, nil
 }
 
-func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func paymentTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
 		Amount:       (*tx).TxAmount().Raw,
@@ -139,7 +139,7 @@ func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.
 	}
 }
 
-func keyregTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func keyregTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	keyreg := v1.KeyregTransactionType{
 		VotePK:          tx.KeyregTxnFields.VotePK[:],
 		SelectionPK:     tx.KeyregTxnFields.SelectionPK[:],
@@ -262,7 +262,7 @@ func modelAppLocalState(s basics.AppLocalState) v1.AppLocalState {
 	}
 }
 
-func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func assetConfigTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	params := modelAssetParams(basics.Address{}, tx.AssetConfigTxnFields.AssetParams)
 
 	config := v1.AssetConfigTransactionType{
@@ -275,7 +275,7 @@ func assetConfigTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func applicationCallTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	b64 := base64.StdEncoding
 	app := v1.ApplicationCallTransactionType{
 		ApplicationID:     uint64(tx.ApplicationID),
@@ -315,7 +315,7 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 	}
 }
 
-func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func assetTransferTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	xfer := v1.AssetTransferTransactionType{
 		AssetID:  uint64(tx.AssetTransferTxnFields.XferAsset),
 		Amount:   tx.AssetTransferTxnFields.AssetAmount,
@@ -339,7 +339,7 @@ func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyDat
 	}
 }
 
-func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func assetFreezeTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	freeze := v1.AssetFreezeTransactionType{
 		AssetID:         uint64(tx.AssetFreezeTxnFields.FreezeAsset),
 		Account:         tx.AssetFreezeTxnFields.FreezeAccount.String(),
@@ -351,7 +351,7 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func stateProofTxEncode(tx transactions.Transaction) v1.Transaction {
+func stateProofTxEncode(tx *transactions.Transaction) v1.Transaction {
 	sp := v1.StateProofTransactionType{
 		StateProof:        protocol.Encode(&tx.StateProofTxnFields.StateProof),
 		StateProofMessage: protocol.Encode(&tx.Message),

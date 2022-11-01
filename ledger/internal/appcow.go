@@ -499,7 +499,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 
 // buildEvalDelta creates an EvalDelta by converting internal sdeltas
 // into the (Global|Local)Delta fields.
-func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
+func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {

@@ -249,7 +249,7 @@ func (cb *roundCowState) incTxnCount() {
 	cb.txnCount++
 }
 
-func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
+func (cb *roundCowState) addTx(txn *transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, Intra: uint64(len(cb.mods.Txids))}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {

@@ -211,7 +211,7 @@ func assemble(source interface{}) []byte {
 }
 
 // Txn produces a transactions.Transaction from the fields in this Txn
-func (tx Txn) Txn() transactions.Transaction {
+func (tx Txn) Txn() *transactions.Transaction {
 	switch fee := tx.Fee.(type) {
 	case basics.MicroAlgos:
 		// nothing, already have MicroAlgos
@@ -224,7 +224,7 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
-	return &transactions.TransactionVal{
+	return &transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
 			Sender:      tx.Sender,

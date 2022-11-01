@@ -122,7 +122,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
 			},
 		}
-		signed[i].Txn = txs[i]
+		signed[i].Txn = &txs[i]
 
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig

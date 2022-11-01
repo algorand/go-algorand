@@ -340,7 +340,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		amt := basics.MicroAlgos{Raw: uint64(gen.Int() % xferMax)}
 		fee := basics.MicroAlgos{Raw: uint64(gen.Int()%maxFee) + proto.MinTxnFee}
 
-		t := &transactions.TransactionVal{
+		t := &transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      saddr,

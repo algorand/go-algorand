@@ -347,7 +347,7 @@ func (pps *WorkerState) schedule(n int) {
 func (pps *WorkerState) fundAccounts(client *libgoal.Client) error {
 	var srcFunds, minFund uint64
 	var err error
-	var tx transactions.Transaction
+	var tx *transactions.Transaction
 	srcFunds, err = client.GetBalance(pps.cfg.SrcAccount)
 
 	if err != nil {
@@ -425,28 +425,28 @@ func (pps *WorkerState) fundAccounts(client *libgoal.Client) error {
 	return err
 }
 
-func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to string, fee, amount uint64, srcAcct *pingPongAccount) (transactions.Transaction, error) {
+func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to string, fee, amount uint64, srcAcct *pingPongAccount) (*transactions.Transaction, error) {
 	// generate a unique note to avoid duplicate transaction failures
 	note := pps.makeNextUniqueNoteField()
 
-	var txn transactions.Transaction
+	var txn *transactions.Transaction
 	var stxn transactions.SignedTxn
 	var err error
 	txn, err = client.ConstructPayment(srcAcct.pk.String(), to, fee, amount, note, "", [32]byte{}, 0, 0)
 
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	stxn, err = signTxn(srcAcct, txn, pps.cfg)
 
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	_, err = client.BroadcastTransaction(stxn)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	return txn, nil
@@ -724,7 +724,7 @@ func (pps *WorkerState) sendFromTo(
 		var update txnUpdate
 		var updates []txnUpdate
 		if pps.cfg.GroupSize == 1 {
-			var txn transactions.Transaction
+			var txn *transactions.Transaction
 			var consErr error
 			// Construct single txn
 			txn, from, update, consErr = pps.constructTxn(from, to, fee, client)
@@ -770,7 +770,7 @@ func (pps *WorkerState) sendFromTo(
 			var txGroup []transactions.Transaction
 			var txSigners []string
 			for j := 0; j < int(pps.cfg.GroupSize); j++ {
-				var txn transactions.Transaction
+				var txn *transactions.Transaction
 				var signer string
 				if j%2 == 0 {
 					txn, signer, update, err = pps.constructTxn(from, to, fee, client)
@@ -797,7 +797,7 @@ func (pps *WorkerState) sendFromTo(
 						return
 					}
 				}
-				txGroup = append(txGroup, txn)
+				txGroup = append(txGroup, *txn)
 				txSigners = append(txSigners, signer)
 				updates = append(updates, update)
 			}
@@ -819,7 +819,7 @@ func (pps *WorkerState) sendFromTo(
 			for j, txn := range txGroup {
 				txn.Group = gid
 				signer := pps.acct(txSigners[j])
-				stxGroup[j], signErr = signTxn(signer, txn, pps.cfg)
+				stxGroup[j], signErr = signTxn(signer, &txn, pps.cfg)
 				if signErr != nil {
 					err = signErr
 					return
@@ -867,7 +867,7 @@ func (pps *WorkerState) makeNextUniqueNoteField() []byte {
 
 var errNotOptedIn = errors.New("not opted in")
 
-func (pps *WorkerState) constructTxn(from, to string, fee uint64, client *libgoal.Client) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructTxn(from, to string, fee uint64, client *libgoal.Client) (txn *transactions.Transaction, sender string, update txnUpdate, err error) {
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = len(pingpongTag)
@@ -943,7 +943,7 @@ type txnUpdate interface {
 	apply(pps *WorkerState)
 }
 
-func (pps *WorkerState) constructPaymentTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructPaymentTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn *transactions.Transaction, sender string, update txnUpdate, err error) {
 	amt := pps.cfg.MaxAmt
 	if pps.cfg.RandomizeAmt {
 		amt = uint64(rand.Int63n(int64(pps.cfg.MaxAmt-1))) + 1
@@ -981,7 +981,7 @@ func pReplace(i int) bool {
 	return rand.Intn(i) == 0
 }
 
-func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn *transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select a pair of random opted-in accounts by aidx
 	// use them as from/to addresses
 	amt := uint64(1)
@@ -1102,7 +1102,7 @@ func (au *assetUpdate) apply(pps *WorkerState) {
 	to.holdings[au.aidx] += au.amt
 }
 
-func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn *transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select opted-in accounts for Txn.Accounts field
 	var accounts []string
 	aidx := pps.randAppID()
@@ -1172,7 +1172,7 @@ func (au *appUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.from].balance -= au.fee
 }
 
-func (pps *WorkerState) constructNFTGenTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructNFTGenTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn *transactions.Transaction, sender string, update txnUpdate, err error) {
 	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
 		var addr string
 
@@ -1255,7 +1255,7 @@ func (au *nftgenUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.from].balance -= au.fee
 }
 
-func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+func signTxn(signer *pingPongAccount, txn *transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 
 	var psig crypto.Signature
 

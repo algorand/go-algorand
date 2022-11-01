@@ -69,7 +69,7 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if err != nil {
 		return nil, err
 	}
-	elem.txn = stxn.Txn
+	elem.txn = *stxn.Txn
 
 	return &elem, nil
 }
@@ -91,10 +91,10 @@ type txnMerkleElem struct {
 
 func (tme *txnMerkleElem) RawLeaf() []byte {
 	if tme.hashType == crypto.Sha512_256 {
-		return txnMerkleToRaw((*tme.txn).ID(), tme.stib.Hash())
+		return txnMerkleToRaw(tme.txn.ID(), tme.stib.Hash())
 	}
 	// else: hashType == crypto.Sha256
-	return txnMerkleToRaw((*tme.txn).IDSha256(), tme.stib.HashSHA256())
+	return txnMerkleToRaw(tme.txn.IDSha256(), tme.stib.HashSHA256())
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

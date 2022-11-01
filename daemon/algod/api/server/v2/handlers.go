@@ -167,28 +167,28 @@ var ErrShutdown = errors.New(errServiceShuttingDown)
 
 // GetStateProofTransactionForRound searches for a state proof transaction that can be used to prove on the given round (i.e the round is within the
 // attestation period). the latestRound should be provided as an upper bound for the search
-func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForAPI, round, latestRound basics.Round, stop <-chan struct{}) (transactions.Transaction, error) {
+func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForAPI, round, latestRound basics.Round, stop <-chan struct{}) (*transactions.Transaction, error) {
 	hdr, err := txnFetcher.BlockHdr(round)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	if config.Consensus[hdr.CurrentProtocol].StateProofInterval == 0 {
-		return &transactions.TransactionVal{}, ErrNoStateProofForRound
+		return &transactions.Transaction{}, ErrNoStateProofForRound
 	}
 
 	for i := round + 1; i <= latestRound; i++ {
 		select {
 		case <-stop:
-			return &transactions.TransactionVal{}, ErrShutdown
+			return &transactions.Transaction{}, ErrShutdown
 		case <-ctx.Done():
-			return &transactions.TransactionVal{}, ErrTimeout
+			return &transactions.Transaction{}, ErrTimeout
 		default:
 		}
 
 		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
 		if err != nil {
-			return &transactions.TransactionVal{}, err
+			return &transactions.Transaction{}, err
 		}
 		for _, txn := range txns {
 			if txn.Txn.Type != protocol.StateProofTx {
@@ -201,7 +201,7 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 			}
 		}
 	}
-	return &transactions.TransactionVal{}, ErrNoStateProofForRound
+	return &transactions.Transaction{}, ErrNoStateProofForRound
 }
 
 // GetParticipationKeys Return a list of participation keys

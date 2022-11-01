@@ -346,7 +346,7 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 	}
 
 	stxn := transactions.SignedTxn{
-		Txn: tx,
+		Txn: &tx,
 		Sig: sig,
 	}
 

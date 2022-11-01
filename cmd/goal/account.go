@@ -830,7 +830,7 @@ func changeAccountOnlineStatus(
 	dataDir string, client libgoal.Client,
 ) error {
 	// Generate an unsigned online/offline tx
-	var utx transactions.Transaction
+	var utx *transactions.Transaction
 	var err error
 	if goOnline {
 		utx, err = client.MakeUnsignedGoOnlineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)

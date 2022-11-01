@@ -205,7 +205,7 @@ func run(params keyregCmdParams) error {
 		return fmt.Errorf("the transaction's specified validity range must be less than or equal to 1000 rounds due to security constraints. Please enter a first valid round (%d) and last valid round (%d) whose difference is no more than 1000 rounds", params.firstValid, params.lastValid)
 	}
 
-	var txn transactions.Transaction
+	var txn *transactions.Transaction
 	if !params.offline {
 		// Generate go-online transaction
 		txn = part.GenerateRegistrationTransaction(
@@ -216,7 +216,7 @@ func run(params keyregCmdParams) error {
 			part.StateProofSecrets != nil)
 	} else {
 		// Generate go-offline transaction
-		txn = &transactions.TransactionVal{
+		txn = &transactions.Transaction{
 			Type: protocol.KeyRegistrationTx,
 			Header: transactions.Header{
 				Sender:     accountAddress,

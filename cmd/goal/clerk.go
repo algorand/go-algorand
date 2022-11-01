@@ -197,7 +197,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 	return
 }
 
-func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, signer basics.Address) (stxn transactions.SignedTxn, err error) {
+func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx *transactions.Transaction, signer basics.Address) (stxn transactions.SignedTxn, err error) {
 	if signTx {
 		// Sign the transaction
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -229,7 +229,7 @@ func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) erro
 	return writeFile(filename, outData, 0600)
 }
 
-func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction, filename string) error {
+func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletName string, tx *transactions.Transaction, filename string) error {
 	var authAddr basics.Address
 	var err error
 	if signerAddress != "" {

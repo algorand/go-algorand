@@ -108,7 +108,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			for desti == sourcei {
 				desti = rand.Intn(len(addresses))
 			}
-			tx := &transactions.TransactionVal{
+			tx := &transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
 					Sender:      addresses[sourcei],

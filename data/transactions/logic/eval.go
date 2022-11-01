@@ -2492,7 +2492,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
-	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
+	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: txn}}
 	fs, ok := txnFieldSpecByField(field)
 	if !ok {
 		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
@@ -2514,7 +2514,7 @@ func (cx *EvalContext) currentTxID() transactions.Txid {
 
 // getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
 // is false. DO NOT call directly, and DO NOT change its behavior
-func (cx *EvalContext) getTxIDNotUnified(txn transactions.Transaction, groupIndex int) transactions.Txid {
+func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
 	if cx.EvalParams.txidCache == nil {
 		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
@@ -2533,7 +2533,7 @@ func (cx *EvalContext) getTxIDNotUnified(txn transactions.Transaction, groupInde
 	return txid
 }
 
-func (cx *EvalContext) getTxID(txn transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
 	// inner indicates that groupIndex is an index into the most recent inner txn group
 
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
@@ -4732,7 +4732,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 	return 0, fmt.Errorf("invalid App reference %d", aid)
 }
 
-func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn transactions.Transaction) (err error) {
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {
 	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {

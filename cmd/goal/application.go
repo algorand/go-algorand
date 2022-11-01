@@ -1398,9 +1398,9 @@ var methodAppCmd = &cobra.Command{
 		// Compile group
 		var txnGroup []transactions.Transaction
 		for i := range txnArgs {
-			txnGroup = append(txnGroup, txnArgs[i].Txn)
+			txnGroup = append(txnGroup, *txnArgs[i].Txn)
 		}
-		txnGroup = append(txnGroup, appCallTxn)
+		txnGroup = append(txnGroup, *appCallTxn)
 		if len(txnGroup) > 1 {
 			// Only if transaction arguments are present, assign group ID
 			groupID, err := client.GroupID(txnGroup)
@@ -1425,12 +1425,12 @@ var methodAppCmd = &cobra.Command{
 				signedTxnGroup = append(signedTxnGroup, transactions.SignedTxn{
 					Lsig:     txnFromArgs.Lsig,
 					AuthAddr: txnFromArgs.AuthAddr,
-					Txn:      unsignedTxn,
+					Txn:      &unsignedTxn,
 				})
 				continue
 			}
 
-			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
+			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, &unsignedTxn, txnFromArgs.AuthAddr)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}

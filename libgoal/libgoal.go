@@ -453,49 +453,49 @@ type MultisigInfo struct {
 }
 
 // SendPaymentFromWallet signs a transaction using the given wallet and returns the resulted transaction id
-func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWallet(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, firstValid, lastValid basics.Round) (*transactions.Transaction, error) {
 	return c.SendPaymentFromWalletWithLease(walletHandle, pw, from, to, fee, amount, note, closeTo, [32]byte{}, firstValid, lastValid)
 }
 
 // SendPaymentFromWalletWithLease is like SendPaymentFromWallet, but with a custom lease.
-func (c *Client) SendPaymentFromWalletWithLease(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) SendPaymentFromWalletWithLease(walletHandle, pw []byte, from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (*transactions.Transaction, error) {
 	// Build the transaction
 	tx, err := c.ConstructPayment(from, to, fee, amount, note, closeTo, lease, firstValid, lastValid)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	return c.signAndBroadcastTransactionWithWallet(walletHandle, pw, tx)
 }
 
-func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, tx transactions.Transaction) (transactions.Transaction, error) {
+func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, tx *transactions.Transaction) (*transactions.Transaction, error) {
 	// Sign the transaction
 	kmd, err := c.ensureKmdClient()
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 	// TODO(rekeying) probably libgoal should allow passing in different public key to sign with
 	resp0, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, tx)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	// Decode the SignedTxn
 	var stx transactions.SignedTxn
 	err = protocol.Decode(resp0.SignedTransaction, &stx)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	// Broadcast the transaction
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	_, err = algod.SendRawTransaction(stx)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 	return tx, nil
 }
@@ -560,36 +560,36 @@ func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxn
 // additional validation is done by computeValidityRounds:
 // if the lastValid is 0, firstValid + maxTxnLifetime will be used
 // if the firstValid is 0, lastRound + 1 will be used
-func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (transactions.Transaction, error) {
+func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []byte, closeTo string, lease [32]byte, firstValid, lastValid basics.Round) (*transactions.Transaction, error) {
 	fromAddr, err := basics.UnmarshalChecksumAddress(from)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	var toAddr basics.Address
 	if to != "" {
 		toAddr, err = basics.UnmarshalChecksumAddress(to)
 		if err != nil {
-			return &transactions.TransactionVal{}, err
+			return &transactions.Transaction{}, err
 		}
 	}
 
 	// Get current round, protocol, genesis ID
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
 	cp, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return &transactions.TransactionVal{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
+		return &transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
 	if err != nil {
-		return &transactions.TransactionVal{}, err
+		return &transactions.Transaction{}, err
 	}
 
-	tx := &transactions.TransactionVal{
+	tx := &transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:     fromAddr,
@@ -611,7 +611,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	if closeTo != "" {
 		closeToAddr, err := basics.UnmarshalChecksumAddress(closeTo)
 		if err != nil {
-			return &transactions.TransactionVal{}, err
+			return &transactions.Transaction{}, err
 		}
 
 		tx.PaymentTxnFields.CloseRemainderTo = closeToAddr
@@ -1141,10 +1141,10 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {
 		case transactions.Transaction:
-			txns = append(txns, transactions.SignedTxn{Txn: txnType})
+			txns = append(txns, transactions.SignedTxn{Txn: &txnType})
 		case []transactions.Transaction:
 			for _, t := range txnType {
-				txns = append(txns, transactions.SignedTxn{Txn: t})
+				txns = append(txns, transactions.SignedTxn{Txn: &t})
 			}
 		case transactions.SignedTxn:
 			txns = append(txns, txnType)

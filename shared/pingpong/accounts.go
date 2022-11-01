@@ -446,7 +446,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 	return nil
 }
 
-func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions.Transaction, client *libgoal.Client) (txID string, err error) {
+func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx *transactions.Transaction, client *libgoal.Client) (txID string, err error) {
 	signedTx := (*tx).Sign(senderAccount.sk)
 	txID, err = client.BroadcastTransaction(signedTx)
 	if err != nil {
@@ -698,7 +698,7 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client *
 	stxgroup := make([]transactions.SignedTxn, len(txgroup))
 	for i, txn := range txgroup {
 		txn.Group = gid
-		stxgroup[i] = (*txn).Sign(pps.accounts[senders[i]].sk)
+		stxgroup[i] = txn.Sign(pps.accounts[senders[i]].sk)
 	}
 repeat:
 	broadcastErr := client.BroadcastTransactionGroup(stxgroup)
@@ -757,14 +757,14 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 				break
 			}
 
-			var tx transactions.Transaction
+			var tx *transactions.Transaction
 			tx, err = pps.newApp(addr, client)
 			if err != nil {
 				return
 			}
 			newAppAddrs = append(newAppAddrs, addr)
 			acct.addBalance(-int64(pps.cfg.MaxFee))
-			txgroup = append(txgroup, tx)
+			txgroup = append(txgroup, *tx)
 			senders = append(senders, addr)
 			if len(txgroup) == int(pps.cfg.GroupSize) {
 				pps.schedule(len(txgroup))
@@ -825,13 +825,13 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 				break
 			}
 			// opt-in the account to the app
-			var tx transactions.Transaction
+			var tx *transactions.Transaction
 			tx, err = pps.appOptIn(addr, appid, client)
 			if err != nil {
 				return
 			}
 			acct.addBalance(-int64(pps.cfg.MaxFee))
-			txgroup = append(txgroup, tx)
+			txgroup = append(txgroup, *tx)
 			senders = append(senders, addr)
 			if len(txgroup) == int(pps.cfg.GroupSize) {
 				pps.schedule(len(txgroup))
@@ -866,7 +866,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	return
 }
 
-func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transactions.Transaction, err error) {
+func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx *transactions.Transaction, err error) {
 	// generate app program with roughly some number of operations
 	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys, pps.cfg.NumBoxUpdate, pps.cfg.NumBoxRead)
 	if !pps.cfg.Quiet {
@@ -895,7 +895,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 	return tx, err
 }
 
-func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
+func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx *transactions.Transaction, err error) {
 	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
@@ -928,7 +928,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.C
 			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())
 
 		pps.schedule(1)
-		var txn transactions.Transaction
+		var txn *transactions.Transaction
 		txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, pps.accounts[pps.cfg.SrcAccount])
 		if err != nil {
 			return err

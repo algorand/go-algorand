@@ -292,7 +292,7 @@ func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 	paysets := make([]transactions.SignedTxnInBlock, 0, len(receivers))
 	for i, b := range receivers {
 		txib, err := blk.EncodeSignedTxn(transactions.SignedTxn{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
 					Sender:      basics.Address{senders[i]},

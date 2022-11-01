@@ -124,7 +124,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return
 			}
 			if len(s.txnGroup) > 0 {
-				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, false, preview), nil
+				return makeTxnImpl(s.txnGroup[idx].Txn, idx, false, preview), nil
 			}
 		} else if parentObjID, idxs, ok := decodeNestedObjID(objID); ok {
 			var itxn transactions.SignedTxnWithAD
@@ -492,7 +492,7 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 func makeTxnPreview(txnGroup []transactions.SignedTxnWithAD, groupIndex int) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
-		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex, false)
+		fields := prepareTxn(txnGroup[groupIndex].Txn, groupIndex, false)
 		prop = makePreview(fields)
 	}
 
@@ -807,7 +807,7 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
-		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, false, preview)
+		return makeTxnImpl(s.txnGroup[s.groupIndex].Txn, s.groupIndex, false, preview)
 	}
 	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	return
@@ -853,7 +853,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, inner bool, prev
 
 func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	groupIndex := groupIndexes[len(groupIndexes)-1]
-	desc = makeTxnImpl(&txn.Txn, groupIndex, true, preview)
+	desc = makeTxnImpl(txn.Txn, groupIndex, true, preview)
 
 	logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
 	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
@@ -907,7 +907,7 @@ func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.Ru
 			length = len(txn.ForeignApps) + 1
 		}
 
-		elems := txnFieldToArrayFieldDesc(&txn, groupIndex, logic.TxnField(fieldIdx), length)
+		elems := txnFieldToArrayFieldDesc(txn, groupIndex, logic.TxnField(fieldIdx), length)
 		for _, elem := range elems {
 			desc = append(desc, makePrimitive(elem))
 		}

@@ -35,7 +35,7 @@ type SignedTxn struct {
 	Sig      crypto.Signature   `codec:"sig"`
 	Msig     crypto.MultisigSig `codec:"msig"`
 	Lsig     LogicSig           `codec:"lsig"`
-	Txn      Transaction        `codec:"txn"`
+	Txn      *Transaction       `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
 }
 
@@ -97,7 +97,7 @@ func (s SignedTxn) Authorizer() basics.Address {
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
 // TODO: is this method used anywhere, or is it safe to remove?
-func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig crypto.MultisigSig) (SignedTxn, error) {
+func AssembleSignedTxn(txn *Transaction, sig crypto.Signature, msig crypto.MultisigSig) (SignedTxn, error) {
 	if sig != (crypto.Signature{}) && !msig.Blank() {
 		return SignedTxn{}, errors.New("signed txn can only have one of sig or msig")
 	}

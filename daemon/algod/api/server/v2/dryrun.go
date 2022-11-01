@@ -481,7 +481,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				}
 			}
 
-			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)
+			ba, err := makeBalancesAdapter(&dl, stxn.Txn, appIdx)
 			if err != nil {
 				response.Error = err.Error()
 				return
