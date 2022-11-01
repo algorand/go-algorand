@@ -30,8 +30,15 @@ arguments from it and pushing results to it. Some operations have
 _immediate_ arguments that are encoded directly into the instruction,
 rather than coming from the stack.
 
-The maximum stack depth is 1000. If the stack depth is
-exceeded or if a byte-array element exceed 4096 bytes, the program fails.
+The maximum stack depth is 1000. If the stack depth is exceeded or if
+a byte-array element exceed 4096 bytes, the program fails. If an
+opcode is documented to access a position in the stack that does not
+exist, the operation fails. Most often, this is an attempt to access
+an element below the stack -- the simplest example is an operation
+like `concat` which expects two arguments on the stack. If the stack
+has fewer than two elements, the operation fails. Some operations, like
+`frame_dig` and `proto` could fail because of an attempt to access
+above the current stack.
 
 ## Scratch Space
 
@@ -188,12 +195,12 @@ _available_.
    `txn.ForeignApplications` field is _available_.
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
-   the same group contains a box reference that denotes the box. The
-   index `i` in the box reference refers to the `ith` application in
-   the containing transaction's ForeignApplications array, with the
-   usual convention that 0 indicates the application ID of the app
-   called by that transaction. No box is ever _available_ to a
-   ClearStateProgram.
+   the same group contains a box reference (`txn.Boxes`) that denotes
+   the box. A box reference contains an index `i`, and name `n`. The
+   index refers to the `ith` application in the transaction's
+   ForeignApplications array, with the usual convention that 0
+   indicates the application ID of the app called by that
+   transaction. No box is ever _available_ to a ClearStateProgram.
 
 ## Constants
 

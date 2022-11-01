@@ -30,8 +30,15 @@ arguments from it and pushing results to it. Some operations have
 _immediate_ arguments that are encoded directly into the instruction,
 rather than coming from the stack.
 
-The maximum stack depth is 1000. If the stack depth is
-exceeded or if a byte-array element exceed 4096 bytes, the program fails.
+The maximum stack depth is 1000. If the stack depth is exceeded or if
+a byte-array element exceed 4096 bytes, the program fails. If an
+opcode is documented to access a position in the stack that does not
+exist, the operation fails. Most often, this is an attempt to access
+an element below the stack -- the simplest example is an operation
+like `concat` which expects two arguments on the stack. If the stack
+has fewer than two elements, the operation fails. Some operations, like
+`frame_dig` and `proto` could fail because of an attempt to access
+above the current stack.
 
 ## Scratch Space
 
@@ -188,12 +195,12 @@ _available_.
    `txn.ForeignApplications` field is _available_.
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
-   the same group contains a box reference that denotes the box. The
-   index `i` in the box reference refers to the `ith` application in
-   the containing transaction's ForeignApplications array, with the
-   usual convention that 0 indicates the application ID of the app
-   called by that transaction. No box is ever _available_ to a
-   ClearStateProgram.
+   the same group contains a box reference (`txn.Boxes`) that denotes
+   the box. A box reference contains an index `i`, and name `n`. The
+   index refers to the `ith` application in the transaction's
+   ForeignApplications array, with the usual convention that 0
+   indicates the application ID of the app called by that
+   transaction. No box is ever _available_ to a ClearStateProgram.
 
 ## Constants
 
@@ -632,8 +639,8 @@ Account fields used in the `acct_params_get` opcode.
 
 | Opcode | Description |
 | - | -- |
-| `balance` | balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `balance` | balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit` |
+| `min_balance` | minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change. |
 | `app_opted_in` | 1 if account A is opted in to application B, else 0 |
 | `app_local_get` | local state of the key B in the current application in account A |
 | `app_local_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |

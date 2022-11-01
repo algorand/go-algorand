@@ -810,29 +810,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		}
 	}()
 
-	defer func() {
-		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil {
-			errDbg := cx.Debugger.Complete(cx.refreshDebugState(err))
-			if err == nil {
-				err = errDbg
-			}
-		}
-	}()
+	// Avoid returning for any reason until after cx.debugState is setup. That
+	// require cx to be minimally setup, too.
 
-	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
-		err = errLogicSigNotSupported
-		return
-	}
-	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
-		err = errTooManyArgs
-		return
-	}
-
-	version, vlen, err := versionCheck(program, cx.EvalParams)
-	if err != nil {
-		return false, err
-	}
+	version, vlen, verr := versionCheck(program, cx.EvalParams)
+	// defer verr check until after cx and debugState is setup
 
 	cx.version = version
 	cx.pc = vlen
@@ -848,6 +830,23 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		if derr := cx.Debugger.Register(cx.refreshDebugState(err)); derr != nil {
 			return false, derr
 		}
+		defer func() {
+			// Ensure we update the debugger before exiting
+			errDbg := cx.Debugger.Complete(cx.refreshDebugState(err))
+			if err == nil {
+				err = errDbg
+			}
+		}()
+	}
+
+	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
+		return false, errLogicSigNotSupported
+	}
+	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+		return false, errTooManyArgs
+	}
+	if verr != nil {
+		return false, verr
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
