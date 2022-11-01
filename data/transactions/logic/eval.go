@@ -815,29 +815,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		}
 	}()
 
-	defer func() {
-		if cx.Debugger != nil {
-			// Ensure we update the debugger before exiting
-			derr := cx.Debugger.AfterLogicEval(cx, err)
-			if err == nil && derr != nil {
-				err = fmt.Errorf("error while running debugger AfterLogicEval hook: %w", derr)
-			}
-		}
-	}()
+	// Avoid returning for any reason until after cx.debugState is setup. That
+	// require cx to be minimally setup, too.
 
-	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
-		err = errLogicSigNotSupported
-		return
-	}
-	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
-		err = errTooManyArgs
-		return
-	}
-
-	version, vlen, err := versionCheck(program, cx.EvalParams)
-	if err != nil {
-		return false, err
-	}
+	version, vlen, verr := versionCheck(program, cx.EvalParams)
+	// defer verr check until after cx and debugState is setup
 
 	cx.version = version
 	cx.pc = vlen
@@ -853,6 +835,23 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		if err != nil {
 			return false, fmt.Errorf("error while running debugger BeforeLogicEval hook: %w", err)
 		}
+		defer func() {
+			// Ensure we update the debugger before exiting
+			derr := cx.Debugger.AfterLogicEval(cx, err)
+			if err == nil && derr != nil {
+				err = fmt.Errorf("error while running debugger AfterLogicEval hook: %w", derr)
+			}
+		}()
+	}
+
+	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
+		return false, errLogicSigNotSupported
+	}
+	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+		return false, errTooManyArgs
+	}
+	if verr != nil {
+		return false, verr
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {

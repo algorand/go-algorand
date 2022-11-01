@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,28 +54,9 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV32, // unlimited assets and apps
 	protocol.ConsensusV33, // 320 rounds
 	protocol.ConsensusV34, // AVM v7, stateproofs
+	protocol.ConsensusV35, // minor, double upgrade withe v34
+	protocol.ConsensusV36, // box storage
 	protocol.ConsensusFuture,
-}
-
-// TestReleasedVersion ensures that the necessary tidying is done when a new
-// protocol release happens.  The new version must be added to
-// consensusByNumber, and a new LogicSigVersion must be added to vFuture.
-func TestReleasedVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	// This confirms that the proto before future has no ApprovedUpgrades.  Once
-	// it does, that new version should be added to consensusByNumber.
-	require.Len(t, config.Consensus[consensusByNumber[len(consensusByNumber)-2]].ApprovedUpgrades, 0)
-	// And no funny business with vFuture
-	require.Equal(t, protocol.ConsensusFuture, consensusByNumber[len(consensusByNumber)-1])
-
-	// Ensure that vFuture gets a new LogicSigVersion when we promote the
-	// existing one.  That allows TestExperimental in the logic package to
-	// prevent unintended releases of experimental opcodes.
-	relV := config.Consensus[consensusByNumber[len(consensusByNumber)-2]].LogicSigVersion
-	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
-	require.Less(t, int(relV), int(futureV))
 }
 
 // TestConsensusRange allows for running tests against a range of consensus

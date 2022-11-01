@@ -1105,6 +1105,10 @@ const globalV8TestProgram = globalV7TestProgram + `
 // No new globals in v8
 `
 
+const globalV9TestProgram = globalV8TestProgram + `
+// No new globals in v9
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1124,6 +1128,7 @@ func TestGlobal(t *testing.T) {
 		6: {CallerApplicationAddress, globalV6TestProgram},
 		7: {CallerApplicationAddress, globalV7TestProgram},
 		8: {CallerApplicationAddress, globalV8TestProgram},
+		9: {CallerApplicationAddress, globalV9TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1622,6 +1627,11 @@ assert
 int 1
 `
 
+const testTxnProgramTextV9 = testTxnProgramTextV8 + `
+assert
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1733,6 +1743,7 @@ func TestTxn(t *testing.T) {
 		6: testTxnProgramTextV6,
 		7: testTxnProgramTextV7,
 		8: testTxnProgramTextV8,
+		9: testTxnProgramTextV9,
 	}
 
 	for i, txnField := range TxnFieldNames {
