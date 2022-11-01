@@ -861,3 +861,25 @@ func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
 		require.GreaterOrEqualf(t, encodedKVRecordV6MaxValueLength, len(longestPossibleKey), "Allocbound constant no longer valid as of consensus version %s", version)
 	}
 }
+
+func TestEncodedKVDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	require.GreaterOrEqual(t, encodedKVRecordV6MaxKeyLength, currentConsensusParams.MaxAppKeyLen)
+	require.GreaterOrEqual(t, uint64(encodedKVRecordV6MaxValueLength), currentConsensusParams.MaxBoxSize)
+
+	kvEntry := encodedKVRecordV6{
+		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
+		Value: make([]byte, encodedKVRecordV6MaxValueLength),
+	}
+
+	crypto.RandBytes(kvEntry.Key[:])
+	crypto.RandBytes(kvEntry.Value[:])
+
+	encoded := kvEntry.MarshalMsg(nil)
+	require.GreaterOrEqual(t, MaxEncodedKVDataSize, len(encoded))
+
+}

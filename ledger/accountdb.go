@@ -381,9 +381,6 @@ const MaxEncodedBaseAccountDataSize = 350
 // this number is verified by the TestEncodedBaseResourceSize function.
 const MaxEncodedBaseResourceDataSize = 20000
 
-// MaxEncodedKVDataSize is the max size of serialized KV entry
-const MaxEncodedKVDataSize = encodedKVRecordV6MaxKeyLength + encodedKVRecordV6MaxValueLength
-
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
 	// The public key address to which the account belongs.

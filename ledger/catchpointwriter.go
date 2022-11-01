@@ -103,6 +103,10 @@ const (
 
 	// For boxes: MaxBoxSize
 	encodedKVRecordV6MaxValueLength = 32768
+
+	// MaxEncodedKVDataSize is the max size of serialized KV entry, checked with TestEncodedKVDataSize.
+	// Exact value is 32906 that is 10 bytes more than 32768 + 128
+	MaxEncodedKVDataSize = 33000
 )
 
 type encodedKVRecordV6 struct {
