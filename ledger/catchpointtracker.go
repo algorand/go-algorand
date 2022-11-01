@@ -1108,7 +1108,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, DefaultMaxResourcesPerChunk)
+		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
 		}
@@ -1527,7 +1527,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 
 	if rootHash.IsZero() {
 		ct.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize, DefaultMaxResourcesPerChunk)
+		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0
@@ -1552,7 +1552,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
-						// we need to transalate the "addrid" into actual account address so that
+						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
 						addr, err := lookupAccountAddressFromAddressID(ctx, tx, acct.addrid)
 						if err != nil {
