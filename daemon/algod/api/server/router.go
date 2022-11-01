@@ -72,8 +72,10 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/public"
+	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
+	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
+	pprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/private"
+	ppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/public"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -147,8 +149,10 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Log:      logger,
 		Shutdown: shutdown,
 	}
-	public.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	private.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
 	return e
 }
