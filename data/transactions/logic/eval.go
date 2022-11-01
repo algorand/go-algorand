@@ -331,6 +331,10 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+func (ep *EvalParams) GetCaller() *EvalContext {
+	return ep.caller
+}
+
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
 	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
@@ -594,6 +598,10 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
+}
+
+func (cx *EvalContext) GroupIndex() int {
+	return cx.groupIndex
 }
 
 // RunMode returns the evaluation context's mode (signature or application)

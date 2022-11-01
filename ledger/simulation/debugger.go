@@ -29,6 +29,7 @@ type cursorDebuggerHook struct {
 
 	cursor         TxnPath
 	nextInnerIndex uint64
+	groupIndex     int
 }
 
 func (cdbg *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
@@ -38,6 +39,7 @@ func (cdbg *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 	} else {
 		cdbg.cursor[top]++
 	}
+	cdbg.groupIndex = groupIndex
 	return nil
 }
 
@@ -61,16 +63,12 @@ func (cdbg *cursorDebuggerHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
 	top := len(cdbg.cursor) - 1
 	cdbg.nextInnerIndex = cdbg.cursor[top] + 1
 	cdbg.cursor = cdbg.cursor[:top]
+	cdbg.groupIndex = ep.GetCaller().GroupIndex()
 	return nil
 }
 
 func (cdbg *cursorDebuggerHook) relativeGroupIndex() int {
-	top := len(cdbg.cursor) - 1
-	if top < 0 {
-		return 0
-	} else {
-		return int(cdbg.cursor[top])
-	}
+	return cdbg.groupIndex
 }
 
 func (cdbg *cursorDebuggerHook) absolutePath() TxnPath {
@@ -105,7 +103,7 @@ func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyDat
 	for _, index := range path[1:] {
 		innerTxns := applyDataCursor.EvalDelta.InnerTxns
 		if index >= uint64(len(innerTxns)) {
-			return nil, fmt.Errorf("simulator debugger error: index %d out of range", index)
+			return nil, fmt.Errorf("simulator debugger error: index %d out of range with length %d. Full path: %v", index, len(innerTxns), path)
 		}
 		applyDataCursor = &innerTxns[index].ApplyData
 	}
@@ -115,10 +113,7 @@ func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyDat
 
 // Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedTxnWithAD) error {
-	if len(dh.cursor) == 0 {
-		return nil
-	}
-	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.cursor[:len(dh.cursor)-1])
+	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.cursor) // this works because the cursor has not been updated yet by `BeforeTxn`
 	if err != nil {
 		return err
 	}
