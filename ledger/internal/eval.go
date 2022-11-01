@@ -1558,7 +1558,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.Err != nil {
-				logging.Base().Errorf("eval prefetcher error: %w", txgroup.Err)
+				logging.Base().Errorf("eval prefetcher error: %v", txgroup.Err)
 			}
 
 			if txgroup.Err == nil {
