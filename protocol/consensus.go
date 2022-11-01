@@ -192,6 +192,11 @@ const ConsensusV35 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
 )
 
+// ConsensusV36 adds box storage
+const ConsensusV36 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/commit/44fa607d6051730f5264526bf3c108d51f0eadb6",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
