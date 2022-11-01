@@ -200,7 +200,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -311,7 +311,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -362,7 +362,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLastRound(r, &fixture, firstStateProofRound, 1)
+	_, stateProofMessage := getStateProofByLastRound(r, &fixture, firstStateProofRound)
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
@@ -396,39 +396,30 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	return consensusParams
 }
 
-func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClientFixture, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClientFixture, stateProofLatestRound uint64) (sp.StateProof, stateproofmsg.Message) {
 	restClient, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
-	curRound, err := fixture.LibGoalClient.CurrentRound()
+	res, err := restClient.StateProofs(stateProofLatestRound)
 	r.NoError(err)
-
-	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
-	r.NoError(err)
+	r.Equal(res.Message.LastAttestedRound, stateProofLatestRound)
 
 	var stateProof sp.StateProof
-	var stateProofMessage stateproofmsg.Message
-	for _, txn := range res.Transactions {
-		r.Equal(txn.Type, string(protocol.StateProofTx))
-		r.True(txn.StateProof != nil)
-		err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
-		r.NoError(err)
-		if stateProofMessage.LastAttestedRound == stateProofLatestRound {
-			err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
-			r.NoError(err)
+	err = protocol.Decode(res.StateProof, &stateProof)
+	r.NoError(err)
 
-			return stateProof, stateProofMessage
-		}
+	msg := stateproofmsg.Message{
+		BlockHeadersCommitment: res.Message.BlockHeadersCommitment,
+		VotersCommitment:       res.Message.VotersCommitment,
+		LnProvenWeight:         res.Message.LnProvenWeight,
+		FirstAttestedRound:     res.Message.FirstAttestedRound,
+		LastAttestedRound:      res.Message.LastAttestedRound,
 	}
-
-	r.FailNow("no state proof with latest round %d found", stateProofLatestRound)
-
-	// Should never get here
-	return sp.StateProof{}, stateproofmsg.Message{}
+	return stateProof, msg
 }
 
-func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClientFixture, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLastRound(r, fixture, nextStateProofRound, expectedNumberOfStateProofs)
+func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClientFixture, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams) (stateproofmsg.Message, bookkeeping.Block) {
+	stateProof, stateProofMessage := getStateProofByLastRound(r, fixture, nextStateProofRound)
 
 	nextStateProofBlock, err := fixture.LibGoalClient.BookkeepingBlock(nextStateProofRound)
 
@@ -545,7 +536,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -771,7 +762,7 @@ func TestAttestorsChange(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -852,7 +843,7 @@ func TestTotalWeightChanges(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -1275,7 +1266,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 
-			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound, expectedNumberOfStateProofs)
+			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound)
 
 			accountSnapshot := accountSnapshotAtRound[stateProofMsg.LastAttestedRound-consensusParams.StateProofInterval-consensusParams.StateProofVotersLookback]
 
