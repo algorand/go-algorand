@@ -472,13 +472,17 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 					Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
 				},
 			}
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
+			if grpSize > 1 {
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
+			}
 			txns = append(txns, tx)
 		}
 		groupHash := crypto.HashObj(txGroup)
 		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
 		for g, txn := range txns {
-			txn.Group = groupHash
+			if grpSize > 1 {
+				txn.Group = groupHash
+			}
 			signedTx := txn.Sign(secrets[(u+g)%numUsers])
 			signedTx.Txn = txn
 			signedTxGroup = append(signedTxGroup, signedTx)

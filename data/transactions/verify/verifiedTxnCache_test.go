@@ -33,7 +33,7 @@ func TestAddingToCache(t *testing.T) {
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 50)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil)
 	require.NoError(t, err)
 	impl.Add(txnGroups[0], groupCtx)
@@ -83,7 +83,7 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	icache := MakeVerifiedTransactionCache(size * 2)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	expectedUnverifiedGroups := make([][]transactions.SignedTxn, 0, len(txnGroups)/2)
 	// add every even transaction to the cache.
@@ -108,7 +108,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	icache := MakeVerifiedTransactionCache(b.N * 2)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	queryTxnGroups := make([][]transactions.SignedTxn, 0, b.N)
 	// add every even transaction to the cache.
@@ -141,7 +141,7 @@ func TestUpdatePinned(t *testing.T) {
 	icache := MakeVerifiedTransactionCache(size * 10)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert some entries.
 	for i := 0; i < len(txnGroups); i++ {
@@ -170,7 +170,7 @@ func TestPinningTransactions(t *testing.T) {
 	icache := MakeVerifiedTransactionCache(size)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert half of the entries.
 	for i := 0; i < len(txnGroups)/2; i++ {

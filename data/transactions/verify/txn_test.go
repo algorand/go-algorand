@@ -18,6 +18,7 @@ package verify
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -48,6 +49,7 @@ var blockHeader = bookkeeping.BlockHeader{
 		CurrentProtocol: protocol.ConsensusCurrentVersion,
 	},
 }
+var protoMaxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
 
 var spec = transactions.SpecialAddresses{
 	FeeSink:     feeSink,
@@ -350,7 +352,7 @@ func TestPaysetGroups(t *testing.T) {
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
@@ -372,7 +374,7 @@ func TestPaysetGroups(t *testing.T) {
 
 	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 50)
 
-	txnGroups = generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups = generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	ctx, ctxCancelFunc := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer ctxCancelFunc()
@@ -420,7 +422,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
 	defer verificationPool.Shutdown()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	cache := MakeVerifiedTransactionCache(50000)
 
 	b.ResetTimer()
@@ -443,7 +445,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 ==`)
 	require.NoError(t, err)
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	dummyLedger := DummyLedgerForSignature{}
 	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
@@ -505,30 +507,39 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 }
 
-func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
+func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.SignedTxn,
+	secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
 	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
 	for i, addr := range addrs {
 		addrToSecret[addr] = secrets[i]
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxns))
-	for i := 0; i < len(signedTxns); i++ {
-		txnPerGroup := 1 + rand.Intn(15)
-		if i+txnPerGroup >= len(signedTxns) {
-			txnPerGroup = len(signedTxns) - i - 1
+	for i := 0; i < len(signedTxns); {
+		txnsInGroup := rand.Intn(protoMaxGroupSize-1) + 1
+		if txnsInGroup > maxGroupSize {
+			txnsInGroup = maxGroupSize
 		}
-		newGroup := signedTxns[i : i+txnPerGroup+1]
+		if i+txnsInGroup > len(signedTxns) {
+			txnsInGroup = len(signedTxns) - i
+		}
+
+		newGroup := signedTxns[i : i+txnsInGroup]
 		var txGroup transactions.TxGroup
-		for _, txn := range newGroup {
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		if txnsInGroup > 1 {
+			for _, txn := range newGroup {
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+			}
 		}
 		groupHash := crypto.HashObj(txGroup)
 		for j := range newGroup {
-			newGroup[j].Txn.Group = groupHash
+			if txnsInGroup > 1 {
+				newGroup[j].Txn.Group = groupHash
+			}
 			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
 		}
 		txnGroups = append(txnGroups, newGroup)
-		i += txnPerGroup
+		i += txnsInGroup
 	}
 
 	return txnGroups
@@ -540,7 +551,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
 	blkHdr := createDummyBlockHeader()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Sig[0]++
 	}
@@ -834,7 +845,7 @@ func BenchmarkTxn(b *testing.B) {
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
 	blk := bookkeeping.Block{BlockHeader: createDummyBlockHeader()}
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
@@ -859,7 +870,7 @@ func TestStreamVerifier(t *testing.T) {
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	numOfTxnGroups := len(txnGroups)
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
@@ -948,6 +959,149 @@ func TestStreamVerifier(t *testing.T) {
 	for _, txn := range unverifiedGroups {
 		if _, has := badTxnGroups[txn[0].Sig]; has {
 			delete(badTxnGroups, txn[0].Sig)
+		}
+	}
+	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
+}
+
+func TestStreamVerifierCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := 10
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	blkHdr := createDummyBlockHeader()
+
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	txnGroups := generateTransactionGroups(1, signedTxn, secrets, addrs)
+	numOfTxnGroups := len(txnGroups)
+	ctx, cancel := context.WithCancel(context.Background())
+	cache := MakeVerifiedTransactionCache(50)
+
+	defer cancel()
+
+	nbw := MakeNewBlockWatcher(blkHdr)
+	stxnChan := make(chan UnverifiedElement)
+	resultChan := make(chan VerificationResult)
+	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, nil, nbw, verificationPool, cache)
+	sv.Start()
+
+	badTxnGroups := make(map[uint64]struct{})
+
+	mod := 1
+
+	// txn with 0 sigs
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	{
+		noteField := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(noteField, uint64(mod))
+		txnGroups[mod][0].Txn.Note = noteField
+		badTxnGroups[uint64(mod)] = struct{}{}
+	}
+	mod++
+
+	// invalid stateproof txn
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Type = protocol.StateProofTx
+	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
+	{
+		noteField := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(noteField, uint64(mod))
+		txnGroups[mod][0].Txn.Note = noteField
+		badTxnGroups[uint64(mod)] = struct{}{}
+	}
+	mod++
+
+	// acceptable stateproof txn
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Type = protocol.StateProofTx
+	txnGroups[mod][0].Txn.Header.Fee = basics.MicroAlgos{Raw: 0}
+	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
+	txnGroups[mod][0].Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+	mod++
+
+	// multisig
+	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
+	txnGroups[mod] = mSigTxn
+	mod++
+
+	// txn with sig and msig
+	txnGroups[mod][0].Msig = mSigTxn[0].Msig
+	{
+		noteField := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(noteField, uint64(mod))
+		txnGroups[mod][0].Txn.Note = noteField
+		badTxnGroups[uint64(mod)] = struct{}{}
+	}
+
+	wg := sync.WaitGroup{}
+
+	var badSigResultCounter int
+	var goodSigResultCounter int
+	errChan := make(chan error)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(errChan)
+		// process the results
+		for x := 0; x < numOfTxnGroups; x++ {
+			select {
+			case result := <-resultChan:
+				u, _ := binary.Uvarint(result.TxnGroup[0].Txn.Note)
+				if _, has := badTxnGroups[u]; has {
+					badSigResultCounter++
+					if result.Err == nil {
+						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
+						errChan <- err
+					}
+				} else {
+					goodSigResultCounter++
+					if result.Err != nil {
+						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
+						errChan <- err
+					}
+				}
+			case <-ctx.Done():
+				break
+			}
+		}
+	}()
+
+	wg.Add(1)
+	// send txn groups to be verified
+	go func() {
+		defer wg.Done()
+		for _, tg := range txnGroups {
+			select {
+			case <-ctx.Done():
+				break
+			default:
+				stxnChan <- UnverifiedElement{TxnGroup: tg, Context: nil}
+			}
+		}
+	}()
+
+	for err := range errChan {
+		require.NoError(t, err)
+	}
+
+	wg.Wait()
+
+	// check if all txns have been checked.
+	require.Equal(t, len(txnGroups), badSigResultCounter+goodSigResultCounter)
+	require.Equal(t, len(badTxnGroups), badSigResultCounter)
+
+	// check the cached transactions
+	// note that the result of each verified txn group is send before the batch is added to the cache
+	// the test does not know if the batch is not added to the cache yet, so some elts might be missing from the cache
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	require.GreaterOrEqual(t, len(unverifiedGroups), badSigResultCounter)
+	for _, txn := range unverifiedGroups {
+		u, _ := binary.Uvarint(txn[0].Txn.Note)
+		if _, has := badTxnGroups[u]; has {
+			delete(badTxnGroups, u)
 		}
 	}
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
