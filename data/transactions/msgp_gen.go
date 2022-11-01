@@ -158,20 +158,12 @@ import (
 //          |-----> (*) MsgIsZero
 //
 // Transaction
-//      |-----> MarshalMsg
-//      |-----> CanMarshalMsg
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
 //      |-----> (*) CanUnmarshalMsg
-//      |-----> Msgsize
-//      |-----> MsgIsZero
-//
-// TransactionVal
-//        |-----> (*) MarshalMsg
-//        |-----> (*) CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> (*) Msgsize
-//        |-----> (*) MsgIsZero
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
 //
 // TxGroup
 //    |-----> (*) MarshalMsg
@@ -3521,7 +3513,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Txn = nil
 			} else {
 				if (*z).Txn == nil {
-					(*z).Txn = new(TransactionVal)
+					(*z).Txn = new(Transaction)
 				}
 				bts, err = (*z).Txn.UnmarshalMsg(bts)
 				if err != nil {
@@ -3588,7 +3580,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Txn = nil
 				} else {
 					if (*z).Txn == nil {
-						(*z).Txn = new(TransactionVal)
+						(*z).Txn = new(Transaction)
 					}
 					bts, err = (*z).Txn.UnmarshalMsg(bts)
 					if err != nil {
@@ -3841,7 +3833,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).SignedTxnWithAD.SignedTxn.Txn = nil
 			} else {
 				if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-					(*z).SignedTxnWithAD.SignedTxn.Txn = new(TransactionVal)
+					(*z).SignedTxnWithAD.SignedTxn.Txn = new(Transaction)
 				}
 				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
 				if err != nil {
@@ -3988,7 +3980,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).SignedTxnWithAD.SignedTxn.Txn = nil
 				} else {
 					if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-						(*z).SignedTxnWithAD.SignedTxn.Txn = new(TransactionVal)
+						(*z).SignedTxnWithAD.SignedTxn.Txn = new(Transaction)
 					}
 					bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
 					if err != nil {
@@ -4283,7 +4275,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).SignedTxn.Txn = nil
 			} else {
 				if (*z).SignedTxn.Txn == nil {
-					(*z).SignedTxn.Txn = new(TransactionVal)
+					(*z).SignedTxn.Txn = new(Transaction)
 				}
 				bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
 				if err != nil {
@@ -4414,7 +4406,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).SignedTxn.Txn = nil
 				} else {
 					if (*z).SignedTxn.Txn == nil {
-						(*z).SignedTxn.Txn = new(TransactionVal)
+						(*z).SignedTxn.Txn = new(Transaction)
 					}
 					bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
 					if err != nil {
@@ -4664,68 +4656,7 @@ func (z *StateProofTxnFields) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Transaction) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	if z == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o = z.MarshalMsg(o)
-	}
-	return
-}
-
-func (_ Transaction) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(Transaction)
-	if !ok {
-		_, ok = (z).(*Transaction)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	if msgp.IsNil(bts) {
-		bts, err = msgp.ReadNilBytes(bts)
-		if err != nil {
-			return
-		}
-		(*z) = nil
-	} else {
-		if (*z) == nil {
-			(*z) = new(TransactionVal)
-		}
-		bts, err = (*z).UnmarshalMsg(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Transaction)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Transaction) Msgsize() (s int) {
-	if z == nil {
-		s += msgp.NilSize
-	} else {
-		s += z.Msgsize()
-	}
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z Transaction) MsgIsZero() bool {
-	return z == nil
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *TransactionVal) MarshalMsg(b []byte) (o []byte) {
+func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0007Len := uint32(46)
@@ -5208,13 +5139,13 @@ func (z *TransactionVal) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *TransactionVal) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*TransactionVal)
+func (_ *Transaction) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Transaction)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TransactionVal) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0007 int
@@ -5810,7 +5741,7 @@ func (z *TransactionVal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0008 {
-			(*z) = TransactionVal{}
+			(*z) = Transaction{}
 		}
 		for zb0007 > 0 {
 			zb0007--
@@ -6312,13 +6243,13 @@ func (z *TransactionVal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *TransactionVal) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*TransactionVal)
+func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Transaction)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *TransactionVal) Msgsize() (s int) {
+func (z *Transaction) Msgsize() (s int) {
 	s = 3 + 5 + (*z).Type.Msgsize() + 4 + (*z).Header.Sender.Msgsize() + 4 + (*z).Header.Fee.Msgsize() + 3 + (*z).Header.FirstValid.Msgsize() + 3 + (*z).Header.LastValid.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).Header.Note) + 4 + msgp.StringPrefixSize + len((*z).Header.GenesisID) + 3 + (*z).Header.GenesisHash.Msgsize() + 4 + (*z).Header.Group.Msgsize() + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + (*z).Header.RekeyTo.Msgsize() + 8 + (*z).KeyregTxnFields.VotePK.Msgsize() + 7 + (*z).KeyregTxnFields.SelectionPK.Msgsize() + 8 + (*z).KeyregTxnFields.StateProofPK.Msgsize() + 8 + (*z).KeyregTxnFields.VoteFirst.Msgsize() + 8 + (*z).KeyregTxnFields.VoteLast.Msgsize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + (*z).PaymentTxnFields.Receiver.Msgsize() + 4 + (*z).PaymentTxnFields.Amount.Msgsize() + 6 + (*z).PaymentTxnFields.CloseRemainderTo.Msgsize() + 5 + (*z).AssetConfigTxnFields.ConfigAsset.Msgsize() + 5 + (*z).AssetConfigTxnFields.AssetParams.Msgsize() + 5 + (*z).AssetTransferTxnFields.XferAsset.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).AssetTransferTxnFields.AssetSender.Msgsize() + 5 + (*z).AssetTransferTxnFields.AssetReceiver.Msgsize() + 7 + (*z).AssetTransferTxnFields.AssetCloseTo.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAccount.Msgsize() + 5 + (*z).AssetFreezeTxnFields.FreezeAsset.Msgsize() + 5 + msgp.BoolSize + 5 + (*z).ApplicationCallTxnFields.ApplicationID.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
 		s += msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
@@ -6344,7 +6275,7 @@ func (z *TransactionVal) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *TransactionVal) MsgIsZero() bool {
+func (z *Transaction) MsgIsZero() bool {
 	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.Boxes) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).StateProofTxnFields.StateProofType.MsgIsZero()) && ((*z).StateProofTxnFields.StateProof.MsgIsZero()) && ((*z).StateProofTxnFields.Message.MsgIsZero())
 }
 

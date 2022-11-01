@@ -974,9 +974,9 @@ func BenchmarkUnmarshalStateProofTxnFields(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalTransactionVal(t *testing.T) {
+func TestMarshalUnmarshalTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := TransactionVal{}
+	v := Transaction{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -995,12 +995,12 @@ func TestMarshalUnmarshalTransactionVal(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingTransactionVal(t *testing.T) {
-	protocol.RunEncodingTest(t, &TransactionVal{})
+func TestRandomizedEncodingTransaction(t *testing.T) {
+	protocol.RunEncodingTest(t, &Transaction{})
 }
 
-func BenchmarkMarshalMsgTransactionVal(b *testing.B) {
-	v := TransactionVal{}
+func BenchmarkMarshalMsgTransaction(b *testing.B) {
+	v := Transaction{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1008,8 +1008,8 @@ func BenchmarkMarshalMsgTransactionVal(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgTransactionVal(b *testing.B) {
-	v := TransactionVal{}
+func BenchmarkAppendMsgTransaction(b *testing.B) {
+	v := Transaction{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -1020,8 +1020,8 @@ func BenchmarkAppendMsgTransactionVal(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalTransactionVal(b *testing.B) {
-	v := TransactionVal{}
+func BenchmarkUnmarshalTransaction(b *testing.B) {
+	v := Transaction{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
