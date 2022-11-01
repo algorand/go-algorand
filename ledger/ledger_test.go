@@ -2382,9 +2382,10 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	prevAccountDBVersion := accountDBVersion
 	accountDBVersion = 6
 	defer func() {
-		accountDBVersion = 7
+		accountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2418,6 +2419,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 			return err
 		}
 		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+			return err
+		}
+		// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
+		// or in later version where we need kvstore table, this test will fail
+		if err := accountsCreateBoxTable(ctx, tx); err != nil {
 			return err
 		}
 		return nil

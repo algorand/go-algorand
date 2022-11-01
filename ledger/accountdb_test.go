@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"reflect"
@@ -32,6 +33,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/stretchr/testify/require"
 
@@ -83,6 +86,9 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
 	require.NoError(tb, err)
 
+	err = accountsCreateBoxTable(context.Background(), tx)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
@@ -102,7 +108,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
 		d := pad.accountData.GetLedgerCoreAccountData()
-		require.Equal(t, d, expected)
+		require.Equal(t, expected, d)
 
 		switch d.Status {
 		case basics.Online:
@@ -309,7 +315,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
-		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		numResUpdates := 0
@@ -317,6 +323,7 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
+		require.Empty(t, updatedKVs)
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -446,7 +453,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
+			updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
 			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
 			require.Equal(t,
@@ -459,6 +466,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(0), round: basics.Round(lastRound)},
 				updatesResources[addr][0],
 			)
+
+			require.Empty(t, updatedKVs)
 		})
 	}
 }
@@ -524,10 +533,12 @@ func checkCreatables(t *testing.T,
 // randomCreatableSampling sets elements to delete from previous iteration
 // It consideres 10 elements in an iteration.
 // loop 0: returns the first 10 elements
-// loop 1: returns: * the second 10 elements
-//                  * random sample of elements from the first 10: created changed from true -> false
-// loop 2: returns: * the elements 20->30
-//                  * random sample of elements from 10->20: created changed from true -> false
+// loop 1: returns:
+// - the second 10 elements
+// - random sample of elements from the first 10: created changed from true -> false
+// loop 2: returns:
+// - the elements 20->30
+// - random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
@@ -717,6 +728,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(b, err)
+	defer qs.close()
 
 	// read all the balances in the database, shuffled
 	addrs := make([]basics.Address, len(accounts))
@@ -1015,8 +1027,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var balances catchpointFileBalancesChunkV6
-		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		var chunk catchpointFileChunkV6
+		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecordV6
 			accountData := baseAccountData{RewardsBase: accountsLoaded + i}
@@ -1026,13 +1038,13 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			if ascendingOrder {
 				binary.LittleEndian.PutUint64(randomAccount.Address[:], accountsLoaded+i)
 			}
-			balances.Balances[i] = randomAccount
+			chunk.Balances[i] = randomAccount
 		}
 		balanceLoopDuration := time.Since(balancesLoopStart)
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
 
-		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
+		normalizedAccountBalances, err := prepareNormalizedBalancesV6(chunk.Balances, proto)
 		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -1065,6 +1077,285 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 		b.Run(fmt.Sprintf("AscendingInsertOrder-%d", size), func(b *testing.B) {
 			b.N = size
 			benchmarkWriteCatchpointStagingBalancesSub(b, true)
+		})
+	}
+}
+
+func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		input            []byte
+		outputPrefix     []byte
+		outputPrefixIncr []byte
+	}{
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{0xFF}, outputPrefix: []byte{0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xFE, 0xFF}, outputPrefix: []byte{0xFE, 0xFF}, outputPrefixIncr: []byte{0xFF}},
+		{input: []byte{0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFF}, outputPrefixIncr: nil},
+		{input: []byte{0xAB, 0xCD}, outputPrefix: []byte{0xAB, 0xCD}, outputPrefixIncr: []byte{0xAB, 0xCE}},
+		{input: []byte{0x1E, 0xFF, 0xFF}, outputPrefix: []byte{0x1E, 0xFF, 0xFF}, outputPrefixIncr: []byte{0x1F}},
+		{input: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefixIncr: []byte{0xFF, 0xFF}},
+		{input: []byte{0x00, 0xFF}, outputPrefix: []byte{0x00, 0xFF}, outputPrefixIncr: []byte{0x01}},
+		{input: []byte(string("bx:123")), outputPrefix: []byte(string("bx:123")), outputPrefixIncr: []byte(string("bx:124"))},
+		{input: []byte{}, outputPrefix: []byte{}, outputPrefixIncr: nil},
+		{input: nil, outputPrefix: []byte{}, outputPrefixIncr: nil},
+		{input: []byte{0x1E, 0xFF, 0xFF}, outputPrefix: []byte{0x1E, 0xFF, 0xFF}, outputPrefixIncr: []byte{0x1F}},
+		{input: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefix: []byte{0xFF, 0xFE, 0xFF, 0xFF}, outputPrefixIncr: []byte{0xFF, 0xFF}},
+		{input: []byte{0x00, 0xFF}, outputPrefix: []byte{0x00, 0xFF}, outputPrefixIncr: []byte{0x01}},
+	}
+	for _, tc := range testCases {
+		actualOutputPrefix, actualOutputPrefixIncr := keyPrefixIntervalPreprocessing(tc.input)
+		require.Equal(t, tc.outputPrefix, actualOutputPrefix)
+		require.Equal(t, tc.outputPrefixIncr, actualOutputPrefixIncr)
+	}
+}
+
+func TestLookupKeysByPrefix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dbs, fn := dbOpenTest(t, false)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(t, err)
+	defer qs.close()
+
+	kvPairDBPrepareSet := []struct {
+		key   []byte
+		value []byte
+	}{
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}, value: []byte("val0")},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}, value: []byte("val1")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}, value: []byte("val2")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}, value: []byte("val3")},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, value: []byte("val4")},
+		{key: []byte{0xFF, 0xFE, 0xFF}, value: []byte("val5")},
+		{key: []byte{0xFF, 0xFF, 0x00, 0xFF, 0xFF}, value: []byte("val6")},
+		{key: []byte{0xFF, 0xFF}, value: []byte("should not confuse with 0xFF-0xFE")},
+		{key: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF}, value: []byte("baddadffff")},
+		{key: []byte{0xBA, 0xDD, 0xAE, 0x00}, value: []byte("baddae00")},
+		{key: []byte{0xBA, 0xDD, 0xAE}, value: []byte("baddae")},
+		{key: []byte("TACOCAT"), value: []byte("val6")},
+		{key: []byte("TACOBELL"), value: []byte("2bucks50cents?")},
+		{key: []byte("DingHo-SmallPack"), value: []byte("3bucks75cents")},
+		{key: []byte("DingHo-StandardPack"), value: []byte("5bucks25cents")},
+		{key: []byte("BostonKitchen-CheeseSlice"), value: []byte("3bucks50cents")},
+		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+
+	// writer is only for kvstore
+	writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < len(kvPairDBPrepareSet); i++ {
+		err := writer.upsertKvPair(string(kvPairDBPrepareSet[i].key), kvPairDBPrepareSet[i].value)
+		require.NoError(t, err)
+	}
+
+	err = tx.Commit()
+	require.NoError(t, err)
+	writer.close()
+
+	testCases := []struct {
+		prefix        []byte
+		expectedNames [][]byte
+		err           string
+	}{
+		{
+			prefix: []byte{0xFF},
+			err:    "strange prefix",
+		},
+		{
+			prefix: []byte{0xFF, 0xFE},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFE, 0xFF},
+			expectedNames: [][]byte{
+				{0xFF, 0xFE, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xFF, 0xFF},
+			err:    "strange prefix",
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF},
+			err:    "strange prefix",
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF},
+			err:    "strange prefix",
+		},
+		{
+			prefix: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			err:    "strange prefix",
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAD, 0xFF},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAE},
+				{0xBA, 0xDD, 0xAE, 0x00},
+				{0xBA, 0xDD, 0xAD, 0xFF, 0xFF},
+			},
+		},
+		{
+			prefix: []byte{0xBA, 0xDD, 0xAE},
+			expectedNames: [][]byte{
+				{0xBA, 0xDD, 0xAE},
+				{0xBA, 0xDD, 0xAE, 0x00},
+			},
+		},
+		{
+			prefix: []byte("TACO"),
+			expectedNames: [][]byte{
+				[]byte("TACOCAT"),
+				[]byte("TACOBELL"),
+			},
+		},
+		{
+			prefix:        []byte("TACOC"),
+			expectedNames: [][]byte{[]byte("TACOCAT")},
+		},
+		{
+			prefix: []byte("DingHo"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix: []byte("DingHo-S"),
+			expectedNames: [][]byte{
+				[]byte("DingHo-SmallPack"),
+				[]byte("DingHo-StandardPack"),
+			},
+		},
+		{
+			prefix:        []byte("DingHo-Small"),
+			expectedNames: [][]byte{[]byte("DingHo-SmallPack")},
+		},
+		{
+			prefix:        []byte("BostonKitchen"),
+			expectedNames: [][]byte{[]byte("BostonKitchen-CheeseSlice")},
+		},
+		{
+			prefix:        []byte(`™£´´∂ƒ∂ƒßƒ©`),
+			expectedNames: [][]byte{[]byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
+		},
+		{
+			prefix: []byte{},
+			err:    "strange prefix",
+		},
+	}
+
+	for index, testCase := range testCases {
+		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
+			actual := make(map[string]bool)
+			_, err := qs.lookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
+			if err != nil {
+				require.NotEmpty(t, testCase.err, testCase.prefix)
+				require.Contains(t, err.Error(), testCase.err)
+			} else {
+				require.Empty(t, testCase.err)
+				expected := make(map[string]bool)
+				for _, name := range testCase.expectedNames {
+					expected[string(name)] = true
+				}
+				require.Equal(t, actual, expected)
+			}
+		})
+	}
+}
+
+func BenchmarkLookupKeyByPrefix(b *testing.B) {
+	// learn something from BenchmarkWritingRandomBalancesDisk
+
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, false)
+
+	// return account data, initialize DB tables from accountsInitTest
+	_ = benchmarkInitBalances(b, 1, dbs, protocol.ConsensusCurrentVersion)
+
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(b, err)
+	defer qs.close()
+
+	currentDBSize := 0
+	nextDBSize := 2
+	increment := 2
+
+	nameBuffer := make([]byte, 5)
+	valueBuffer := make([]byte, 5)
+
+	// from 2^1 -> 2^2 -> ... -> 2^22 sized DB
+	for bIndex := 0; bIndex < 22; bIndex++ {
+		// make writer to DB
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+
+		// writer is only for kvstore
+		writer, err := makeAccountsSQLWriter(tx, true, true, true, true)
+		if err != nil {
+			return
+		}
+
+		var prefix string
+		// how to write to dbs a bunch of stuffs?
+		for i := 0; i < nextDBSize-currentDBSize; i++ {
+			crypto.RandBytes(nameBuffer)
+			crypto.RandBytes(valueBuffer)
+			appID := basics.AppIndex(crypto.RandUint64())
+			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
+			err = writer.upsertKvPair(boxKey, valueBuffer)
+			require.NoError(b, err)
+
+			if i == 0 {
+				prefix = logic.MakeBoxKey(appID, "")
+			}
+		}
+		err = tx.Commit()
+		require.NoError(b, err)
+		writer.close()
+
+		// benchmark the query against large DB, see if we have O(log N) speed
+		currentDBSize = nextDBSize
+		nextDBSize *= increment
+
+		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				results := make(map[string]bool)
+				_, err := qs.lookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+				require.NoError(b, err)
+				require.True(b, len(results) >= 1)
+			}
 		})
 	}
 }
@@ -1282,6 +1573,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 
 func TestResourcesDataApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1326,161 +1618,176 @@ func TestResourcesDataApp(t *testing.T) {
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check empty states + non-empty params
-	appParams := ledgertesting.RandomAppParams()
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+	// Since some steps use randomly generated input, the test is run N times
+	// to cover a larger search space of inputs.
+	for i := 0; i < 1000; i++ {
+		// check empty states + non-empty params
+		appParams := ledgertesting.RandomAppParams()
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	appState := ledgertesting.RandomAppLocalState()
-	rd.SetAppLocalState(appState)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appState, rd.GetAppLocalState())
+		appState := ledgertesting.RandomAppLocalState()
+		rd.SetAppLocalState(appState)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appState, rd.GetAppLocalState())
 
-	// check ClearAppLocalState
-	rd.ClearAppLocalState()
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParams, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check ClearAppLocalState
+		rd.ClearAppLocalState()
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParams, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check ClearAppParams
-	rd.SetAppLocalState(appState)
-	rd.ClearAppParams()
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appState, rd.GetAppLocalState())
+		// check ClearAppParams
+		rd.SetAppLocalState(appState)
+		rd.ClearAppParams()
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appState, rd.GetAppLocalState())
 
-	// check both clear
-	rd.ClearAppLocalState()
-	a.False(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check both clear
+		rd.ClearAppLocalState()
+		a.False(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	// check params clear when non-empty params and empty holding
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	rd.ClearAppParams()
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
-	a.Equal(appParamsEmpty, rd.GetAppParams())
-	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+		// check params clear when non-empty params and empty holding
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		rd.ClearAppParams()
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
+		a.Equal(appParamsEmpty, rd.GetAppParams())
+		a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
-	rd = resourcesData{}
-	rd.SetAppLocalState(appLocalEmpty)
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsApp())
-	a.False(rd.IsEmpty())
-	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
-	rd.ClearAppLocalState()
-	a.False(rd.IsApp())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+		rd = resourcesData{}
+		rd.SetAppLocalState(appLocalEmpty)
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsApp())
+		a.False(rd.IsEmpty())
+		a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
+		rd.ClearAppLocalState()
+		a.False(rd.IsApp())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+		a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 
-	// check migration flow (accountDataResources)
-	// 1. both exist and empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParamsEmpty, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// check migration flow (accountDataResources)
+		// 1. both exist and empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParamsEmpty, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 2. both exist and not empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 2. both exist and not empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 3. both exist: holding not empty, param is empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	rd.SetAppParams(appParamsEmpty, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 3. both exist: holding not empty, param is empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		rd.SetAppParams(appParamsEmpty, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
 
-	// 4. both exist: holding empty, param is not empty
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appLocalEmpty)
-	rd.SetAppParams(appParams, true)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 4. both exist: holding empty, param is not empty
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appLocalEmpty)
+		rd.SetAppParams(appParams, true)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.True(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 5. holding does not exist and params is empty
-	rd = makeResourcesData(0)
-	rd.SetAppParams(appParamsEmpty, false)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 5. holding does not exist and params is empty
+		rd = makeResourcesData(0)
+		rd.SetAppParams(appParamsEmpty, false)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 6. holding does not exist and params is not empty
-	rd = makeResourcesData(0)
-	rd.SetAppParams(appParams, false)
-	a.True(rd.IsApp())
-	a.True(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 6. holding does not exist and params is not empty
+		rd = makeResourcesData(0)
+		rd.SetAppParams(appParams, false)
+		a.True(rd.IsApp())
+		a.True(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.False(rd.IsEmptyAppFields())
+		a.False(rd.IsEmpty())
 
-	// 7. holding exist and not empty and params does not exist
-	rd = makeResourcesData(0)
-	rd.SetAppLocalState(appState)
-	a.True(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAppFields())
-	a.False(rd.IsEmpty())
+		// 7. holding exist and not empty and params does not exist
+		rd = makeResourcesData(0)
+		rd.SetAppLocalState(appState)
+		a.True(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.True(rd.IsHolding())
+		if appState.Schema.NumEntries() == 0 {
+			a.True(rd.IsEmptyAppFields())
+		} else {
+			a.False(rd.IsEmptyAppFields())
+		}
+		a.False(rd.IsEmpty())
 
-	// 8. both do not exist
-	rd = makeResourcesData(0)
-	a.False(rd.IsApp())
-	a.False(rd.IsOwning())
-	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAppFields())
-	a.True(rd.IsEmpty())
-
+		// 8. both do not exist
+		rd = makeResourcesData(0)
+		a.False(rd.IsApp())
+		a.False(rd.IsOwning())
+		a.False(rd.IsHolding())
+		a.True(rd.IsEmptyAppFields())
+		a.True(rd.IsEmpty())
+	}
 }
 
 func TestResourcesDataAsset(t *testing.T) {
@@ -2334,7 +2641,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
 		zeros32 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"TotalBoxes":0,"TotalBoxBytes":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -2551,6 +2858,8 @@ type mockAccountWriter struct {
 	rowids    map[int64]basics.Address
 	resources map[mockResourcesKey]ledgercore.AccountResource
 
+	kvStore map[string][]byte
+
 	lastRowid   int64
 	availRowIds []int64
 }
@@ -2739,6 +3048,16 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 	}
 	m.resources[key] = new
 	return 1, nil
+}
+
+func (m *mockAccountWriter) upsertKvPair(key string, value []byte) error {
+	m.kvStore[key] = value
+	return nil
+}
+
+func (m *mockAccountWriter) deleteKvPair(key string) error {
+	delete(m.kvStore, key)
+	return nil
 }
 
 func (m *mockAccountWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
@@ -2984,12 +3303,13 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
-				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
+				updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
+					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
-				a.Equal(3, len(updatedAccounts))
-				a.Equal(3, len(updatedResources))
+				a.Len(updatedAccounts, 3)
+				a.Len(updatedResources, 3)
+				a.Empty(updatedKVs)
 			})
 		}
 	}
@@ -3066,12 +3386,13 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
-	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+	updatedAccounts, updatedResources, updatedKVs, err := accountsNewRoundImpl(
+		&mock, acctDeltas, resDeltas, nil, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))
 	a.Equal(2, len(updatedResources))
+	a.Equal(0, len(updatedKVs))
 
 	// one deletion entry for pre-existing account addr1, and one entry for in-memory account addr2
 	// in base accounts updates and in resources updates
@@ -3095,6 +3416,155 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	}
 }
 
+func BenchmarkLRUResources(b *testing.B) {
+	var baseResources lruResources
+	baseResources.init(nil, 1000, 850)
+
+	var data persistedResourcesData
+	var has bool
+	addrs := make([]basics.Address, 850)
+	for i := 0; i < 850; i++ {
+		data.data.ApprovalProgram = make([]byte, 8096*4)
+		data.aidx = basics.CreatableIndex(1)
+		addrBytes := ([]byte(fmt.Sprintf("%d", i)))[:32]
+		var addr basics.Address
+		for i, b := range addrBytes {
+			addr[i] = b
+		}
+		addrs[i] = addr
+		baseResources.write(data, addr)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pos := i % 850
+		data, has = baseResources.read(addrs[pos], basics.CreatableIndex(1))
+		require.True(b, has)
+	}
+}
+
+func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), error) {
+	batchCount := 100
+	if batchCount > totalBoxes {
+		batchCount = 1
+	}
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, false)
+	setDbLogging(b, dbs)
+	cleanup := func() {
+		cleanupTestDb(dbs, fn, false)
+	}
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(b, err)
+	_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
+	require.NoError(b, err)
+	err = tx.Commit()
+	require.NoError(b, err)
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+	require.NoError(b, err)
+
+	cnt := 0
+	for batch := 0; batch <= batchCount; batch++ {
+		tx, err = dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+		writer, err := makeAccountsSQLWriter(tx, false, false, true, false)
+		require.NoError(b, err)
+		for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
+			err = writer.upsertKvPair(fmt.Sprintf("%d", cnt), make([]byte, boxSize))
+			require.NoError(b, err)
+			cnt++
+		}
+
+		err = tx.Commit()
+		require.NoError(b, err)
+		writer.close()
+	}
+	err = dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+	return dbs, cleanup, err
+}
+
+func BenchmarkBoxDatabaseRead(b *testing.B) {
+	getBoxNamePermutation := func(totalBoxes int) []int {
+		rand.Seed(time.Now().UnixNano())
+		boxNames := make([]int, totalBoxes)
+		for i := 0; i < totalBoxes; i++ {
+			boxNames[i] = i
+		}
+		rand.Shuffle(len(boxNames), func(x, y int) { boxNames[x], boxNames[y] = boxNames[y], boxNames[x] })
+		return boxNames
+	}
+
+	boxCnt := []int{10, 1000, 100000}
+	boxSizes := []int{2, 2048, 4 * 8096}
+	for _, totalBoxes := range boxCnt {
+		for _, boxSize := range boxSizes {
+			b.Run(fmt.Sprintf("totalBoxes=%d/boxSize=%d", totalBoxes, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
+				var v sql.NullString
+				for i := 0; i < b.N; i++ {
+					var pv persistedKVData
+					boxName := boxNames[i%totalBoxes]
+					b.StartTimer()
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					b.StopTimer()
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+				}
+
+				cleanup()
+			})
+		}
+	}
+
+	// test caching performance
+	lookbacks := []int{1, 32, 256, 2048}
+	for _, lookback := range lookbacks {
+		for _, boxSize := range boxSizes {
+			totalBoxes := 100000
+
+			b.Run(fmt.Sprintf("lookback=%d/boxSize=%d", lookback, boxSize), func(b *testing.B) {
+				b.StopTimer()
+
+				dbs, cleanup, err := initBoxDatabase(b, totalBoxes, boxSize)
+				require.NoError(b, err)
+
+				boxNames := getBoxNamePermutation(totalBoxes)
+				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+				require.NoError(b, err)
+				var v sql.NullString
+				for i := 0; i < b.N+lookback; i++ {
+					var pv persistedKVData
+					boxName := boxNames[i%totalBoxes]
+					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+					require.NoError(b, err)
+					require.True(b, v.Valid)
+
+					// benchmark reading the potentially cached value that was read lookback boxes ago
+					if i >= lookback {
+						boxName = boxNames[(i-lookback)%totalBoxes]
+						b.StartTimer()
+						err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.round, &v)
+						b.StopTimer()
+						require.NoError(b, err)
+						require.True(b, v.Valid)
+					}
+				}
+
+				cleanup()
+			})
+		}
+	}
+}
+
 // TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
 // from the history table.
 // Start with two online accounts A, B at round 1
@@ -3103,11 +3573,11 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 //
 // addr | rnd | status
 // -----|-----|--------
-//    A |   1 |      1
-//    B |   1 |      1
-//    A |   2 |      0
-//    B |   3 |      0
-//    C |   3 |      1
+// A    |  1  |    1
+// B    |  1  |    1
+// A    |  2  |    0
+// B    |  3  |    0
+// C    |  3  |    1
 //
 // Ensure
 // - for round 1 A and B returned
@@ -3215,7 +3685,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
+		updatedAccts, _, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 
@@ -4119,4 +4589,123 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			require.True(t, ba.StateProofID.IsEmpty())
 		}
 	}
+}
+
+func TestEncodedBaseAccountDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	vd := baseVotingData{
+		VoteFirstValid:  basics.Round(crypto.RandUint64()),
+		VoteLastValid:   basics.Round(crypto.RandUint64()),
+		VoteKeyDilution: crypto.RandUint64(),
+	}
+	crypto.RandBytes(vd.VoteID[:])
+	crypto.RandBytes(vd.StateProofID[:])
+	crypto.RandBytes(vd.SelectionID[:])
+
+	baseAD := baseAccountData{
+		Status:                     basics.Online,
+		MicroAlgos:                 basics.MicroAlgos{Raw: crypto.RandUint64()},
+		RewardsBase:                crypto.RandUint64(),
+		RewardedMicroAlgos:         basics.MicroAlgos{Raw: crypto.RandUint64()},
+		AuthAddr:                   ledgertesting.RandomAddress(),
+		TotalAppSchemaNumUint:      crypto.RandUint64(),
+		TotalAppSchemaNumByteSlice: crypto.RandUint64(),
+		TotalExtraAppPages:         uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		TotalAssetParams:           crypto.RandUint64(),
+		TotalAssets:                crypto.RandUint64(),
+		TotalAppParams:             crypto.RandUint64(),
+		TotalAppLocalStates:        crypto.RandUint64(),
+		baseVotingData:             vd,
+		UpdateRound:                crypto.RandUint64(),
+	}
+
+	encoded := baseAD.MarshalMsg(nil)
+	require.GreaterOrEqual(t, MaxEncodedBaseAccountDataSize, len(encoded))
+}
+
+func TestEncodedBaseResourceSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// resourcesData is suiteable for keeping asset params, holding, app params, app local state
+	// but only asset + holding or app + local state can appear there
+	rdAsset := resourcesData{
+		Total:         crypto.RandUint64(),
+		Decimals:      uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		DefaultFrozen: true,
+		// MetadataHash
+		UnitName:  makeString(currentConsensusParams.MaxAssetUnitNameBytes),
+		AssetName: makeString(currentConsensusParams.MaxAssetNameBytes),
+		URL:       makeString(currentConsensusParams.MaxAssetURLBytes),
+		Manager:   ledgertesting.RandomAddress(),
+		Reserve:   ledgertesting.RandomAddress(),
+		Freeze:    ledgertesting.RandomAddress(),
+		Clawback:  ledgertesting.RandomAddress(),
+
+		Amount: crypto.RandUint64(),
+		Frozen: true,
+	}
+	crypto.RandBytes(rdAsset.MetadataHash[:])
+
+	rdApp := resourcesData{
+
+		SchemaNumUint:      crypto.RandUint64(),
+		SchemaNumByteSlice: crypto.RandUint64(),
+		// KeyValue
+
+		// ApprovalProgram
+		// ClearStateProgram
+		// GlobalState
+		LocalStateSchemaNumUint:       crypto.RandUint64(),
+		LocalStateSchemaNumByteSlice:  crypto.RandUint64(),
+		GlobalStateSchemaNumUint:      crypto.RandUint64(),
+		GlobalStateSchemaNumByteSlice: crypto.RandUint64(),
+		ExtraProgramPages:             uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+
+		ResourceFlags: 255,
+		UpdateRound:   crypto.RandUint64(),
+	}
+
+	// MaxAvailableAppProgramLen is conbined size of approval and clear state since it is bound by proto.MaxAppTotalProgramLen
+	rdApp.ApprovalProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	crypto.RandBytes(rdApp.ApprovalProgram)
+	rdApp.ClearStateProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	crypto.RandBytes(rdApp.ClearStateProgram)
+
+	maxGlobalState := make(basics.TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
+	for globalKey := uint64(0); globalKey < currentConsensusParams.MaxGlobalSchemaEntries; globalKey++ {
+		prefix := fmt.Sprintf("%d|", globalKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxValue := basics.TealValue{
+			Type:  basics.TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
+		maxGlobalState[maxKey] = maxValue
+	}
+
+	maxLocalState := make(basics.TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
+	for localKey := uint64(0); localKey < currentConsensusParams.MaxLocalSchemaEntries; localKey++ {
+		prefix := fmt.Sprintf("%d|", localKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxValue := basics.TealValue{
+			Type:  basics.TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
+		maxLocalState[maxKey] = maxValue
+	}
+
+	rdApp.GlobalState = maxGlobalState
+	rdApp.KeyValue = maxLocalState
+
+	encodedAsset := rdAsset.MarshalMsg(nil)
+	encodedApp := rdApp.MarshalMsg(nil)
+
+	require.Less(t, len(encodedAsset), len(encodedApp))
+	require.GreaterOrEqual(t, MaxEncodedBaseResourceDataSize, len(encodedApp))
 }

@@ -180,13 +180,6 @@ func TestSyncRound(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
 	c, rec = newReq(t)
-	// TestSetSyncRound 400 SyncModeNotEnabled
-	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncModeNotEnabled)
-	err = handler.SetSyncRound(c, 0)
-	require.NoError(t, err)
-	require.Equal(t, 400, rec.Code)
-	mockCall.Unset()
-	c, rec = newReq(t)
 	// TestSetSyncRound 400 SyncRoundInvalid
 	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncRoundInvalid)
 	err = handler.SetSyncRound(c, 0)
@@ -201,13 +194,6 @@ func TestSyncRound(t *testing.T) {
 	require.Equal(t, 500, rec.Code)
 	c, rec = newReq(t)
 
-	// TestGetSyncRound 400 SyncModeNotEnabled
-	mockCall = mockNode.On("GetSyncRound").Return(false, 0, catchup.ErrSyncModeNotEnabled)
-	err = handler.GetSyncRound(c)
-	require.NoError(t, err)
-	require.Equal(t, 400, rec.Code)
-	mockCall.Unset()
-	c, rec = newReq(t)
 	// TestGetSyncRound 200
 	mockCall = mockNode.On("GetSyncRound").Return(true, 2, nil)
 	err = handler.GetSyncRound(c)
@@ -222,13 +208,6 @@ func TestSyncRound(t *testing.T) {
 	require.Equal(t, 500, rec.Code)
 	c, rec = newReq(t)
 
-	// TestUnsetSyncRound 400 SyncModeNotEnabled
-	mockCall = mockNode.On("UnsetSyncRound").Return(catchup.ErrSyncModeNotEnabled)
-	err = handler.UnsetSyncRound(c)
-	require.NoError(t, err)
-	require.Equal(t, 400, rec.Code)
-	mockCall.Unset()
-	c, rec = newReq(t)
 	// TestUnsetSyncRound 200
 	mockCall = mockNode.On("UnsetSyncRound").Return(nil)
 	err = handler.UnsetSyncRound(c)

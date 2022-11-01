@@ -45,9 +45,6 @@ const blockQueryPeerLimit = 10
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
-// ErrSyncModeNotEnabled is returned by "SyncRound" APIs when EnableSyncMode is false
-var ErrSyncModeNotEnabled = errors.New("attempted to set sync round for catchup service when EnableSyncMode was disabled")
-
 // ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
 var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
 
@@ -160,9 +157,6 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 
 // SetSyncRound attempts to set the minimum sync round to keep in the cache
 func (s *Service) SetSyncRound(rnd uint64) error {
-	if !s.cfg.EnableSyncMode {
-		return ErrSyncModeNotEnabled
-	}
 	if basics.Round(rnd) < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
@@ -175,9 +169,6 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 
 // UnsetSyncRound removes any previously set sync round TODO do we need this?
 func (s *Service) UnsetSyncRound() error {
-	if !s.cfg.EnableSyncMode {
-		return ErrSyncModeNotEnabled
-	}
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
 	s.syncRoundSet = false
@@ -186,9 +177,6 @@ func (s *Service) UnsetSyncRound() error {
 
 // GetSyncRound returns whether a round has been previously set, the minimum sync round, and an error
 func (s *Service) GetSyncRound() (bool, uint64, error) {
-	if !s.cfg.EnableSyncMode {
-		return false, 0, ErrSyncModeNotEnabled
-	}
 	s.syncRoundMu.RLock()
 	defer s.syncRoundMu.RUnlock()
 	return s.syncRoundSet, s.syncRound, nil

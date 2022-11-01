@@ -73,6 +73,8 @@ type Handlers struct {
 type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
+	LookupKv(round basics.Round, key string) ([]byte, error)
+	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -368,7 +370,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
-			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
+			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
 			extraData := map[string]interface{}{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,
@@ -473,6 +475,8 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
 		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+		TotalBoxes:          numOrNil(record.TotalBoxes),
+		TotalBoxBytes:       numOrNil(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
 	}
 	response := generated.AccountResponse(account)
@@ -950,12 +954,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
 	err := v2.Node.UnsetSyncRound()
 	if err != nil {
-		switch err {
-		case catchup.ErrSyncModeNotEnabled:
-			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
-		default:
-			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
-		}
+		return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
 	}
 	return ctx.NoContent(http.StatusOK)
 }
@@ -966,8 +965,6 @@ func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
 	err := v2.Node.SetSyncRound(round)
 	if err != nil {
 		switch err {
-		case catchup.ErrSyncModeNotEnabled:
-			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
 		case catchup.ErrSyncRoundInvalid:
 			return badRequest(ctx, err, errFailedSettingSyncRound, v2.Log)
 		default:
@@ -982,12 +979,7 @@ func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
 func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	set, rnd, err := v2.Node.GetSyncRound()
 	if err != nil {
-		switch err {
-		case catchup.ErrSyncModeNotEnabled:
-			return badRequest(ctx, err, errSyncModeNotEnabled, v2.Log)
-		default:
-			return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
-		}
+		return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
 	}
 	if !set {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
@@ -1413,6 +1405,97 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	appParams := *record.AppParams
 	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
 	response := generated.ApplicationResponse(app)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
+	if requestedMax == 0 {
+		if algodMax == 0 {
+			return math.MaxUint64 // unlimited results when both requested and algod max are 0
+		}
+		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+	}
+
+	if requestedMax <= algodMax || algodMax == 0 {
+		return requestedMax // requested limit dominates
+	}
+
+	return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+}
+
+// GetApplicationBoxes returns the box names of an application
+// (GET /v2/applications/{application-id}/boxes)
+func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxesParams) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.LedgerForAPI()
+	lastRound := ledger.Latest()
+	keyPrefix := logic.MakeBoxKey(appIdx, "")
+
+	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
+	max := applicationBoxesMaxKeys(requestedMax, algodMax)
+
+	if max != math.MaxUint64 {
+		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		if record.TotalBoxes > max {
+			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data: &map[string]interface{}{
+					"max-api-box-per-application": algodMax,
+					"max":                         requestedMax,
+					"total-boxes":                 record.TotalBoxes,
+				},
+			})
+		}
+	}
+
+	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+	responseBoxes := make([]generated.BoxDescriptor, len(boxKeys))
+	for i, boxKey := range boxKeys {
+		responseBoxes[i] = generated.BoxDescriptor{
+			Name: []byte(boxKey[prefixLen:]),
+		}
+	}
+	response := generated.BoxesResponse{Boxes: responseBoxes}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetApplicationBoxByName returns the value of an application's box
+// (GET /v2/applications/{application-id}/box)
+func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxByNameParams) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.LedgerForAPI()
+	lastRound := ledger.Latest()
+
+	encodedBoxName := params.Name
+	boxNameBytes, err := logic.NewAppCallBytes(encodedBoxName)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	boxName, err := boxNameBytes.Raw()
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, string(boxName)))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if value == nil {
+		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
+	}
+
+	response := generated.BoxResponse{
+		Name:  boxName,
+		Value: value,
+	}
 	return ctx.JSON(http.StatusOK, response)
 }
 
