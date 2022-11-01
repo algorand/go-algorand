@@ -457,7 +457,7 @@ func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
 
-// UnverifiedElement is the element passed the Stream verifier
+// UnverifiedElement is the element passed to the Stream verifier
 // Context is a reference associated with the txn group which is passed
 // with the result
 type UnverifiedElement struct {

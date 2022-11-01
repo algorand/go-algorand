@@ -47,9 +47,6 @@ var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessages
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 
-// verifierStreamBufferSize is the number of txn that coult be accumulated before the verifier stream consumes them
-var verifierStreamBufferSize = 0
-
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
 	rawmsg            *network.IncomingMessage // the raw message from the network
@@ -97,8 +94,8 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		streamVerifierChan:    make(chan verify.UnverifiedElement, verifierStreamBufferSize),
-		streamReturnChan:      make(chan verify.VerificationResult, verifierStreamBufferSize),
+		streamVerifierChan:    make(chan verify.UnverifiedElement, 0),
+		streamReturnChan:      make(chan verify.VerificationResult, 0),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
