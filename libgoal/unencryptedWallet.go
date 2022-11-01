@@ -32,7 +32,7 @@ var UnencryptedWalletName = []byte("unencrypted-default-wallet")
 func (c *Client) SendPaymentFromUnencryptedWallet(from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
 	wh, err := c.GetUnencryptedWalletHandle()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	return c.SendPaymentFromWallet(wh, nil, from, to, fee, amount, note, "", 0, 0)

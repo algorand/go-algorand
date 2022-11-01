@@ -1120,7 +1120,7 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 	// Fetch the required key
 	var sk crypto.PrivateKey
 	if (pk == crypto.PublicKey{}) {
-		sk, err = sw.fetchSecretKey(crypto.Digest(tx.Src()))
+		sk, err = sw.fetchSecretKey(crypto.Digest((*tx).Src()))
 	} else {
 		sk, err = sw.fetchSecretKey(crypto.Digest(pk))
 	}
@@ -1136,7 +1136,7 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 	}
 
 	// Sign the transaction
-	stxn := tx.Sign(secrets)
+	stxn := (*tx).Sign(secrets)
 	stx = protocol.Encode(&stxn)
 	return
 }
@@ -1185,7 +1185,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 		// Look up the preimage in the database
 		var pks []crypto.PublicKey
 		var version, threshold uint8
-		version, threshold, pks, err = sw.LookupMultisigPreimage(crypto.Digest(tx.Src()))
+		version, threshold, pks, err = sw.LookupMultisigPreimage(crypto.Digest((*tx).Src()))
 		if err != nil {
 			return
 		}
@@ -1206,8 +1206,8 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 		}
 
 		// Sign the transaction
-		from := crypto.Digest(tx.Src())
-		sig, err = crypto.MultisigSign(tx, from, version, threshold, pks, *secrets)
+		from := crypto.Digest((*tx).Src())
+		sig, err = crypto.MultisigSign(*tx, from, version, threshold, pks, *secrets)
 		return
 	}
 
@@ -1221,7 +1221,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	}
 
 	// Check that the multisig address equals to either sender or signer
-	if addr != crypto.Digest(tx.Src()) && addr != signer {
+	if addr != crypto.Digest((*tx).Src()) && addr != signer {
 		err = errMsigWrongAddr
 		return
 	}
@@ -1252,7 +1252,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	msig2, err := crypto.MultisigSign(tx, addr, version, threshold, pks, *secrets)
+	msig2, err := crypto.MultisigSign(*tx, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return
 	}

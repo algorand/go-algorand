@@ -447,7 +447,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 }
 
 func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions.Transaction, client *libgoal.Client) (txID string, err error) {
-	signedTx := tx.Sign(senderAccount.sk)
+	signedTx := (*tx).Sign(senderAccount.sk)
 	txID, err = client.BroadcastTransaction(signedTx)
 	if err != nil {
 		fmt.Printf("Cannot broadcast transaction %+v\nerror %v \n", signedTx, err)
@@ -698,7 +698,7 @@ func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client *
 	stxgroup := make([]transactions.SignedTxn, len(txgroup))
 	for i, txn := range txgroup {
 		txn.Group = gid
-		stxgroup[i] = txn.Sign(pps.accounts[senders[i]].sk)
+		stxgroup[i] = (*txn).Sign(pps.accounts[senders[i]].sk)
 	}
 repeat:
 	broadcastErr := client.BroadcastTransactionGroup(stxgroup)

@@ -482,7 +482,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 		// changes from this app and any inner called apps. Instead, we now keep
 		// the EvalDelta built as we go, in app evaluation.  So just use it.
 		if cb.proto.LogicSigVersion < 6 {
-			evalDelta, err = calf.buildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
+			evalDelta, err = calf.buildEvalDelta(aidx, params.TxnGroup[gi].Txn)
 			if err != nil {
 				return false, transactions.EvalDelta{}, err
 			}
@@ -499,7 +499,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 
 // buildEvalDelta creates an EvalDelta by converting internal sdeltas
 // into the (Global|Local)Delta fields.
-func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
+func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {
@@ -531,7 +531,7 @@ func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn *transactions.
 				if cb.compatibilityMode {
 					addrOffset = sdelta.accountIdx
 				} else {
-					addrOffset, err = txn.IndexByAddress(addr, txn.Sender)
+					addrOffset, err = (*txn).IndexByAddress(addr, txn.Sender)
 					if err != nil {
 						return transactions.EvalDelta{}, err
 					}

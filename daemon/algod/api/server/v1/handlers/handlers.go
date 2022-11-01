@@ -70,9 +70,9 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 		return err
 	}
 	if txs.ConfirmedRound != basics.Round(0) {
-		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String(), txs.ConfirmedRound)
+		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, (*txs.Txn.Txn).ID().String(), txs.ConfirmedRound)
 	}
-	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String())
+	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, (*txs.Txn.Txn).ID().String())
 }
 
 // txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
@@ -100,12 +100,12 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	}
 
 	res.Type = string(tx.Type)
-	res.TxID = tx.ID().String()
-	res.From = tx.Src().String()
-	res.Fee = tx.TxFee().Raw
-	res.FirstRound = uint64(tx.First())
-	res.LastRound = uint64(tx.Last())
-	res.Note = tx.Aux()
+	res.TxID = (*tx).ID().String()
+	res.From = (*tx).Src().String()
+	res.Fee = (*tx).TxFee().Raw
+	res.FirstRound = uint64((*tx).First())
+	res.LastRound = uint64((*tx).Last())
+	res.Note = (*tx).Aux()
 	res.FromRewards = ad.SenderRewards.Raw
 	res.GenesisID = tx.GenesisID
 	res.GenesisHash = tx.GenesisHash[:]
@@ -124,7 +124,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 func paymentTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
-		Amount:       tx.TxAmount().Raw,
+		Amount:       (*tx).TxAmount().Raw,
 		ToRewards:    ad.ReceiverRewards.Raw,
 		CloseRewards: ad.CloseRewards.Raw,
 	}
@@ -377,7 +377,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
-		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+		if (*tx.Txn.Txn).ID() == (*stxnib.Txn).ID() {
 			offset = idx
 			break
 		}

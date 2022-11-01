@@ -70,7 +70,7 @@ var signCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			stxn.Sig = key.Sign(stxn.Txn)
+			stxn.Sig = key.Sign(*stxn.Txn)
 			if stxn.Txn.Sender != basics.Address(key.SignatureVerifier) {
 				stxn.AuthAddr = basics.Address(key.SignatureVerifier)
 			}

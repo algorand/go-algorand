@@ -91,7 +91,7 @@ var multisigCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			stxn.Msig, err = crypto.MultisigSign(stxn.Txn, addr, ver, thresh, pks, *key)
+			stxn.Msig, err = crypto.MultisigSign(*stxn.Txn, addr, ver, thresh, pks, *key)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Cannot add multisig signature: %v\n", err)
 				os.Exit(1)

@@ -154,7 +154,7 @@ func (part Participation) StateProofVerifier() *merklesignature.Verifier {
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
 func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, includeStateProofKeys bool) transactions.Transaction {
-	t := transactions.Transaction{
+	t := transactions.TransactionVal{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:     part.Parent,
@@ -176,7 +176,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
 	t.KeyregTxnFields.VoteLast = part.LastValid
 	t.KeyregTxnFields.VoteKeyDilution = part.KeyDilution
-	return t
+	return &t
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.

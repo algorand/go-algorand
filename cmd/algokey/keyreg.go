@@ -216,7 +216,7 @@ func run(params keyregCmdParams) error {
 			part.StateProofSecrets != nil)
 	} else {
 		// Generate go-offline transaction
-		txn = transactions.Transaction{
+		txn = &transactions.TransactionVal{
 			Type: protocol.KeyRegistrationTx,
 			Header: transactions.Header{
 				Sender:     accountAddress,

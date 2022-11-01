@@ -2505,7 +2505,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 func (cx *EvalContext) currentTxID() transactions.Txid {
 	if cx.Proto.UnifyInnerTxIDs {
 		// can't just return cx.txn.ID() because I might be an inner txn
-		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+		return cx.getTxID(cx.txn.Txn, cx.groupIndex, false)
 	}
 
 	// original behavior, for backwards comatability
@@ -2514,7 +2514,7 @@ func (cx *EvalContext) currentTxID() transactions.Txid {
 
 // getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
 // is false. DO NOT call directly, and DO NOT change its behavior
-func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+func (cx *EvalContext) getTxIDNotUnified(txn transactions.Transaction, groupIndex int) transactions.Txid {
 	if cx.EvalParams.txidCache == nil {
 		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
@@ -2523,9 +2523,9 @@ func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupInd
 	if !ok {
 		if cx.caller != nil {
 			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
-			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+			txid = (*txn).InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
 		} else {
-			txid = txn.ID()
+			txid = (*txn).ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
 	}
@@ -2533,11 +2533,11 @@ func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupInd
 	return txid
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+func (cx *EvalContext) getTxID(txn transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
 	// inner indicates that groupIndex is an index into the most recent inner txn group
 
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
-		return txn.ID()
+		return (*txn).ID()
 	}
 
 	if !cx.Proto.UnifyInnerTxIDs {
@@ -2558,7 +2558,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 			lastGroupLen := len(cx.getLastInnerGroup())
 			// innerIndex is the referenced inner txn's index in cx.txn.EvalDelta.InnerTxns
 			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
-			txid = txn.InnerID(myTxid, innerIndex)
+			txid = (*txn).InnerID(myTxid, innerIndex)
 			cx.EvalParams.innerTxidCache[groupIndex] = txid
 		}
 
@@ -2576,10 +2576,10 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 			// We're referencing a peer txn, not my inner, but I am an inner
 			parentTxid := cx.caller.currentTxID()
 			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
-			txid = txn.InnerID(parentTxid, innerIndex)
+			txid = (*txn).InnerID(parentTxid, innerIndex)
 		} else {
 			// We're referencing a peer txn and I am not an inner
-			txid = txn.ID()
+			txid = (*txn).ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
 	}
@@ -2604,7 +2604,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 	}
 	err = nil
-	txn := &stxn.SignedTxn.Txn
+	txn := stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
@@ -3952,14 +3952,14 @@ func opExtract64Bits(cx *EvalContext) error {
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
-		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		addr, err := (*cx.txn.Txn).AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
 	addr, err := account.address()
 	if err != nil {
 		return addr, 0, err
 	}
-	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	idx, err := (*cx.txn.Txn).IndexByAddress(addr, cx.txn.Txn.Sender)
 
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
 	// Allow an address for an app that was created in group
@@ -4732,7 +4732,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 	return 0, fmt.Errorf("invalid App reference %d", aid)
 }
 
-func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn transactions.Transaction) (err error) {
 	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
@@ -4991,7 +4991,7 @@ func opItxnField(cx *EvalContext) error {
 		return fmt.Errorf("invalid itxn_field %s", field)
 	}
 	sv := cx.stack[last]
-	err := cx.stackIntoTxnField(sv, &fs, &cx.subtxns[itx].Txn)
+	err := cx.stackIntoTxnField(sv, &fs, cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 	return err
 }
@@ -5049,7 +5049,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		err = (*cx.subtxns[itx].Txn).WellFormed(*cx.Specials, *cx.Proto)
 		if err != nil {
 			return err
 		}
@@ -5123,7 +5123,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				innerOffset += itx
 			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
-				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
+				crypto.Digest((*cx.subtxns[itx].Txn).InnerID(parent, innerOffset)))
 		}
 	}
 

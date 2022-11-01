@@ -435,18 +435,18 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to 
 	txn, err = client.ConstructPayment(srcAcct.pk.String(), to, fee, amount, note, "", [32]byte{}, 0, 0)
 
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	stxn, err = signTxn(srcAcct, txn, pps.cfg)
 
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	_, err = client.BroadcastTransaction(stxn)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	return txn, nil
@@ -1260,7 +1260,7 @@ func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig
 	var psig crypto.Signature
 
 	if cfg.Rekey {
-		stxn, err = txn.Sign(signer.sk), nil
+		stxn, err = (*txn).Sign(signer.sk), nil
 
 	} else if len(cfg.Program) > 0 && rand.Float64() < cfg.ProgramProbability {
 		// If there's a program, sign it and use that in a lsig
@@ -1275,7 +1275,7 @@ func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig
 	} else {
 
 		// Otherwise, just sign the transaction like normal
-		stxn, err = txn.Sign(signer.sk), nil
+		stxn, err = (*txn).Sign(signer.sk), nil
 	}
 	return
 }

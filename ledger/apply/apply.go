@@ -102,7 +102,7 @@ type Balances interface {
 }
 
 // Rekey updates tx.Sender's AuthAddr to tx.RekeyTo, if provided
-func Rekey(balances Balances, tx *transactions.Transaction) error {
+func Rekey(balances Balances, tx transactions.Transaction) error {
 	if (tx.RekeyTo != basics.Address{}) {
 		acct, err := balances.Get(tx.Sender, false)
 		if err != nil {

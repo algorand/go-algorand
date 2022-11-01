@@ -18,10 +18,11 @@ package fixtures
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"sort"
 	"time"
 	"unicode"
+
+	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/stretchr/testify/require"
 
@@ -332,9 +333,9 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 	// use one curRound - 1 in case other nodes are behind
 	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
-	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
+	require.NotEmpty(f.t, (*fundingTx).ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
+	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, (*fundingTx).ID().String())
 	require.NoError(f.t, err)
 	return
 }

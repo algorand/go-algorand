@@ -199,35 +199,35 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
 	addr, err := basics.UnmarshalChecksumAddress(part.Address)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	if len(part.Key.VoteParticipationKey) != 32 {
-		return transactions.Transaction{}, fmt.Errorf("voting key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+		return &transactions.TransactionVal{}, fmt.Errorf("voting key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
 	}
 
 	var votePk [32]byte
 	copy(votePk[:], part.Key.VoteParticipationKey[:])
 
 	if len(part.Key.SelectionParticipationKey) != 32 {
-		return transactions.Transaction{}, fmt.Errorf("selection key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
+		return &transactions.TransactionVal{}, fmt.Errorf("selection key is the wrong size, should be 32 but it is %d", len(part.Key.VoteParticipationKey))
 	}
 
 	var selectionPk [32]byte
 	copy(selectionPk[:], part.Key.SelectionParticipationKey[:])
 
 	if part.Key.StateProofKey == nil {
-		return transactions.Transaction{}, fmt.Errorf("state proof key pointer is nil")
+		return &transactions.TransactionVal{}, fmt.Errorf("state proof key pointer is nil")
 	}
 
 	if len(*part.Key.StateProofKey) != len(merklesignature.Commitment{}) {
-		return transactions.Transaction{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Commitment{}), len(*part.Key.StateProofKey))
+		return &transactions.TransactionVal{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Commitment{}), len(*part.Key.StateProofKey))
 	}
 
 	var stateProofPk merklesignature.Commitment
 	copy(stateProofPk[:], (*part.Key.StateProofKey)[:])
 
-	t := transactions.Transaction{
+	t := transactions.TransactionVal{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:     addr,
@@ -246,7 +246,7 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 	t.KeyregTxnFields.VoteLast = basics.Round(part.Key.VoteLastValid)
 	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
 
-	return t, nil
+	return &t, nil
 }
 
 // MakeRegistrationTransactionWithGenesisID Generates a Registration transaction with the genesis ID set from the suggested parameters of the client
@@ -255,17 +255,17 @@ func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participa
 	// Get current round, protocol, genesis ID
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	txnFirstValid, txnLastValid, err = computeValidityRounds(txnFirstValid, txnLastValid, 0, params.LastRound, cparams.MaxTxnLife)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	goOnlineTx := part.GenerateRegistrationTransaction(
@@ -289,30 +289,30 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, f
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	// Get current round, protocol, genesis ID
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
 	part, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	parsedFrstValid := basics.Round(firstValid)
@@ -321,7 +321,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, f
 
 	goOnlineTransaction, err := generateRegistrationTransaction(part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
@@ -334,7 +334,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, f
 	// transaction to get the size post signing and encoding.
 	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		goOnlineTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, goOnlineTransaction.EstimateEncodedSize())
+		goOnlineTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, (*goOnlineTransaction).EstimateEncodedSize())
 		if goOnlineTransaction.Fee.Raw < cparams.MinTxnFee {
 			goOnlineTransaction.Fee.Raw = cparams.MinTxnFee
 		}
@@ -347,29 +347,29 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	parsedFirstRound := basics.Round(firstValid)
 	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOfflineTransaction := transactions.Transaction{
+	goOfflineTransaction := &transactions.TransactionVal{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:     parsedAddr,
@@ -402,29 +402,29 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	parsedFirstRound := basics.Round(firstValid)
 	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	becomeNonparticipatingTransaction := transactions.Transaction{
+	becomeNonparticipatingTransaction := &transactions.TransactionVal{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:     parsedAddr,
@@ -457,22 +457,22 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(sender)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	firstValid, lastValid, err = computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cparams.MaxTxnLife)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	parsedFee := basics.MicroAlgos{Raw: fee}
@@ -493,7 +493,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	// transaction to get the size post signing and encoding.
 	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
+		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, (*tx).EstimateEncodedSize())
 		if tx.Fee.Raw < cparams.MinTxnFee {
 			tx.Fee.Raw = cparams.MinTxnFee
 		}
@@ -640,12 +640,12 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 	// Get consensus params so we can get max field lengths
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return transactions.Transaction{}, errors.New("unknown consensus version")
+		return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 	}
 
 	// If assets are not yet enabled, lookup the base parameters to allow creating assets during catchup
@@ -653,7 +653,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 		cparams, ok = c.consensus[protocol.ConsensusCurrentVersion]
 
 		if !ok {
-			return transactions.Transaction{}, errors.New("unknown consensus version")
+			return &transactions.TransactionVal{}, errors.New("unknown consensus version")
 		}
 	}
 
@@ -846,7 +846,7 @@ func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest,
 			return
 		}
 
-		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(tx.ID()))
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest((*tx).ID()))
 	}
 
 	return crypto.HashObj(group), nil

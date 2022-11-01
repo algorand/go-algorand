@@ -243,7 +243,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	// create sendSize transaction to send.
 	txns := make([]transactions.SignedTxn, sendSize)
 	for i := range txns {
-		tx := transactions.Transaction{
+		tx := transactions.TransactionVal{
 			Header: transactions.Header{
 				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},

@@ -224,7 +224,7 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
-	return transactions.Transaction{
+	return &transactions.TransactionVal{
 		Type: tx.Type,
 		Header: transactions.Header{
 			Sender:      tx.Sender,

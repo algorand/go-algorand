@@ -80,8 +80,10 @@ type Header struct {
 	RekeyTo basics.Address `codec:"rekey"`
 }
 
+type Transaction *TransactionVal
+
 // Transaction describes a transaction that can appear in a block.
-type Transaction struct {
+type TransactionVal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Type of transaction
@@ -172,19 +174,19 @@ func (tg TxGroup) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
-func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
+func (tx TransactionVal) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
 // ID returns the Txid (i.e., hash) of the transaction.
-func (tx Transaction) ID() Txid {
+func (tx TransactionVal) ID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
 }
 
 // IDSha256 returns the digest (i.e., hash) of the transaction.
-func (tx Transaction) IDSha256() crypto.Digest {
+func (tx TransactionVal) IDSha256() crypto.Digest {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return sha256.Sum256(enc)
@@ -192,7 +194,7 @@ func (tx Transaction) IDSha256() crypto.Digest {
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the
 // index of the inner call.
-func (tx Transaction) InnerID(parent Txid, index int) Txid {
+func (tx TransactionVal) InnerID(parent Txid, index int) Txid {
 	input := append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...)
 	input = append(input, parent[:]...)
 	buf := make([]byte, 8)
@@ -204,11 +206,11 @@ func (tx Transaction) InnerID(parent Txid, index int) Txid {
 }
 
 // Sign signs a transaction using a given Account's secrets.
-func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
+func (tx TransactionVal) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 	sig := secrets.Sign(tx)
 
 	s := SignedTxn{
-		Txn: tx,
+		Txn: &tx,
 		Sig: sig,
 	}
 	// Set the AuthAddr if the signing key doesn't match the transaction sender
@@ -269,7 +271,7 @@ func (tx Header) Alive(tc TxnContext) error {
 }
 
 // MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
+func (tx TransactionVal) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
 	for _, candidate := range tx.RelevantAddrs(spec) {
 		if addr == candidate {
 			return true
@@ -299,7 +301,7 @@ var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in stat
 var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
-func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
+func (tx TransactionVal) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
 	case protocol.PaymentTx:
 		// in case that the fee sink is spending, check that this spend is to a valid address
@@ -599,7 +601,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	return nil
 }
 
-func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
+func (tx TransactionVal) stateProofPKWellFormed(proto config.ConsensusParams) error {
 	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
 	if !proto.EnableStateProofKeyregCheck {
 		// make certain empty key is stored.
@@ -654,7 +656,7 @@ func (tx Header) Last() basics.Round {
 
 // RelevantAddrs returns the addresses whose balance records this transaction will need to access.
 // The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
+func (tx TransactionVal) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
@@ -677,7 +679,7 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 }
 
 // TxAmount returns the amount paid to the recipient in this payment
-func (tx Transaction) TxAmount() basics.MicroAlgos {
+func (tx TransactionVal) TxAmount() basics.MicroAlgos {
 	switch tx.Type {
 	case protocol.PaymentTx:
 		return tx.PaymentTxnFields.Amount
@@ -688,7 +690,7 @@ func (tx Transaction) TxAmount() basics.MicroAlgos {
 }
 
 // GetReceiverAddress returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
-func (tx Transaction) GetReceiverAddress() basics.Address {
+func (tx TransactionVal) GetReceiverAddress() basics.Address {
 	switch tx.Type {
 	case protocol.PaymentTx:
 		return tx.PaymentTxnFields.Receiver
@@ -703,13 +705,17 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 // This function is to be used for calculating the fee
 // Note that it may be an underestimate if the transaction is signed in an unusual way
 // (e.g., with an authaddr or via multisig or logicsig)
-func (tx Transaction) EstimateEncodedSize() int {
+func (tx TransactionVal) EstimateEncodedSize() int {
 	// Make a signedtxn with a nonzero signature and encode it
 	stx := SignedTxn{
-		Txn: tx,
+		Txn: &tx,
 		Sig: crypto.Signature{1},
 	}
 	return stx.GetEncodedLength()
+}
+
+func (tx *TransactionVal) TryThis() int {
+	return 5
 }
 
 // TxnContext describes the context in which a transaction can appear

@@ -101,7 +101,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
-		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
+		if (*tx.Txn.Txn).ID() == (*stxnib.Txn).ID() {
 			offset = idx
 			break
 		}

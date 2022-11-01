@@ -170,25 +170,25 @@ var ErrShutdown = errors.New(errServiceShuttingDown)
 func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForAPI, round, latestRound basics.Round, stop <-chan struct{}) (transactions.Transaction, error) {
 	hdr, err := txnFetcher.BlockHdr(round)
 	if err != nil {
-		return transactions.Transaction{}, err
+		return &transactions.TransactionVal{}, err
 	}
 
 	if config.Consensus[hdr.CurrentProtocol].StateProofInterval == 0 {
-		return transactions.Transaction{}, ErrNoStateProofForRound
+		return &transactions.TransactionVal{}, ErrNoStateProofForRound
 	}
 
 	for i := round + 1; i <= latestRound; i++ {
 		select {
 		case <-stop:
-			return transactions.Transaction{}, ErrShutdown
+			return &transactions.TransactionVal{}, ErrShutdown
 		case <-ctx.Done():
-			return transactions.Transaction{}, ErrTimeout
+			return &transactions.TransactionVal{}, ErrTimeout
 		default:
 		}
 
 		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
 		if err != nil {
-			return transactions.Transaction{}, err
+			return &transactions.TransactionVal{}, err
 		}
 		for _, txn := range txns {
 			if txn.Txn.Type != protocol.StateProofTx {
@@ -201,7 +201,7 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 			}
 		}
 	}
-	return transactions.Transaction{}, ErrNoStateProofForRound
+	return &transactions.TransactionVal{}, ErrNoStateProofForRound
 }
 
 // GetParticipationKeys Return a list of participation keys
@@ -1100,7 +1100,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
-		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
+		if addrPtr != nil && !(*txn.Txn).MatchAddress(*addrPtr, spec) {
 			continue
 		}
 

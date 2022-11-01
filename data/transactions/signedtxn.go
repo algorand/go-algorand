@@ -59,7 +59,7 @@ type SignedTxnWithAD struct {
 
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
-	return s.Txn.ID()
+	return (*s.Txn).ID()
 }
 
 // ID on SignedTxnInBlock should never be called, because the ID depends
