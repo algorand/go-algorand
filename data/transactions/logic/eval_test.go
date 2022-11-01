@@ -41,12 +41,12 @@ import (
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
 // we check that v1 and v2 programs are compatible with the latest evaluator
-func makeTestProto() *config.ConsensusParams {
+func makeTestProto() config.ConsensusParams {
 	return makeTestProtoV(LogicVersion)
 }
 
-func makeTestProtoV(version uint64) *config.ConsensusParams {
-	return &config.ConsensusParams{
+func makeTestProtoV(version uint64) config.ConsensusParams {
+	return &config.ConsensusParamsVal{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
 		Application:         version >= appsEnabledVersion,
@@ -3138,7 +3138,7 @@ func TestProgramProtoForbidden(t *testing.T) {
 	var program [12]byte
 	vlen := binary.PutUvarint(program[:], evalMaxVersion)
 	ep := defaultEvalParams(nil)
-	ep.Proto = &config.ConsensusParams{
+	ep.Proto = &config.ConsensusParamsVal{
 		LogicSigVersion: evalMaxVersion - 1,
 	}
 	testLogicBytes(t, program[:vlen], ep, "greater than protocol", "greater than protocol")

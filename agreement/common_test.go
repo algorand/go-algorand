@@ -403,7 +403,7 @@ func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
 func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
 	version, err := l.ConsensusVersion(r)
 	if err != nil {
-		return config.ConsensusParams{}, err
+		return &config.ConsensusParamsVal{}, err
 	}
 	return config.Consensus[version], nil
 }

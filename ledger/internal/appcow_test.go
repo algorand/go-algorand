@@ -974,7 +974,7 @@ func TestApplyStorageDelta(t *testing.T) {
 			TotalAppLocalStates: 1,
 		}},
 	)
-	baseCow := makeRoundCowBase(nil, 0, 0, 0, config.ConsensusParams{})
+	baseCow := makeRoundCowBase(nil, 0, 0, 0, &config.ConsensusParamsVal{})
 	baseCow.updateAppResourceCache(ledgercore.AccountApp{Address: addr, App: 1}, ledgercore.AppResource{})
 	cow.lookupParent = baseCow
 

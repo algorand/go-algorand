@@ -80,7 +80,7 @@ func TestNewAppEvalParams(t *testing.T) {
 	for i, param := range params {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				ep := logic.NewEvalParams(testCase.group, &param, nil)
+				ep := logic.NewEvalParams(testCase.group, param, nil)
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
 				require.Equal(t, *ep.Proto, param)

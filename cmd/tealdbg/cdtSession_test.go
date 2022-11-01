@@ -478,7 +478,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 	req := cdt.ChromeRequest{ID: rid}
 	state := cdtState{
 		disassembly: "version 2\nint 1",
-		proto:       &proto,
+		proto:       proto,
 		txnGroup: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 			{
 				Txn: transactions.Transaction{

@@ -2985,7 +2985,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
 				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
+					&mock2, acctVariant, resVariant, nil, &config.ConsensusParamsVal{}, latestRound,
 				)
 				a.NoError(err)
 				a.Equal(3, len(updatedAccounts))
@@ -3067,7 +3067,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
 	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+		&mock, acctDeltas, resDeltas, nil, &config.ConsensusParamsVal{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))

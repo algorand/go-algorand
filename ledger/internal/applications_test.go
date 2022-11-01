@@ -62,7 +62,7 @@ func (c *mockCowForLogicLedger) getAccount(addr basics.Address, withPendingRewar
 	return br, nil
 }
 
-func (c *mockCowForLogicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+func (c *mockCowForLogicLedger) MinBalance(addr basics.Address, proto config.ConsensusParams) (res basics.MicroAlgos, err error) {
 	br, ok := c.brs[addr]
 	if !ok {
 		return basics.MicroAlgos{}, fmt.Errorf("addr %s not in mock cow", addr.String())

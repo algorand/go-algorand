@@ -439,7 +439,7 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	var ep logic.EvalParams
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	proto.MaxAppProgramCost = 1
 	err := checkPrograms(&ac, &ep)
@@ -539,7 +539,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	// this test will succeed in creating the app, but then fail
 	// because the mock balances doesn't update the creators table
@@ -640,7 +640,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
@@ -794,7 +794,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData, 2)
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	ac := transactions.ApplicationCallTxnFields{
 		ApplicationID: appIdx,
@@ -987,7 +987,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.pass = false
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
@@ -1086,7 +1086,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusV28)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.pass = false
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
@@ -1115,7 +1115,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	//check program len check happens in future consensus proto version
 	b.SetProto(protocol.ConsensusFuture)
 	proto = b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	// check app program len
 	params = basics.AppParams{
@@ -1243,7 +1243,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	// check if it fails nothing changes
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.pass = false
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
@@ -1259,7 +1259,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	// check calculation on ConsensusV28. TotalExtraAppPages does not change
 	b.SetProto(protocol.ConsensusV28)
 	proto = b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.pass = true
 	b.balances[sender] = basics.AccountData{}
@@ -1280,7 +1280,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusFuture)
 	proto = b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	// check deletion
 	for initTotalExtraPages := uint32(0); initTotalExtraPages < 3; initTotalExtraPages++ {
@@ -1348,7 +1348,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
@@ -1398,7 +1398,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep.Proto = &proto
+	ep.Proto = proto
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
