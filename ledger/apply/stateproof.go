@@ -19,6 +19,7 @@ package apply
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -60,10 +61,20 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 			return err
 		}
 
-		err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
+		verificationData := ledgercore.StateProofVerificationData{
+			TargetStateProofRound: lastRoundInInterval,
+			VotersCommitment:      votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+			OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+			Version:               votersHdr.CurrentProtocol,
+		}
+		err = verify.ValidateStateProof(&verificationData, &tx.StateProof, atRound, &tx.Message)
 		if err != nil {
 			return err
 		}
+		//err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
+		//if err != nil {
+		//	return err
+		//}
 	}
 
 	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(proto.StateProofInterval))
