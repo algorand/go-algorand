@@ -223,7 +223,7 @@ const ConsensusVAlpha4 = ConsensusVersion("alpha4")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV35
+const ConsensusCurrentVersion = ConsensusV36
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
