@@ -56,7 +56,6 @@ func TestGenesis_Balances(t *testing.T) {
 		}
 	}
 	goodAddr := makeAddr(100)
-	zeroAddr := makeAddr(0)
 	allocation1 := acctWith(1000, makeAddr(1).String())
 	allocation2 := acctWith(2000, makeAddr(2).String())
 	badAllocation := acctWith(1234, "El Toro Loco")
@@ -64,7 +63,6 @@ func TestGenesis_Balances(t *testing.T) {
 		Allocation  []GenesisAllocation
 		FeeSink     string
 		RewardsPool string
-		DevMode     bool
 	}
 	tests := []struct {
 		name    string
@@ -141,24 +139,6 @@ func TestGenesis_Balances(t *testing.T) {
 			},
 			wantErr: containsErrorFunc("repeated allocation to"),
 		},
-		{
-			name: "dev mode",
-			fields: fields{
-				Allocation:  []GenesisAllocation{allocation1},
-				FeeSink:     goodAddr.String(),
-				RewardsPool: zeroAddr.String(),
-				DevMode:     true,
-			},
-			want: GenesisBalances{
-				Balances: map[basics.Address]basics.AccountData{
-					mustAddr(allocation1.Address): allocation1.State,
-				},
-				FeeSink:     goodAddr,
-				RewardsPool: zeroAddr,
-				Timestamp:   0,
-			},
-			wantErr: assert.NoError,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -166,7 +146,6 @@ func TestGenesis_Balances(t *testing.T) {
 				Allocation:  tt.fields.Allocation,
 				FeeSink:     tt.fields.FeeSink,
 				RewardsPool: tt.fields.RewardsPool,
-				DevMode:     true,
 			}
 			got, err := genesis.Balances()
 			if tt.wantErr(t, err, fmt.Sprintf("Balances()")) {
