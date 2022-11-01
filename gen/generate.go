@@ -354,6 +354,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
 	}
 
+	// Add FeeSink and RewardsPool to allocation slice to be handled with other allocations.
 	sinkAcct := genesisAllocation{
 		Name: "FeeSink",
 	}
