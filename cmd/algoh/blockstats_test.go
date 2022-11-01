@@ -54,10 +54,6 @@ func TestConsecutiveBlocks(t *testing.T) {
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
-	makeTestBlock := func(round uint64) rpcs.EncodedBlockCert {
-		return rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(round)}}}
-	}
-
 	bs.onBlock(makeTestBlock(300))
 	// first consecutive block
 	bs.onBlock(makeTestBlock(301))
