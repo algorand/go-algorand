@@ -316,10 +316,6 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...inte
 	return
 }
 
-func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) error {
-	return db.AtomicContext(context.Background(), fn, extras)
-}
-
 // ResetTransactionWarnDeadline allow the atomic function to extend its warn deadline by setting a new deadline.
 // The Accessor can be copied and therefore isn't suitable for multi-threading directly,
 // however, the transaction context and transaction object can be used to uniquely associate the request
