@@ -146,10 +146,12 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			"writing balances to disk took %d seconds, "+
 				"writing creatables to disk took %d seconds, "+
 				"writing hashes to disk took %d seconds, "+
+				"writing kv pairs to disk took %d seconds, "+
 				"total duration is %d seconds",
 			downloadProgress.BalancesWriteDuration/time.Second,
 			downloadProgress.CreatablesWriteDuration/time.Second,
 			downloadProgress.HashesWriteDuration/time.Second,
+			downloadProgress.KVWriteDuration/time.Second,
 			writeDuration/time.Second)
 	}
 
@@ -191,5 +193,5 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 }
 
 func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte, downloadProgress *ledger.CatchpointCatchupAccessorProgress) error {
-	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes, downloadProgress)
+	return lf.accessor.ProcessStagingBalances(ctx, sectionName, bytes, downloadProgress)
 }

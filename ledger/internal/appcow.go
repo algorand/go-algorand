@@ -284,11 +284,6 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 	return nil
 }
 
-// GetKey looks for a key in {addr, aidx, global} storage
-func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	return cb.getKey(addr, aidx, global, key, accountIdx)
-}
-
 // getKey looks for a key in {addr, aidx, global} storage
 // This is hierarchical lookup: if the key not in this cow cache, then request parent and all way down to ledger
 func (cb *roundCowState) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
@@ -339,8 +334,8 @@ func (cb *roundCowState) getKey(addr basics.Address, aidx basics.AppIndex, globa
 	return cb.lookupParent.getKey(addr, aidx, global, key, accountIdx)
 }
 
-// SetKey creates a new key-value in {addr, aidx, global} storage
-func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
+// setKey creates a new key-value in {addr, aidx, global} storage
+func (cb *roundCowState) setKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	// Enforce maximum key length
 	if len(key) > cb.proto.MaxAppKeyLen {
 		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cb.proto.MaxAppKeyLen)
@@ -368,7 +363,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	// Fetch the old value + presence so we know how to update
-	oldValue, oldOk, err := cb.GetKey(addr, aidx, global, key, accountIdx)
+	oldValue, oldOk, err := cb.getKey(addr, aidx, global, key, accountIdx)
 	if err != nil {
 		return err
 	}
@@ -398,8 +393,8 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	return lsd.checkCounts()
 }
 
-// DelKey removes a key from {addr, aidx, global} storage
-func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
+// delKey removes a key from {addr, aidx, global} storage
+func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
@@ -411,7 +406,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	// Fetch the old value + presence so we know how to update counts
-	oldValue, oldOk, err := cb.GetKey(addr, aidx, global, key, accountIdx)
+	oldValue, oldOk, err := cb.getKey(addr, aidx, global, key, accountIdx)
 	if err != nil {
 		return err
 	}
@@ -461,7 +456,7 @@ func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.Co
 func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
-	params.Ledger = newLogicLedger(calf)
+	params.Ledger = calf
 
 	// Eval the program
 	pass, cx, err := logic.EvalContract(program, gi, aidx, params)
@@ -487,7 +482,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 		// changes from this app and any inner called apps. Instead, we now keep
 		// the EvalDelta built as we go, in app evaluation.  So just use it.
 		if cb.proto.LogicSigVersion < 6 {
-			evalDelta, err = calf.BuildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
+			evalDelta, err = calf.buildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
 			if err != nil {
 				return false, transactions.EvalDelta{}, err
 			}
@@ -502,9 +497,9 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta creates an EvalDelta by converting internal sdeltas
+// buildEvalDelta creates an EvalDelta by converting internal sdeltas
 // into the (Global|Local)Delta fields.
-func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
+func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {

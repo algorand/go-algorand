@@ -314,9 +314,9 @@ func BenchmarkUnmarshalcatchpointFileBalancesChunkV5(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalcatchpointFileBalancesChunkV6(t *testing.T) {
+func TestMarshalUnmarshalcatchpointFileChunkV6(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := catchpointFileBalancesChunkV6{}
+	v := catchpointFileChunkV6{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -335,12 +335,12 @@ func TestMarshalUnmarshalcatchpointFileBalancesChunkV6(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingcatchpointFileBalancesChunkV6(t *testing.T) {
-	protocol.RunEncodingTest(t, &catchpointFileBalancesChunkV6{})
+func TestRandomizedEncodingcatchpointFileChunkV6(t *testing.T) {
+	protocol.RunEncodingTest(t, &catchpointFileChunkV6{})
 }
 
-func BenchmarkMarshalMsgcatchpointFileBalancesChunkV6(b *testing.B) {
-	v := catchpointFileBalancesChunkV6{}
+func BenchmarkMarshalMsgcatchpointFileChunkV6(b *testing.B) {
+	v := catchpointFileChunkV6{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -348,8 +348,8 @@ func BenchmarkMarshalMsgcatchpointFileBalancesChunkV6(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgcatchpointFileBalancesChunkV6(b *testing.B) {
-	v := catchpointFileBalancesChunkV6{}
+func BenchmarkAppendMsgcatchpointFileChunkV6(b *testing.B) {
+	v := catchpointFileChunkV6{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -360,8 +360,8 @@ func BenchmarkAppendMsgcatchpointFileBalancesChunkV6(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalcatchpointFileBalancesChunkV6(b *testing.B) {
-	v := catchpointFileBalancesChunkV6{}
+func BenchmarkUnmarshalcatchpointFileChunkV6(b *testing.B) {
+	v := catchpointFileChunkV6{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -542,6 +542,66 @@ func BenchmarkAppendMsgencodedBalanceRecordV6(b *testing.B) {
 
 func BenchmarkUnmarshalencodedBalanceRecordV6(b *testing.B) {
 	v := encodedBalanceRecordV6{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalencodedKVRecordV6(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := encodedKVRecordV6{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingencodedKVRecordV6(t *testing.T) {
+	protocol.RunEncodingTest(t, &encodedKVRecordV6{})
+}
+
+func BenchmarkMarshalMsgencodedKVRecordV6(b *testing.B) {
+	v := encodedKVRecordV6{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgencodedKVRecordV6(b *testing.B) {
+	v := encodedKVRecordV6{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalencodedKVRecordV6(b *testing.B) {
+	v := encodedKVRecordV6{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
