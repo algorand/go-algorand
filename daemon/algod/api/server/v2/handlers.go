@@ -886,17 +886,20 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
+// encodedTxnResult mirrors simulation.TxnResult
 type encodedTxnResult struct {
 	Txn              preEncodedTxInfo
 	MissingSignature *bool `codec:"nosig,omitempty"`
 }
 
+// encodedTxnGroupResult mirrors simulation.TxnGroupResult
 type encodedTxnGroupResult struct {
 	Txns           []encodedTxnResult
 	FailureMessage *string   `codec:"failmsg,omitempty"`
 	FailedAt       *[]uint64 `codec:"failedat,omitempty"`
 }
 
+// EncodedSimulationResult mirrors simulation.Result
 type EncodedSimulationResult struct {
 	Version      uint64                   `codec:"v"`
 	TxnGroups    *[]encodedTxnGroupResult `codec:"txns,omitempty"`

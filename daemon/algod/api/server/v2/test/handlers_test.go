@@ -46,7 +46,6 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -722,7 +721,7 @@ func TestSimulateTransaction(t *testing.T) {
 				require.Nil(t, result.WouldSucceed)
 				txnGroup := (*result.TxnGroups)[0]
 				require.Contains(t, *txnGroup.FailureMessage, "rejected by ApprovalProgram")
-				require.Equal(t, simulation.TxnPath{1, uint64(i)}, *txnGroup.FailedAt)
+				require.Equal(t, []uint64{1, uint64(i)}, *txnGroup.FailedAt)
 
 				// check inner txn length
 				innerTxns := *txnGroup.Txns[1].Txn.Inners

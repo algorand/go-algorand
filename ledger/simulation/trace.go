@@ -17,6 +17,8 @@
 package simulation
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -59,16 +61,25 @@ type Result struct {
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 }
 
-func MakeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) Result {
+func MakeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+	if version != ResultCurrentVersion {
+		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
+	}
+
 	groups := make([]TxnGroupResult, len(txgroups))
 
 	for i, txgroup := range txgroups {
 		groups[i] = MakeTxnGroupResult(txgroup)
 	}
 
-	return Result{Version: version, TxnGroups: groups, WouldSucceed: true}
+	return Result{Version: version, TxnGroups: groups, WouldSucceed: true}, nil
 }
 
 func MakeSimulationResult(txgroups [][]transactions.SignedTxn) Result {
-	return MakeSimulationResultWithVersion(txgroups, ResultCurrentVersion)
+	result, err := MakeSimulationResultWithVersion(txgroups, ResultCurrentVersion)
+	if err != nil {
+		// this should never happen, since we pass in ResultCurrentVersion
+		panic(err)
+	}
+	return result
 }

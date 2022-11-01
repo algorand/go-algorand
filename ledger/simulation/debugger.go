@@ -84,6 +84,7 @@ func (cdbg *cursorDebuggerHook) absolutePath() TxnPath {
 type debuggerHook struct {
 	cursorDebuggerHook
 
+	isAppRunning      bool
 	result            *Result
 	evalDeltaSnapshot transactions.EvalDelta
 }
@@ -158,16 +159,12 @@ func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {
 	return nil
 }
 
-func (dh *debuggerHook) BeforeLogicEval(cx *logic.EvalContext) error {
-	return nil
-}
-
-func (dh *debuggerHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
-	return nil
-}
-
 func (dh *debuggerHook) BeforeTealOp(cx *logic.EvalContext) error {
-	// TODO: only do this for apps, not LogicSig evals
-	groupIndex := dh.relativeGroupIndex() // TODO: get actual group index from cx
+	if cx.RunMode() != logic.ModeApp {
+		// do nothing for LogicSig ops
+		return nil
+	}
+
+	groupIndex := dh.relativeGroupIndex()
 	return dh.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta)
 }
