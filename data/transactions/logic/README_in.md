@@ -31,7 +31,7 @@ _immediate_ arguments that are encoded directly into the instruction,
 rather than coming from the stack.
 
 The maximum stack depth is 1000. If the stack depth is exceeded or if
-a byte-array element exceed 4096 bytes, the program fails. If an
+a byte-array element exceeds 4096 bytes, the program fails. If an
 opcode is documented to access a position in the stack that does not
 exist, the operation fails. Most often, this is an attempt to access
 an element below the stack -- the simplest example is an operation
