@@ -170,10 +170,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	}
 	timeoutTime := time.Now().Add(timeout)
 	for {
-		// tx, err = testClient.TransactionInformation(fromAddress, txID)
-		// if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
 		tx, err = testClient.ParsedPendingTransaction(txID)
-		// }
 		if err == nil {
 			a.NotEmpty(tx)
 			a.Empty(tx.PoolError)
