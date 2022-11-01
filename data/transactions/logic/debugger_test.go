@@ -118,7 +118,7 @@ func TestDebuggerHook(t *testing.T) {
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
 		testDbg := testDbgHook{}
-		ep := defaultEvalParams(nil)
+		ep := defaultEvalParams()
 		ep.Debugger = &testDbg
 		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 
@@ -141,7 +141,7 @@ func TestDebuggerHook(t *testing.T) {
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
 		testDbg := testDbgHook{}
-		ep := defaultEvalParams(nil)
+		ep := defaultEvalParams()
 		ep.Debugger = &testDbg
 		testApp(t, legacyDebuggerTestProgram, ep)
 

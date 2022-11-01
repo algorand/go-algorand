@@ -59,7 +59,7 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand.repo %{buildroot}/usr
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
 if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
-  genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+  genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
   for dir in "${genesis_dirs[@]}"; do
     mkdir -p %{buildroot}/var/lib/algorand/genesis/${dir}
     cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json %{buildroot}/var/lib/algorand/genesis/${dir}/genesis.json
@@ -89,6 +89,7 @@ fi
   /var/lib/algorand/genesis/testnet/genesis.json
   /var/lib/algorand/genesis/betanet/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
+  /var/lib/algorand/genesis/alphanet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
 /lib/systemd/system/algorand@.service

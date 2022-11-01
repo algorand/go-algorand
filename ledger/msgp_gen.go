@@ -61,13 +61,13 @@ import (
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
 //
-// catchpointFileBalancesChunkV6
-//               |-----> (*) MarshalMsg
-//               |-----> (*) CanMarshalMsg
-//               |-----> (*) UnmarshalMsg
-//               |-----> (*) CanUnmarshalMsg
-//               |-----> (*) Msgsize
-//               |-----> (*) MsgIsZero
+// catchpointFileChunkV6
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
 //
 // catchpointFirstStageInfo
 //             |-----> (*) MarshalMsg
@@ -100,6 +100,14 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//
+// encodedKVRecordV6
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
 //
 // resourceFlags
 //       |-----> MarshalMsg
@@ -451,8 +459,8 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(19)
-	var zb0001Mask uint32 /* 21 bits */
+	zb0001Len := uint32(21)
+	var zb0001Mask uint32 /* 23 bits */
 	if (*z).baseVotingData.VoteID.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -525,9 +533,17 @@ func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x80000
 	}
-	if (*z).UpdateRound == 0 {
+	if (*z).TotalBoxes == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x100000
+	}
+	if (*z).TotalBoxBytes == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x200000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x400000
 	}
 	// variable map header, size zb0001Len
 	o = msgp.AppendMapHeader(o, zb0001Len)
@@ -623,6 +639,16 @@ func (z *baseAccountData) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalAppLocalStates)
 		}
 		if (zb0001Mask & 0x100000) == 0 { // if not empty
+			// string "m"
+			o = append(o, 0xa1, 0x6d)
+			o = msgp.AppendUint64(o, (*z).TotalBoxes)
+		}
+		if (zb0001Mask & 0x200000) == 0 { // if not empty
+			// string "n"
+			o = append(o, 0xa1, 0x6e)
+			o = msgp.AppendUint64(o, (*z).TotalBoxBytes)
+		}
+		if (zb0001Mask & 0x400000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -742,6 +768,22 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			(*z).TotalAppLocalStates, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalAppLocalStates")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxes")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxBytes")
 				return
 			}
 		}
@@ -896,6 +938,18 @@ func (z *baseAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TotalAppLocalStates")
 					return
 				}
+			case "m":
+				(*z).TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxes")
+					return
+				}
+			case "n":
+				(*z).TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxBytes")
+					return
+				}
 			case "A":
 				bts, err = (*z).baseVotingData.VoteID.UnmarshalMsg(bts)
 				if err != nil {
@@ -958,13 +1012,13 @@ func (_ *baseAccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *baseAccountData) Msgsize() (s int) {
-	s = 3 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).baseVotingData.VoteID.Msgsize() + 2 + (*z).baseVotingData.SelectionID.Msgsize() + 2 + (*z).baseVotingData.VoteFirstValid.Msgsize() + 2 + (*z).baseVotingData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).baseVotingData.StateProofID.Msgsize() + 2 + msgp.Uint64Size
+	s = 3 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).baseVotingData.VoteID.Msgsize() + 2 + (*z).baseVotingData.SelectionID.Msgsize() + 2 + (*z).baseVotingData.VoteFirstValid.Msgsize() + 2 + (*z).baseVotingData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).baseVotingData.StateProofID.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *baseAccountData) MsgIsZero() bool {
-	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchemaNumUint == 0) && ((*z).TotalAppSchemaNumByteSlice == 0) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalAssetParams == 0) && ((*z).TotalAssets == 0) && ((*z).TotalAppParams == 0) && ((*z).TotalAppLocalStates == 0) && ((*z).baseVotingData.VoteID.MsgIsZero()) && ((*z).baseVotingData.SelectionID.MsgIsZero()) && ((*z).baseVotingData.VoteFirstValid.MsgIsZero()) && ((*z).baseVotingData.VoteLastValid.MsgIsZero()) && ((*z).baseVotingData.VoteKeyDilution == 0) && ((*z).baseVotingData.StateProofID.MsgIsZero()) && ((*z).UpdateRound == 0)
+	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchemaNumUint == 0) && ((*z).TotalAppSchemaNumByteSlice == 0) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalAssetParams == 0) && ((*z).TotalAssets == 0) && ((*z).TotalAppParams == 0) && ((*z).TotalAppLocalStates == 0) && ((*z).TotalBoxes == 0) && ((*z).TotalBoxBytes == 0) && ((*z).baseVotingData.VoteID.MsgIsZero()) && ((*z).baseVotingData.SelectionID.MsgIsZero()) && ((*z).baseVotingData.VoteFirstValid.MsgIsZero()) && ((*z).baseVotingData.VoteLastValid.MsgIsZero()) && ((*z).baseVotingData.VoteKeyDilution == 0) && ((*z).baseVotingData.StateProofID.MsgIsZero()) && ((*z).UpdateRound == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1764,19 +1818,23 @@ func (z *catchpointFileBalancesChunkV5) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *catchpointFileBalancesChunkV6) MarshalMsg(b []byte) (o []byte) {
+func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(1)
-	var zb0002Mask uint8 /* 2 bits */
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 4 bits */
 	if len((*z).Balances) == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x2
+		zb0003Len--
+		zb0003Mask |= 0x2
 	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x2) == 0 { // if not empty
+	if len((*z).KVs) == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x4
+	}
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "bl"
 			o = append(o, 0xa2, 0x62, 0x6c)
 			if (*z).Balances == nil {
@@ -1788,48 +1846,82 @@ func (z *catchpointFileBalancesChunkV6) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Balances[zb0001].MarshalMsg(o)
 			}
 		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "kv"
+			o = append(o, 0xa2, 0x6b, 0x76)
+			if (*z).KVs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).KVs)))
+			}
+			for zb0002 := range (*z).KVs {
+				// omitempty: check for empty values
+				zb0004Len := uint32(2)
+				var zb0004Mask uint8 /* 3 bits */
+				if len((*z).KVs[zb0002].Key) == 0 {
+					zb0004Len--
+					zb0004Mask |= 0x2
+				}
+				if len((*z).KVs[zb0002].Value) == 0 {
+					zb0004Len--
+					zb0004Mask |= 0x4
+				}
+				// variable map header, size zb0004Len
+				o = append(o, 0x80|uint8(zb0004Len))
+				if (zb0004Mask & 0x2) == 0 { // if not empty
+					// string "k"
+					o = append(o, 0xa1, 0x6b)
+					o = msgp.AppendBytes(o, (*z).KVs[zb0002].Key)
+				}
+				if (zb0004Mask & 0x4) == 0 { // if not empty
+					// string "v"
+					o = append(o, 0xa1, 0x76)
+					o = msgp.AppendBytes(o, (*z).KVs[zb0002].Value)
+				}
+			}
+		}
 	}
 	return
 }
 
-func (_ *catchpointFileBalancesChunkV6) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileBalancesChunkV6)
+func (_ *catchpointFileChunkV6) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointFileChunkV6)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileBalancesChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
-			var zb0004 int
-			var zb0005 bool
-			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0003 > 0 {
+			zb0003--
+			var zb0005 int
+			var zb0006 bool
+			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Balances")
 				return
 			}
-			if zb0004 > BalancesPerCatchpointFileChunk {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(BalancesPerCatchpointFileChunk))
+			if zb0005 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(BalancesPerCatchpointFileChunk))
 				err = msgp.WrapError(err, "struct-from-array", "Balances")
 				return
 			}
-			if zb0005 {
+			if zb0006 {
 				(*z).Balances = nil
-			} else if (*z).Balances != nil && cap((*z).Balances) >= zb0004 {
-				(*z).Balances = ((*z).Balances)[:zb0004]
+			} else if (*z).Balances != nil && cap((*z).Balances) >= zb0005 {
+				(*z).Balances = ((*z).Balances)[:zb0005]
 			} else {
-				(*z).Balances = make([]encodedBalanceRecordV6, zb0004)
+				(*z).Balances = make([]encodedBalanceRecordV6, zb0005)
 			}
 			for zb0001 := range (*z).Balances {
 				bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
@@ -1839,8 +1931,141 @@ func (z *catchpointFileBalancesChunkV6) UnmarshalMsg(bts []byte) (o []byte, err 
 				}
 			}
 		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
+		if zb0003 > 0 {
+			zb0003--
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "KVs")
+				return
+			}
+			if zb0007 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(BalancesPerCatchpointFileChunk))
+				err = msgp.WrapError(err, "struct-from-array", "KVs")
+				return
+			}
+			if zb0008 {
+				(*z).KVs = nil
+			} else if (*z).KVs != nil && cap((*z).KVs) >= zb0007 {
+				(*z).KVs = ((*z).KVs)[:zb0007]
+			} else {
+				(*z).KVs = make([]encodedKVRecordV6, zb0007)
+			}
+			for zb0002 := range (*z).KVs {
+				var zb0009 int
+				var zb0010 bool
+				zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
+						return
+					}
+					if zb0009 > 0 {
+						zb0009--
+						var zb0011 int
+						zb0011, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Key")
+							return
+						}
+						if zb0011 > encodedKVRecordV6MaxKeyLength {
+							err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedKVRecordV6MaxKeyLength))
+							return
+						}
+						(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Key")
+							return
+						}
+					}
+					if zb0009 > 0 {
+						zb0009--
+						var zb0012 int
+						zb0012, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Value")
+							return
+						}
+						if zb0012 > encodedKVRecordV6MaxValueLength {
+							err = msgp.ErrOverflow(uint64(zb0012), uint64(encodedKVRecordV6MaxValueLength))
+							return
+						}
+						(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array", "Value")
+							return
+						}
+					}
+					if zb0009 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0009)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
+						return
+					}
+					if zb0010 {
+						(*z).KVs[zb0002] = encodedKVRecordV6{}
+					}
+					for zb0009 > 0 {
+						zb0009--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
+							return
+						}
+						switch string(field) {
+						case "k":
+							var zb0013 int
+							zb0013, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Key")
+								return
+							}
+							if zb0013 > encodedKVRecordV6MaxKeyLength {
+								err = msgp.ErrOverflow(uint64(zb0013), uint64(encodedKVRecordV6MaxKeyLength))
+								return
+							}
+							(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Key")
+								return
+							}
+						case "v":
+							var zb0014 int
+							zb0014, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Value")
+								return
+							}
+							if zb0014 > encodedKVRecordV6MaxValueLength {
+								err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedKVRecordV6MaxValueLength))
+								return
+							}
+							(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002, "Value")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
+								return
+							}
+						}
+					}
+				}
+			}
+		}
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -1851,11 +2076,11 @@ func (z *catchpointFileBalancesChunkV6) UnmarshalMsg(bts []byte) (o []byte, err 
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 {
-			(*z) = catchpointFileBalancesChunkV6{}
+		if zb0004 {
+			(*z) = catchpointFileChunkV6{}
 		}
-		for zb0002 > 0 {
-			zb0002--
+		for zb0003 > 0 {
+			zb0003--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -1863,30 +2088,161 @@ func (z *catchpointFileBalancesChunkV6) UnmarshalMsg(bts []byte) (o []byte, err 
 			}
 			switch string(field) {
 			case "bl":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0015 int
+				var zb0016 bool
+				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Balances")
 					return
 				}
-				if zb0006 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(BalancesPerCatchpointFileChunk))
+				if zb0015 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(BalancesPerCatchpointFileChunk))
 					err = msgp.WrapError(err, "Balances")
 					return
 				}
-				if zb0007 {
+				if zb0016 {
 					(*z).Balances = nil
-				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0006 {
-					(*z).Balances = ((*z).Balances)[:zb0006]
+				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0015 {
+					(*z).Balances = ((*z).Balances)[:zb0015]
 				} else {
-					(*z).Balances = make([]encodedBalanceRecordV6, zb0006)
+					(*z).Balances = make([]encodedBalanceRecordV6, zb0015)
 				}
 				for zb0001 := range (*z).Balances {
 					bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Balances", zb0001)
 						return
+					}
+				}
+			case "kv":
+				var zb0017 int
+				var zb0018 bool
+				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "KVs")
+					return
+				}
+				if zb0017 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(BalancesPerCatchpointFileChunk))
+					err = msgp.WrapError(err, "KVs")
+					return
+				}
+				if zb0018 {
+					(*z).KVs = nil
+				} else if (*z).KVs != nil && cap((*z).KVs) >= zb0017 {
+					(*z).KVs = ((*z).KVs)[:zb0017]
+				} else {
+					(*z).KVs = make([]encodedKVRecordV6, zb0017)
+				}
+				for zb0002 := range (*z).KVs {
+					var zb0019 int
+					var zb0020 bool
+					zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if _, ok := err.(msgp.TypeError); ok {
+						zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "KVs", zb0002)
+							return
+						}
+						if zb0019 > 0 {
+							zb0019--
+							var zb0021 int
+							zb0021, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Key")
+								return
+							}
+							if zb0021 > encodedKVRecordV6MaxKeyLength {
+								err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedKVRecordV6MaxKeyLength))
+								return
+							}
+							(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Key")
+								return
+							}
+						}
+						if zb0019 > 0 {
+							zb0019--
+							var zb0022 int
+							zb0022, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Value")
+								return
+							}
+							if zb0022 > encodedKVRecordV6MaxValueLength {
+								err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedKVRecordV6MaxValueLength))
+								return
+							}
+							(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array", "Value")
+								return
+							}
+						}
+						if zb0019 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0019)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002, "struct-from-array")
+								return
+							}
+						}
+					} else {
+						if err != nil {
+							err = msgp.WrapError(err, "KVs", zb0002)
+							return
+						}
+						if zb0020 {
+							(*z).KVs[zb0002] = encodedKVRecordV6{}
+						}
+						for zb0019 > 0 {
+							zb0019--
+							field, bts, err = msgp.ReadMapKeyZC(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "KVs", zb0002)
+								return
+							}
+							switch string(field) {
+							case "k":
+								var zb0023 int
+								zb0023, err = msgp.ReadBytesBytesHeader(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "KVs", zb0002, "Key")
+									return
+								}
+								if zb0023 > encodedKVRecordV6MaxKeyLength {
+									err = msgp.ErrOverflow(uint64(zb0023), uint64(encodedKVRecordV6MaxKeyLength))
+									return
+								}
+								(*z).KVs[zb0002].Key, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Key)
+								if err != nil {
+									err = msgp.WrapError(err, "KVs", zb0002, "Key")
+									return
+								}
+							case "v":
+								var zb0024 int
+								zb0024, err = msgp.ReadBytesBytesHeader(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "KVs", zb0002, "Value")
+									return
+								}
+								if zb0024 > encodedKVRecordV6MaxValueLength {
+									err = msgp.ErrOverflow(uint64(zb0024), uint64(encodedKVRecordV6MaxValueLength))
+									return
+								}
+								(*z).KVs[zb0002].Value, bts, err = msgp.ReadBytesBytes(bts, (*z).KVs[zb0002].Value)
+								if err != nil {
+									err = msgp.WrapError(err, "KVs", zb0002, "Value")
+									return
+								}
+							default:
+								err = msgp.ErrNoField(string(field))
+								if err != nil {
+									err = msgp.WrapError(err, "KVs", zb0002)
+									return
+								}
+							}
+						}
 					}
 				}
 			default:
@@ -1902,23 +2258,27 @@ func (z *catchpointFileBalancesChunkV6) UnmarshalMsg(bts []byte) (o []byte, err 
 	return
 }
 
-func (_ *catchpointFileBalancesChunkV6) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileBalancesChunkV6)
+func (_ *catchpointFileChunkV6) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointFileChunkV6)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *catchpointFileBalancesChunkV6) Msgsize() (s int) {
+func (z *catchpointFileChunkV6) Msgsize() (s int) {
 	s = 1 + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Balances {
 		s += (*z).Balances[zb0001].Msgsize()
+	}
+	s += 3 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).KVs {
+		s += 1 + 2 + msgp.BytesPrefixSize + len((*z).KVs[zb0002].Key) + 2 + msgp.BytesPrefixSize + len((*z).KVs[zb0002].Value)
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *catchpointFileBalancesChunkV6) MsgIsZero() bool {
-	return (len((*z).Balances) == 0)
+func (z *catchpointFileChunkV6) MsgIsZero() bool {
+	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2298,8 +2658,8 @@ func (z *encodedBalanceRecordV5) MsgIsZero() bool {
 func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(3)
-	var zb0003Mask uint8 /* 4 bits */
+	zb0003Len := uint32(4)
+	var zb0003Mask uint8 /* 5 bits */
 	if (*z).Address.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2
@@ -2311,6 +2671,10 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 	if len((*z).Resources) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
+	}
+	if (*z).ExpectingMoreEntries == false {
+		zb0003Len--
+		zb0003Mask |= 0x10
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -2344,6 +2708,11 @@ func (z *encodedBalanceRecordV6) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, zb0001)
 				o = zb0002.MarshalMsg(o)
 			}
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "e"
+			o = append(o, 0xa1, 0x65)
+			o = msgp.AppendBool(o, (*z).ExpectingMoreEntries)
 		}
 	}
 	return
@@ -2392,8 +2761,8 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				err = msgp.WrapError(err, "struct-from-array", "Resources")
 				return
 			}
-			if zb0005 > basics.MaxEncodedAccountDataSize {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(basics.MaxEncodedAccountDataSize))
+			if zb0005 > resourcesPerCatchpointFileChunkBackwardCompatible {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(resourcesPerCatchpointFileChunkBackwardCompatible))
 				err = msgp.WrapError(err, "struct-from-array", "Resources")
 				return
 			}
@@ -2417,6 +2786,14 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					return
 				}
 				(*z).Resources[zb0001] = zb0002
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).ExpectingMoreEntries, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ExpectingMoreEntries")
+				return
 			}
 		}
 		if zb0003 > 0 {
@@ -2462,8 +2839,8 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					err = msgp.WrapError(err, "Resources")
 					return
 				}
-				if zb0007 > basics.MaxEncodedAccountDataSize {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(basics.MaxEncodedAccountDataSize))
+				if zb0007 > resourcesPerCatchpointFileChunkBackwardCompatible {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(resourcesPerCatchpointFileChunkBackwardCompatible))
 					err = msgp.WrapError(err, "Resources")
 					return
 				}
@@ -2487,6 +2864,12 @@ func (z *encodedBalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) 
 						return
 					}
 					(*z).Resources[zb0001] = zb0002
+				}
+			case "e":
+				(*z).ExpectingMoreEntries, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ExpectingMoreEntries")
+					return
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -2516,12 +2899,182 @@ func (z *encodedBalanceRecordV6) Msgsize() (s int) {
 			s += 0 + msgp.Uint64Size + zb0002.Msgsize()
 		}
 	}
+	s += 2 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedBalanceRecordV6) MsgIsZero() bool {
-	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0)
+	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).ExpectingMoreEntries == false)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedKVRecordV6) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if len((*z).Key) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if len((*z).Value) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "k"
+			o = append(o, 0xa1, 0x6b)
+			o = msgp.AppendBytes(o, (*z).Key)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendBytes(o, (*z).Value)
+		}
+	}
+	return
+}
+
+func (_ *encodedKVRecordV6) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedKVRecordV6)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedKVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Key")
+				return
+			}
+			if zb0003 > encodedKVRecordV6MaxKeyLength {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(encodedKVRecordV6MaxKeyLength))
+				return
+			}
+			(*z).Key, bts, err = msgp.ReadBytesBytes(bts, (*z).Key)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Key")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Value")
+				return
+			}
+			if zb0004 > encodedKVRecordV6MaxValueLength {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(encodedKVRecordV6MaxValueLength))
+				return
+			}
+			(*z).Value, bts, err = msgp.ReadBytesBytes(bts, (*z).Value)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Value")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedKVRecordV6{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "k":
+				var zb0005 int
+				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Key")
+					return
+				}
+				if zb0005 > encodedKVRecordV6MaxKeyLength {
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(encodedKVRecordV6MaxKeyLength))
+					return
+				}
+				(*z).Key, bts, err = msgp.ReadBytesBytes(bts, (*z).Key)
+				if err != nil {
+					err = msgp.WrapError(err, "Key")
+					return
+				}
+			case "v":
+				var zb0006 int
+				zb0006, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Value")
+					return
+				}
+				if zb0006 > encodedKVRecordV6MaxValueLength {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(encodedKVRecordV6MaxValueLength))
+					return
+				}
+				(*z).Value, bts, err = msgp.ReadBytesBytes(bts, (*z).Value)
+				if err != nil {
+					err = msgp.WrapError(err, "Value")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedKVRecordV6) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedKVRecordV6)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedKVRecordV6) Msgsize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Key) + 2 + msgp.BytesPrefixSize + len((*z).Value)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedKVRecordV6) MsgIsZero() bool {
+	return (len((*z).Key) == 0) && (len((*z).Value) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

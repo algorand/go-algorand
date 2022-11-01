@@ -24,6 +24,8 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,21 +49,51 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 // buffer and starve messages from other peers.
 const msgsInReadBufferPerPeer = 10
 
+var tagStringList []string
+
+func init() {
+	tagStringList = make([]string, len(protocol.TagList))
+	for i, t := range protocol.TagList {
+		tagStringList[i] = string(t)
+	}
+	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
+	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+
+	matched := false
+	for _, version := range SupportedProtocolVersions {
+		if version == versionPeerFeatures {
+			matched = true
+		}
+	}
+	if !matched {
+		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
+	}
+
+	var err error
+	versionPeerFeaturesNum[0], versionPeerFeaturesNum[1], err = versionToMajorMinor(versionPeerFeatures)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse version %v: %s", versionPeerFeatures, err.Error()))
+	}
+}
+
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
-var networkSentBytesByTag = metrics.NewTagCounter("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages")
+var networkSentBytesByTag *metrics.TagCounter
 var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytesTotal)
-var networkReceivedBytesByTag = metrics.NewTagCounter("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages")
+var networkReceivedBytesByTag *metrics.TagCounter
 
 var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
-var networkMessageReceivedByTag = metrics.NewTagCounter("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages")
+var networkMessageReceivedByTag *metrics.TagCounter
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
-var networkMessageSentByTag = metrics.NewTagCounter("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages")
+var networkMessageSentByTag *metrics.TagCounter
 
 var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
 var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})
 
 var duplicateNetworkMessageReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedTotal)
 var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedBytesTotal)
+var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
 
@@ -148,6 +180,11 @@ type wsPeer struct {
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
 
+	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
+	// to filter that it had already sent before.
+	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
+	duplicateFilterCount uint64
+
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -196,6 +233,9 @@ type wsPeer struct {
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
 
+	// peer features derived from the peer version
+	features peerFeatureFlag
+
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
 
@@ -203,10 +243,10 @@ type wsPeer struct {
 	responseChannelsMutex deadlock.RWMutex
 
 	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
-	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
+	// only guarantee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
-	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seent to this peer.
+	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seen to this peer.
 	messagesOfInterestGeneration uint32
 
 	// connMonitor used to measure the relative performance of the connection
@@ -214,10 +254,10 @@ type wsPeer struct {
 	// field set to nil.
 	connMonitor *connectionPerformanceMonitor
 
-	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	// peerMessageDelay is calculated by the connection monitor; it's the relative average per-message delay.
 	peerMessageDelay int64
 
-	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled based on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
@@ -388,6 +428,8 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	dataConverter := makeWsPeerMsgDataConverter(wp)
+
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
@@ -427,6 +469,11 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
+		msg.Data, err = dataConverter.convert(msg.Tag, msg.Data)
+		if err != nil {
+			wp.reportReadErr(err)
+			return
+		}
 		msg.Net = wp.net
 		atomic.StoreInt64(&wp.lastPacketTime, msg.Received)
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
@@ -470,7 +517,7 @@ func (wp *wsPeer) readLoop() {
 			case channel <- &Response{Topics: topics}:
 				// do nothing. writing was successful.
 			default:
-				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
+				wp.net.log.Warn("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}
 			continue
 		case protocol.MsgDigestSkipTag:
@@ -563,7 +610,14 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
 	//wp.net.log.Debugf("add filter %v", digest)
-	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	has := wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	if has {
+		// Count that this peer has sent us duplicate filter messages: this means it received the same
+		// large message concurrently from several peers, and then sent the filter message to us after
+		// each large message finished transferring.
+		duplicateNetworkFilterReceivedTotal.Inc(nil)
+		atomic.AddUint64(&wp.duplicateFilterCount, 1)
+	}
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
@@ -888,4 +942,58 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	} else {
 		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
+}
+
+func (wp *wsPeer) pfProposalCompressionSupported() bool {
+	return wp.features&pfCompressedProposal != 0
+}
+
+type peerFeatureFlag int
+
+const pfCompressedProposal peerFeatureFlag = 1
+
+// versionPeerFeatures defines protocol version when peer features were introduced
+const versionPeerFeatures = "2.2"
+
+// versionPeerFeaturesNum is a parsed numeric representation of versionPeerFeatures
+var versionPeerFeaturesNum [2]int64
+
+func versionToMajorMinor(version string) (int64, int64, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("version %s does not have two components", version)
+	}
+	major, err := strconv.ParseInt(parts[0], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	minor, err := strconv.ParseInt(parts[1], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	return major, minor, nil
+}
+
+func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFlag {
+	major, minor, err := versionToMajorMinor(version)
+	if err != nil {
+		return 0
+	}
+
+	if major < versionPeerFeaturesNum[0] {
+		return 0
+	}
+	if minor < versionPeerFeaturesNum[1] {
+		return 0
+	}
+
+	var features peerFeatureFlag
+	parts := strings.Split(announcedFeatures, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == PeerFeatureProposalCompression {
+			features |= pfCompressedProposal
+		}
+	}
+	return features
 }

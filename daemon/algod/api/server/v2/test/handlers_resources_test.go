@@ -18,6 +18,7 @@ package test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,6 +42,7 @@ import (
 
 type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
+	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
 }
@@ -58,6 +60,17 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
+}
+
+func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
+	if value, ok := l.kvstore[key]; ok {
+		return value, nil
+	}
+	return nil, fmt.Errorf("Key %v does not exist", key)
+}
+
+func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	panic("not implemented")
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -98,8 +111,12 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
-func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	panic("not implemented")
+func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := l.Block(rnd)
+	if err != nil {
+		return bookkeeping.BlockHeader{}, err
+	}
+	return blk.BlockHeader, nil
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
 	panic("not implemented")
@@ -111,7 +128,11 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 	panic("not implemented")
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
-	panic("not implemented")
+	if len(l.blocks) == 0 {
+		err = fmt.Errorf("mockledger error: no block")
+		return
+	}
+	return l.blocks[0], nil
 }
 
 func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {

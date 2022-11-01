@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"encoding/hex"
 	"fmt"
-	"strings"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,43 +27,27 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// main wraps up some TEAL source in a header and footer so that it is
-// an app that does nothing at create time, but otherwise runs source,
-// then approves, if the source avoids panicing and leaves the stack
-// empty.
-func main(source string) string {
-	return strings.Replace(fmt.Sprintf(`txn ApplicationID
-            bz end
-            %s
-       end: int 1`, source), ";", "\n", -1)
-}
-
 // TestPayAction ensures a pay in teal affects balances
 func TestPayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Inner txns start in v30
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	create := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
+		ai := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
+			main(`
          itxn_begin
          int pay
          itxn_field TypeEnum
@@ -72,130 +56,110 @@ func TestPayAction(t *testing.T) {
          txn Accounts 1
          itxn_field Receiver
          itxn_submit
-`),
-	}
+        `))
 
-	ai := basics.AppIndex(1)
-	fund := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: ai.Address(),
-		Amount:   200000, // account min balance, plus fees
-	}
+		require.Equal(t, ai, basics.AppIndex(1))
 
-	payout1 := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: ai,
-		Accounts:      []basics.Address{addrs[1]}, // pay self
-	}
+		payout1 := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: ai,
+			Accounts:      []basics.Address{addrs[1]}, // pay self
+		}
 
-	eval := nextBlock(t, l)
-	txns(t, l, eval, &create, &fund, &payout1)
-	vb := endBlock(t, l, eval)
+		dl.fullBlock(&payout1)
 
-	// AD contains expected appIndex
-	require.Equal(t, ai, vb.Block().Payset[0].ApplyData.ApplicationID)
+		ad0 := micros(dl.t, dl.generator, addrs[0])
+		ad1 := micros(dl.t, dl.generator, addrs[1])
+		app := micros(dl.t, dl.generator, ai.Address())
 
-	ad0 := micros(t, l, addrs[0])
-	ad1 := micros(t, l, addrs[1])
-	app := micros(t, l, ai.Address())
+		genAccounts := genBalances.Balances
+		// create(1000) and fund(1000 + 200000)
+		require.Equal(t, uint64(202000), genAccounts[addrs[0]].MicroAlgos.Raw-ad0)
+		// paid 5000, but 1000 fee
+		require.Equal(t, uint64(4000), ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
+		// app still has 194000 (paid out 5000, and paid fee to do it)
+		require.Equal(t, uint64(194000), app)
 
-	genAccounts := genesisInitState.Accounts
-	// create(1000) and fund(1000 + 200000)
-	require.Equal(t, uint64(202000), genAccounts[addrs[0]].MicroAlgos.Raw-ad0)
-	// paid 5000, but 1000 fee
-	require.Equal(t, uint64(4000), ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
-	// app still has 194000 (paid out 5000, and paid fee to do it)
-	require.Equal(t, uint64(194000), app)
+		// Build up Residue in RewardsState so it's ready to pay
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
 
-	// Build up Residue in RewardsState so it's ready to pay
-	for i := 1; i < 10; i++ {
-		eval = nextBlock(t, l)
-		endBlock(t, l, eval)
-	}
+		payout2 := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: ai,
+			Accounts:      []basics.Address{addrs[2]}, // pay other
+		}
+		vb := dl.fullBlock(&payout2)
+		// confirm that modifiedAccounts can see account in inner txn
 
-	eval = nextBlock(t, l)
-	payout2 := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: ai,
-		Accounts:      []basics.Address{addrs[2]}, // pay other
-	}
-	txn(t, l, eval, &payout2)
-	// confirm that modifiedAccounts can see account in inner txn
-	vb = endBlock(t, l, eval)
+		deltas := vb.Delta()
+		require.Contains(t, deltas.Accts.ModifiedAccounts(), addrs[2])
 
-	deltas := vb.Delta()
-	require.Contains(t, deltas.Accts.ModifiedAccounts(), addrs[2])
+		payInBlock := vb.Block().Payset[0]
+		rewards := payInBlock.ApplyData.SenderRewards.Raw
+		require.Greater(t, rewards, uint64(2000)) // some biggish number
+		inners := payInBlock.ApplyData.EvalDelta.InnerTxns
+		require.Len(t, inners, 1)
 
-	payInBlock := vb.Block().Payset[0]
-	rewards := payInBlock.ApplyData.SenderRewards.Raw
-	require.Greater(t, rewards, uint64(2000)) // some biggish number
-	inners := payInBlock.ApplyData.EvalDelta.InnerTxns
-	require.Len(t, inners, 1)
+		// addr[2] is going to get the same rewards as addr[1], who
+		// originally sent the top-level txn.  Both had their algo balance
+		// touched and has very nearly the same balance.
+		require.Equal(t, rewards, inners[0].ReceiverRewards.Raw)
+		// app gets none, because it has less than 1A
+		require.Equal(t, uint64(0), inners[0].SenderRewards.Raw)
 
-	// addr[2] is going to get the same rewards as addr[1], who
-	// originally sent the top-level txn.  Both had their algo balance
-	// touched and has very nearly the same balance.
-	require.Equal(t, rewards, inners[0].ReceiverRewards.Raw)
-	// app gets none, because it has less than 1A
-	require.Equal(t, uint64(0), inners[0].SenderRewards.Raw)
+		ad1 = micros(dl.t, dl.validator, addrs[1])
+		ad2 := micros(dl.t, dl.validator, addrs[2])
+		app = micros(dl.t, dl.validator, ai.Address())
 
-	ad1 = micros(t, l, addrs[1])
-	ad2 := micros(t, l, addrs[2])
-	app = micros(t, l, ai.Address())
+		// paid 5000, in first payout (only), but paid 1000 fee in each payout txn
+		require.Equal(t, rewards+3000, ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
+		// app still has 188000 (paid out 10000, and paid 2k fees to do it)
+		// no rewards because owns less than an algo
+		require.Equal(t, uint64(200000)-10000-2000, app)
 
-	// paid 5000, in first payout (only), but paid 1000 fee in each payout txn
-	require.Equal(t, rewards+3000, ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
-	// app still has 188000 (paid out 10000, and paid 2k fees to do it)
-	// no rewards because owns less than an algo
-	require.Equal(t, uint64(200000)-10000-2000, app)
+		// paid 5000 by payout2, never paid any fees, got same rewards
+		require.Equal(t, rewards+uint64(5000), ad2-genAccounts[addrs[2]].MicroAlgos.Raw)
 
-	// paid 5000 by payout2, never paid any fees, got same rewards
-	require.Equal(t, rewards+uint64(5000), ad2-genAccounts[addrs[2]].MicroAlgos.Raw)
+		// Now fund the app account much more, so we can confirm it gets rewards.
+		tenkalgos := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: ai.Address(),
+			Amount:   10 * 1000 * 1000000, // account min balance, plus fees
+		}
+		dl.fullBlock(&tenkalgos)
+		beforepay := micros(dl.t, dl.validator, ai.Address())
 
-	// Now fund the app account much more, so we can confirm it gets rewards.
-	tenkalgos := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: ai.Address(),
-		Amount:   10 * 1000 * 1000000, // account min balance, plus fees
-	}
-	eval = nextBlock(t, l)
-	txn(t, l, eval, &tenkalgos)
-	endBlock(t, l, eval)
-	beforepay := micros(t, l, ai.Address())
+		// Build up Residue in RewardsState so it's ready to pay again
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+		vb = dl.fullBlock(payout2.Noted("2"))
 
-	// Build up Residue in RewardsState so it's ready to pay again
-	for i := 1; i < 10; i++ {
-		eval = nextBlock(t, l)
-		endBlock(t, l, eval)
-	}
-	eval = nextBlock(t, l)
-	txn(t, l, eval, payout2.Noted("2"))
-	vb = endBlock(t, l, eval)
+		afterpay := micros(dl.t, dl.validator, ai.Address())
 
-	afterpay := micros(t, l, ai.Address())
+		payInBlock = vb.Block().Payset[0]
+		inners = payInBlock.ApplyData.EvalDelta.InnerTxns
+		require.Len(t, inners, 1)
 
-	payInBlock = vb.Block().Payset[0]
-	inners = payInBlock.ApplyData.EvalDelta.InnerTxns
-	require.Len(t, inners, 1)
+		appreward := inners[0].SenderRewards.Raw
+		require.Greater(t, appreward, uint64(1000))
 
-	appreward := inners[0].SenderRewards.Raw
-	require.Greater(t, appreward, uint64(1000))
-
-	require.Equal(t, beforepay+appreward-5000-1000, afterpay)
+		require.Equal(t, beforepay+appreward-5000-1000, afterpay)
+	})
 }
 
 // TestAxferAction ensures axfers in teal have the intended effects
 func TestAxferAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusFuture)
 	defer l.Close()
 
 	asa := txntest.Txn{
@@ -383,36 +347,10 @@ submit:  itxn_submit
 	require.Equal(t, uint64(20000), back-left)
 }
 
-func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *ledger.Ledger {
-	return newTestLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
-}
-
-func newTestLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *ledger.Ledger {
-	var genHash crypto.Digest
-	crypto.RandBytes(genHash[:])
-	return newTestLedgerFull(t, balances, cv, genHash)
-}
-
-func newTestLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest) *ledger.Ledger {
-	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
-	require.NoError(t, err)
-	require.False(t, genBlock.FeeSink.IsZero())
-	require.False(t, genBlock.RewardsPool.IsZero())
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := ledger.OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
-		Block:       genBlock,
-		Accounts:    balances.Balances,
-		GenesisHash: genHash,
-	}, cfg)
-	require.NoError(t, err)
-	return l
-}
-
 // TestClawbackAction ensures an app address can act as clawback address.
 func TestClawbackAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -498,6 +436,7 @@ func TestClawbackAction(t *testing.T) {
 // TestRekeyAction ensures an app can transact for a rekeyed account
 func TestRekeyAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -602,6 +541,7 @@ skipclose:
 // properly removes the app as an authorizer for the account
 func TestRekeyActionCloseAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -677,6 +617,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 // TestDuplicatePayAction shows two pays with same parameters can be done as inner tarnsactions
 func TestDuplicatePayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -752,6 +693,7 @@ func TestDuplicatePayAction(t *testing.T) {
 // TestInnerTxCount ensures that inner transactions increment the TxnCounter
 func TestInnerTxnCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -800,6 +742,7 @@ func TestInnerTxnCount(t *testing.T) {
 // TestAcfgAction ensures assets can be created and configured in teal
 func TestAcfgAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -976,6 +919,7 @@ submit:  itxn_submit
 // we can know, so it helps exercise txncounter changes.
 func TestAsaDuringInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1029,6 +973,7 @@ func TestAsaDuringInit(t *testing.T) {
 
 func TestRekey(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1080,6 +1025,7 @@ func TestRekey(t *testing.T) {
 
 func TestNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1128,6 +1074,7 @@ func TestNote(t *testing.T) {
 
 func TestKeyreg(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1228,6 +1175,7 @@ nonpart:
 
 func TestInnerAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1295,6 +1243,7 @@ func TestInnerAppCall(t *testing.T) {
 // the changes expected when invoked.
 func TestInnerAppManipulate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1405,8 +1354,8 @@ func TestCreateAndUse(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 the asset reference is illegal, then from v31 it works.
-	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1475,8 +1424,8 @@ func TestGtxnEffects(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 `gtxn CreatedAssetId is illegal, then from v31 it works.
-	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1537,8 +1486,8 @@ func TestBasicReentry(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		app0 := txntest.Txn{
@@ -1731,8 +1680,8 @@ func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v31 = inner appl
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		program := `
@@ -1891,8 +1840,8 @@ func TestInnerAppVersionCalling(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	// 31 allowed inner appls. v34 lowered proto.MinInnerApplVersion
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		three, err := logic.AssembleStringWithVersion("int 1", 3)
@@ -2085,8 +2034,8 @@ func TestAppDowngrade(t *testing.T) {
 
 	// Confirm that in old protocol version, downgrade is legal
 	// Start at 28 because we want to v4 app to downgrade to v3
-	testConsensusRange(t, 28, 30, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 28, 30, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2116,8 +2065,8 @@ func TestAppDowngrade(t *testing.T) {
 		dl.fullBlock(&update)
 	})
 
-	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2361,7 +2310,7 @@ func executeMegaContract(b *testing.B) {
 	var cv protocol.ConsensusVersion = "temp test"
 	config.Consensus[cv] = vTest
 
-	l := newTestLedgerWithConsensusVersion(b, genBalances, cv)
+	l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
 	defer l.Close()
 	defer delete(config.Consensus, cv)
 
@@ -2458,6 +2407,7 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 // TestInnerClearState ensures inner ClearState performs close out properly, even if rejects.
 func TestInnerClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2479,7 +2429,7 @@ func TestInnerClearState(t *testing.T) {
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &inner)
 	vb := endBlock(t, l, eval)
-	innerId := vb.Block().Payset[0].ApplicationID
+	innerID := vb.Block().Payset[0].ApplicationID
 
 	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
 	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
@@ -2498,33 +2448,33 @@ itxn_begin
  itxn_field OnCompletion
 itxn_submit
 `),
-		ForeignApps: []basics.AppIndex{innerId},
+		ForeignApps: []basics.AppIndex{innerID},
 	}
 
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &outer)
 	vb = endBlock(t, l, eval)
-	outerId := vb.Block().Payset[0].ApplicationID
+	outerID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: outerId.Address(),
+		Receiver: outerID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   outerId,
+		ApplicationID:   outerID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{innerId},
+		ForeignApps:     []basics.AppIndex{innerID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	outerAcct := lookup(t, l, outerId.Address())
+	outerAcct := lookup(t, l, outerID.Address())
 	require.Len(t, outerAcct.AppLocalStates, 1)
 	require.Equal(t, outerAcct.TotalAppSchema, basics.StateSchema{
 		NumUint:      2,
@@ -2536,7 +2486,7 @@ itxn_submit
 	txn(t, l, eval, &call)
 	endBlock(t, l, eval)
 
-	outerAcct = lookup(t, l, outerId.Address())
+	outerAcct = lookup(t, l, outerID.Address())
 	require.Empty(t, outerAcct.AppLocalStates)
 	require.Empty(t, outerAcct.TotalAppSchema)
 
@@ -2546,6 +2496,7 @@ itxn_submit
 // allowed to use more than 700 (MaxAppProgramCost)
 func TestInnerClearStateBadCallee(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2567,7 +2518,7 @@ b top
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &badCallee)
 	vb := endBlock(t, l, eval)
-	badId := vb.Block().Payset[0].ApplicationID
+	badID := vb.Block().Payset[0].ApplicationID
 
 	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
 	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
@@ -2603,33 +2554,33 @@ bnz skip						// Don't do budget checking during optin
  assert
 skip:
 `),
-		ForeignApps: []basics.AppIndex{badId},
+		ForeignApps: []basics.AppIndex{badID},
 	}
 
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &outer)
 	vb = endBlock(t, l, eval)
-	outerId := vb.Block().Payset[0].ApplicationID
+	outerID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: outerId.Address(),
+		Receiver: outerID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   outerId,
+		ApplicationID:   outerID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{badId},
+		ForeignApps:     []basics.AppIndex{badID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	outerAcct := lookup(t, l, outerId.Address())
+	outerAcct := lookup(t, l, outerID.Address())
 	require.Len(t, outerAcct.AppLocalStates, 1)
 
 	// When doing a clear state, `call` checks that budget wasn't stolen
@@ -2639,7 +2590,7 @@ skip:
 	endBlock(t, l, eval)
 
 	// Clearstate took effect, despite failure from infinite loop
-	outerAcct = lookup(t, l, outerId.Address())
+	outerAcct = lookup(t, l, outerID.Address())
 	require.Empty(t, outerAcct.AppLocalStates)
 }
 
@@ -2647,6 +2598,7 @@ skip:
 // be called with less than 700 (MaxAppProgramCost)) OpcodeBudget.
 func TestInnerClearStateBadCaller(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2697,8 +2649,8 @@ log
 	eval := nextBlock(t, l)
 	txns(t, l, eval, &inner, &waster)
 	vb := endBlock(t, l, eval)
-	innerId := vb.Block().Payset[0].ApplicationID
-	wasterId := vb.Block().Payset[1].ApplicationID
+	innerID := vb.Block().Payset[0].ApplicationID
+	wasterID := vb.Block().Payset[1].ApplicationID
 
 	// Grouper is a simple app that will invoke the given apps (in
 	// ForeignApps[0,1]) as a group, with the given OnCompletion (in
@@ -2730,27 +2682,27 @@ itxn_submit
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &grouper)
 	vb = endBlock(t, l, eval)
-	grouperId := vb.Block().Payset[0].ApplicationID
+	grouperID := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: grouperId.Address(),
+		Receiver: grouperID.Address(),
 		Amount:   1_000_000,
 	}
 
 	call := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   grouperId,
+		ApplicationID:   grouperID,
 		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}, {byte(transactions.OptInOC)}},
-		ForeignApps:     []basics.AppIndex{wasterId, innerId},
+		ForeignApps:     []basics.AppIndex{wasterID, innerID},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	gAcct := lookup(t, l, grouperId.Address())
+	gAcct := lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 
 	call.ApplicationArgs = [][]byte{{byte(transactions.CloseOutOC)}, {byte(transactions.ClearStateOC)}}
@@ -2760,7 +2712,7 @@ itxn_submit
 	require.Len(t, vb.Block().Payset, 0)
 
 	// Clearstate did not take effect, since the caller tried to shortchange the CSP
-	gAcct = lookup(t, l, grouperId.Address())
+	gAcct = lookup(t, l, grouperID.Address())
 	require.Len(t, gAcct.AppLocalStates, 2)
 }
 
@@ -2768,6 +2720,7 @@ itxn_submit
 // v30, but not in vFuture. (Test should add v31 after it exists.)
 func TestClearStateInnerPay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	tests := []struct {
 		consensus protocol.ConsensusVersion
@@ -2783,7 +2736,7 @@ func TestClearStateInnerPay(t *testing.T) {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 
 			genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-			l := newTestLedgerWithConsensusVersion(t, genBalances, test.consensus)
+			l := newSimpleLedgerWithConsensusVersion(t, genBalances, test.consensus)
 			defer l.Close()
 
 			app0 := txntest.Txn{
@@ -2880,6 +2833,7 @@ itxn_submit
 // calls when using inners.
 func TestGlobalChangesAcrossApps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2988,6 +2942,7 @@ check:
 // calls when using inners.
 func TestLocalChangesAcrossApps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -3101,8 +3056,8 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3167,8 +3122,8 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3221,8 +3176,8 @@ func TestForeignAppAccountsMutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
-		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3293,5 +3248,510 @@ done:
 		vb = dl.fullBlock(&fund0, &fund1, &callA, &callB)
 
 		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
+	})
+}
+
+// TestReloadWithTxns confirms that the ledger can be reloaded from "disk" when
+// doing so requires replaying some interesting AVM txns.
+func TestReloadWithTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		dl.fullBlock() // So that the `block` opcode has a block to inspect
+
+		lookHdr := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "txn FirstValid;  int 1;  -;  block BlkTimestamp",
+		}
+
+		dl.fullBlock(&lookHdr)
+
+		dl.reloadLedgers()
+	})
+}
+
+// TestEvalAppState ensures txns in a group can't violate app state schema
+// limits. It ensures that commitToParent -> applyChild copies child's cow state
+// usage counts into parent and the usage counts are correctly propagated from
+// parent cow to child cow and back. When limits are not violated, the test
+// ensures that the updates are correct.
+func TestEvalAppState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		appcall1 := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[0],
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`,
+			ClearStateProgram: "#pragma version 2\nint 1",
+		}
+
+		appcall2 := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[0],
+			ApplicationID: 1,
+		}
+
+		dl.beginBlock()
+		dl.txgroup("store bytes count 2 exceeds schema bytes count 1", &appcall1, &appcall2)
+
+		appcall1.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
+		dl.txgroup("", &appcall1, &appcall2)
+		vb := dl.endBlock()
+		deltas := vb.Delta()
+
+		params, ok := deltas.Accts.GetAppParams(addrs[0], 1)
+		require.True(t, ok)
+		state := params.Params.GlobalState
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["caller"])
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["creator"])
+	})
+}
+
+func TestGarbageClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   "int 1",
+			ClearStateProgram: []byte{},
+		}
+
+		dl.txn(&createTxn, "invalid program (empty)")
+
+		createTxn.ClearStateProgram = []byte{0xfe} // bad uvarint
+		dl.txn(&createTxn, "invalid version")
+	})
+}
+
+func TestRewardsInAD(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v15 put rewards into ApplyData
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
+		nonpartTxn := txntest.Txn{Type: protocol.KeyRegistrationTx, Sender: addrs[2], Nonparticipation: true}
+		payNonPart := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[2]}
+
+		if ver < 18 { // Nonpart reyreg happens in v18
+			dl.txn(&nonpartTxn, "tries to mark an account as nonparticipating")
+		} else {
+			dl.fullBlock(&nonpartTxn)
+		}
+
+		// Build up Residue in RewardsState so it's ready to pay
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		vb := dl.fullBlock(&payTxn, &payNonPart)
+		payInBlock := vb.Block().Payset[0]
+		nonPartInBlock := vb.Block().Payset[1]
+		if ver >= 15 {
+			require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
+			require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+			// Sender is not due for more, and Receiver is nonpart
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			if ver < 18 {
+				require.Greater(t, nonPartInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			} else {
+				require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
+			}
+		} else {
+			require.Zero(t, payInBlock.ApplyData.SenderRewards)
+			require.Zero(t, payInBlock.ApplyData.ReceiverRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.SenderRewards)
+			require.Zero(t, nonPartInBlock.ApplyData.ReceiverRewards)
+		}
+	})
+}
+
+// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistantKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// AVM v2 (apps)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		const appID basics.AppIndex = 1
+
+		createTxn := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+byte "missing_global"
+app_global_del
+int 0
+byte "missing_local"
+app_local_del
+`),
+		}
+
+		optInTxn := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.OptInOC,
+		}
+
+		vb := dl.fullBlock(&createTxn, &optInTxn)
+		require.Len(t, vb.Block().Payset[1].EvalDelta.GlobalDelta, 0)
+		// For a while, we encoded an empty localdelta
+		deltas := 1
+		if ver >= 27 {
+			deltas = 0
+		}
+		require.Len(t, vb.Block().Payset[1].EvalDelta.LocalDeltas, deltas)
+	})
+}
+
+func TestDuplicates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: addrs[1],
+			Amount:   10,
+		}
+		dl.txn(&pay)
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Test same transaction in a later block
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Change the note so it can go in again
+		pay.Note = []byte("1")
+		dl.txn(&pay)
+
+		// Change note again, but try the txn twice in same group
+		if dl.generator.GenesisProto().MaxTxGroupSize > 1 {
+			pay.Note = []byte("2")
+			dl.txgroup("transaction already in ledger", &pay, &pay)
+		}
+	})
+}
+
+// TestHeaderAccess tests FirstValidTime and `block` which can access previous
+// block headers.
+func TestHeaderAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Added in v34
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		fvt := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			FirstValid:      0,
+			ApprovalProgram: "txn FirstValidTime",
+		}
+		dl.txn(&fvt, "round 0 is not available")
+
+		// advance current to 2
+		pay := txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]}
+		dl.fullBlock(&pay)
+
+		fvt.FirstValid = 1
+		dl.txn(&fvt, "round 0 is not available")
+
+		fvt.FirstValid = 2
+		dl.txn(&fvt) // current becomes 3
+
+		// Advance current round far enough to test access MaxTxnLife ago
+		for i := 0; i < int(config.Consensus[cv].MaxTxnLife); i++ {
+			dl.fullBlock()
+		}
+
+		// current should be 1003. Confirm.
+		require.EqualValues(t, 1002, dl.generator.Latest())
+		require.EqualValues(t, 1002, dl.validator.Latest())
+
+		fvt.FirstValid = 1003
+		fvt.LastValid = 1010
+		dl.txn(&fvt) // success advances the round
+		// now we're confident current is 1004, so construct a txn that is as
+		// old as possible, and confirm access.
+		fvt.FirstValid = 1004 - basics.Round(config.Consensus[cv].MaxTxnLife)
+		fvt.LastValid = 1004
+		dl.txn(&fvt)
+	})
+
+}
+
+// TestLogsInBlock ensures that logs appear in the block properly
+func TestLogsInBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Run tests from v30 onward
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "byte \"APP\"\n log\n int 1",
+			// Fail the clear state
+			ClearStateProgram: "byte \"CLR\"\n log\n int 0",
+		}
+		vb := dl.fullBlock(&createTxn)
+		createInBlock := vb.Block().Payset[0]
+		appID := createInBlock.ApplyData.ApplicationID
+		require.Equal(t, "APP", createInBlock.ApplyData.EvalDelta.Logs[0])
+
+		optInTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.OptInOC,
+		}
+		vb = dl.fullBlock(&optInTxn)
+		optInInBlock := vb.Block().Payset[0]
+		require.Equal(t, "APP", optInInBlock.ApplyData.EvalDelta.Logs[0])
+
+		clearTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appID,
+			OnCompletion:  transactions.ClearStateOC,
+		}
+		vb = dl.fullBlock(&clearTxn)
+		clearInBlock := vb.Block().Payset[0]
+		// Logs do not appear if the ClearState failed
+		require.Len(t, clearInBlock.ApplyData.EvalDelta.Logs, 0)
+	})
+}
+
+// TestUnfundedSenders confirms that accounts that don't even exist
+// can be the Sender in some situations.  If some other transaction
+// covers the fee, and the transaction itself does not require an
+// asset or a min balance, it's fine.
+func TestUnfundedSenders(t *testing.T) {
+	/*
+		In a 0-fee transaction from unfunded sender, we still call balances.Move
+		to “pay” the fee.  Move() does not short-circuit a Move of 0 (for good
+		reason, it allows compounding rewards).  Therefore, in Move, we do
+		rewards processing on the unfunded account.  Before
+		proto.UnfundedSenders, the rewards procesing would set the RewardsBase,
+		which would require the account be written to DB, and therefore the MBR
+		check would kick in (and fail). Now it skips the update if the account
+		has less than RewardsUnit, as the update is meaningless anyway.
+	*/
+
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		asaIndex := basics.AssetIndex(1)
+
+		ghost := basics.Address{0x01}
+
+		asaCreate := txntest.Txn{
+			Type:   "acfg",
+			Sender: addrs[0],
+			AssetParams: basics.AssetParams{
+				Total:    10,
+				Clawback: ghost,
+				Freeze:   ghost,
+				Manager:  ghost,
+			},
+		}
+
+		appCreate := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		dl.fullBlock(&asaCreate, &appCreate)
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		benefactor := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: addrs[0],
+			Fee:      2000,
+		}
+
+		ephemeral := []txntest.Txn{
+			{
+				Type:     "pay",
+				Amount:   0,
+				Sender:   ghost,
+				Receiver: ghost,
+				Fee:      0,
+			},
+			{ // Axfer of 0
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: basics.Address{0x02},
+				XferAsset:     basics.AssetIndex(1),
+				Fee:           0,
+			},
+			{ // Clawback
+				Type:          "axfer",
+				AssetAmount:   0,
+				Sender:        ghost,
+				AssetReceiver: addrs[0],
+				AssetSender:   addrs[1],
+				XferAsset:     asaIndex,
+				Fee:           0,
+			},
+			{ // Freeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   true,
+				Fee:           0,
+			},
+			{ // Unfreeze
+				Type:          "afrz",
+				Sender:        ghost,
+				FreezeAccount: addrs[0], // creator, therefore is opted in
+				FreezeAsset:   asaIndex,
+				AssetFrozen:   false,
+				Fee:           0,
+			},
+			{ // App call
+				Type:          "appl",
+				Sender:        ghost,
+				ApplicationID: basics.AppIndex(2),
+				Fee:           0,
+			},
+			{ // App creation (only works because it's also deleted)
+				Type:         "appl",
+				Sender:       ghost,
+				OnCompletion: transactions.DeleteApplicationOC,
+				Fee:          0,
+			},
+		}
+
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 34 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		for i, e := range ephemeral {
+			dl.txgroup(problem, benefactor.Noted(strconv.Itoa(i)), &e)
+		}
+	})
+}
+
+// TestAppCallAppDuringInit is similar to TestUnfundedSenders test, but now the
+// unfunded sender is a newly created app.  The fee has been paid by the outer
+// transaction, so the app should be able to make an app call as that requires
+// no min balance.
+func TestAppCallAppDuringInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		dl := NewDoubleLedger(t, genBalances, cv)
+		defer dl.Close()
+
+		approve := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
+
+		// construct a simple app
+		vb := dl.fullBlock(&approve)
+
+		// now make a new app that calls it during init
+		approveID := vb.Block().Payset[0].ApplicationID
+
+		// Advance so that rewardsLevel increases
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
+
+		callInInit := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `
+			  itxn_begin
+			  int appl
+			  itxn_field TypeEnum
+			  txn Applications 1
+			  itxn_field ApplicationID
+			  itxn_submit
+              int 1
+            `,
+			ForeignApps: []basics.AppIndex{approveID},
+			Fee:         2000, // Enough to have the inner fee paid for
+		}
+		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
+		var problem string
+		if ver < 34 {
+			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+			problem = "balance 0 below min"
+		}
+		dl.txn(&callInInit, problem)
 	})
 }

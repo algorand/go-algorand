@@ -97,6 +97,11 @@ func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
 	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
 }
 
+// AfterTealOp does nothing
+func (adaptor *legacyDebuggerAdaptor) AfterTealOp(cx *EvalContext, evalError error) error {
+	return nil
+}
+
 // AfterLogicEval invokes the legacy debugger's Complete hook
 func (adaptor *legacyDebuggerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) error {
 	if adaptor.innerTxnDepth > 0 {
@@ -264,12 +269,12 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 
 // parseCallStack initializes an array of CallFrame objects from the raw
 // callstack.
-func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
+func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
 	callFrames := make([]CallFrame, 0)
 	lines := strings.Split(d.Disassembly, "\n")
-	for _, pc := range callstack {
+	for _, fr := range callstack {
 		// The callsub is pc - 3 from the callstack pc
-		callsubLineNum := d.PCToLine(pc - 3)
+		callsubLineNum := d.PCToLine(fr.retpc - 3)
 		callSubLine := strings.Fields(lines[callsubLineNum])
 		label := ""
 		if callSubLine[0] == "callsub" {

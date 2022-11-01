@@ -15,6 +15,8 @@ import (
 // > Simulate With Debugger
 
 type simpleDebugger struct {
+	logic.NullDebuggerHook
+
 	beforeTxnCalls int
 	afterTxnCalls  int
 

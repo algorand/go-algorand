@@ -25,6 +25,8 @@ import (
 )
 
 type cursorDebuggerHook struct {
+	logic.NullDebuggerHook
+
 	cursor         TxnPath
 	nextInnerIndex uint64
 }
@@ -40,8 +42,6 @@ func (cdbg *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 }
 
 func (cdbg *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	// top := len(cdbg.cursor) - 1
-	// cdbg.cursor[top]++
 	cdbg.nextInnerIndex = 0
 	return nil
 }
@@ -113,8 +113,12 @@ func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyDat
 	return applyDataCursor, nil
 }
 
+// Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedTxnWithAD) error {
-	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.absolutePath()) // this works because the cursor has not been updated yet by `BeforeTxn`
+	if len(dh.cursor) == 0 {
+		return nil
+	}
+	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.cursor[:len(dh.cursor)-1])
 	if err != nil {
 		return err
 	}
@@ -122,7 +126,6 @@ func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedT
 	return nil
 }
 
-// Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
 	err := dh.populateInnerTransactions(ep.TxnGroup)
 	if err != nil {
@@ -143,7 +146,11 @@ func (dh *debuggerHook) saveApplyData(applyData transactions.ApplyData) error {
 
 func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
 	// Update ApplyData if not an inner transaction
-	return dh.saveApplyData(ep.TxnGroup[groupIndex].ApplyData)
+	err := dh.saveApplyData(ep.TxnGroup[groupIndex].ApplyData)
+	if err != nil {
+		return err
+	}
+	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
 }
 
 func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {

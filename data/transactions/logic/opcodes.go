@@ -24,7 +24,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 8
+const LogicVersion = 9
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -64,11 +64,15 @@ const appAddressAvailableVersion = 7
 
 const fidoVersion = 7       // base64, json, secp256r1
 const randomnessVersion = 7 // vrf_verify, block
+const fpVersion = 8         // changes for frame pointers and simpler function discipline
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const pairingVersion = 8 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+
+// Unlimited Global Storage opcodes
+const boxVersion = 8 // box_*
 
 type linearCost struct {
 	baseCost  int
@@ -122,6 +126,8 @@ type OpDetails struct {
 	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
 	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
 	Immediates []immediate // details of each immediate arg to opcode
+
+	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -167,16 +173,16 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	return cost
 }
 
-func opDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil}
+func detDefault() OpDetails {
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
-func opBranch() OpDetails {
-	d := opDefault()
+func detBranch() OpDetails {
+	d := detDefault()
 	d.asm = asmBranch
 	d.check = checkBranch
 	d.Size = 3
@@ -184,60 +190,79 @@ func opBranch() OpDetails {
 	return d
 }
 
+func detSwitch() OpDetails {
+	d := detDefault()
+	d.asm = asmSwitch
+	d.check = checkSwitch
+	d.Size = 0
+	d.Immediates = []immediate{imm("target ...", immLabels)}
+	return d
+}
+
 func assembler(asm asmFunc) OpDetails {
-	d := opDefault()
+	d := detDefault()
 	d.asm = asm
 	return d
 }
 
 func (d OpDetails) assembler(asm asmFunc) OpDetails {
-	clone := d
-	clone.asm = asm
-	return clone
+	d.asm = asm
+	return d
 }
 
 func costly(cost int) OpDetails {
-	d := opDefault()
+	d := detDefault()
 	d.FullCost.baseCost = cost
 	return d
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	clone := d
-	clone.FullCost = linearCost{baseCost: cost}
-	return clone
+	d.FullCost = linearCost{baseCost: cost}
+	return d
 }
 
 func only(m RunMode) OpDetails {
-	d := opDefault()
+	d := detDefault()
 	d.Modes = m
 	return d
 }
 
 func (d OpDetails) only(m RunMode) OpDetails {
-	clone := d
-	clone.Modes = m
-	return clone
+	d.Modes = m
+	return d
 }
 
 func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	clone := d
-	clone.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
-	return clone
+	d.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
+	return d
 }
 
 func immediates(names ...string) OpDetails {
-	d := opDefault()
+	return immKinded(immByte, names...)
+}
+
+func (d OpDetails) trust() OpDetails {
+	d.trusted = true
+	return d
+}
+
+func immKinded(kind immKind, names ...string) OpDetails {
+	d := detDefault()
 	d.Size = len(names) + 1
 	d.Immediates = make([]immediate, len(names))
 	for i, name := range names {
-		d.Immediates[i] = imm(name, immByte)
+		d.Immediates[i] = imm(name, kind)
 	}
 	return d
 }
 
-func stacky(typer refineFunc, imms ...string) OpDetails {
-	d := immediates(imms...)
+func typed(typer refineFunc) OpDetails {
+	d := detDefault()
+	d.refine = typer
+	return d
+}
+
+func (d OpDetails) typed(typer refineFunc) OpDetails {
 	d.refine = typer
 	return d
 }
@@ -273,7 +298,7 @@ func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
 		panic("bad cost configuration")
 	}
-	d := opDefault()
+	d := detDefault()
 	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
 	return d
 }
@@ -283,11 +308,13 @@ type immKind byte
 
 const (
 	immByte immKind = iota
+	immInt8
 	immLabel
 	immInt
 	immBytes
 	immInts
 	immBytess // "ss" not a typo.  Multiple "bytes"
+	immLabels
 )
 
 type immediate struct {
@@ -369,7 +396,7 @@ func (spec *OpSpec) deadens() bool {
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, proto(":x"), 1, opDefault()},
+	{0x00, "err", opErr, proto(":x"), 1, detDefault()},
 	{0x01, "sha256", opSHA256, proto("b:b"), 1, costly(7)},
 	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
@@ -399,43 +426,43 @@ var OpSpecs = []OpSpec{
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b:bb"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
 	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("bibb:bb"), 5, field("v", &EcdsaCurves).costs(2000)},
 
-	{0x08, "+", opPlus, proto("ii:i"), 1, opDefault()},
-	{0x09, "-", opMinus, proto("ii:i"), 1, opDefault()},
-	{0x0a, "/", opDiv, proto("ii:i"), 1, opDefault()},
-	{0x0b, "*", opMul, proto("ii:i"), 1, opDefault()},
-	{0x0c, "<", opLt, proto("ii:i"), 1, opDefault()},
-	{0x0d, ">", opGt, proto("ii:i"), 1, opDefault()},
-	{0x0e, "<=", opLe, proto("ii:i"), 1, opDefault()},
-	{0x0f, ">=", opGe, proto("ii:i"), 1, opDefault()},
-	{0x10, "&&", opAnd, proto("ii:i"), 1, opDefault()},
-	{0x11, "||", opOr, proto("ii:i"), 1, opDefault()},
-	{0x12, "==", opEq, proto("aa:i"), 1, stacky(typeEquals)},
-	{0x13, "!=", opNeq, proto("aa:i"), 1, stacky(typeEquals)},
-	{0x14, "!", opNot, proto("i:i"), 1, opDefault()},
-	{0x15, "len", opLen, proto("b:i"), 1, opDefault()},
-	{0x16, "itob", opItob, proto("i:b"), 1, opDefault()},
-	{0x17, "btoi", opBtoi, proto("b:i"), 1, opDefault()},
-	{0x18, "%", opModulo, proto("ii:i"), 1, opDefault()},
-	{0x19, "|", opBitOr, proto("ii:i"), 1, opDefault()},
-	{0x1a, "&", opBitAnd, proto("ii:i"), 1, opDefault()},
-	{0x1b, "^", opBitXor, proto("ii:i"), 1, opDefault()},
-	{0x1c, "~", opBitNot, proto("i:i"), 1, opDefault()},
-	{0x1d, "mulw", opMulw, proto("ii:ii"), 1, opDefault()},
-	{0x1e, "addw", opAddw, proto("ii:ii"), 2, opDefault()},
+	{0x08, "+", opPlus, proto("ii:i"), 1, detDefault()},
+	{0x09, "-", opMinus, proto("ii:i"), 1, detDefault()},
+	{0x0a, "/", opDiv, proto("ii:i"), 1, detDefault()},
+	{0x0b, "*", opMul, proto("ii:i"), 1, detDefault()},
+	{0x0c, "<", opLt, proto("ii:i"), 1, detDefault()},
+	{0x0d, ">", opGt, proto("ii:i"), 1, detDefault()},
+	{0x0e, "<=", opLe, proto("ii:i"), 1, detDefault()},
+	{0x0f, ">=", opGe, proto("ii:i"), 1, detDefault()},
+	{0x10, "&&", opAnd, proto("ii:i"), 1, detDefault()},
+	{0x11, "||", opOr, proto("ii:i"), 1, detDefault()},
+	{0x12, "==", opEq, proto("aa:i"), 1, typed(typeEquals)},
+	{0x13, "!=", opNeq, proto("aa:i"), 1, typed(typeEquals)},
+	{0x14, "!", opNot, proto("i:i"), 1, detDefault()},
+	{0x15, "len", opLen, proto("b:i"), 1, detDefault()},
+	{0x16, "itob", opItob, proto("i:b"), 1, detDefault()},
+	{0x17, "btoi", opBtoi, proto("b:i"), 1, detDefault()},
+	{0x18, "%", opModulo, proto("ii:i"), 1, detDefault()},
+	{0x19, "|", opBitOr, proto("ii:i"), 1, detDefault()},
+	{0x1a, "&", opBitAnd, proto("ii:i"), 1, detDefault()},
+	{0x1b, "^", opBitXor, proto("ii:i"), 1, detDefault()},
+	{0x1c, "~", opBitNot, proto("i:i"), 1, detDefault()},
+	{0x1d, "mulw", opMulw, proto("ii:ii"), 1, detDefault()},
+	{0x1e, "addw", opAddw, proto("ii:ii"), 2, detDefault()},
 	{0x1f, "divmodw", opDivModw, proto("iiii:iiii"), 4, costly(20)},
 
-	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntConstBlock, "uint ...", immInts)},
+	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntImmArgs, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, proto(":i"), 1, immediates("i").assembler(asmIntC)},
-	{0x22, "intc_0", opIntConst0, proto(":i"), 1, opDefault()},
-	{0x23, "intc_1", opIntConst1, proto(":i"), 1, opDefault()},
-	{0x24, "intc_2", opIntConst2, proto(":i"), 1, opDefault()},
-	{0x25, "intc_3", opIntConst3, proto(":i"), 1, opDefault()},
-	{0x26, "bytecblock", opByteConstBlock, proto(":"), 1, constants(asmByteCBlock, checkByteConstBlock, "bytes ...", immBytess)},
+	{0x22, "intc_0", opIntConst0, proto(":i"), 1, detDefault()},
+	{0x23, "intc_1", opIntConst1, proto(":i"), 1, detDefault()},
+	{0x24, "intc_2", opIntConst2, proto(":i"), 1, detDefault()},
+	{0x25, "intc_3", opIntConst3, proto(":i"), 1, detDefault()},
+	{0x26, "bytecblock", opByteConstBlock, proto(":"), 1, constants(asmByteCBlock, checkByteImmArgs, "bytes ...", immBytess)},
 	{0x27, "bytec", opByteConstLoad, proto(":b"), 1, immediates("i").assembler(asmByteC)},
-	{0x28, "bytec_0", opByteConst0, proto(":b"), 1, opDefault()},
-	{0x29, "bytec_1", opByteConst1, proto(":b"), 1, opDefault()},
-	{0x2a, "bytec_2", opByteConst2, proto(":b"), 1, opDefault()},
-	{0x2b, "bytec_3", opByteConst3, proto(":b"), 1, opDefault()},
+	{0x28, "bytec_0", opByteConst0, proto(":b"), 1, detDefault()},
+	{0x29, "bytec_1", opByteConst1, proto(":b"), 1, detDefault()},
+	{0x2a, "bytec_2", opByteConst2, proto(":b"), 1, detDefault()},
+	{0x2b, "bytec_3", opByteConst3, proto(":b"), 1, detDefault()},
 	{0x2c, "arg", opArg, proto(":b"), 1, immediates("n").only(ModeSig).assembler(asmArg)},
 	{0x2d, "arg_0", opArg0, proto(":b"), 1, only(ModeSig)},
 	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(ModeSig)},
@@ -446,8 +473,8 @@ var OpSpecs = []OpSpec{
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
-	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},
-	{0x35, "store", opStore, proto("a:"), 1, stacky(typeStore, "i")},
+	{0x34, "load", opLoad, proto(":a"), 1, immediates("i").typed(typeLoad)},
+	{0x35, "store", opStore, proto("a:"), 1, immediates("i").typed(typeStore)},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
 	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
@@ -461,41 +488,41 @@ var OpSpecs = []OpSpec{
 	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(ModeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
-	{0x3e, "loads", opLoads, proto("i:a"), 5, stacky(typeLoads)},
-	{0x3f, "stores", opStores, proto("ia:"), 5, stacky(typeStores)},
+	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
+	{0x3f, "stores", opStores, proto("ia:"), 5, typed(typeStores)},
 
-	{0x40, "bnz", opBnz, proto("i:"), 1, opBranch()},
-	{0x41, "bz", opBz, proto("i:"), 2, opBranch()},
-	{0x42, "b", opB, proto(":"), 2, opBranch()},
-	{0x43, "return", opReturn, proto("i:x"), 2, opDefault()},
-	{0x44, "assert", opAssert, proto("i:"), 3, opDefault()},
-	{0x48, "pop", opPop, proto("a:"), 1, opDefault()},
-	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, stacky(typeDup)},
-	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, stacky(typeDupTwo)},
-	// There must be at least one thing on the stack for dig, but
-	// it would be nice if we did better checking than that.
-	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, stacky(typeDig, "n")},
-	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, stacky(typeSwap)},
-	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, stacky(typeSelect)},
-	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]"), 5, stacky(typeCover, "n")},
-	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A"), 5, stacky(typeUncover, "n")},
+	{0x40, "bnz", opBnz, proto("i:"), 1, detBranch()},
+	{0x41, "bz", opBz, proto("i:"), 2, detBranch()},
+	{0x42, "b", opB, proto(":"), 2, detBranch()},
+	{0x43, "return", opReturn, proto("i:x"), 2, detDefault()},
+	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
+	{0x45, "bury", opBury, proto("a:"), fpVersion, immediates("n").typed(typeBury)},
+	{0x46, "popn", opPopN, proto(":", "[N items]", ""), fpVersion, immediates("n").typed(typePopN).trust()},
+	{0x47, "dupn", opDupN, proto("a:", "", "A, [N copies of A]"), fpVersion, immediates("n").typed(typeDupN).trust()},
+	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
+	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, typed(typeDup)},
+	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, typed(typeDupTwo)},
+	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, immediates("n").typed(typeDig)},
+	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, typed(typeSwap)},
+	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, typed(typeSelect)},
+	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]"), 5, immediates("n").typed(typeCover)},
+	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A"), 5, immediates("n").typed(typeUncover)},
 
 	// byteslice processing / StringOps
-	{0x50, "concat", opConcat, proto("bb:b"), 2, opDefault()},
+	{0x50, "concat", opConcat, proto("bb:b"), 2, detDefault()},
 	{0x51, "substring", opSubstring, proto("b:b"), 2, immediates("s", "e").assembler(asmSubstring)},
-	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, opDefault()},
-	{0x53, "getbit", opGetBit, proto("ai:i"), 3, opDefault()},
-	{0x54, "setbit", opSetBit, proto("aii:a"), 3, stacky(typeSetBit)},
-	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, opDefault()},
-	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, opDefault()},
+	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, detDefault()},
+	{0x53, "getbit", opGetBit, proto("ai:i"), 3, detDefault()},
+	{0x54, "setbit", opSetBit, proto("aii:a"), 3, typed(typeSetBit)},
+	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, detDefault()},
+	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, detDefault()},
 	{0x57, "extract", opExtract, proto("b:b"), 5, immediates("s", "l")},
-	{0x58, "extract3", opExtract3, proto("bii:b"), 5, opDefault()},
-	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
-	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
-	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
+	{0x58, "extract3", opExtract3, proto("bii:b"), 5, detDefault()},
+	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, detDefault()},
+	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, detDefault()},
+	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, detDefault()},
 	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
-	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, opDefault()},
-
+	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, detDefault()},
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
@@ -528,23 +555,30 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, proto(":i"), 3, constants(asmPushInt, opPushInt, "uint", immInt)},
+	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]"), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
+	{0x83, "pushints", opPushInts, proto(":", "", "[N items]"), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i"), 7, costly(1900)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, proto(":"), 4, opBranch()},
-	{0x89, "retsub", opRetSub, proto(":"), 4, opDefault()},
-	// Leave a little room for indirect function calls, or similar
+	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
+	{0x89, "retsub", opRetSub, proto(":"), 4, detDefault().trust()},
+	// protoByte is a named constant because opCallSub needs to know it.
+	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
+	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0x8c, "frame_bury", opFrameBury, proto("a:"), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
+	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
+	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", ""), 8, detSwitch().trust()},
 
 	// More math
-	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, opDefault()},
-	{0x91, "shr", opShiftRight, proto("ii:i"), 4, opDefault()},
+	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
+	{0x91, "shr", opShiftRight, proto("ii:i"), 4, detDefault()},
 	{0x92, "sqrt", opSqrt, proto("i:i"), 4, costly(4)},
-	{0x93, "bitlen", opBitLen, proto("a:i"), 4, opDefault()},
-	{0x94, "exp", opExp, proto("ii:i"), 4, opDefault()},
+	{0x93, "bitlen", opBitLen, proto("a:i"), 4, detDefault()},
+	{0x94, "exp", opExp, proto("ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
 	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), 6, costly(40)},
-	{0x97, "divw", opDivw, proto("iii:i"), 6, opDefault()},
+	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), 7, costly(130)},
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
@@ -553,36 +587,44 @@ var OpSpecs = []OpSpec{
 	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
 	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
 	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
-	// leave room here for eip-2537 style opcodes
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("bb:b"), 4, costly(10)},
 	{0xa1, "b-", opBytesMinus, proto("bb:b"), 4, costly(10)},
 	{0xa2, "b/", opBytesDiv, proto("bb:b"), 4, costly(20)},
 	{0xa3, "b*", opBytesMul, proto("bb:b"), 4, costly(20)},
-	{0xa4, "b<", opBytesLt, proto("bb:i"), 4, opDefault()},
-	{0xa5, "b>", opBytesGt, proto("bb:i"), 4, opDefault()},
-	{0xa6, "b<=", opBytesLe, proto("bb:i"), 4, opDefault()},
-	{0xa7, "b>=", opBytesGe, proto("bb:i"), 4, opDefault()},
-	{0xa8, "b==", opBytesEq, proto("bb:i"), 4, opDefault()},
-	{0xa9, "b!=", opBytesNeq, proto("bb:i"), 4, opDefault()},
+	{0xa4, "b<", opBytesLt, proto("bb:i"), 4, detDefault()},
+	{0xa5, "b>", opBytesGt, proto("bb:i"), 4, detDefault()},
+	{0xa6, "b<=", opBytesLe, proto("bb:i"), 4, detDefault()},
+	{0xa7, "b>=", opBytesGe, proto("bb:i"), 4, detDefault()},
+	{0xa8, "b==", opBytesEq, proto("bb:i"), 4, detDefault()},
+	{0xa9, "b!=", opBytesNeq, proto("bb:i"), 4, detDefault()},
 	{0xaa, "b%", opBytesModulo, proto("bb:b"), 4, costly(20)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
 	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
-	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, opDefault()},
+	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
 	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(ModeApp)},
-	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, stacky(typeTxField, "f").field("f", &TxnFields).only(ModeApp).assembler(asmItxnField)},
+	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(ModeApp).assembler(asmItxnField)},
 	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(ModeApp)},
 	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(ModeApp).assembler(asmItxn)},
 	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(ModeApp)},
 	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(ModeApp).assembler(asmGitxn)},
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
+
+	// Unlimited Global Storage - Boxes
+	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

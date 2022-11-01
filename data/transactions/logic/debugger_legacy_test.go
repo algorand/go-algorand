@@ -117,7 +117,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
 		testDbg := testLegacyDbgHook{}
-		ep := defaultEvalParams(nil)
+		ep := defaultEvalParams()
 		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
 		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 
@@ -130,7 +130,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
 		testDbg := testLegacyDbgHook{}
-		ep := defaultEvalParams(nil)
+		ep := defaultEvalParams()
 		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
 		testApp(t, legacyDebuggerTestProgram, ep)
 
@@ -241,7 +241,7 @@ func TestParseCallstack(t *testing.T) {
 		Disassembly: testCallStackProgram,
 		PCOffset:    []PCOffset{{PC: 1, Offset: 18}, {PC: 4, Offset: 30}, {PC: 7, Offset: 45}, {PC: 8, Offset: 65}, {PC: 11, Offset: 88}},
 	}
-	callstack := []int{4, 8}
+	callstack := []frame{{retpc: 4}, {retpc: 8}}
 
 	cfs := dState.parseCallstack(callstack)
 	require.Equal(t, expectedCallFrames, cfs)
@@ -263,7 +263,7 @@ func TestCallStackUpdate(t *testing.T) {
 	}
 
 	testDbg := testLegacyDbgHook{}
-	ep := defaultEvalParams(nil)
+	ep := defaultEvalParams()
 	ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 

@@ -52,8 +52,8 @@ func (m *MockCatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context
 	return nil
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (m *MockCatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
+// ProcessStagingBalances deserialize the given bytes as a temporary staging balances
+func (m *MockCatchpointCatchupAccessor) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
 	return nil
 }
 
@@ -101,5 +101,10 @@ func (m *MockCatchpointCatchupAccessor) EnsureFirstBlock(ctx context.Context) (b
 // CompleteCatchup completes the catchpoint catchup process by switching the databases tables around
 // and reloading the ledger.
 func (m *MockCatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (err error) {
+	return nil
+}
+
+// Ledger returns ledger instance as CatchupAccessorClientLedger interface
+func (m *MockCatchpointCatchupAccessor) Ledger() (l ledger.CatchupAccessorClientLedger) {
 	return nil
 }
