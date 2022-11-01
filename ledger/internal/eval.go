@@ -850,6 +850,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		if !txn.Txn.Group.IsZero() {
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
+
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
