@@ -223,7 +223,7 @@ type wsPeer struct {
 	peerIndex int
 
 	identity          crypto.PublicKey
-	identityVerified  bool
+	identityVerified  uint32
 	identityChallenge [32]byte
 
 	// Challenge sent to the peer on an incoming connection
@@ -951,7 +951,7 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 }
 
 func (wp *wsPeer) IdentityVerified() {
-	wp.identityVerified = true
+	atomic.StoreUint32(&wp.identityVerified, 1)
 }
 
 // waitForIdentityVerify starts a goroutine to wait and check that the
@@ -960,7 +960,7 @@ func (wp *wsPeer) IdentityVerified() {
 func (wp *wsPeer) waitForIdentityVerify() {
 	go func() {
 		time.Sleep(5 * time.Second)
-		if !wp.identityVerified {
+		if atomic.LoadUint32(&wp.identityVerified) != 1 {
 			wp.Close(time.Now())
 		}
 	}()

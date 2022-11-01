@@ -27,15 +27,16 @@ import (
 )
 
 func TestShouldSupportIdentityChallenge(t *testing.T) {
-	require.True(t, shouldSupportIdentityChallenge("2.2"))
-	require.True(t, shouldSupportIdentityChallenge("2.20"))
 	require.True(t, shouldSupportIdentityChallenge("2.3"))
+	require.True(t, shouldSupportIdentityChallenge("2.20"))
+	require.True(t, shouldSupportIdentityChallenge("2.4"))
 	require.True(t, shouldSupportIdentityChallenge("3.1"))
 	require.True(t, shouldSupportIdentityChallenge("100.1"))
 
 	require.False(t, shouldSupportIdentityChallenge("1.1"))
 	require.False(t, shouldSupportIdentityChallenge("2.2.0"))
 	require.False(t, shouldSupportIdentityChallenge("2.1"))
+	require.False(t, shouldSupportIdentityChallenge("2.2"))
 	require.False(t, shouldSupportIdentityChallenge("1.999"))
 	require.False(t, shouldSupportIdentityChallenge("foobar"))
 	require.False(t, shouldSupportIdentityChallenge(""))
@@ -84,7 +85,7 @@ func TestIdentityChallengeSignEncodeDecode(t *testing.T) {
 	assert.Equal(t, chal.Key, chal2.Key)
 
 	// sign this ourselves to confirm signing is as expected,
-	//	and because the object is not signed until encoding
+	// and because the object is not signed until encoding
 	chalSignature := secrets.SignBytes(chal.signableBytes())
 	assert.Equal(t, chalSignature, chal2.Signature)
 }
@@ -156,7 +157,7 @@ func TestIdentityVerificationHandler(t *testing.T) {
 	p := wsPeer{
 		identity:          (crypto.PublicKey)(chalSecrets.SignatureVerifier),
 		identityChallenge: chal,
-		identityVerified:  false,
+		identityVerified:  0,
 	}
 
 	i := IncomingMessage{
@@ -165,7 +166,7 @@ func TestIdentityVerificationHandler(t *testing.T) {
 		Data:   sig[:],
 	}
 	identityVerificationHandler(i)
-	assert.True(t, p.identityVerified)
+	assert.Equal(t, uint32(1), p.identityVerified)
 }
 
 func TestIdentityVerificationHandlerBadSignature(t *testing.T) {
@@ -180,7 +181,7 @@ func TestIdentityVerificationHandlerBadSignature(t *testing.T) {
 	p := wsPeer{
 		identity:          (crypto.PublicKey)(chalSecrets.SignatureVerifier),
 		identityChallenge: chal,
-		identityVerified:  false,
+		identityVerified:  0,
 	}
 
 	i := IncomingMessage{
@@ -189,5 +190,5 @@ func TestIdentityVerificationHandlerBadSignature(t *testing.T) {
 		Data:   sig[:],
 	}
 	identityVerificationHandler(i)
-	assert.False(t, p.identityVerified)
+	assert.Equal(t, uint32(0), p.identityVerified)
 }

@@ -344,8 +344,7 @@ type WebsocketNetwork struct {
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
 	peersByID          map[crypto.PublicKey]*wsPeer // peersByID maps a Public Identification Key to a given peer
-	peersByIDLock      deadlock.RWMutex
-	peersChangeCounter int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersChangeCounter int32                        // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
@@ -594,9 +593,6 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	peer := badnode.(*wsPeer)
 	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
-	wn.peersByIDLock.Lock()
-	defer wn.peersByIDLock.Unlock()
-	delete(wn.peersByID, peer.identity)
 }
 
 func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
@@ -608,8 +604,6 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 func (wn *WebsocketNetwork) DisconnectPeers() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
-	wn.peersByIDLock.Lock()
-	defer wn.peersByIDLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
@@ -1179,10 +1173,11 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		}
 		peerPublicKey = idChal.Key
 		// if we already have a verified peer using this key, do not proceed
-		wn.peersByIDLock.Lock()
-		defer wn.peersByIDLock.Unlock()
-		if wn.peersByID[peerPublicKey] != nil &&
-			wn.peersByID[peerPublicKey].identityVerified {
+		wn.peersLock.RLock()
+		existingPeer := wn.peersByID[peerPublicKey]
+		wn.peersLock.RUnlock()
+		if existingPeer != nil &&
+			atomic.LoadUint32(&existingPeer.identityVerified) == 1 {
 			wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
 			response.WriteHeader(http.StatusPreconditionFailed)
 			n, err := response.Write([]byte("already connected"))
@@ -1191,9 +1186,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			}
 			return
 		}
-		idChalResp := NewIdentityChallengeResponse((crypto.PublicKey)(wn.identityKeys.SignatureVerifier), idChal)
-		peerIDChallenge = idChalResp.ResponseChallenge
-		responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalResp.SignAndEncodeB64(wn.identityKeys))
+		challengeResponse, idChalRespHeader := SignedEncodedB64IdentityChallengeResponse(wn.identityKeys, idChal)
+		peerIDChallenge = challengeResponse
+		responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
 	}
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
@@ -1219,13 +1214,12 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		version:           matchingVersion,
 		identity:          peerPublicKey,
 		identityChallenge: peerIDChallenge,
-		identityVerified:  false,
+		identityVerified:  0,
 		features:          decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
-	wn.peersByID[peerPublicKey] = peer
 	if shouldSupportIdentityChallenge(matchingVersion) {
 		peer.waitForIdentityVerify()
 	}
@@ -2149,9 +2143,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChal := NewIdentityChallenge((crypto.PublicKey)(wn.identityKeys.SignatureVerifier))
-	idChalB64 := idChal.SignAndEncodeB64(wn.identityKeys)
-	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChalB64)
+	idChallenge, idChallengeHeader := SignedEncodedB64IdentityChallenge(wn.identityKeys)
+	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
@@ -2227,15 +2220,18 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			return
 		}
 		// if the signed challenge does not return our original challenge, do not proceed
-		if idChalResp.Challenge != idChal.Challenge {
-			wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChal.Challenge)
+		if idChalResp.Challenge != idChallenge {
+			wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChallenge)
 			return
 		}
 		// now that we have validated the identity challenge, we can proceed and treat this peer as validated
 		peerPublicKey = idChalResp.Key
 		// if we already have a verified peer using this key, do not proceed
-		if wn.peersByID[peerPublicKey] != nil &&
-			wn.peersByID[peerPublicKey].identityVerified {
+		wn.peersLock.RLock()
+		existingPeer := wn.peersByID[peerPublicKey]
+		wn.peersLock.RUnlock()
+		if existingPeer != nil &&
+			atomic.LoadUint32(&existingPeer.identityVerified) == 1 {
 			wn.log.Warnf("ws connect(%s) already connected", gossipAddr)
 			return
 		}
@@ -2258,13 +2254,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
 		identity:                    peerPublicKey,
-		identityVerified:            true,
+		identityVerified:            0,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
-	wn.peersByID[peerPublicKey] = peer
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2356,9 +2351,6 @@ func (wn *WebsocketNetwork) SetPrioScheme(s NetPrioScheme) {
 // called from wsPeer to report that it has closed
 func (wn *WebsocketNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	wn.removePeer(peer, reason)
-	wn.peersByIDLock.Lock()
-	defer wn.peersByIDLock.Unlock()
-	delete(wn.peersByID, peer.identity)
 }
 
 func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
@@ -2413,6 +2405,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
 		wn.prioTracker.removePeer(peer)
+		delete(wn.peersByID, peer.identity)
 		if peer.throttledOutgoingConnection {
 			atomic.AddInt32(&wn.throttledOutgoingConnections, int32(1))
 		}
@@ -2432,6 +2425,9 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
+	if peer.identity != [32]byte{} {
+		wn.peersByID[peer.identity] = peer
+	}
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 	wn.countPeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {

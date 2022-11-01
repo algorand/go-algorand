@@ -31,8 +31,8 @@ import (
 const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
 // minimumProtocolVersion is used to evaluate if a peer's supported protocol
-// should include identityChallenge exchange
-var minimumProtocolVersion = [2]int64{2, 2}
+// should include identityChallenge exchange. {2, 3} represents version 2.3
+var minimumProtocolVersion = [2]int64{2, 3}
 
 func shouldSupportIdentityChallenge(v string) bool {
 	maj, min, err := versionToMajorMinor(v)
@@ -74,6 +74,7 @@ func NewIdentityChallenge(p crypto.PublicKey) identityChallenge {
 
 func (i identityChallenge) signableBytes() []byte {
 	return bytes.Join([][]byte{
+		[]byte("IC"),
 		i.Challenge[:],
 		i.Key[:],
 	},
@@ -116,6 +117,14 @@ func IdentityChallengeFromB64(i string) identityChallenge {
 	return ret
 }
 
+// SignedEncodedB64IdentityChallenge creates an encoded header string for identityChallenges,
+// provided signing keys. It simply wraps the process of creating and encoding the object.
+// Also returns the challenge generated
+func SignedEncodedB64IdentityChallenge(keys *crypto.SignatureSecrets) ([32]byte, string) {
+	c := NewIdentityChallenge(keys.SignatureVerifier)
+	return c.Challenge, c.SignAndEncodeB64(keys)
+}
+
 // NewIdentityChallengeResponse creates an IdentityChallengeResponse from a received identityChallenge
 func NewIdentityChallengeResponse(p crypto.PublicKey, id identityChallenge) identityChallengeResponse {
 	c := identityChallengeResponse{
@@ -131,6 +140,7 @@ func NewIdentityChallengeResponse(p crypto.PublicKey, id identityChallenge) iden
 
 func (i identityChallengeResponse) signableBytes() []byte {
 	return bytes.Join([][]byte{
+		[]byte("ICR"),
 		i.Challenge[:],
 		i.ResponseChallenge[:],
 		i.Key[:],
@@ -170,6 +180,13 @@ func (i *identityChallengeResponse) SignAndEncodeB64(s *crypto.SignatureSecrets)
 	enc := protocol.EncodeReflect(i)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	return b64enc
+}
+
+// SignedEncodedB64IdentityChallengeResponse will create a new IdentityChallengeResponse,
+// and will sign and encode to B64 for header inclusion. The challenge generated is also returned
+func SignedEncodedB64IdentityChallengeResponse(keys *crypto.SignatureSecrets, c identityChallenge) ([32]byte, string) {
+	r := NewIdentityChallengeResponse(keys.SignatureVerifier, c)
+	return r.ResponseChallenge, r.SignAndEncodeB64(keys)
 }
 
 // SendIdentityChallengeVerification will send a signaturure of a challenge which was assigned
