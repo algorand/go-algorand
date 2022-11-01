@@ -661,6 +661,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
+// StateProofs gets a state proof that covers a given round
+func (client RestClient) StateProofs(round uint64) (response generatedV2.StateProofResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/stateproofs/%d", round), nil)
+	return
+}
+
 // LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
 func (client RestClient) LightBlockHeaderProof(round uint64) (response generatedV2.LightBlockHeaderProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
