@@ -48,6 +48,7 @@ type cadaver struct {
 	overrideSetup bool // if true, do not execute code in trySetup
 
 	baseFilename   string // no logging happens if this is ""
+	baseDirectory  string // if empty, will be data directory
 	fileSizeTarget int64
 
 	out       *cadaverHandle
@@ -60,11 +61,14 @@ type cadaver struct {
 }
 
 func (c *cadaver) filename() string {
-	// Put cadaver files in our data directory
-	p := config.GetCurrentVersion().DataDirectory
+	baseDir := c.baseDirectory
+	if baseDir == "" {
+		// Put cadaver files in our data directory
+		baseDir = config.GetCurrentVersion().DataDirectory
+	}
 
 	fmtstr := "%s.cdv"
-	return filepath.Join(p, fmt.Sprintf(fmtstr, c.baseFilename))
+	return filepath.Join(baseDir, fmt.Sprintf(fmtstr, c.baseFilename))
 }
 
 func (c *cadaver) init() (err error) {
@@ -115,6 +119,7 @@ func (c *cadaver) trySetup() bool {
 	if c.out == nil {
 		err := c.init()
 		if err != nil {
+			logging.Base().Warn(err)
 			c.failed = err
 			return false
 		}

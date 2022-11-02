@@ -752,7 +752,8 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		os.Remove(cadaverFilename + ".cdv")
 		os.Remove(cadaverFilename + ".cdv.archive")
 
-		services[i] = MakeService(params)
+		services[i], err = MakeService(params)
+		require.NoError(t, err)
 		services[i].tracer.cadaver.baseFilename = cadaverFilename
 		services[i].tracer.level = traceLevel
 		services[i].tracer.tag = strconv.Itoa(i)
