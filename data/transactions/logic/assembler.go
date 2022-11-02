@@ -1653,7 +1653,7 @@ func nextStatement(ops *OpStream, tokens []string) (current, rest []string) {
 		replacement, ok := ops.macros[token]
 		if ok {
 			tokens = append(tokens[0:i], append(replacement, tokens[i+1:]...)...)
-			// backup to handle any expansions in replacement
+			// backup to handle potential re-expansion of the first token in the expansion
 			i--
 			continue
 		}
@@ -1667,9 +1667,6 @@ func nextStatement(ops *OpStream, tokens []string) (current, rest []string) {
 type directiveFunc func(*OpStream, []string) error
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
-
-// Unfortunately we do have to write the names twice so we avoid a cycle when we check macro names in define
-var directiveNames = map[string]bool{"pragma": true, "define": true}
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
@@ -1701,7 +1698,7 @@ func (ops *OpStream) assemble(text string) error {
 			// we're about to begin processing opcodes, so settle the Version
 			if ops.Version == assemblerNoVersion {
 				ops.Version = AssemblerDefaultVersion
-				_ = ops.versionedCheckMacroNames()
+				_ = ops.recheckMacroNames()
 			}
 			if ops.versionedPseudoOps == nil {
 				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
@@ -1805,19 +1802,17 @@ func (ops *OpStream) cycle(macro string, previous ...string) bool {
 	return false
 }
 
-// Once a version is obtained, versionedCheckMacroNames goes through previously defined macros
-// and ensures they don't use opcodes/fields from the obtained version
-func (ops *OpStream) versionedCheckMacroNames() error {
-	var errored bool
+// recheckMacroNames goes through previously defined macros and ensures they
+// don't use opcodes/fields from newly obtained version. Therefore it repeats
+// some checks that don't need to be repeated, in the interest of simplicity.
+func (ops *OpStream) recheckMacroNames() error {
+	errored := false
 	for macroName := range ops.macros {
-		if fieldNames[ops.Version][macroName] {
-			ops.errorf("%s is defined as a macro but is a field name in version %d", macroName, ops.Version)
-			errored = true
+		err := checkMacroName(macroName, ops.Version, ops.labels)
+		if err != nil {
 			delete(ops.macros, macroName)
-		} else if _, ok := OpsByName[ops.Version][macroName]; ok {
-			ops.errorf("%s is defined as a macro but is an opcode in version %d", macroName, ops.Version)
+			ops.error(err)
 			errored = true
-			delete(ops.macros, macroName)
 		}
 	}
 	if errored {
@@ -1826,8 +1821,9 @@ func (ops *OpStream) versionedCheckMacroNames() error {
 	return nil
 }
 
+var otherAllowedChars = [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '~': true, '!': true, '>': true, '<': true, '=': true, '?': true, '_': true}
+
 func checkMacroName(macroName string, version uint64, labels map[string]int) error {
-	otherAllowedChars := [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '#': true, '!': true, '>': true, '<': true, '=': true, '?': true, '_': true}
 	var firstRune rune
 	var secondRune rune
 	count := 0
@@ -1850,17 +1846,12 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
 		}
 	}
-	if len(macroName) > 0 {
-		if ok := directiveNames[macroName[1:]]; ok {
-			return fmt.Errorf("Macro names cannot be directives: %s", macroName)
-		}
-	}
 	// Note parentheses are not allowed characters, so we don't have to check for b64(AAA) syntax
 	if macroName == "b64" || macroName == "base64" {
-		return fmt.Errorf("Cannot use base64 notation in macro name: %s", macroName)
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
 	}
 	if macroName == "b32" || macroName == "base32" {
-		return fmt.Errorf("Cannot use base32 notation in macro name: %s", macroName)
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
 	}
 	_, isTxnType := txnTypeMap[macroName]
 	_, isOnCompletion := onCompletionMap[macroName]
@@ -1939,7 +1930,7 @@ func pragma(ops *OpStream, tokens []string) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-			return ops.versionedCheckMacroNames()
+			return ops.recheckMacroNames()
 		}
 		if ops.Version != ver {
 			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)

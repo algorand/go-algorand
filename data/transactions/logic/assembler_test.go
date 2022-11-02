@@ -527,6 +527,7 @@ type Expect struct {
 
 func testMatch(t testing.TB, actual, expected string) (ok bool) {
 	defer func() {
+		t.Helper()
 		if !ok {
 			t.Logf("'%s' does not match '%s'", actual, expected)
 		}
@@ -3076,7 +3077,7 @@ add:
 		assemblerNoVersion,
 		Expect{3, "Named constants..."},
 		Expect{4, "Named constants..."},
-		Expect{6, "+ is defined as a macro but is an opcode..."},
+		Expect{6, "Macro names cannot be opcodes: +"},
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
@@ -3093,11 +3094,10 @@ add:
 		assemblerNoVersion,
 		Expect{3, "Named constants..."},
 		Expect{4, "Named constants..."},
-		Expect{6, "+ is defined as a macro but is an opcode..."},
+		Expect{6, "Macro names cannot be opcodes: +"},
 		Expect{8, "Macro names cannot be opcodes: +"},
 	)
 
-	// Check fields can't be used as macro names; note fields are also versioned so same deal as last two tests
 	testProg(t, `
 		#define Sender hello
 		#define ApplicationArgs hiya
@@ -3106,8 +3106,7 @@ add:
 		#define ApplicationArgs heyyyyy // no error b/c ApplicationArgs is after v1
 		int 1`,
 		assemblerNoVersion,
-		Expect{4, "Sender is defined as a macro but is a field name..."},
-		Expect{5, "Macro names cannot be field names: Sender"},
+		Expect{4, "Macro names cannot be field names: Sender"}, // error happens once version is known
 	)
 
 	// Same check but defaults to AssemblerDefaultVersion instead of pragma
@@ -3118,28 +3117,23 @@ add:
 		#define Sender helllooooo
 		#define ApplicationArgs heyyyyy`,
 		assemblerNoVersion,
-		Expect{4, "Sender is defined as a macro but is a field name..."},
-		Expect{5, "Macro names cannot be field names: Sender"},
+		Expect{4, "Macro names cannot be field names: Sender"}, // error happens once version is auto-set
+		Expect{5, "Macro names cannot be field names: Sender"}, // and on following line
 	)
-	require.Equal(t, len(directives), len(directiveNames))
-	// Ensure both directive maps are synced
-	for directive := range directives {
-		require.True(t, directiveNames[directive])
-	}
 	// define needs name and body
 	testLine(t, "#define", AssemblerMaxVersion, "define directive requires a name and body")
 	testLine(t, "#define hello", AssemblerMaxVersion, "define directive requires a name and body")
 	// macro names cannot be directives
-	testLine(t, "#define #define 1", AssemblerMaxVersion, "Macro names cannot be directives: #define")
-	testLine(t, "#define #pragma 1", AssemblerMaxVersion, "Macro names cannot be directives: #pragma")
+	testLine(t, "#define #define 1", AssemblerMaxVersion, "# character not allowed in macro name")
+	testLine(t, "#define #pragma 1", AssemblerMaxVersion, "# character not allowed in macro name")
 	// macro names cannot begin with digits (including negative ones)
 	testLine(t, "#define 1hello one", AssemblerMaxVersion, "Cannot begin macro name with number: 1hello")
 	testLine(t, "#define -1hello negativeOne", AssemblerMaxVersion, "Cannot begin macro name with number: -1hello")
 	// macro names can't use base64/32 notation
-	testLine(t, "#define b64 AA", AssemblerMaxVersion, "Cannot use base64 notation in macro name: b64")
-	testLine(t, "#define base64 AA", AssemblerMaxVersion, "Cannot use base64 notation in macro name: base64")
-	testLine(t, "#define b32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: b32")
-	testLine(t, "#define base32 AA", AssemblerMaxVersion, "Cannot use base32 notation in macro name: base32")
+	testLine(t, "#define b64 AA", AssemblerMaxVersion, "Cannot use b64 as macro name")
+	testLine(t, "#define base64 AA", AssemblerMaxVersion, "Cannot use base64 as macro name")
+	testLine(t, "#define b32 AA", AssemblerMaxVersion, "Cannot use b32 as macro name")
+	testLine(t, "#define base32 AA", AssemblerMaxVersion, "Cannot use base32 as macro name")
 	// macro names can't use non-alphanumeric characters that aren't specifically allowed
 	testLine(t, "#define wh@t 1", AssemblerMaxVersion, "@ character not allowed in macro name")
 	// check both kinds of pseudo-ops to make sure they can't be used as macro names
