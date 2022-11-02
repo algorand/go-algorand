@@ -42,7 +42,7 @@ func makeNodeStatuses(blocks ...uint64) (ret []generatedV2.NodeStatusResponse) {
 func makeBlocks(blocks ...uint64) (ret map[uint64]rpcs.EncodedBlockCert) {
 	ret = map[uint64]rpcs.EncodedBlockCert{}
 	for _, block := range blocks {
-		ret[block] = rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(300)}}}
+		ret[block] = rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(block)}}}
 	}
 	return ret
 }
