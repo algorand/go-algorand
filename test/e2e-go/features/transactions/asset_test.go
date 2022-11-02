@@ -40,7 +40,7 @@ type assetIDParams struct {
 	params v1.AssetParams
 }
 
-func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx transactions.Transaction, err error) (string, error) {
+func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx *transactions.Transaction, err error) (string, error) {
 	if err != nil {
 		return "", err
 	}
@@ -259,7 +259,7 @@ func TestAssetConfig(t *testing.T) {
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	var tx transactions.Transaction
+	var tx *transactions.Transaction
 	if config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount != 0 {
 		// Creating more assets should return an error
 		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, "toomany", "toomany", assetURL, assetMetadataHash, 0)
@@ -565,7 +565,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txSend, err = client1.FillUnsignedTxTemplate(account1, 0, 0, fee, txSend)
 	a.NoError(err)
 
-	gid, err := client0.GroupID([]transactions.Transaction{txCreate1, txSend})
+	gid, err := client0.GroupID([]transactions.Transaction{*txCreate1, *txSend})
 	a.NoError(err)
 
 	var stxns []transactions.SignedTxn
@@ -602,7 +602,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txDestroy, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txDestroy)
 	a.NoError(err)
 
-	gid, err = client0.GroupID([]transactions.Transaction{txCreate2, txDestroy})
+	gid, err = client0.GroupID([]transactions.Transaction{*txCreate2, *txDestroy})
 	a.NoError(err)
 
 	stxns = []transactions.SignedTxn{}
@@ -1162,7 +1162,7 @@ func setupActors(account0 string, client *libgoal.Client, asser *require.Asserti
 	return
 }
 
-func submitAndWaitForTransaction(sender string, tx transactions.Transaction, message string,
+func submitAndWaitForTransaction(sender string, tx *transactions.Transaction, message string,
 	client *libgoal.Client,
 	fixture *fixtures.RestClientFixture,
 	asser *require.Assertions) {

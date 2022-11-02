@@ -44,7 +44,7 @@ func newAccount(t testing.TB, gen io.Reader, latest basics.Round, keyBatchesForw
 }
 
 func signTx(s *crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
-	return (*t).Sign(s)
+	return t.Sign(s)
 }
 
 func testingenv(t testing.TB, numAccounts, numTxs int) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {

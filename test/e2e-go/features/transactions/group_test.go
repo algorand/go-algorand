@@ -62,7 +62,7 @@ func TestGroupTransactions(t *testing.T) {
 	a.NoError(err)
 
 	// group them
-	gid, err := client.GroupID([]transactions.Transaction{tx1, tx2})
+	gid, err := client.GroupID([]transactions.Transaction{*tx1, *tx2})
 	a.NoError(err)
 
 	tx1.Group = gid
@@ -139,7 +139,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 		for i, acct := range accts {
 			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
 			a.NoError(err)
-			txns = append(txns, txn)
+			txns = append(txns, *txn)
 		}
 
 		// compute gid
@@ -151,7 +151,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 		txids := make(map[string]string)
 		for _, txn := range txns {
 			txn.Group = gid
-			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			stxn, err := client.SignTransactionWithWallet(wh, nil, &txn)
 			a.NoError(err)
 			stxns = append(stxns, stxn)
 			txids[txn.ID().String()] = account0
@@ -190,7 +190,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 		for i, acct := range accts {
 			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
 			a.NoError(err)
-			txns = append(txns, txn)
+			txns = append(txns, *txn)
 		}
 
 		// compute gid
@@ -201,7 +201,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 		var stxns []transactions.SignedTxn
 		for _, txn := range txns {
 			txn.Group = gid
-			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			stxn, err := client.SignTransactionWithWallet(wh, nil, &txn)
 			a.NoError(err)
 			stxns = append(stxns, stxn)
 		}
@@ -252,7 +252,7 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 		for i, acct := range accts {
 			txn, err := client.ConstructPayment(account0, acct, 0, uint64((i+1)*1000000), nil, "", [32]byte{}, 0, 0)
 			a.NoError(err)
-			txns = append(txns, txn)
+			txns = append(txns, *txn)
 		}
 
 		// compute gid
@@ -263,7 +263,7 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 		var stxns []transactions.SignedTxn
 		for _, txn := range txns {
 			txn.Group = gid
-			stxn, err := client.SignTransactionWithWallet(wh, nil, txn)
+			stxn, err := client.SignTransactionWithWallet(wh, nil, &txn)
 			a.NoError(err)
 			stxns = append(stxns, stxn)
 		}

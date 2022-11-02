@@ -175,7 +175,7 @@ func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 		stxns[i] = transactions.SignedTxn{
 			Sig:      sig,
 			AuthAddr: addr,
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Header: transactions.Header{
 					Sender: addr,
 					Fee:    basics.MicroAlgos{Raw: crypto.RandUint64()},
@@ -458,7 +458,7 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 		for g, txn := range txns {
 			txn.Group = groupHash
 			signedTx := txn.Sign(secrets[(u+g)%numUsers])
-			signedTx.Txn = txn
+			signedTx.Txn = &txn
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures

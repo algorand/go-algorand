@@ -133,7 +133,7 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	empty := false
 	if len(txns) == 0 {
 		empty = true
-		txns = []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}}
+		txns = []transactions.SignedTxn{{Txn: &transactions.Transaction{Type: protocol.ApplicationCallTx}}}
 	}
 	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Trace = &strings.Builder{}
@@ -1146,7 +1146,7 @@ func TestGlobal(t *testing.T) {
 			}
 
 			appcall := transactions.SignedTxn{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 				},
 			}
@@ -2698,7 +2698,7 @@ func TestGload(t *testing.T) {
 
 	nonAppCall := failureCase{
 		firstTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.PaymentTx,
 			},
 		},
@@ -2708,7 +2708,7 @@ func TestGload(t *testing.T) {
 
 	logicSigCall := failureCase{
 		firstTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 			},
 		},
@@ -2721,7 +2721,7 @@ func TestGload(t *testing.T) {
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
 
 			appcall := transactions.SignedTxn{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 				},
 			}

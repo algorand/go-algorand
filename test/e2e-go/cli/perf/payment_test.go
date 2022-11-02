@@ -55,7 +55,7 @@ func BenchmarkSendPayment(b *testing.B) {
 		}
 	})
 
-	var tx transactions.Transaction
+	var tx *transactions.Transaction
 	b.Run("construct", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var nonce [8]byte

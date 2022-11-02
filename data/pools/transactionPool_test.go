@@ -919,7 +919,7 @@ func TestLogicSigOK(t *testing.T) {
 		},
 	}
 	signedTx := transactions.SignedTxn{
-		Txn: tx,
+		Txn: &tx,
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
 		},
@@ -1250,7 +1250,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		tx.Note = make([]byte, 8, 8)
 		crypto.RandBytes(tx.Note)
 
-		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+		signedTx, err := transactions.AssembleSignedTxn(&tx, crypto.Signature{}, crypto.MultisigSig{})
 		require.NoError(b, err)
 		signedTransactions = append(signedTransactions, signedTx)
 	}

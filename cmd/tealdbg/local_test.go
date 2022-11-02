@@ -367,7 +367,7 @@ func TestDebugEnvironment(t *testing.T) {
 
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
@@ -747,7 +747,7 @@ func TestDebugFromTxn(t *testing.T) {
 
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Header: transactions.Header{
 				Sender: sender,
 			},
@@ -975,7 +975,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Header: transactions.Header{
 				Sender: sender,
 			},
@@ -1066,7 +1066,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Header: transactions.Header{
 				Sender: sender,
 			},
@@ -1132,7 +1132,7 @@ func TestDebugTxSubmit(t *testing.T) {
 	balanceBlob = append(balanceBlob, protocol.EncodeMsgp(&bra)...)
 
 	txn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
@@ -1210,7 +1210,7 @@ int 1`
 	prog := ops.Program
 
 	stxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
@@ -1314,7 +1314,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	trivial := ops.Program
 
 	stxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
@@ -1332,7 +1332,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	appIdx := basics.AppIndex(1)
 	trivialAppIdx := basics.AppIndex(2)
 	trivialStxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,

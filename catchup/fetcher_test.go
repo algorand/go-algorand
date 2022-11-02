@@ -89,7 +89,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 		},
 	}
 	signedtx := transactions.SignedTxn{
-		Txn: tx,
+		Txn: &tx,
 	}
 
 	prev, err := ledger.Block(ledger.LastRound())

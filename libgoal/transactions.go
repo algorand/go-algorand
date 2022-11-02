@@ -547,6 +547,7 @@ func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs [][]byte, accounts
 // transaction constructors. A fully custom ApplicationCall transaction may
 // be constructed using this method.
 func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32) (tx *transactions.Transaction, err error) {
+	tx = new(transactions.Transaction)
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion

@@ -66,7 +66,7 @@ func signer(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, wh []byte, txnCh
 			break
 		}
 
-		stxn, err := c.SignTransactionWithWallet(wh, nil, *txn)
+		stxn, err := c.SignTransactionWithWallet(wh, nil, txn)
 		if err != nil {
 			fmt.Printf("Error signing: %v\n", err)
 		}
@@ -221,7 +221,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 			// Now, send a payment with low fee, so that when this transaction
 			// clears, we can infer that all previous transactions also cleared.
-			var tx transactions.Transaction
+			var tx *transactions.Transaction
 			for {
 				tx, err = c.SendPaymentFromUnencryptedWallet(addr, addr, config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 0, nil)
 				if err == nil {

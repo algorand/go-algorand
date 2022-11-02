@@ -875,7 +875,7 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 		return err
 	}
 
-	err = l.rekey(&txn.Txn)
+	err = l.rekey(txn.Txn)
 	if err != nil {
 		return err
 	}

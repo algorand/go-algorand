@@ -106,7 +106,7 @@ func TestAccountInformationV2(t *testing.T) {
 
 	fee := uint64(1000)
 
-	var txn transactions.Transaction
+	var txn *transactions.Transaction
 
 	// Fund the manager, so it can issue transactions later on
 	txn, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
@@ -410,7 +410,7 @@ func accountInformationCheckWithOffendingFields(t *testing.T,
 
 	fee := uint64(1000)
 
-	var txn transactions.Transaction
+	var txn *transactions.Transaction
 
 	// Fund the manager, so it can issue transactions later on
 	txn, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)

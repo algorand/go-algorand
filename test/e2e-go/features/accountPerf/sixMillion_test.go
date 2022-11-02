@@ -503,7 +503,7 @@ func scenarioA(
 			totalAssetAmount += uint64(600000000) + assetAmount
 			assetAmount++
 
-			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
+			counter, txnGroup = queueTransaction(na.sk, &atx, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
@@ -517,7 +517,7 @@ func scenarioA(
 
 	// make ownAllAccount very rich
 	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
-	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
+	counter, txnGroup = queueTransaction(baseAcct.sk, &sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 
@@ -546,7 +546,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				uint64(0))
 
-			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInT, txnChan, txnGrpChan, counter, txnGroup)
+			counter, txnGroup = queueTransaction(ownAllAccount.sk, &optInT, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
@@ -584,7 +584,7 @@ func scenarioA(
 				basics.AssetIndex(asset.AssetId),
 				ownAllAccount.pk,
 				asset.Amount)
-			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
+			counter, txnGroup = queueTransaction(nacc.sk, &assSend, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
@@ -663,7 +663,7 @@ func scenarioB(
 		totalAssetAmount += uint64(600000000) + assetAmount
 		assetAmount++
 
-		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
+		counter, txnGroup = queueTransaction(baseAcct.sk, &atx, txnChan, txnGrpChan, counter, txnGroup)
 
 		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 		require.NoError(t, err)
@@ -757,7 +757,7 @@ func scenarioC(
 	ownAllAccount := keys[numberOfAccounts]
 	// make ownAllAccount very rich
 	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
-	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
+	counter, txnGroup = queueTransaction(baseAcct.sk, &sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 
@@ -1045,7 +1045,7 @@ func signAndBroadcastTransaction(
 	if err != nil {
 		return err
 	}
-	stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
+	stxn, err := client.SignTransactionWithWallet(walletHandle, nil, txn)
 	if err != nil {
 		return err
 	}
@@ -1061,12 +1061,12 @@ func signAndBroadcastTransaction(
 // queues transactions and packages them into maxTxGroupSize groups
 func queueTransaction(
 	sk *crypto.SignatureSecrets,
-	tx transactions.Transaction,
+	tx *transactions.Transaction,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	counter uint64,
 	txnGroup []txnKey) (uint64, []txnKey) {
-	tk := txnKey{tx: tx, sk: sk}
+	tk := txnKey{tx: *tx, sk: sk}
 
 	if !groupTransactions {
 		txnChan <- &tk
@@ -1114,7 +1114,7 @@ func makeAppTransaction(
 	sender basics.Address,
 	tLife uint64,
 	setCounterInProg bool,
-	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+	genesisHash crypto.Digest) (appTx *transactions.Transaction) {
 
 	progCounter := uint64(1)
 	if setCounterInProg {
@@ -1180,7 +1180,7 @@ func makeOptInAppTransaction(
 	round uint64,
 	sender basics.Address,
 	tLife uint64,
-	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+	genesisHash crypto.Digest) (appTx *transactions.Transaction) {
 
 	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)
@@ -1267,7 +1267,7 @@ func createAccounts(
 		}
 		printStdOut(i, numberOfAccounts, "account create txn")
 		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
-		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
+		counter, txnGroup = queueTransaction(baseAcct.sk, &txn, txnChan, txnGrpChan, counter, txnGroup)
 
 		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 		require.NoError(t, err)
@@ -1286,7 +1286,7 @@ func callAppTransaction(
 	round uint64,
 	sender basics.Address,
 	tLife uint64,
-	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+	genesisHash crypto.Digest) (appTx *transactions.Transaction) {
 
 	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)

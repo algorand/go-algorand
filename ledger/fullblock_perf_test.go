@@ -233,7 +233,7 @@ func payEvent(bc *benchConfig, newAccount bool) {
 func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIndex, amt uint64) {
 	tx := sendAssetTransaction(bc.txnCount, bc.round, from, to, assIdx, amt)
 	var stxn transactions.SignedTxn
-	stxn.Txn = tx
+	stxn.Txn = &tx
 	stxn.Sig = crypto.Signature{1}
 	addTransaction(bc, stxn)
 	bc.numAst++
@@ -242,7 +242,7 @@ func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIn
 func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
 	tx := createPaymentTransaction(uint64(bc.txnCount), bc.round, from, to, amt)
 	var stxn transactions.SignedTxn
-	stxn.Txn = tx
+	stxn.Txn = &tx
 	stxn.Sig = crypto.Signature{1}
 	addTransaction(bc, stxn)
 	bc.numPay++
@@ -250,7 +250,7 @@ func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
 
 func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.AssetIndex) {
 	tx := createAssetTransaction(bc.txnCount, bc.round, acct)
-	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	stxn := transactions.SignedTxn{Txn: &tx, Sig: crypto.Signature{1}}
 	aIdx := basics.AssetIndex(addTransaction(bc, stxn))
 	if len(bc.acctToAst[acct]) == 0 {
 		bc.acctToAst[acct] = make(map[basics.AssetIndex]uint64)
@@ -263,7 +263,7 @@ func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.Asset
 func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIndex) {
 	tx, err := makeAppTransaction(bc.txnCount, bc.round, acct)
 	require.NoError(bc.b, err)
-	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	stxn := transactions.SignedTxn{Txn: &tx, Sig: crypto.Signature{1}}
 	appIdx = basics.AppIndex(addTransaction(bc, stxn))
 	if len(bc.acctToApp[acct]) == 0 {
 		bc.acctToApp[acct] = make(map[basics.AppIndex]struct{})
@@ -276,7 +276,7 @@ func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIn
 func optInApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
 	tx := makeOptInAppTransaction(bc.txnCount, appIdx, bc.round, acct)
 	var stxn transactions.SignedTxn
-	stxn.Txn = tx
+	stxn.Txn = &tx
 	stxn.Sig = crypto.Signature{1}
 	addTransaction(bc, stxn)
 	bc.numApp++
@@ -285,7 +285,7 @@ func optInApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
 func callApp(bc *benchConfig, acct basics.Address, appIdx basics.AppIndex) {
 	tx := callAppTransaction(bc.txnCount, appIdx, bc.round, acct)
 	var stxn transactions.SignedTxn
-	stxn.Txn = tx
+	stxn.Txn = &tx
 	stxn.Sig = crypto.Signature{1}
 	addTransaction(bc, stxn)
 	bc.numApp++

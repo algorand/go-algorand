@@ -230,7 +230,7 @@ func TestMultisigSign(t *testing.T) {
 	a.NoError(err)
 
 	// Assemble them into a signed transaction and see if it verifies
-	_, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, msig)
+	_, err = transactions.AssembleSignedTxn(&tx, crypto.Signature{}, msig)
 	a.NoError(err)
 
 	// TODO See if the signature verifies
@@ -316,7 +316,7 @@ func TestMultisigSignWithSigner(t *testing.T) {
 	a.NoError(err)
 
 	// Assemble them into a signed transaction and see if it verifies
-	_, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, msig)
+	_, err = transactions.AssembleSignedTxn(&tx, crypto.Signature{}, msig)
 	a.NoError(err)
 
 }

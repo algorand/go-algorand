@@ -434,7 +434,7 @@ func TestDryrunGlobal1(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID: 1,
@@ -483,7 +483,7 @@ func TestDryrunGlobal2(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID: 1,
@@ -536,7 +536,7 @@ func TestDryrunLocal1(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID: 1,
@@ -610,7 +610,7 @@ func TestDryrunLocal1A(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID: 1,
@@ -688,7 +688,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID: 1,
@@ -742,7 +742,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	txn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 				ApplicationID: 1,
@@ -787,7 +787,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	var gdr generated.DryrunRequest
 	txns := []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID:   1,
@@ -902,7 +902,7 @@ func TestDryrunMakeLedger(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Txn: transactions.Transaction{
+			Txn: &transactions.Transaction{
 				Header: transactions.Header{Sender: sender},
 				Type:   protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -927,7 +927,7 @@ func TestDryrunMakeLedger(t *testing.T) {
 	dl := dryrunLedger{dr: &dr}
 	err = dl.init()
 	require.NoError(t, err)
-	_, err = makeBalancesAdapter(&dl, &dr.Txns[0].Txn, 1)
+	_, err = makeBalancesAdapter(&dl, dr.Txns[0].Txn, 1)
 	require.NoError(t, err)
 }
 
@@ -1100,7 +1100,7 @@ int 1`)
 	dr := DryrunRequest{
 		Txns: []transactions.SignedTxn{
 			{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Header: transactions.Header{Sender: sender},
 					Type:   protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1181,7 +1181,7 @@ return
 	dr := DryrunRequest{
 		Txns: []transactions.SignedTxn{
 			{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Header: transactions.Header{Sender: sender},
 					Type:   protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1191,7 +1191,7 @@ return
 				},
 			},
 			{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Header: transactions.Header{Sender: sender},
 					Type:   protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1308,7 +1308,7 @@ int 1`)
 			dr := DryrunRequest{
 				Txns: []transactions.SignedTxn{
 					{
-						Txn: transactions.Transaction{
+						Txn: &transactions.Transaction{
 							Header: transactions.Header{Sender: sender},
 							Type:   protocol.ApplicationCallTx,
 							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1318,7 +1318,7 @@ int 1`)
 						},
 					},
 					{
-						Txn: transactions.Transaction{
+						Txn: &transactions.Transaction{
 							Header: transactions.Header{Sender: sender},
 							Type:   protocol.ApplicationCallTx,
 							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1328,7 +1328,7 @@ int 1`)
 						},
 					},
 					{
-						Txn: transactions.Transaction{
+						Txn: &transactions.Transaction{
 							Header: transactions.Header{Sender: sender},
 							Type:   protocol.ApplicationCallTx,
 							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1491,7 +1491,7 @@ int 0
 	dr := DryrunRequest{
 		Txns: []transactions.SignedTxn{
 			{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Header: transactions.Header{Sender: creator},
 					Type:   protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1746,7 +1746,7 @@ int %d`, expectedUint, i))
 
 		dr.Txns = []transactions.SignedTxn{
 			{
-				Txn: transactions.Transaction{
+				Txn: &transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationID: 1,

@@ -60,7 +60,7 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	ledger := NewLedger(nil)
 	ep.SigLedger = ledger
 	ep.Ledger = ledger
-	return ep, &ep.TxnGroup[0].Txn, ledger
+	return ep, ep.TxnGroup[0].Txn, ledger
 }
 
 func makeOldAndNewEnv(version uint64) (*EvalParams, *EvalParams, *Ledger) {
@@ -2695,7 +2695,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	int 1`
 
 	ledger := NewLedger(nil)
-	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+	call := transactions.SignedTxn{Txn: &transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
 		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"})

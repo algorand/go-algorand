@@ -1297,7 +1297,7 @@ int 1
 	}
 	signedLsigPayment := transactions.SignedTxn{
 		Lsig: transactions.LogicSig{Logic: program},
-		Txn:  lsigPayment,
+		Txn:  &lsigPayment,
 	}
 	err = l.appendUnvalidatedSignedTx(t, genesisInitState.Accounts, signedLsigPayment, transactions.ApplyData{})
 	a.NoError(err)

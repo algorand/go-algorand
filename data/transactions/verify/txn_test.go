@@ -289,7 +289,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 	config.Consensus[spProto] = proto
 
 	stxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
+		Txn: &transactions.Transaction{
 			Type: protocol.StateProofTx,
 			Header: transactions.Header{
 				Sender:     transactions.StateProofSender,
@@ -554,7 +554,7 @@ func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*c
 		groupHash := crypto.HashObj(txGroup)
 		for j := range newGroup {
 			newGroup[j].Txn.Group = groupHash
-			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
+			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(newGroup[j].Txn)
 		}
 		txnGroups = append(txnGroups, newGroup)
 		i += txnPerGroup
@@ -712,7 +712,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 		a := rand.Intn(1000)
 		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
 
-		signedTxn[i].Txn = transactions.Transaction{
+		signedTxn[i].Txn = &transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      multiAddress[s],

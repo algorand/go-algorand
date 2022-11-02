@@ -59,7 +59,7 @@ func TestTxnMerkle(t *testing.T) {
 				},
 			}
 
-			sigtxn := transactions.SignedTxn{Txn: txn}
+			sigtxn := transactions.SignedTxn{Txn: &txn}
 			ad := transactions.ApplyData{}
 
 			stib, err := b.BlockHeader.EncodeSignedTxn(sigtxn, ad)
@@ -110,7 +110,7 @@ func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
 				},
 			}
 
-			sigtxn := transactions.SignedTxn{Txn: txn}
+			sigtxn := transactions.SignedTxn{Txn: &txn}
 			ad := transactions.ApplyData{}
 
 			stib, err := b.BlockHeader.EncodeSignedTxn(sigtxn, ad)
@@ -161,7 +161,7 @@ func BenchmarkTxnRoots(b *testing.B) {
 		crypto.RandBytes(txn.Sender[:])
 		crypto.RandBytes(txn.PaymentTxnFields.Receiver[:])
 
-		sigtxn := transactions.SignedTxn{Txn: txn}
+		sigtxn := transactions.SignedTxn{Txn: &txn}
 		crypto.RandBytes(sigtxn.Sig[:])
 		ad := transactions.ApplyData{}
 

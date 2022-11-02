@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -32,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
@@ -574,7 +575,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 			StateProofPK:    stateproof.Commitment,
 		},
 	}
-	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, &tx)
 	a.NoError(err)
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
@@ -1114,7 +1115,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 			Nonparticipation: false,
 		},
 	}
-	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, &tx)
 	a.NoError(err)
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
@@ -1211,7 +1212,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 			Nonparticipation: false,
 		},
 	}
-	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, &tx)
 	a.NoError(err)
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
@@ -1329,7 +1330,7 @@ end:
 	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string, errPrefix ...string) {
 		txns := make([]transactions.Transaction, len(boxNames))
 		txIDs := make(map[string]string, len(boxNames))
-
+		var txn *transactions.Transaction
 		for i := 0; i < len(boxNames); i++ {
 			appArgs := [][]byte{
 				[]byte(operation),
@@ -1340,15 +1341,16 @@ end:
 				Name:  []byte(boxNames[i]),
 				Index: 0,
 			}
-
-			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
+			txn, err = testClient.MakeUnsignedAppNoOpTx(
 				uint64(createdAppID), appArgs,
 				nil, nil, nil,
 				[]transactions.BoxRef{boxRef},
 			)
 			a.NoError(err)
-			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
+			txns[i] = *txn
+			txn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, &txns[i])
 			a.NoError(err)
+			txns[i] = *txn
 			txIDs[txns[i].ID().String()] = someAddress
 		}
 
@@ -1361,7 +1363,7 @@ end:
 			txns[i].Group = gid
 			wh, err = testClient.GetUnencryptedWalletHandle()
 			a.NoError(err)
-			stxns[i], err = testClient.SignTransactionWithWallet(wh, nil, txns[i])
+			stxns[i], err = testClient.SignTransactionWithWallet(wh, nil, &txns[i])
 			a.NoError(err)
 		}
 

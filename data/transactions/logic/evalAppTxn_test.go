@@ -1846,52 +1846,52 @@ int 1
 					claimedGroup: []byte(parentEd.Logs[1]),
 				},
 				{
-					txn:          childA.Txn,
+					txn:          *childA.Txn,
 					claimedTxID:  []byte(childA.EvalDelta.Logs[0]),
 					claimedGroup: []byte(childA.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          childB.Txn,
+					txn:          *childB.Txn,
 					claimedTxID:  []byte(childB.EvalDelta.Logs[0]),
 					claimedGroup: []byte(childB.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcAA.Txn,
+					txn:          *gcAA.Txn,
 					claimedTxID:  []byte(gcAA.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcAA.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcAB.Txn,
+					txn:          *gcAB.Txn,
 					claimedTxID:  []byte(gcAB.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcAB.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcAC.Txn,
+					txn:          *gcAC.Txn,
 					claimedTxID:  []byte(gcAC.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcAC.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcAD.Txn,
+					txn:          *gcAD.Txn,
 					claimedTxID:  []byte(gcAD.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcAD.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcBA.Txn,
+					txn:          *gcBA.Txn,
 					claimedTxID:  []byte(gcBA.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcBA.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcBB.Txn,
+					txn:          *gcBB.Txn,
 					claimedTxID:  []byte(gcBB.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcBB.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcBC.Txn,
+					txn:          *gcBC.Txn,
 					claimedTxID:  []byte(gcBC.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcBC.EvalDelta.Logs[1]),
 				},
 				{
-					txn:          gcBD.Txn,
+					txn:          *gcBD.Txn,
 					claimedTxID:  []byte(gcBD.EvalDelta.Logs[0]),
 					claimedGroup: []byte(gcBD.EvalDelta.Logs[1]),
 				},
@@ -2173,43 +2173,43 @@ int 1
 					// leave claimedTxID as the zero value since we don't want to test it
 				},
 				{
-					txn:         childA.Txn,
+					txn:         *childA.Txn,
 					claimedTxID: []byte(parentEd.Logs[0]),
 				},
 				{
-					txn:         childB.Txn,
+					txn:         *childB.Txn,
 					claimedTxID: []byte(parentEd.Logs[1]),
 				},
 				{
-					txn:         gcAA.Txn,
+					txn:         *gcAA.Txn,
 					claimedTxID: []byte(childA.EvalDelta.Logs[0]),
 				},
 				{
-					txn:         gcAB.Txn,
+					txn:         *gcAB.Txn,
 					claimedTxID: []byte(childA.EvalDelta.Logs[1]),
 				},
 				{
-					txn:         gcAC.Txn,
+					txn:         *gcAC.Txn,
 					claimedTxID: []byte(childA.EvalDelta.Logs[2]),
 				},
 				{
-					txn:         gcAD.Txn,
+					txn:         *gcAD.Txn,
 					claimedTxID: []byte(childA.EvalDelta.Logs[3]),
 				},
 				{
-					txn:         gcBA.Txn,
+					txn:         *gcBA.Txn,
 					claimedTxID: []byte(childB.EvalDelta.Logs[0]),
 				},
 				{
-					txn:         gcBB.Txn,
+					txn:         *gcBB.Txn,
 					claimedTxID: []byte(childB.EvalDelta.Logs[1]),
 				},
 				{
-					txn:         gcBC.Txn,
+					txn:         *gcBC.Txn,
 					claimedTxID: []byte(childB.EvalDelta.Logs[2]),
 				},
 				{
-					txn:         gcBD.Txn,
+					txn:         *gcBD.Txn,
 					claimedTxID: []byte(childB.EvalDelta.Logs[3]),
 				},
 			}

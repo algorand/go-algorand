@@ -50,14 +50,14 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t *transactions.Transaction) transactions.SignedTxn {
+func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
 	var sig crypto.Signature
 	_, ok := secrets[t.Sender]
 	if ok {
 		sig = secrets[t.Sender].Sign(t)
 	}
 	return transactions.SignedTxn{
-		Txn: t,
+		Txn: &t,
 		Sig: sig,
 	}
 }
