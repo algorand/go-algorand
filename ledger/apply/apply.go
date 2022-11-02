@@ -30,6 +30,7 @@ type StateProofsApplier interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
+	StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error)
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records

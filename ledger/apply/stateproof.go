@@ -55,28 +55,51 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 
 	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 	if validate {
-		votersRnd := lastRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
-		votersHdr, err := sp.BlockHdr(votersRnd)
+		var err error
+		if proto.StateProofUseTrackerVerification {
+			err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
+		} else {
+			err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
+		}
 		if err != nil {
 			return err
 		}
-
-		verificationData := ledgercore.StateProofVerificationData{
-			TargetStateProofRound: lastRoundInInterval,
-			VotersCommitment:      votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-			OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-			Version:               votersHdr.CurrentProtocol,
-		}
-		err = verify.ValidateStateProof(&verificationData, &tx.StateProof, atRound, &tx.Message)
-		if err != nil {
-			return err
-		}
-		//err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
-		//if err != nil {
-		//	return err
-		//}
 	}
 
 	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(proto.StateProofInterval))
+	return nil
+}
+
+func verifyStateProofUsingTracker(tx *transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, lastRoundInInterval basics.Round) error {
+	verificationData, err := sp.StateProofVerificationData(lastRoundInInterval)
+	if err != nil {
+		return err
+	}
+
+	return verify.ValidateStateProof(verificationData, &tx.StateProof, atRound, &tx.Message)
+
+}
+
+func verifyStateProof(tx *transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, lastRoundInInterval basics.Round, proto *config.ConsensusParams) error {
+	votersRnd := lastRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersHdr, err := sp.BlockHdr(votersRnd)
+	if err != nil {
+		return err
+	}
+
+	verificationData := ledgercore.StateProofVerificationData{
+		TargetStateProofRound: lastRoundInInterval,
+		VotersCommitment:      votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		Version:               votersHdr.CurrentProtocol,
+	}
+	err = verify.ValidateStateProof(&verificationData, &tx.StateProof, atRound, &tx.Message)
+	if err != nil {
+		return err
+	}
+	//err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
+	//if err != nil {
+	//	return err
+	//}
 	return nil
 }
