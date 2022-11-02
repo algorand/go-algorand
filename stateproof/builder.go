@@ -480,12 +480,12 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 	for _, key := range keys {
 		firstRoundAtKeyLifeTime, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
 		if err != nil {
-			spw.log.Errorf("deleteStaleKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+			spw.log.Errorf("deleteStaleKeys: could not calculate keylifetime for account %v on round %d:  %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 			continue
 		}
 		err = spw.accts.DeleteStateProofKey(key.ParticipationID, basics.Round(firstRoundAtKeyLifeTime))
 		if err != nil {
-			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %s: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %d: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 		}
 	}
 	spw.accts.DeleteStateProofKeysForExpiredAccounts(retainRound)
