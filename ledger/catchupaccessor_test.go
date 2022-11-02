@@ -209,17 +209,17 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	err = catchpointAccessor.CompleteCatchup(ctx)
 	require.NoError(t, err)
 
-	var trackedStateProofVerificationData *[]ledgercore.StateProofVerificationData
+	var trackedStateProofVerificationData []ledgercore.StateProofVerificationData
 	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		dbData, err := stateProofVerification(ctx, tx)
+		dbData, err := StateProofVerification(ctx, tx)
 		trackedStateProofVerificationData = dbData
 		return err
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, len(targetData), len(*trackedStateProofVerificationData))
+	require.Equal(t, len(targetData), len(trackedStateProofVerificationData))
 	for index, data := range targetData {
-		require.Equal(t, data, (*trackedStateProofVerificationData)[index])
+		require.Equal(t, data, trackedStateProofVerificationData[index])
 	}
 	require.NoError(t, err)
 }
