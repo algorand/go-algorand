@@ -1,6 +1,5 @@
 # scenario1s is scenario1 but smaller, (100 nodes, 100 wallets) -> (20 nodes, 20 wallets), each algod gets single tenancy on a smaller ec2 instance
 PARAMS=-w 20 -R 8 -N 20 -n 20 --npn-algod-nodes 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
-FILEPARAMS=--rounds 400 --ntxns 10000 --naccounts 3000000 --nassets 20000 --napps 20000 --wallet-name "wallet1" --bal 100000 --bal 1000000
 
 all:	net.json genesis.json topology.json boostrappedFile.json
 
@@ -14,9 +13,6 @@ genesis.json:	${GOPATH}/bin/netgoal Makefile
 
 topology.json:	gen_topology.py
 	python3 gen_topology.py
-
-boostrappedFile.json:  ${GOPATH}/bin/netgoal Makefile
-	netgoal generate -t loadingFile -r /tmp/wat -o boostrappedFile.json ${FILEPARAMS}
 
 clean:
 	rm -f net.json genesis.json

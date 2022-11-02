@@ -3,6 +3,5 @@
     "NetworkFile":"net.json",
     "ConfigFile": "../../configs/reference.json",
     "HostTemplatesFile": "../../hosttemplates/hosttemplates.json",
-    "TopologyFile": "topology.json",
-    "BootstrappedFile": "boostrappedFile.json"
+    "TopologyFile": "topology.json"
 }
