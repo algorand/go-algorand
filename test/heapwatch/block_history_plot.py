@@ -119,8 +119,12 @@ def process(path, args):
     ax1.set_title('round time (seconds)')
     ax1.hist(list(filter(lambda x: x < 9,dtv[start:end])),bins=20)
 
-    ax2.set_title('TPS')
-    ax2.hist(tpsv[start:end],bins=20)
+    if args.rtime:
+        ax2.set_title('round time')
+        ax2.plot(dtv)
+    else:
+        ax2.set_title('TPS')
+        ax2.hist(tpsv[start:end],bins=20)
 
     ax3.set_title('txn/block')
     ax3.hist(txnv[start:end],bins=20)
@@ -152,6 +156,7 @@ def main():
     ap.add_argument('files', nargs='+')
     ap.add_argument('--all', default=False, action='store_true')
     ap.add_argument('--tps1', default=False, action='store_true')
+    ap.add_argument('--rtime',  default=False, action='store_true')
     ap.add_argument('--start', default=0, type=int, help='start round')
     args = ap.parse_args()
 

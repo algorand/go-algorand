@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -209,7 +210,7 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // The return error of fn should be a native sqlite3.Error type or an error wrapping it.
-// DO NOT return a custom error - the internal logic of Atmoic expects an sqlite error and uses that value.
+// DO NOT return a custom error - the internal logic of Atomic expects an sqlite error and uses that value.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	return db.atomic(fn, extras...)
 }
@@ -228,6 +229,12 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 				if !ok {
 					err = fmt.Errorf("%v", r)
 				}
+
+				buf := make([]byte, 16*1024)
+				stlen := runtime.Stack(buf, false)
+				errstr := string(buf[:stlen])
+				fmt.Fprintf(os.Stderr, "recovered panic in atomic: %s", errstr)
+
 			}
 		}()
 
@@ -309,7 +316,7 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 	return
 }
 
-// ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
+// ResetTransactionWarnDeadline allow the atomic function to extend its warn deadline by setting a new deadline.
 // The Accessor can be copied and therefore isn't suitable for multi-threading directly,
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.
