@@ -484,6 +484,7 @@ type StreamVerifier struct {
 	ctx              context.Context
 	cache            VerifiedTransactionCache
 	pendingTasksWg   sync.WaitGroup
+	activeLoopWg     sync.WaitGroup
 	nbw              *NewBlockWatcher
 	ledger           logic.LedgerForSignature
 }
@@ -600,10 +601,12 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 // Start is called when the verifier is created and whenever it needs to restart after
 // the ctx is canceled
 func (sv *StreamVerifier) Start() {
+	sv.activeLoopWg.Add(1)
 	go sv.batchingLoop()
 }
 
 func (sv *StreamVerifier) batchingLoop() {
+	defer sv.activeLoopWg.Done()
 	timer := time.NewTicker(waitForFirstTxnDuration)
 	var added bool
 	var numberOfSigsInCurrent uint64

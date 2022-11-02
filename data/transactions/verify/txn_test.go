@@ -863,7 +863,7 @@ func BenchmarkTxn(b *testing.B) {
 	b.StopTimer()
 }
 
-func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}, t *testing.T) {
+func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}, t *testing.T) (sv *StreamVerifier) {
 
 	numOfTxnGroups := len(txnGroups)
 	execPool := execpool.MakePool(t)
@@ -879,7 +879,7 @@ func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint6
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan VerificationResult)
-	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv = MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
 	sv.Start()
 
 	wg := sync.WaitGroup{}
@@ -951,6 +951,7 @@ func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint6
 		}
 	}
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
+	return sv
 }
 
 // TestStreamVerifier tests the basic functionality
@@ -1077,5 +1078,6 @@ func TestStreamVerifierIdel(t *testing.T) {
 	}()
 	// set this value too small to hit the timeout first
 	waitForFirstTxnDuration = 1 * time.Microsecond
-	streamVerifier(txnGroups, badTxnGroups, t)
+	sv := streamVerifier(txnGroups, badTxnGroups, t)
+	sv.activeLoopWg.Wait()
 }
