@@ -59,7 +59,7 @@ func (stats *blockstats) onBlock(block rpcs.EncodedBlockCert) {
 
 	stats.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockStatsEvent, telemetryspec.BlockStatsEventDetails{
 		Hash:                block.Block.Hash().String(),
-		OriginalProposer:    block.Certificate.Proposal.OriginalProposer.String(), // v2 API no longer returns the Block Proposer; we need to decode a raw block and retrieve proposer from block certificate.
+		OriginalProposer:    block.Certificate.Proposal.OriginalProposer.String(),
 		Round:               uint64(blockHeader.Round),
 		Transactions:        uint64(len(block.Block.Payset)),
 		ActiveUsers:         uint64(len(users)),
