@@ -56,12 +56,11 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 	if validate {
 		var err error
-		//if proto.StateProofUseTrackerVerification {
-		//	err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
-		//} else {
-		//	err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
-		//}
-		err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
+		if proto.StateProofUseTrackerVerification {
+			err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
+		} else {
+			err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
+		}
 		if err != nil {
 			return err
 		}
