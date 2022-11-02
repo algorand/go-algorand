@@ -92,7 +92,7 @@ func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uin
 		t.cadaver.baseFilename = cadaverFilename
 		t.cadaver.baseDirectory = cadaverDirectory
 		t.cadaver.fileSizeTarget = fileSizeTarget
-		log.Infof("agreement: cadaver set to %v", cadaverFilename)
+		log.Infof("agreement: cadaver set to %s", t.cadaver.filename())
 		err := t.cadaver.init()
 		if err != nil {
 			return nil, err
