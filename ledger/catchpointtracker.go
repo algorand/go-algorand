@@ -1107,13 +1107,13 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err := ct.dbs.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
+	err := ct.dbs.Rdb.AtomicContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
+		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
 		}
 		for more {
-			stepCtx, stepCancelFunction := context.WithTimeout(ctx, chunkExecutionDuration)
+			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
 			more, err = catchpointWriter.WriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
@@ -1123,7 +1123,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				_, err0 := db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
+				_, err0 := db.ResetTransactionWarnDeadline(dbCtx, tx, time.Now().Add(1*time.Second))
 				if err0 != nil {
 					ct.log.Warnf("catchpointTracker: generateCatchpoint: failed to reset transaction warn deadline : %v", err0)
 				}
@@ -1135,7 +1135,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 					if chunkExecutionDuration > longChunkExecutionDuration {
 						chunkExecutionDuration = longChunkExecutionDuration
 					}
-				case <-ctx.Done():
+				case <-dbCtx.Done():
 					//retryCatchpointCreation = true
 					err2 := catchpointWriter.Abort()
 					if err2 != nil {
