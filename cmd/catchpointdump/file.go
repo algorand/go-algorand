@@ -124,6 +124,11 @@ var fileCmd = &cobra.Command{
 				defer outFile.Close()
 			}
 
+			err = printStateProofVerificationData("./ledger.tracker.sqlite", outFile)
+			if err != nil {
+				reportErrorf("Unable to print state proof verification database : %v", err)
+			}
+
 			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
@@ -383,4 +388,38 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
+}
+
+func printStateProofVerificationData(databaseName string, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	printDumpingCatchpointProgressLine(0, 50, 0)
+	defer printDumpingCatchpointProgressLine(0, 0, 0)
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+
+	var stateProofVerificationData []ledgercore.StateProofVerificationData
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		stateProofVerificationData, err = ledger.CatchpointStateProofVerification(ctx, tx)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var printedLines []string
+	for _, data := range stateProofVerificationData {
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		printedLines = append(printedLines, fmt.Sprintf("%d : %s", data.TargetStateProofRound, string(jsonData)))
+	}
+	_, err = fmt.Fprintf(fileWriter, "State Proof Verification Data:\n"+strings.Join(printedLines, "\n")+"\n")
+	return err
 }

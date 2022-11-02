@@ -154,12 +154,12 @@ func (cw *catchpointWriter) Abort() error {
 }
 
 func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, error) {
-	rawData, err := stateProofVerification(cw.ctx, cw.tx)
+	rawData, err := StateProofVerification(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
 
-	wrappedData := catchpointStateProofVerificationData{Data: *rawData}
+	wrappedData := catchpointStateProofVerificationData{Data: rawData}
 	encodedData := protocol.Encode(&wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{

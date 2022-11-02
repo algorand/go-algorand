@@ -820,12 +820,12 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateVerificationProofData, err := catchpointStateProofVerification(ctx, tx)
+		rawStateVerificationProofData, err := CatchpointStateProofVerification(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		wrappedData := catchpointStateProofVerificationData{Data: *rawStateVerificationProofData}
+		wrappedData := catchpointStateProofVerificationData{Data: rawStateVerificationProofData}
 		stateProofVerificationDataHash = crypto.HashObj(wrappedData)
 
 		return
