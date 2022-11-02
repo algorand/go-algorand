@@ -568,7 +568,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 const waitForNextTxnDuration = 1 * time.Millisecond
 
 // waitForFirstTxnDuration is the time to wait for the first transaction in the batch
-const waitForFirstTxnDuration = 2000 * time.Millisecond
+var waitForFirstTxnDuration = 2000 * time.Millisecond
 
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
