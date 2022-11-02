@@ -985,7 +985,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan VerificationResult)
-	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, nil, nbw, verificationPool, cache)
+	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
 	sv.Start()
 
 	badTxnGroups := make(map[uint64]struct{})
@@ -1027,6 +1027,39 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod] = mSigTxn
 	mod++
 
+	// logicsig
+	// add a simple logic that verifies this condition:
+	// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
+	op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+	require.NoError(t, err)
+	s := rand.Intn(len(secrets))
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Sender = addrs[s]
+	txnGroups[mod][0].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+	txnGroups[mod][0].Lsig.Logic = op.Program
+	program := logic.Program(op.Program)
+	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
+	mod++
+
+	// bad lgicsig
+	s = rand.Intn(len(secrets))
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Sender = addrs[s]
+	txnGroups[mod][0].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+	txnGroups[mod][0].Lsig.Args[0][0]++
+	txnGroups[mod][0].Lsig.Logic = op.Program
+	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
+	{
+		noteField := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(noteField, uint64(mod))
+		txnGroups[mod][0].Txn.Note = noteField
+		badTxnGroups[uint64(mod)] = struct{}{}
+	}
+	mod++
+
 	// txn with sig and msig
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	{
@@ -1053,13 +1086,13 @@ func TestStreamVerifierCases(t *testing.T) {
 				if _, has := badTxnGroups[u]; has {
 					badSigResultCounter++
 					if result.Err == nil {
-						err := fmt.Errorf("%dth transaction varified with a bad sig", x)
+						err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
 						errChan <- err
 					}
 				} else {
 					goodSigResultCounter++
 					if result.Err != nil {
-						err := fmt.Errorf("%dth transaction failed to varify with good sigs", x)
+						err := fmt.Errorf("%dth (%d) transaction failed to varify with good sigs", x, u)
 						errChan <- err
 					}
 				}
