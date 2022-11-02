@@ -1015,7 +1015,7 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 // Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.
 func (db *participationDB) Close() {
 	if err := db.Flush(db.flushTimeout); err != nil {
-		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
+		db.log.Warnf("participationDB unhandled error during Close/Flush: %v", err)
 	}
 
 	db.store.Close()

@@ -513,7 +513,7 @@ var appExecuteCmd = &cobra.Command{
 
 		var inputs appCallInputs
 		for _, arg := range proc.Args {
-			var callArg appCallArg
+			var callArg logic.AppCallBytes
 			callArg.Encoding = arg.Kind
 
 			if !procFlags.Changed(arg.Name) && arg.Default != "" {
@@ -565,7 +565,7 @@ var appExecuteCmd = &cobra.Command{
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
-			rawValue, err := parseAppArg(arg)
+			rawValue, err := arg.Raw()
 			if err != nil {
 				reportErrorf("Could not parse argument corresponding to '%s': %v", proc.Args[i].Name, err)
 			}
@@ -586,7 +586,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
