@@ -5190,10 +5190,12 @@ func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName stri
 	return result, err
 }
 
+// StateProofVerification returns all state proof verification data from the stateProofVerification table.
 func StateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationData, error) {
 	return stateProofVerificationTable(ctx, tx, "stateProofVerification")
 }
 
+// CatchpointStateProofVerification returns all state proof verification data from the catchpointStateProofVerification table.
 func CatchpointStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationData, error) {
 	return stateProofVerificationTable(ctx, tx, "catchpointStateProofVerification")
 }
