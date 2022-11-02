@@ -94,8 +94,8 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		streamVerifierChan:    make(chan verify.UnverifiedElement, 0),
-		streamReturnChan:      make(chan verify.VerificationResult, 0),
+		streamVerifierChan:    make(chan verify.UnverifiedElement),
+		streamReturnChan:      make(chan verify.VerificationResult),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
