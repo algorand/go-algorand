@@ -197,7 +197,7 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 
 			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
 				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
-				return txn.Txn, nil
+				return &txn.Txn, nil
 			}
 		}
 	}
@@ -1100,7 +1100,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
-		if addrPtr != nil && !(*txn.Txn).MatchAddress(*addrPtr, spec) {
+		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
 			continue
 		}
 

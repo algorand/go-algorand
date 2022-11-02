@@ -3421,7 +3421,7 @@ func (z *SignedTxn) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).Txn == nil {
+	if (*z).Txn.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
@@ -3451,11 +3451,7 @@ func (z *SignedTxn) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			if (*z).Txn == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = (*z).Txn.MarshalMsg(o)
-			}
+			o = (*z).Txn.MarshalMsg(o)
 		}
 	}
 	return
@@ -3505,21 +3501,10 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			if msgp.IsNil(bts) {
-				bts, err = msgp.ReadNilBytes(bts)
-				if err != nil {
-					return
-				}
-				(*z).Txn = nil
-			} else {
-				if (*z).Txn == nil {
-					(*z).Txn = new(Transaction)
-				}
-				bts, err = (*z).Txn.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Txn")
-					return
-				}
+			bts, err = (*z).Txn.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Txn")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -3572,21 +3557,10 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "txn":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).Txn = nil
-				} else {
-					if (*z).Txn == nil {
-						(*z).Txn = new(Transaction)
-					}
-					bts, err = (*z).Txn.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Txn")
-						return
-					}
+				bts, err = (*z).Txn.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Txn")
+					return
 				}
 			case "sgnr":
 				bts, err = (*z).AuthAddr.UnmarshalMsg(bts)
@@ -3614,19 +3588,13 @@ func (_ *SignedTxn) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxn) Msgsize() (s int) {
-	s = 1 + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 5 + (*z).Lsig.Msgsize() + 4
-	if (*z).Txn == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).Txn.Msgsize()
-	}
-	s += 5 + (*z).AuthAddr.Msgsize()
+	s = 1 + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 5 + (*z).Lsig.Msgsize() + 4 + (*z).Txn.Msgsize() + 5 + (*z).AuthAddr.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxn) MsgIsZero() bool {
-	return ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).Lsig.MsgIsZero()) && ((*z).Txn == nil) && ((*z).AuthAddr.MsgIsZero())
+	return ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).Lsig.MsgIsZero()) && ((*z).Txn.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3691,7 +3659,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x20000
 	}
-	if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
+	if (*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40000
 	}
@@ -3771,11 +3739,7 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x40000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = (*z).SignedTxnWithAD.SignedTxn.Txn.MarshalMsg(o)
-			}
+			o = (*z).SignedTxnWithAD.SignedTxn.Txn.MarshalMsg(o)
 		}
 	}
 	return
@@ -3825,21 +3789,10 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			if msgp.IsNil(bts) {
-				bts, err = msgp.ReadNilBytes(bts)
-				if err != nil {
-					return
-				}
-				(*z).SignedTxnWithAD.SignedTxn.Txn = nil
-			} else {
-				if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-					(*z).SignedTxnWithAD.SignedTxn.Txn = new(Transaction)
-				}
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Txn")
-					return
-				}
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Txn")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -3972,21 +3925,10 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "txn":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).SignedTxnWithAD.SignedTxn.Txn = nil
-				} else {
-					if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-						(*z).SignedTxnWithAD.SignedTxn.Txn = new(Transaction)
-					}
-					bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Txn")
-						return
-					}
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Txn")
+					return
 				}
 			case "sgnr":
 				bts, err = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.UnmarshalMsg(bts)
@@ -4074,19 +4016,13 @@ func (_ *SignedTxnInBlock) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnInBlock) Msgsize() (s int) {
-	s = 1 + 4 + (*z).SignedTxnWithAD.SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Lsig.Msgsize() + 4
-	if (*z).SignedTxnWithAD.SignedTxn.Txn == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).SignedTxnWithAD.SignedTxn.Txn.Msgsize()
-	}
-	s += 5 + (*z).SignedTxnWithAD.SignedTxn.AuthAddr.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).SignedTxnWithAD.ApplyData.SenderRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.CloseRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.EvalDelta.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ConfigAsset.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ApplicationID.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	s = 1 + 4 + (*z).SignedTxnWithAD.SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Lsig.Msgsize() + 4 + (*z).SignedTxnWithAD.SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.AuthAddr.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).SignedTxnWithAD.ApplyData.SenderRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.CloseRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.EvalDelta.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ConfigAsset.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ApplicationID.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnInBlock) MsgIsZero() bool {
-	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn == nil) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ConfigAsset.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ApplicationID.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
+	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ConfigAsset.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ApplicationID.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4143,7 +4079,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4000
 	}
-	if (*z).SignedTxn.Txn == nil {
+	if (*z).SignedTxn.Txn.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8000
 	}
@@ -4213,11 +4149,7 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x8000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			if (*z).SignedTxn.Txn == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = (*z).SignedTxn.Txn.MarshalMsg(o)
-			}
+			o = (*z).SignedTxn.Txn.MarshalMsg(o)
 		}
 	}
 	return
@@ -4267,21 +4199,10 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			if msgp.IsNil(bts) {
-				bts, err = msgp.ReadNilBytes(bts)
-				if err != nil {
-					return
-				}
-				(*z).SignedTxn.Txn = nil
-			} else {
-				if (*z).SignedTxn.Txn == nil {
-					(*z).SignedTxn.Txn = new(Transaction)
-				}
-				bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Txn")
-					return
-				}
+			bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Txn")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -4398,21 +4319,10 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "txn":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).SignedTxn.Txn = nil
-				} else {
-					if (*z).SignedTxn.Txn == nil {
-						(*z).SignedTxn.Txn = new(Transaction)
-					}
-					bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Txn")
-						return
-					}
+				bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Txn")
+					return
 				}
 			case "sgnr":
 				bts, err = (*z).SignedTxn.AuthAddr.UnmarshalMsg(bts)
@@ -4488,19 +4398,13 @@ func (_ *SignedTxnWithAD) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnWithAD) Msgsize() (s int) {
-	s = 1 + 4 + (*z).SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxn.Lsig.Msgsize() + 4
-	if (*z).SignedTxn.Txn == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).SignedTxn.Txn.Msgsize()
-	}
-	s += 5 + (*z).SignedTxn.AuthAddr.Msgsize() + 3 + (*z).ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).ApplyData.SenderRewards.Msgsize() + 3 + (*z).ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).ApplyData.CloseRewards.Msgsize() + 3 + (*z).ApplyData.EvalDelta.Msgsize() + 5 + (*z).ApplyData.ConfigAsset.Msgsize() + 5 + (*z).ApplyData.ApplicationID.Msgsize()
+	s = 1 + 4 + (*z).SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxn.Lsig.Msgsize() + 4 + (*z).SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxn.AuthAddr.Msgsize() + 3 + (*z).ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).ApplyData.SenderRewards.Msgsize() + 3 + (*z).ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).ApplyData.CloseRewards.Msgsize() + 3 + (*z).ApplyData.EvalDelta.Msgsize() + 5 + (*z).ApplyData.ConfigAsset.Msgsize() + 5 + (*z).ApplyData.ApplicationID.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnWithAD) MsgIsZero() bool {
-	return ((*z).SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxn.Txn == nil) && ((*z).SignedTxn.AuthAddr.MsgIsZero()) && ((*z).ApplyData.ClosingAmount.MsgIsZero()) && ((*z).ApplyData.AssetClosingAmount == 0) && ((*z).ApplyData.SenderRewards.MsgIsZero()) && ((*z).ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).ApplyData.CloseRewards.MsgIsZero()) && ((*z).ApplyData.EvalDelta.MsgIsZero()) && ((*z).ApplyData.ConfigAsset.MsgIsZero()) && ((*z).ApplyData.ApplicationID.MsgIsZero())
+	return ((*z).SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxn.AuthAddr.MsgIsZero()) && ((*z).ApplyData.ClosingAmount.MsgIsZero()) && ((*z).ApplyData.AssetClosingAmount == 0) && ((*z).ApplyData.SenderRewards.MsgIsZero()) && ((*z).ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).ApplyData.CloseRewards.MsgIsZero()) && ((*z).ApplyData.EvalDelta.MsgIsZero()) && ((*z).ApplyData.ConfigAsset.MsgIsZero()) && ((*z).ApplyData.ApplicationID.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

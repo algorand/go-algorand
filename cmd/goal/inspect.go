@@ -33,11 +33,11 @@ import (
 type inspectSignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig      crypto.Signature          `codec:"sig"`
-	Msig     inspectMultisigSig        `codec:"msig"`
-	Lsig     inspectLogicSig           `codec:"lsig"`
-	Txn      *transactions.Transaction `codec:"txn"`
-	AuthAddr basics.Address            `codec:"sgnr"`
+	Sig      crypto.Signature         `codec:"sig"`
+	Msig     inspectMultisigSig       `codec:"msig"`
+	Lsig     inspectLogicSig          `codec:"lsig"`
+	Txn      transactions.Transaction `codec:"txn"`
+	AuthAddr basics.Address           `codec:"sgnr"`
 }
 
 // inspectMultisigSig is isomorphic to MultisigSig but uses different

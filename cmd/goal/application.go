@@ -1398,7 +1398,7 @@ var methodAppCmd = &cobra.Command{
 		// Compile group
 		var txnGroup []transactions.Transaction
 		for i := range txnArgs {
-			txnGroup = append(txnGroup, *txnArgs[i].Txn)
+			txnGroup = append(txnGroup, txnArgs[i].Txn)
 		}
 		txnGroup = append(txnGroup, *appCallTxn)
 		if len(txnGroup) > 1 {
@@ -1425,7 +1425,7 @@ var methodAppCmd = &cobra.Command{
 				signedTxnGroup = append(signedTxnGroup, transactions.SignedTxn{
 					Lsig:     txnFromArgs.Lsig,
 					AuthAddr: txnFromArgs.AuthAddr,
-					Txn:      &unsignedTxn,
+					Txn:      unsignedTxn,
 				})
 				continue
 			}
@@ -1469,7 +1469,7 @@ var methodAppCmd = &cobra.Command{
 		// remember the final txid in this variable
 		var txid string
 		for _, stxn := range signedTxnGroup {
-			txid = (*stxn.Txn).ID().String()
+			txid = stxn.Txn.ID().String()
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
 		}
 

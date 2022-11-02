@@ -919,7 +919,7 @@ func TestLogicSigOK(t *testing.T) {
 		},
 	}
 	signedTx := transactions.SignedTxn{
-		Txn: &tx,
+		Txn: tx,
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
 		},

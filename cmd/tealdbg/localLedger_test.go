@@ -89,7 +89,7 @@ int 2
 
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
-		Txn: &transactions.Transaction{
+		Txn: transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: addr,

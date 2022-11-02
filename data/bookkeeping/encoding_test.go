@@ -48,7 +48,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 	}
 
 	sigtxn := transactions.SignedTxn{
-		Txn: &txn,
+		Txn: txn,
 	}
 
 	var b Block

@@ -39,8 +39,8 @@ func TestDecorateUnknownTransactionTypeError(t *testing.T) {
 
 	paymentTx := transactions.Transaction{Type: protocol.PaymentTx}
 	keyregTx := transactions.Transaction{Type: protocol.KeyRegistrationTx}
-	signedPaymentTx := transactions.SignedTxn{Txn: &paymentTx}
-	signedKeyregTx := transactions.SignedTxn{Txn: &keyregTx}
+	signedPaymentTx := transactions.SignedTxn{Txn: paymentTx}
+	signedKeyregTx := transactions.SignedTxn{Txn: keyregTx}
 
 	testCases := []TestCase{
 		{

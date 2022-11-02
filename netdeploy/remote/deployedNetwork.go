@@ -656,7 +656,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 				header.Sender = src
 
-				tx := &transactions.Transaction{
+				tx := transactions.Transaction{
 					Type:   protocol.PaymentTx,
 					Header: header,
 					PaymentTxnFields: transactions.PaymentTxnFields{
@@ -679,7 +679,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			accti := rand.Intn(len(bootstrappedNet.accounts))
 			for i := uint64(0); i < n; i++ {
 				header.Sender = src
-				tx := &transactions.Transaction{
+				tx := transactions.Transaction{
 					Type:   protocol.PaymentTx,
 					Header: header,
 					PaymentTxnFields: transactions.PaymentTxnFields{
@@ -710,7 +710,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 				AssetParams: assetParam,
 			}
 
-			tx := &transactions.Transaction{
+			tx := transactions.Transaction{
 				Type:                 protocol.AssetConfigTx,
 				Header:               header,
 				AssetConfigTxnFields: assetConfigFields,
@@ -763,7 +763,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 					[]byte("bar"),
 				},
 			}
-			tx := &transactions.Transaction{
+			tx := transactions.Transaction{
 				Type:   protocol.ApplicationCallTx,
 				Header: header,
 

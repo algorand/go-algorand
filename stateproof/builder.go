@@ -413,7 +413,6 @@ func (spw *Worker) tryBroadcast() {
 
 		spw.log.Infof("spw.tryBroadcast: building state proof transaction for round %d", rnd)
 		var stxn transactions.SignedTxn
-		stxn.Txn = new(transactions.Transaction)
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid

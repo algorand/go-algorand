@@ -481,7 +481,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		proto:       &proto,
 		txnGroup: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 			{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
 						Sender: basics.Address{}, Fee: basics.MicroAlgos{Raw: 1000}, FirstValid: 10,
@@ -489,7 +489,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 				},
 			},
 			{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationArgs: [][]byte{{0, 1, 2, 3}},
@@ -531,7 +531,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 			innerTxns: []transactions.SignedTxnWithAD{
 				{
 					SignedTxn: transactions.SignedTxn{
-						Txn: &transactions.Transaction{
+						Txn: transactions.Transaction{
 							Type: protocol.ApplicationCallTx,
 							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 								ApplicationArgs: [][]byte{{0, 1, 2, 3}},
@@ -542,7 +542,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 						EvalDelta: transactions.EvalDelta{
 							InnerTxns: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 								{
-									Txn: &transactions.Transaction{
+									Txn: transactions.Transaction{
 										Type: protocol.PaymentTx,
 										Header: transactions.Header{
 											Sender: basics.Address{}, Fee: basics.MicroAlgos{Raw: 1000}, FirstValid: 10,
@@ -550,7 +550,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 									},
 								},
 								{
-									Txn: &transactions.Transaction{
+									Txn: transactions.Transaction{
 										Type: protocol.ApplicationCallTx,
 										ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 											ApplicationArgs: [][]byte{{0, 1, 2, 3}},

@@ -35,7 +35,7 @@ type SignedTxn struct {
 	Sig      crypto.Signature   `codec:"sig"`
 	Msig     crypto.MultisigSig `codec:"msig"`
 	Lsig     LogicSig           `codec:"lsig"`
-	Txn      *Transaction       `codec:"txn"`
+	Txn      Transaction        `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
 }
 
@@ -59,7 +59,7 @@ type SignedTxnWithAD struct {
 
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
-	return (*s.Txn).ID()
+	return s.Txn.ID()
 }
 
 // ID on SignedTxnInBlock should never be called, because the ID depends
@@ -102,7 +102,7 @@ func AssembleSignedTxn(txn *Transaction, sig crypto.Signature, msig crypto.Multi
 		return SignedTxn{}, errors.New("signed txn can only have one of sig or msig")
 	}
 	s := SignedTxn{
-		Txn:  txn,
+		Txn:  *txn,
 		Sig:  sig,
 		Msig: msig,
 	}

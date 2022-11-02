@@ -293,7 +293,7 @@ func (tx Txn) Txn() *transactions.Transaction {
 // the fields in this Txn.  This seemingly pointless operation exists,
 // again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
-	return transactions.SignedTxn{Txn: tx.Txn()}
+	return transactions.SignedTxn{Txn: *tx.Txn()}
 }
 
 // SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD

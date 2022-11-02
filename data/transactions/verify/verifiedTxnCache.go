@@ -133,7 +133,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 		baseBucket := v.base
 		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {
 			txn := &signedTxnGroup[txnIdx]
-			id := (*txn.Txn).ID()
+			id := txn.Txn.ID()
 			// check pinned first
 			entryGroup := v.pinned[id]
 			// if not found in the pinned map, try to find in the verified buckets:

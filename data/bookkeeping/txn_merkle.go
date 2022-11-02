@@ -69,7 +69,7 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if err != nil {
 		return nil, err
 	}
-	elem.txn = *stxn.Txn
+	elem.txn = stxn.Txn
 
 	return &elem, nil
 }

@@ -481,7 +481,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				}
 			}
 
-			ba, err := makeBalancesAdapter(&dl, stxn.Txn, appIdx)
+			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)
 			if err != nil {
 				response.Error = err.Error()
 				return
@@ -525,7 +525,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				if len(delta.LocalDeltas) > 0 {
 					localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
-						ldaddr, err2 := (*stxn.Txn).AddressByIndex(k, stxn.Txn.Sender)
+						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err2 != nil {
 							messages = append(messages, err2.Error())
 						}

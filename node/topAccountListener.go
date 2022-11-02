@@ -110,7 +110,7 @@ func (t *topAccountListener) update(b bookkeeping.Block, balances basics.Balance
 				accountSet[tx.Txn.CloseRemainderTo] = true
 			}
 		}
-		accountSet[(*tx.Txn).Src()] = true
+		accountSet[tx.Txn.Src()] = true
 	}
 
 	// TODO: This loop may not be needed with the ledger refactor.

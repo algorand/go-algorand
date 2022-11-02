@@ -219,7 +219,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "payment transaction",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -260,7 +260,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "asset config transaction for a non-existing asset",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -296,7 +296,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "asset config transaction for an existing asset",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -332,7 +332,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "asset transfer transaction",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -384,7 +384,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "asset transfer transaction zero amount",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -429,7 +429,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "asset freeze transaction",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.AssetFreezeTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -478,7 +478,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		{
 			name: "application transaction",
 			signedTxn: transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -597,7 +597,7 @@ func TestAssetLookupError(t *testing.T) {
 	ledger := getPrefetcherTestLedger(rnd)
 	assetTransferTxn :=
 		transactions.SignedTxn{
-			Txn: &transactions.Transaction{
+			Txn: transactions.Transaction{
 				Type: protocol.AssetTransferTx,
 				Header: transactions.Header{
 					Sender: makeAddress(1),
@@ -655,7 +655,7 @@ func TestGetCreatorForRoundError(t *testing.T) {
 
 	createAssetTxn :=
 		transactions.SignedTxn{
-			Txn: &transactions.Transaction{
+			Txn: transactions.Transaction{
 				Type: protocol.AssetConfigTx,
 				Header: transactions.Header{
 					Sender: makeAddress(1),
@@ -711,7 +711,7 @@ func TestLookupWithoutRewards(t *testing.T) {
 
 	createAssetTxn :=
 		transactions.SignedTxn{
-			Txn: &transactions.Transaction{
+			Txn: transactions.Transaction{
 				Type: protocol.AssetConfigTx,
 				Header: transactions.Header{
 					Sender: makeAddress(1),
@@ -784,7 +784,7 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 		txnGroups[i] = make([]transactions.SignedTxnWithAD, 16)
 		for k := range txnGroups[i] {
 			txnGroups[i][k].SignedTxn = transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
 						Sender: makeAddress(1),
@@ -823,7 +823,7 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 		groups[grpIdx] = make([]transactions.SignedTxnWithAD, txnGroupLen)
 		for txnIdx := range groups[grpIdx] {
 			groups[grpIdx][txnIdx].SignedTxn = transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					Header: transactions.Header{
 						Sender: makeAddress(grpIdx + txnIdx),
@@ -871,7 +871,7 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 		groups[grpIdx] = make([]transactions.SignedTxnWithAD, txnGroupLen)
 		for txnIdx := range groups[grpIdx] {
 			groups[grpIdx][txnIdx].SignedTxn = transactions.SignedTxn{
-				Txn: &transactions.Transaction{
+				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
 						Sender: makeAddress(grpIdx + txnIdx),

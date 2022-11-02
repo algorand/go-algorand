@@ -142,7 +142,7 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	var sender basics.Address
 	copy(sender[:], lhash[:])
 	stx := transactions.SignedTxn{
-		Txn: &transactions.Transaction{
+		Txn: transactions.Transaction{
 			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender:      sender,
@@ -787,7 +787,7 @@ func TestTealDryrun(t *testing.T) {
 	var gdr generated.DryrunRequest
 	txns := []transactions.SignedTxn{
 		{
-			Txn: &transactions.Transaction{
+			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 					ApplicationID:   1,
@@ -1072,7 +1072,7 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	}
 	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
 	tx := transactions.SignedTxn{
-		Txn: &transactions.Transaction{
+		Txn: transactions.Transaction{
 			Type:   protocol.StateProofTx,
 			Header: transactions.Header{Sender: transactions.StateProofSender},
 			StateProofTxnFields: transactions.StateProofTxnFields{

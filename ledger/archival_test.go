@@ -678,7 +678,7 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 	return transactions.SignedTxnInBlock{
 		SignedTxnWithAD: transactions.SignedTxnWithAD{
 			SignedTxn: transactions.SignedTxn{
-				Txn: &tx,
+				Txn: tx,
 			},
 		},
 		HasGenesisID: true,

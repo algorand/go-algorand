@@ -300,7 +300,7 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 		return err
 	}
 
-	err = apply.Rekey(cs, txn.Txn)
+	err = apply.Rekey(cs, &txn.Txn)
 	if err != nil {
 		return err
 	}

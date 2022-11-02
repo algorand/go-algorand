@@ -122,7 +122,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
 			},
 		}
-		signed[i].Txn = &txs[i]
+		signed[i].Txn = txs[i]
 
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig
@@ -289,7 +289,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 	config.Consensus[spProto] = proto
 
 	stxn := transactions.SignedTxn{
-		Txn: &transactions.Transaction{
+		Txn: transactions.Transaction{
 			Type: protocol.StateProofTx,
 			Header: transactions.Header{
 				Sender:     transactions.StateProofSender,
@@ -712,7 +712,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 		a := rand.Intn(1000)
 		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
 
-		signedTxn[i].Txn = &transactions.Transaction{
+		signedTxn[i].Txn = transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      multiAddress[s],

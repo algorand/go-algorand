@@ -1141,10 +1141,10 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {
 		case transactions.Transaction:
-			txns = append(txns, transactions.SignedTxn{Txn: &txnType})
+			txns = append(txns, transactions.SignedTxn{Txn: txnType})
 		case []transactions.Transaction:
 			for _, t := range txnType {
-				txns = append(txns, transactions.SignedTxn{Txn: &t})
+				txns = append(txns, transactions.SignedTxn{Txn: t})
 			}
 		case transactions.SignedTxn:
 			txns = append(txns, txnType)

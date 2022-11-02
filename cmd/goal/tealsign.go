@@ -183,7 +183,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			if lsigTxnFilename == "" {
 				reportErrorf(tealsignTxIDLsigReq)
 			}
-			txid := (*stxn.Txn).ID()
+			txid := stxn.Txn.ID()
 			dataToSign = txid[:]
 			dataArgs++
 		}

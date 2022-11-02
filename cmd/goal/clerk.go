@@ -416,7 +416,7 @@ var sendCmd = &cobra.Command{
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
-				Txn:  payment,
+				Txn:  *payment,
 				Lsig: lsig,
 			}
 			blockHeader := bookkeeping.BlockHeader{
@@ -434,7 +434,7 @@ var sendCmd = &cobra.Command{
 			stx = uncheckedTxn
 		} else if program != nil {
 			stx = transactions.SignedTxn{
-				Txn: payment,
+				Txn: *payment,
 				Lsig: transactions.LogicSig{
 					Logic: program,
 					Args:  programArgs,
@@ -841,7 +841,7 @@ var signCmd = &cobra.Command{
 					signedTxn = txn
 				} else {
 					// sign the usual way
-					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, &txn.Txn)
 					if err != nil {
 						reportErrorf(errorSigningTX, err)
 					}

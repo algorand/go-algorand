@@ -135,7 +135,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 		return nil, err
 	}
 	for _, tx := range payset {
-		if (*tx.Txn).MatchAddress(id, spec) {
+		if tx.Txn.MatchAddress(id, spec) {
 			res = append(res, tx)
 		}
 	}

@@ -794,7 +794,7 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 		crypto.RandBytes(txn.Sender[:])
 		crypto.RandBytes(txn.PaymentTxnFields.Receiver[:])
 
-		sigtxn := transactions.SignedTxn{Txn: &txn}
+		sigtxn := transactions.SignedTxn{Txn: txn}
 		ad := transactions.ApplyData{}
 
 		stib, err := block.BlockHeader.EncodeSignedTxn(sigtxn, ad)

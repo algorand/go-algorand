@@ -482,7 +482,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 		// changes from this app and any inner called apps. Instead, we now keep
 		// the EvalDelta built as we go, in app evaluation.  So just use it.
 		if cb.proto.LogicSigVersion < 6 {
-			evalDelta, err = calf.buildEvalDelta(aidx, params.TxnGroup[gi].Txn)
+			evalDelta, err = calf.buildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
 			if err != nil {
 				return false, transactions.EvalDelta{}, err
 			}

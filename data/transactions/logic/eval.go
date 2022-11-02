@@ -2492,7 +2492,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
-	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: txn}}
+	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
 	fs, ok := txnFieldSpecByField(field)
 	if !ok {
 		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
@@ -2505,7 +2505,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 func (cx *EvalContext) currentTxID() transactions.Txid {
 	if cx.Proto.UnifyInnerTxIDs {
 		// can't just return cx.txn.ID() because I might be an inner txn
-		return cx.getTxID(cx.txn.Txn, cx.groupIndex, false)
+		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
 	}
 
 	// original behavior, for backwards comatability
@@ -2666,7 +2666,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case GroupIndex:
 		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := cx.getTxID(txn, groupIndex, inner)
+		txid := cx.getTxID(&txn, groupIndex, inner)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
@@ -3952,14 +3952,14 @@ func opExtract64Bits(cx *EvalContext) error {
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
-		addr, err := (*cx.txn.Txn).AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
 	addr, err := account.address()
 	if err != nil {
 		return addr, 0, err
 	}
-	idx, err := (*cx.txn.Txn).IndexByAddress(addr, cx.txn.Txn.Sender)
+	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
 	// Allow an address for an app that was created in group
@@ -4991,7 +4991,7 @@ func opItxnField(cx *EvalContext) error {
 		return fmt.Errorf("invalid itxn_field %s", field)
 	}
 	sv := cx.stack[last]
-	err := cx.stackIntoTxnField(sv, &fs, cx.subtxns[itx].Txn)
+	err := cx.stackIntoTxnField(sv, &fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 	return err
 }
@@ -5049,7 +5049,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = (*cx.subtxns[itx].Txn).WellFormed(*cx.Specials, *cx.Proto)
+		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
 		if err != nil {
 			return err
 		}
@@ -5123,7 +5123,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				innerOffset += itx
 			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
-				crypto.Digest((*cx.subtxns[itx].Txn).InnerID(parent, innerOffset)))
+				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
 	}
 

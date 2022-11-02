@@ -208,7 +208,7 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 	sig := secrets.Sign(tx)
 
 	s := SignedTxn{
-		Txn: &tx,
+		Txn: tx,
 		Sig: sig,
 	}
 	// Set the AuthAddr if the signing key doesn't match the transaction sender
@@ -706,7 +706,7 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 func (tx Transaction) EstimateEncodedSize() int {
 	// Make a signedtxn with a nonzero signature and encode it
 	stx := SignedTxn{
-		Txn: &tx,
+		Txn: tx,
 		Sig: crypto.Signature{1},
 	}
 	return stx.GetEncodedLength()

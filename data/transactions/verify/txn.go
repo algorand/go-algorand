@@ -107,7 +107,7 @@ func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext,
 		return errors.New("nonempty AuthAddr but rekeying is not supported")
 	}
 
-	if err := (*s.Txn).WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
+	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
 		return err
 	}
 
@@ -204,11 +204,11 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 	}
 
 	if hasSig {
-		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), *s.Txn, s.Sig)
+		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
 		return nil
 	}
 	if hasMsig {
-		if err := crypto.MultisigBatchPrep(*s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
+		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return fmt.Errorf("multisig validation failed: %w", err)
 		}
 		return nil

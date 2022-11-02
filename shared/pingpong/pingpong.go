@@ -1268,7 +1268,7 @@ func signTxn(signer *pingPongAccount, txn *transactions.Transaction, cfg PpConfi
 		psig = signer.sk.Sign(&progb)
 
 		// Fill in signed transaction
-		stxn.Txn = txn
+		stxn.Txn = *txn
 		stxn.Lsig.Logic = cfg.Program
 		stxn.Lsig.Sig = psig
 		stxn.Lsig.Args = cfg.LogicArgs

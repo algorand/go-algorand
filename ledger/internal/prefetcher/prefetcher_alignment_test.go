@@ -243,7 +243,7 @@ func makeGroupFromTxn(txn transactions.Transaction) []transactions.SignedTxnWith
 	return []transactions.SignedTxnWithAD{
 		{
 			SignedTxn: transactions.SignedTxn{
-				Txn: &txn,
+				Txn: txn,
 			},
 			ApplyData: transactions.ApplyData{},
 		},

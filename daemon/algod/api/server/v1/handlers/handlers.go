@@ -70,9 +70,9 @@ func decorateUnknownTransactionTypeError(err error, txs node.TxnWithStatus) erro
 		return err
 	}
 	if txs.ConfirmedRound != basics.Round(0) {
-		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, (*txs.Txn.Txn).ID().String(), txs.ConfirmedRound)
+		return fmt.Errorf(errInvalidTransactionTypeLedger, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String(), txs.ConfirmedRound)
 	}
-	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, (*txs.Txn.Txn).ID().String())
+	return fmt.Errorf(errInvalidTransactionTypePending, txs.Txn.Txn.Type, txs.Txn.Txn.ID().String())
 }
 
 // txEncode copies the data fields of the internal transaction object and populate the v1.Transaction accordingly.
@@ -363,7 +363,7 @@ func stateProofTxEncode(tx *transactions.Transaction) v1.Transaction {
 }
 
 func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
-	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
+	s, err := txEncode(&tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
 		err = decorateUnknownTransactionTypeError(err, tr)
 		return v1.Transaction{}, err
@@ -377,7 +377,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
-		if (*tx.Txn.Txn).ID() == (*stxnib.Txn).ID() {
+		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
 			offset = idx
 			break
 		}
@@ -1126,7 +1126,7 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 
 	responseTxs := make([]v1.Transaction, len(txs))
 	for i, twr := range txs {
-		responseTxs[i], err = txEncode(twr.Txn, transactions.ApplyData{})
+		responseTxs[i], err = txEncode(&twr.Txn, transactions.ApplyData{})
 		if err != nil {
 			// update the error as needed
 			err = decorateUnknownTransactionTypeError(err, node.TxnWithStatus{Txn: twr})
@@ -1233,7 +1233,7 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 				break
 			}
 
-			tx, err := txEncode(twr.Txn, transactions.ApplyData{})
+			tx, err := txEncode(&twr.Txn, transactions.ApplyData{})
 			responseTxs = append(responseTxs, tx)
 			if err != nil {
 				// update the error as needed

@@ -170,7 +170,7 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d1 = EvalDelta{
 		InnerTxns: []SignedTxnWithAD{{
 			SignedTxn: SignedTxn{
-				Txn: &Transaction{
+				Txn: Transaction{
 					Type: protocol.TxType("pay"),
 				},
 			},
@@ -179,7 +179,7 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d2 = EvalDelta{
 		InnerTxns: []SignedTxnWithAD{{
 			SignedTxn: SignedTxn{
-				Txn: &Transaction{
+				Txn: Transaction{
 					Type: protocol.TxType("axfer"),
 				},
 			},
