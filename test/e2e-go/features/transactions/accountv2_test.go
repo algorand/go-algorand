@@ -343,7 +343,7 @@ func TestAccountInformationWithBadAssetIdx(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
-	AccountInformationCheckWithOffendingFields(t, []basics.AssetIndex{12181853637140359511}, nil, nil)
+	accountInformationCheckWithOffendingFields(t, []basics.AssetIndex{12181853637140359511}, nil, nil)
 }
 
 // Add missing asset index
@@ -351,7 +351,7 @@ func TestAccountInformationWithMissingAssetIdx(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	AccountInformationCheckWithOffendingFields(t, []basics.AssetIndex{121818}, nil, nil)
+	accountInformationCheckWithOffendingFields(t, []basics.AssetIndex{121818}, nil, nil)
 }
 
 // Add offending app index greater than uint64
@@ -359,7 +359,7 @@ func TestAccountInformationWithBadAppIdx(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	AccountInformationCheckWithOffendingFields(t, nil, []basics.AppIndex{12181853637140359511}, nil)
+	accountInformationCheckWithOffendingFields(t, nil, []basics.AppIndex{12181853637140359511}, nil)
 }
 
 // Add missing app index
@@ -367,7 +367,7 @@ func TestAccountInformationWithMissingApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	AccountInformationCheckWithOffendingFields(t, nil, []basics.AppIndex{121818}, nil)
+	accountInformationCheckWithOffendingFields(t, nil, []basics.AppIndex{121818}, nil)
 }
 
 // Add missing account address
@@ -377,10 +377,10 @@ func TestAccountInformationWithMissingAddress(t *testing.T) {
 
 	randAddr := basics.Address{}
 	crypto.RandBytes(randAddr[:])
-	AccountInformationCheckWithOffendingFields(t, nil, nil, []basics.Address{randAddr})
+	accountInformationCheckWithOffendingFields(t, nil, nil, []basics.Address{randAddr})
 }
 
-func AccountInformationCheckWithOffendingFields(t *testing.T,
+func accountInformationCheckWithOffendingFields(t *testing.T,
 	foreignAssets []basics.AssetIndex,
 	foreignApps []basics.AppIndex,
 	accounts []basics.Address) {
@@ -464,7 +464,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
@@ -519,7 +519,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	if foreignAssets != nil {
 		tx.ForeignAssets = foreignAssets
@@ -608,7 +608,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)

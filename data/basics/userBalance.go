@@ -42,20 +42,16 @@ const (
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
 
-	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 850000
-
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
 	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
 	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific constains would be tested once the decoding is complete.
+	// protocol-specific contains would be tested once the decoding is complete.
 	encodedMaxAssetsPerAccount = 1024
 
 	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn
 	EncodedMaxAppLocalStates = 64
 
 	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
