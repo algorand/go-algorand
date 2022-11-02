@@ -87,6 +87,12 @@ type Account struct {
 	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
 	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
+	// \[tbxb\] The total number of bytes used by this account's app's box keys and values.
+	TotalBoxBytes *uint64 `json:"total-box-bytes,omitempty"`
+
+	// \[tbx\] The number of existing boxes created by this account's app.
+	TotalBoxes *uint64 `json:"total-boxes,omitempty"`
+
 	// The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
 
@@ -257,6 +263,23 @@ type AssetParams struct {
 
 	// Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// Box defines model for Box.
+type Box struct {
+
+	// \[name\] box name, base64 encoded
+	Name []byte `json:"name"`
+
+	// \[value\] box value, base64 encoded.
+	Value []byte `json:"value"`
+}
+
+// BoxDescriptor defines model for BoxDescriptor.
+type BoxDescriptor struct {
+
+	// Base64 encoded box name
+	Name []byte `json:"name"`
 }
 
 // BuildVersion defines model for BuildVersion.
@@ -626,6 +649,13 @@ type ApplicationResponse Application
 // AssetResponse defines model for AssetResponse.
 type AssetResponse Asset
 
+// BlockHashResponse defines model for BlockHashResponse.
+type BlockHashResponse struct {
+
+	// Block header hash.
+	BlockHash string `json:"blockHash"`
+}
+
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
 
@@ -634,6 +664,14 @@ type BlockResponse struct {
 
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
+}
+
+// BoxResponse defines model for BoxResponse.
+type BoxResponse Box
+
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+	Boxes []BoxDescriptor `json:"boxes"`
 }
 
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.

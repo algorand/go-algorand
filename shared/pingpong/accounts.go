@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/passphrase"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,6 +45,8 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 		go randomDeterministicAccounts(initCfg, out)
 	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
 		go sequentialDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "mnemonic" {
+		go mnemonicDeterministicAccounts(initCfg, out)
 	}
 	return out
 }
@@ -51,7 +54,7 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
 	numAccounts := initCfg.NumPartAccounts
 	totalAccounts := initCfg.GeneratedAccountsCount
-	if totalAccounts < numAccounts*4 {
+	if totalAccounts < uint64(numAccounts)*4 {
 		// simpler rand strategy for smaller totalAccounts
 		order := rand.Perm(int(totalAccounts))[:numAccounts]
 		for _, acct := range order {
@@ -86,6 +89,21 @@ func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.Signatur
 		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
 		out <- crypto.GenerateSignatureSecrets(seed)
 	}
+	close(out)
+}
+
+func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for _, mnemonic := range initCfg.GeneratedAccountsMnemonics {
+		seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
+			os.Exit(1)
+		}
+		var seed crypto.Seed
+		copy(seed[:], seedbytes)
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+	close(out)
 }
 
 // load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey
@@ -461,7 +479,67 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return ops.Program
 }
 
-func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
+	if numBoxUpdate != 0 || numBoxRead != 0 {
+		prologue := `#pragma version 8
+			txn ApplicationID
+			bz done
+		`
+		createBoxes := `
+			byte "%d"
+			int 1024
+			box_create
+			pop
+		`
+		updateBoxes := `
+			byte "%d"
+			int 0
+			byte "1"
+			box_replace
+		`
+		getBoxes := `
+			byte "%d"
+			box_get
+			assert
+			pop
+		`
+		done := `
+			done:
+			int 1
+			return
+		`
+
+		progParts := []string{prologue}
+
+		// note: only one of numBoxUpdate or numBoxRead should be nonzero
+		if numBoxUpdate != 0 {
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
+			}
+		} else {
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(getBoxes, i))
+			}
+		}
+		progParts = append(progParts, done)
+
+		// assemble
+		progAsm := strings.Join(progParts, "\n")
+		ops, err := logic.AssembleString(progAsm)
+		if err != nil {
+			panic(err)
+		}
+		return ops.Program, progAsm
+	}
+
 	prologueSize := uint32(2 + 3 + 2 + 1 + 1 + 3)
 	prologue := `#pragma version 2
 		txn ApplicationID
@@ -667,28 +745,39 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	}
 
 	// generate new apps
+	// cycle through accts and create apps until the desired quantity is reached
 	var txgroup []transactions.Transaction
 	var senders []string
-	for addr, acct := range pps.accounts {
-		if len(pps.cinfo.AppParams) >= int(pps.cfg.NumApp) {
-			break
-		}
-		var tx transactions.Transaction
-		tx, err = pps.newApp(addr, client)
-		if err != nil {
-			return
-		}
-		acct.addBalance(-int64(pps.cfg.MaxFee))
-		txgroup = append(txgroup, tx)
-		senders = append(senders, addr)
-		if len(txgroup) == int(pps.cfg.GroupSize) {
-			pps.schedule(len(txgroup))
-			err = pps.sendAsGroup(txgroup, client, senders)
+	var newAppAddrs []string
+	appsPerAddr := make(map[string]int)
+	totalAppCnt := len(pps.cinfo.AppParams)
+	for totalAppCnt < int(pps.cfg.NumApp) {
+		for addr, acct := range pps.accounts {
+			if totalAppCnt >= int(pps.cfg.NumApp) {
+				break
+			}
+
+			var tx transactions.Transaction
+			tx, err = pps.newApp(addr, client)
 			if err != nil {
 				return
 			}
-			txgroup = txgroup[:0]
-			senders = senders[:0]
+			newAppAddrs = append(newAppAddrs, addr)
+			acct.addBalance(-int64(pps.cfg.MaxFee))
+			txgroup = append(txgroup, tx)
+			senders = append(senders, addr)
+			if len(txgroup) == int(pps.cfg.GroupSize) {
+				pps.schedule(len(txgroup))
+				err = pps.sendAsGroup(txgroup, client, senders)
+				if err != nil {
+					return
+				}
+				txgroup = txgroup[:0]
+				senders = senders[:0]
+			}
+
+			appsPerAddr[addr]++
+			totalAppCnt++
 		}
 	}
 	if len(txgroup) > 0 {
@@ -699,6 +788,32 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		}
 		txgroup = txgroup[:0]
 		senders = senders[:0]
+	}
+
+	// update pps.cinfo.AppParams to ensure newly created apps are present
+	for _, addr := range newAppAddrs {
+		var ai v1.Account
+		for {
+			ai, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			if len(ai.AppParams) >= appsPerAddr[addr] {
+				break
+			}
+			waitForNextRoundOrSleep(client, 500*time.Millisecond)
+			// TODO : if we fail here for too long, we should re-create new accounts, etc.
+		}
+		ai, err = client.AccountInformation(addr)
+		if err != nil {
+			return
+		}
+
+		for appID, ap := range ai.AppParams {
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+			pps.cinfo.AppParams[appID] = ap
+		}
 	}
 
 	// opt-in more accounts to apps
@@ -739,19 +854,28 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		//txgroup = txgroup[:0]
 		//senders = senders[:0]
 	}
+
+	for appid := range pps.cinfo.AppParams {
+		// use source account to fund all apps
+		err = pps.appFundFromSourceAccount(appid, client)
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 
 func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transactions.Transaction, err error) {
 	// generate app program with roughly some number of operations
-	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys)
+	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys, pps.cfg.NumBoxUpdate, pps.cfg.NumBoxRead)
 	if !pps.cfg.Quiet {
 		fmt.Printf("generated program: \n%s\n", asm)
 	}
 	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
 	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
 
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -772,7 +896,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 }
 
 func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
-	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -787,6 +911,35 @@ func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Clie
 	// Ensure different txids
 	tx.Note = pps.makeNextUniqueNoteField()
 	return
+}
+
+func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.Client) (err error) {
+	// currently, apps only need to be funded if boxes are used
+	if pps.getNumBoxes() > 0 {
+		var srcFunds uint64
+		srcFunds, err = client.GetBalance(pps.cfg.SrcAccount)
+		if err != nil {
+			return err
+		}
+
+		appAddr := basics.AppIndex(appID).Address()
+		mbr := proto.MinBalance +
+			proto.BoxFlatMinBalance*uint64(pps.getNumBoxes()) +
+			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())
+
+		pps.schedule(1)
+		var txn transactions.Transaction
+		txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, pps.accounts[pps.cfg.SrcAccount])
+		if err != nil {
+			return err
+		}
+
+		srcFunds -= mbr
+		srcFunds -= txn.Fee.Raw
+		pps.accounts[pps.cfg.SrcAccount].setBalance(srcFunds)
+	}
+
+	return nil
 }
 
 func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {

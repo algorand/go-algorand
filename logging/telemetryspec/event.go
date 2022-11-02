@@ -29,6 +29,12 @@ type Event string
 // StartupEvent event
 const StartupEvent Event = "Startup"
 
+// NameValue defines a named value, for use in an array reported to telemetry.
+type NameValue struct {
+	Name  string
+	Value interface{}
+}
+
 // StartupEventDetails contains details for the StartupEvent
 type StartupEventDetails struct {
 	Version      string
@@ -36,6 +42,7 @@ type StartupEventDetails struct {
 	Branch       string
 	Channel      string
 	InstanceHash string
+	Overrides    []NameValue
 }
 
 // HeartbeatEvent is sent periodically to indicate node is running
@@ -84,6 +91,7 @@ type BlockAcceptedEventDetails struct {
 	Hash         string
 	Round        uint64
 	ValidatedAt  time.Duration
+	ReceivedAt   time.Duration
 	PreValidated bool
 	PropBufLen   uint64
 	VoteBufLen   uint64
@@ -292,6 +300,8 @@ type PeerConnectionDetails struct {
 	Endpoint string `json:",omitempty"`
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
+	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
+	DuplicateFilterCount uint64
 }
 
 // CatchpointGenerationEvent event
@@ -315,6 +325,25 @@ type CatchpointGenerationEventDetails struct {
 	FileSize uint64
 	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
 	CatchpointLabel string
+}
+
+// CatchpointRootUpdateEvent event
+const CatchpointRootUpdateEvent Event = "CatchpointRoot"
+
+// CatchpointRootUpdateEventDetails is generated when the catchpoint merkle trie root is updated, when
+// account updates for rounds are flushed to disk.
+type CatchpointRootUpdateEventDetails struct {
+	Root                        string
+	OldBase                     uint64
+	NewBase                     uint64
+	NewPageCount                int `json:"npc"`
+	NewNodeCount                int `json:"nnc"`
+	UpdatedPageCount            int `json:"upc"`
+	UpdatedNodeCount            int `json:"unc"`
+	DeletedPageCount            int `json:"dpc"`
+	FanoutReallocatedNodeCount  int `json:"frnc"`
+	PackingReallocatedNodeCount int `json:"prnc"`
+	LoadedPages                 int `json:"lp"`
 }
 
 // BalancesAccountVacuumEvent event
