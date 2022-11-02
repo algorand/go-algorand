@@ -62,8 +62,8 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-
 	kvGet(key string) ([]byte, bool, error)
+	StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error)
 }
 
 type roundCowState struct {
@@ -239,6 +239,10 @@ func (cb *roundCowState) GetStateProofNextRound() basics.Round {
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.BlockHdr(r)
+}
+
+func (cb *roundCowState) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	return cb.lookupParent.StateProofVerificationData(stateProofLastAttestedRound)
 }
 
 func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {

@@ -37,14 +37,6 @@ var (
 	errInsufficientWeight   = errors.New("insufficient state proof weight")
 )
 
-func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
-	proto := config.Consensus[votersHdr.CurrentProtocol]
-	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
-	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
-
-	return calculateAcceptableStateProofWeight(total, proto.StateProofInterval, proto.StateProofWeightThreshold, latestRoundInProof, firstValid, logger)
-}
-
 // AcceptableStateProofWeight computes the acceptable signed weight
 // of a state proof if it were to appear in a transaction with a
 // particular firstValid round.  Earlier rounds require a smaller proof.
@@ -53,6 +45,14 @@ func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid b
 // (votersHdr.Round(), votersHdr.Round()+StateProofInterval].
 //
 // logger must not be nil; use at least logging.Base()
+func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
+	proto := config.Consensus[votersHdr.CurrentProtocol]
+	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
+	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
+
+	return calculateAcceptableStateProofWeight(total, proto.StateProofInterval, proto.StateProofWeightThreshold, latestRoundInProof, firstValid, logger)
+}
+
 func calculateAcceptableStateProofWeight(totalOnline basics.MicroAlgos, stateProofInterval uint64, provenWeightThreshold uint32, lastAttestedRound basics.Round, firstValid basics.Round, logger logging.Logger) uint64 {
 
 	halfPeriodForInterval := stateProofInterval / 2

@@ -285,6 +285,10 @@ func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, err
 	return bookkeeping.BlockHeader{}, nil
 }
 
+func (l *localLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	return nil, fmt.Errorf("localLedger: StateProofVerificationData is not implemented")
+}
+
 func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
