@@ -219,12 +219,7 @@ func TestSyncRound(t *testing.T) {
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
-	// Set sync round failure
-	err = s.SetSyncRound(uint64(initialLocalRound + 2))
-	require.Errorf(t, err, "attempted to set sync round for catchup service when EnableSyncMode was disabled")
-
 	// Set sync round success
-	s.cfg.EnableSyncMode = true
 	err = s.SetSyncRound(uint64(initialLocalRound + 2))
 	require.NoError(t, err)
 

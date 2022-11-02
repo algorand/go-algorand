@@ -48,7 +48,6 @@
     "EnableProfiler": false,
     "EnableRequestLogger": false,
     "EnableRuntimeMetrics": false,
-    "EnableSyncMode": false,
     "EnableTopAccountsReporting": false,
     "EnableUsageLog": false,
     "EnableVerbosedTransactionSyncLogging": false,
