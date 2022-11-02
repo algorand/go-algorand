@@ -19,11 +19,11 @@ package apply
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
@@ -42,49 +42,47 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	}
 
 	lastRoundInInterval := basics.Round(tx.Message.LastAttestedRound)
-	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
-	if err != nil {
-		return err
-	}
-
 	nextStateProofRnd := sp.GetStateProofNextRound()
 	if nextStateProofRnd == 0 || nextStateProofRnd != lastRoundInInterval {
 		return fmt.Errorf("applyStateProof: %w - expecting state proof for %d, but new state proof is for %d",
 			ErrExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
 	}
 
-	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
+	atRoundHdr, err := sp.BlockHdr(atRound)
+	if err != nil {
+		return err
+	}
+
+	var verificationData *ledgercore.StateProofVerificationData
+	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
+		verificationData, err = sp.StateProofVerificationData(lastRoundInInterval)
+	} else {
+		verificationData, err = gatherVerificationDataUsingHeaders(sp, lastRoundInInterval)
+	}
+	if err != nil {
+		return err
+	}
+
 	if validate {
-		var err error
-		if proto.StateProofUseTrackerVerification {
-			err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
-		} else {
-			err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
-		}
-		if err != nil {
+		if err = verify.ValidateStateProof(verificationData, &tx.StateProof, atRound, &tx.Message); err != nil {
 			return err
 		}
 	}
 
-	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(proto.StateProofInterval))
+	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(config.Consensus[verificationData.Version].StateProofInterval))
 	return nil
 }
 
-func verifyStateProofUsingTracker(tx *transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, lastRoundInInterval basics.Round) error {
-	verificationData, err := sp.StateProofVerificationData(lastRoundInInterval)
+func gatherVerificationDataUsingHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	return verify.ValidateStateProof(verificationData, &tx.StateProof, atRound, &tx.Message)
-
-}
-
-func verifyStateProof(tx *transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, lastRoundInInterval basics.Round, proto *config.ConsensusParams) error {
+	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 	votersRnd := lastRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
 	votersHdr, err := sp.BlockHdr(votersRnd)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	verificationData := ledgercore.StateProofVerificationData{
@@ -93,9 +91,5 @@ func verifyStateProof(tx *transactions.StateProofTxnFields, atRound basics.Round
 		OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		Version:               votersHdr.CurrentProtocol,
 	}
-	err = verify.ValidateStateProof(&verificationData, &tx.StateProof, atRound, &tx.Message)
-	if err != nil {
-		return err
-	}
-	return nil
+	return &verificationData, nil
 }
