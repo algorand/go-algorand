@@ -69,7 +69,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		plyr.Pending.push(&messageEvent{
 			T: payloadPresent,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				messageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
 			},
 		})
@@ -161,7 +161,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -172,7 +172,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
@@ -182,7 +182,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -193,7 +193,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -205,7 +205,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
@@ -214,7 +214,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: payloadPresent,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				messageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
 			},
 		}
@@ -222,7 +222,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: payloadVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				messageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
@@ -278,7 +278,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -290,7 +290,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:       "uniquemessage",
+				messageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -303,7 +303,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			Input: message{
 				Bundle:                bundle{},
 				UnauthenticatedBundle: unauthenticatedBundle{},
-				MessageHandle:         "uniquemalformedBundle",
+				messageHandle:         "uniquemalformedBundle",
 			},
 			Err: errTestVerifyFailed,
 		}
