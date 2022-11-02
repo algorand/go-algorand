@@ -56,11 +56,12 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
 	if validate {
 		var err error
-		if proto.StateProofUseTrackerVerification {
-			err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
-		} else {
-			err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
-		}
+		//if proto.StateProofUseTrackerVerification {
+		//	err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
+		//} else {
+		//	err = verifyStateProof(&tx, atRound, sp, lastRoundInInterval, &proto)
+		//}
+		err = verifyStateProofUsingTracker(&tx, atRound, sp, lastRoundInInterval)
 		if err != nil {
 			return err
 		}
@@ -97,9 +98,5 @@ func verifyStateProof(tx *transactions.StateProofTxnFields, atRound basics.Round
 	if err != nil {
 		return err
 	}
-	//err = verify.ValidateStateProof(&lastRoundHdr, &tx.StateProof, &votersHdr, atRound, &tx.Message)
-	//if err != nil {
-	//	return err
-	//}
 	return nil
 }
