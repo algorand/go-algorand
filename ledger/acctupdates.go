@@ -1384,6 +1384,23 @@ func (au *accountUpdates) lookupAccountDeltas(rnd basics.Round) (ledgercore.Acco
 	return deltas, err
 }
 
+func (au *accountUpdates) lookupKvDeltas(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	var offset uint64
+	var deltas = make(map[string]ledgercore.KvValueDelta)
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return deltas, err
+	}
+	if uint64(len(au.kvDeltas)) <= offset {
+		err = fmt.Errorf("round %d not in kvDeltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.kvDeltas), offset)
+		return deltas, err
+	}
+	deltas = au.kvDeltas[offset]
+	return deltas, err
+}
+
 // lookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data ledgercore.AccountData, validThrough basics.Round, rewardsVersion protocol.ConsensusVersion, rewardsLevel uint64, err error) {
 	needUnlock := false

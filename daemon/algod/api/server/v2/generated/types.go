@@ -454,6 +454,17 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// KvDelta defines model for KvDelta.
+type KvDelta struct {
+	Key *[]byte `json:"key,omitempty"`
+
+	// The previous value of the KV store entry.
+	PrevValue *[]byte `json:"prev-value,omitempty"`
+
+	// The new value of the KV store entry.
+	Value *[]byte `json:"value,omitempty"`
+}
+
 // LightBlockHeaderProof defines model for LightBlockHeaderProof.
 type LightBlockHeaderProof struct {
 
@@ -552,6 +563,9 @@ type RoundDeltas struct {
 
 	// Array of Asset updates for the round.
 	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
+
+	// Array of KV Deltas for the round.
+	KvDeltas *[]KvDelta `json:"kv-deltas,omitempty"`
 }
 
 // StateDelta defines model for StateDelta.

@@ -25,6 +25,7 @@ var (
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
 	errFailedRetrievingAccountDeltas           = "failed retrieving account deltas"
+	errFailedRetrievingKvDeltas                = "failed retrieving kv store deltas"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"

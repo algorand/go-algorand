@@ -450,6 +450,13 @@ func (l *Ledger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountD
 	return l.accts.lookupAccountDeltas(rnd)
 }
 
+// GetKvDeltasForRound retrieves all KvValueDeltas from the accountUpdates cache for the requested rnd
+func (l *Ledger) GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.lookupKvDeltas(rnd)
+}
+
 // VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.

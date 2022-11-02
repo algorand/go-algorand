@@ -88,6 +88,7 @@ type LedgerForAPI interface {
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 	GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error)
+	GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -995,10 +996,15 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingAccountDeltas, v2.Log)
 	}
+	kvds, err := v2.Node.LedgerForAPI().GetKvDeltasForRound(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingKvDeltas, v2.Log)
+	}
 
 	var accts []generated.AccountBalanceRecord
 	var apps []generated.AppResourceRecord
 	var assets []generated.AssetResourceRecord
+	var keyValues []generated.KvDelta
 
 	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
 	if err != nil {
@@ -1007,6 +1013,15 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
+	}
+
+	for key, kvDelta := range kvds {
+		var keyBytes = []byte(key)
+		keyValues = append(keyValues, generated.KvDelta{
+			Key:       &keyBytes,
+			PrevValue: &kvDelta.OldData,
+			Value:     &kvDelta.Data,
+		})
 	}
 
 	for _, record := range ads.GetAllAccounts() {
@@ -1144,6 +1159,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		Accounts: &accts,
 		Apps:     &apps,
 		Assets:   &assets,
+		KvDeltas: &keyValues,
 	}
 
 	return ctx.JSON(http.StatusOK, response)

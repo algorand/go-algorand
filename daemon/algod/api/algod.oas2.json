@@ -2354,6 +2354,13 @@
           "items": {
             "$ref": "#/definitions/AssetResourceRecord"
           }
+        },
+        "kv-deltas": {
+          "description": "Array of KV Deltas for the round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KvDelta"
+          }
         }
       }
     },
@@ -3100,6 +3107,27 @@
       "properties": {
         "name": {
           "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "KvDelta": {
+      "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "",
+          "type": "string",
+          "format": "byte"
+        },
+        "prev-value": {
+          "description": "The previous value of the KV store entry.",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "The new value of the KV store entry.",
           "type": "string",
           "format": "byte"
         }
