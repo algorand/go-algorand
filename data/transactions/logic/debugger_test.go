@@ -113,7 +113,7 @@ func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
+	ep := defaultEvalParams()
 	ep.Debugger = &testDbg
 	testLogic(t, testProgram, AssemblerMaxVersion, ep)
 
@@ -223,7 +223,7 @@ func TestCallStackUpdate(t *testing.T) {
 	}
 
 	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
+	ep := defaultEvalParams()
 	ep.Debugger = &testDbg
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 

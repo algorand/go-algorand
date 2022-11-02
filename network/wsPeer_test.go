@@ -103,6 +103,7 @@ func TestAtomicVariablesAlignment(t *testing.T) {
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.duplicateFilterCount)%8) == 0)
 }
 
 func TestTagCounterFiltering(t *testing.T) {
