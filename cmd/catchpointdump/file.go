@@ -394,9 +394,6 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
 	defer fileWriter.Flush()
 
-	printDumpingCatchpointProgressLine(0, 50, 0)
-	defer printDumpingCatchpointProgressLine(0, 0, 0)
-
 	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
 	if err != nil || dbAccessor.Handle == nil {
 		return err
