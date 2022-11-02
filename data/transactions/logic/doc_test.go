@@ -33,7 +33,9 @@ func TestOpDocs(t *testing.T) {
 		opsSeen[op.Name] = false
 	}
 	for name := range opDocByName {
-		assert.Contains(t, opsSeen, name, "opDocByName contains strange opcode %#v", name)
+		if _, ok := opsSeen[name]; !ok { // avoid assert.Contains: printing opsSeen is waste
+			assert.Fail(t, "opDocByName contains strange opcode", "%#v", name)
+		}
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {

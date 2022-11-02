@@ -241,7 +241,14 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		*remainingChanges--
 	case reflect.String:
 		var buf []byte
-		len := rand.Int() % 64
+		var len int
+		if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/agreement") && v.Type().Name() == "serializableError" {
+			// Don't generate empty strings for serializableError since nil values of *string type
+			// will serialize differently by msgp and go-codec
+			len = rand.Int()%63 + 1
+		} else {
+			len = rand.Int() % 64
+		}
 		for i := 0; i < len; i++ {
 			buf = append(buf, byte(rand.Uint32()))
 		}
@@ -268,6 +275,10 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 			if f.PkgPath != "" && !f.Anonymous {
 				// unexported
+				continue
+			}
+			if st.Name() == "messageEvent" && f.Name == "Tail" {
+				// Don't try and set the Tail field since it's recursive
 				continue
 			}
 			if rawMsgpType == f.Type {

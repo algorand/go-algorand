@@ -39,8 +39,8 @@ import (
 var errNoLedgerForRound = errors.New("no ledger available for given round")
 
 const (
-	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
-	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
+	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk and one account with max resources.
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk*(ledger.MaxEncodedBaseAccountDataSize+ledger.MaxEncodedKVDataSize) + ledger.ResourcesPerCatchpointFileChunk*ledger.MaxEncodedBaseResourceDataSize
 	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
 	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
 	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each iteration from the incoming http data stream
@@ -146,10 +146,12 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			"writing balances to disk took %d seconds, "+
 				"writing creatables to disk took %d seconds, "+
 				"writing hashes to disk took %d seconds, "+
+				"writing kv pairs to disk took %d seconds, "+
 				"total duration is %d seconds",
 			downloadProgress.BalancesWriteDuration/time.Second,
 			downloadProgress.CreatablesWriteDuration/time.Second,
 			downloadProgress.HashesWriteDuration/time.Second,
+			downloadProgress.KVWriteDuration/time.Second,
 			writeDuration/time.Second)
 	}
 
@@ -191,5 +193,5 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 }
 
 func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte, downloadProgress *ledger.CatchpointCatchupAccessorProgress) error {
-	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes, downloadProgress)
+	return lf.accessor.ProcessStagingBalances(ctx, sectionName, bytes, downloadProgress)
 }
