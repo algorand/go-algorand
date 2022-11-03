@@ -853,7 +853,7 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil)
+		groupCtx, err := PrepareGroupContext(txnGroup, &blk.BlockHeader, nil)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
 			err := verifyTxn(&txn, i, groupCtx)

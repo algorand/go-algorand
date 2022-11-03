@@ -753,8 +753,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 		failedSigIdx := 0
 		for txgIdx := range bl.txnGroups {
 			txGroupSigFailed := false
-			// if err == nil, then all sigs are verified, no need to check for the failed
-			for err != nil && failedSigIdx < bl.messagesForTxn[txgIdx] {
+			for failedSigIdx < bl.messagesForTxn[txgIdx] {
 				if failed[failedSigIdx] {
 					// if there is a failed sig check, then no need to check the rest of the
 					// sigs for this txnGroup
