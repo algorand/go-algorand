@@ -209,6 +209,8 @@ func TestCowStateProofV34(t *testing.T) {
 	var validate bool
 	msg := stateproofmsg.Message{}
 
+	const version = protocol.ConsensusV34
+
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
@@ -242,12 +244,20 @@ func TestCowStateProofV34(t *testing.T) {
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
 
+	// no atRound block
+	noBlockErr := errors.New("no block")
+	blockErr[atRound] = noBlockErr
+	stateProofTx.Message.LastAttestedRound = 32
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, noBlockErr)
+	delete(blockErr, atRound)
+
 	atRoundBlock := bookkeeping.BlockHeader{}
-	atRoundBlock.CurrentProtocol = protocol.ConsensusV34
+	atRoundBlock.CurrentProtocol = version
 	blocks[atRound] = atRoundBlock
 
 	// no spRnd block
-	noBlockErr := errors.New("no block")
+	noBlockErr = errors.New("no block")
 	blockErr[32] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
@@ -273,10 +283,32 @@ func TestCowStateProofV34(t *testing.T) {
 	require.Contains(t, err.Error(), "no block")
 	delete(blockErr, 13)
 
-	// fall through to no err
-	validate = false
+	// check the happy flow - we should fail only on crypto
+	atRound = 800
+	spHdr = bookkeeping.BlockHeader{}
+	spHdr.CurrentProtocol = version
+	blocks[basics.Round(2*config.Consensus[version].StateProofInterval)] = spHdr
+
+	votersHdr := bookkeeping.BlockHeader{}
+	votersHdr.CurrentProtocol = version
+	stateproofTracking := bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  []byte{0x1}[:],
+		StateProofOnlineTotalWeight: basics.MicroAlgos{Raw: 5},
+	}
+	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	votersHdr.StateProofTracking[protocol.StateProofBasic] = stateproofTracking
+
+	blocks[basics.Round(config.Consensus[version].StateProofInterval)] = votersHdr
+	atRoundBlock = bookkeeping.BlockHeader{}
+	atRoundBlock.CurrentProtocol = version
+	blocks[atRound] = atRoundBlock
+
+	stateProofTx.Message.LastAttestedRound = 2 * config.Consensus[version].StateProofInterval
+	stateProofTx.StateProof.SignedWeight = 100
+	c0.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
+
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.NoError(t, err)
+	require.Contains(t, err.Error(), "crypto error")
 }
 
 func TestCowStateProof(t *testing.T) {

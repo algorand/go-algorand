@@ -57,7 +57,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
 		verificationData, err = sp.StateProofVerificationData(lastRoundInInterval)
 	} else {
-		verificationData, err = gatherVerificationDataUsingHeaders(sp, lastRoundInInterval)
+		verificationData, err = gatherVerificationDataUsingBlockHeaders(sp, lastRoundInInterval)
 	}
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	return nil
 }
 
-func gatherVerificationDataUsingHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return nil, err

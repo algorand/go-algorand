@@ -50,19 +50,18 @@ func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid b
 	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
 	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
 
-	return calculateAcceptableStateProofWeight(total, proto.StateProofInterval, proto.StateProofWeightThreshold, latestRoundInProof, firstValid, logger)
+	return calculateAcceptableStateProofWeight(total, &proto, latestRoundInProof, firstValid, logger)
 }
 
-func calculateAcceptableStateProofWeight(totalOnline basics.MicroAlgos, stateProofInterval uint64, provenWeightThreshold uint32, lastAttestedRound basics.Round, firstValid basics.Round, logger logging.Logger) uint64 {
-
-	halfPeriodForInterval := stateProofInterval / 2
+func calculateAcceptableStateProofWeight(total basics.MicroAlgos, proto *config.ConsensusParams, lastAttestedRound basics.Round, firstValid basics.Round, logger logging.Logger) uint64 {
+	halfPeriodForInterval := proto.StateProofInterval / 2
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a proof for.
 	// Start by subtracting the latest round number in the state proof interval.
 	// If that round hasn't even passed yet, require 100% votes in proof.
 	offset := firstValid.SubSaturate(lastAttestedRound)
 	if offset == 0 {
-		return totalOnline.ToUint64()
+		return total.ToUint64()
 	}
 
 	// During the first proto.StateProofInterval/2 blocks, the
@@ -70,18 +69,18 @@ func calculateAcceptableStateProofWeight(totalOnline basics.MicroAlgos, statePro
 	// 100% votes.
 	offset = offset.SubSaturate(basics.Round(halfPeriodForInterval))
 	if offset == 0 {
-		return totalOnline.ToUint64()
+		return total.ToUint64()
 	}
 
 	// In the next proto.StateProofInterval/2 blocks, linearly scale
 	// the acceptable weight from 100% to StateProofWeightThreshold.
 	// If we are outside of that window, accept any weight at or above
 	// StateProofWeightThreshold.
-	provenWeight, overflowed := basics.Muldiv(totalOnline.ToUint64(), uint64(provenWeightThreshold), 1<<32)
-	if overflowed || provenWeight > totalOnline.ToUint64() {
+	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
+	if overflowed || provenWeight > total.ToUint64() {
 		// Shouldn't happen, but a safe fallback is to accept a larger proof.
 		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight",
-			totalOnline, stateProofInterval, lastAttestedRound, firstValid)
+			total, proto.StateProofInterval, lastAttestedRound, firstValid)
 		return 0
 	}
 
@@ -89,11 +88,11 @@ func calculateAcceptableStateProofWeight(totalOnline basics.MicroAlgos, statePro
 		return provenWeight
 	}
 
-	scaledWeight, overflowed := basics.Muldiv(totalOnline.ToUint64()-provenWeight, halfPeriodForInterval-uint64(offset), halfPeriodForInterval)
+	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, halfPeriodForInterval-uint64(offset), halfPeriodForInterval)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger state proof.
 		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow scaledWeight",
-			totalOnline, stateProofInterval, lastAttestedRound, firstValid)
+			total, proto.StateProofInterval, lastAttestedRound, firstValid)
 		return 0
 	}
 
@@ -101,7 +100,7 @@ func calculateAcceptableStateProofWeight(totalOnline basics.MicroAlgos, statePro
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger state proof.
 		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
-			totalOnline, stateProofInterval, lastAttestedRound, firstValid, provenWeight, scaledWeight)
+			total, proto.StateProofInterval, lastAttestedRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
 
@@ -152,7 +151,7 @@ func ValidateStateProof(verificationData *ledgercore.StateProofVerificationData,
 		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationData.TargetStateProofRound, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
-	acceptableWeight := calculateAcceptableStateProofWeight(verificationData.OnlineTotalWeight, proto.StateProofInterval, proto.StateProofWeightThreshold, verificationData.TargetStateProofRound, atRound, logging.Base())
+	acceptableWeight := calculateAcceptableStateProofWeight(verificationData.OnlineTotalWeight, &proto, verificationData.TargetStateProofRound, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
