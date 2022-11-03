@@ -79,7 +79,7 @@ type GroupContext struct {
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -123,7 +123,7 @@ func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext,
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
 	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier); err != nil {
@@ -143,7 +143,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // txnGroupBatchPrep verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger)
 	if err != nil {
 		return nil, err
@@ -513,10 +513,10 @@ func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore
 	nbw.blkHeader = block.BlockHeader
 }
 
-func (nbw *NewBlockWatcher) getBlockHeader() (bh bookkeeping.BlockHeader) {
+func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 	nbw.mu.RLock()
 	defer nbw.mu.RUnlock()
-	return nbw.blkHeader
+	return &nbw.blkHeader
 }
 
 type batchLoad struct {
@@ -726,8 +726,9 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 
 		bl := makeBatchLoad()
 		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
+		blockHeader := sv.nbw.getBlockHeader()
 		for _, ue := range uelts {
-			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, sv.nbw.getBlockHeader(), sv.ledger, batchVerifier)
+			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, no need to add the sig to the batch, report the error
 				sv.sendResult(ue.TxnGroup, ue.Context, err)
