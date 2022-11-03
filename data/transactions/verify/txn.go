@@ -740,6 +740,13 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 
 		failed, err := batchVerifier.VerifyWithFeedback()
 		// this error can only be crypto.ErrBatchHasFailedSigs
+		if err == nil { // success, all signatures verified
+			for i := range bl.txnGroups {
+				sv.sendResult(bl.txnGroups[i], bl.elementContext[i], nil)
+		    }
+		    sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+		    return nil
+		}
 
 		verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
 		verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
