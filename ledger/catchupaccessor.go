@@ -328,7 +328,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 		}
 		return
 	})
-	// TODO: Set synchronous mode in db?
+
 	return err
 }
 
