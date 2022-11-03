@@ -46,8 +46,8 @@ func getConnRTT(conn net.Conn) (*RTTInfo, error) {
 	}
 	var ret RTTInfo
 	if info != nil {
-		ret.RTT = uint64(info.Srtt)
-		ret.RTTVar = uint64(info.Rttvar)
+		ret.RTT = info.Srtt
+		ret.RTTVar = info.Rttvar
 	}
 	return &ret, nil
 }

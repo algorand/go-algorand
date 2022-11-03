@@ -23,8 +23,8 @@ import (
 
 // RTTInfo provides smoothed RTT and RTT variance from socket-level TCP information.
 type RTTInfo struct {
-	RTT    uint64
-	RTTVar uint64
+	RTT    uint32
+	RTTVar uint32
 }
 
 var (

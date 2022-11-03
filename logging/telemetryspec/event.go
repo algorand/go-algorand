@@ -303,8 +303,8 @@ type PeerConnectionDetails struct {
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
 	// RTT and RTTVar are latency observations from TCP.
-	RTT    uint64 `json:",omitempty"`
-	RTTVar uint64 `json:",omitempty"`
+	RTT    int64 `json:",omitempty"`
+	RTTVar int64 `json:",omitempty"`
 }
 
 // CatchpointGenerationEvent event
