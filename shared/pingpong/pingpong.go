@@ -159,6 +159,17 @@ type WorkerState struct {
 	blocks   chan *bookkeeping.Block
 }
 
+// returns the number of boxes per app
+func (pps *WorkerState) getNumBoxes() uint32 {
+	// only one of NumBoxUpdate and NumBoxRead should be nonzero. There isn't
+	// currently support for mixed box workloads so these numbers should not be
+	// added together.
+	if pps.cfg.NumBoxUpdate > 0 {
+		return pps.cfg.NumBoxUpdate
+	}
+	return pps.cfg.NumBoxRead
+}
+
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
 func (pps *WorkerState) PrepareAccounts(ac *libgoal.Client) (err error) {
 	pps.client = ac
@@ -1135,6 +1146,13 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		err = fmt.Errorf("no known apps")
 		return
 	}
+
+	// construct box ref array
+	var boxRefs []transactions.BoxRef
+	for i := uint32(0); i < pps.getNumBoxes(); i++ {
+		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+	}
+
 	appOptIns := pps.cinfo.OptIns[aidx]
 	sender = from
 	if len(appOptIns) > 0 {
@@ -1164,7 +1182,7 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
 	if err != nil {
 		return
 	}

@@ -14,15 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package v2
 
-// Export for testing only.  See
-// https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
-// nice explanation. tl;dr: Since some of our testing is in logic_test package,
-// we export some extra things to make testing easier there. But we do it in a
-// _test.go file, so they are only exported during testing.
+import (
+	"math"
+	"testing"
 
-// In order to generate a block
-func (eval *BlockEvaluator) SetGenerate(g bool) {
-	eval.generate = g
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
+)
+
+func TestApplicationBoxesMaxKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Response size limited by request supplied value.
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 7))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 0))
+
+	// Response size limited by algod max.
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(5, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(0, 1))
+
+	// Response size _not_ limited
+	require.Equal(t, uint64(math.MaxUint64), applicationBoxesMaxKeys(0, 0))
 }

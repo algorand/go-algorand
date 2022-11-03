@@ -1058,7 +1058,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		response.WriteHeader(http.StatusPreconditionFailed)
 		n, err := response.Write([]byte("mismatching genesis ID"))
 		if err != nil {
-			wn.log.Warnf("ws failed to write mismatching genesis ID response '%s' : n = %d err = %v", n, err)
+			wn.log.Warnf("ws failed to write mismatching genesis ID response '%s' : n = %d err = %v", otherGenesisID, n, err)
 		}
 		return http.StatusPreconditionFailed
 	}

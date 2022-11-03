@@ -480,7 +480,7 @@ func TestBackwardCompatAssemble(t *testing.T) {
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testLogic(t, source, v, defaultEvalParams(nil))
+			testLogic(t, source, v, defaultEvalParams())
 		})
 	}
 }
