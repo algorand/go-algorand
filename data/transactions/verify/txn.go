@@ -793,7 +793,7 @@ func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs u
 	return
 }
 
-func getNumberOfBatchableSigsInTxn(stx transactions.SignedTxn) (batchSigs uint64, err error) {
+func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (batchSigs uint64, err error) {
 	var hasSig, hasMsig bool
 	numSigs := 0
 	if stx.Sig != (crypto.Signature{}) {
