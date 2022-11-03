@@ -124,8 +124,8 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 		return nil, nil
 	}
 	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
-	for i, m := range b.messages {
-		messages[i] = HashRep(m)
+	for i := range b.messages {
+		messages[i] = HashRep(b.messages[i])
 	}
 	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
 	if allValid {
