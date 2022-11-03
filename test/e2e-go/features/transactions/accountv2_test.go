@@ -309,13 +309,13 @@ int 1
 		_, err = client.WaitForRound(round + 1)
 		a.NoError(err)
 		// Ensure the txn committed
-		resp, err = client.GetPendingTransactions(2)
+		resp, err := client.GetParsedPendingTransactions(2)
 		a.NoError(err)
-		if resp.TotalTxns == 1 {
-			a.Equal(resp.TruncatedTxns.Transactions[0].TxID, txid)
+		if resp.TotalTransactions == 1 {
+			a.Equal(resp.TopTransactions[0].Txn.ID(), txid)
 			continue
 		}
-		a.Equal(uint64(0), resp.TotalTxns)
+		a.Equal(uint64(0), resp.TotalTransactions)
 		break
 	}
 
@@ -547,7 +547,7 @@ int 1
 	// Ensure the txn committed
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTxns)
+	a.Equal(uint64(0), resp.TotalTransactions)
 	txinfo, err := client.TransactionInformation(signedTxn.Txn.Sender.String(), txid)
 	a.NoError(err)
 	a.True(txinfo.ConfirmedRound != 0)
