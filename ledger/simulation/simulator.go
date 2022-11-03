@@ -212,7 +212,7 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 
 		// otherwise add the failure message and location to the result
 		simulatorDebugger.result.TxnGroups[0].FailureMessage = err.Error()
-		simulatorDebugger.result.TxnGroups[0].FailedAt = simulatorDebugger.cursor
+		simulatorDebugger.result.TxnGroups[0].FailedAt = simulatorDebugger.absolutePath()
 
 		// and set WouldSucceed to false
 		simulatorDebugger.result.WouldSucceed = false

@@ -18,7 +18,6 @@ package simulation
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -27,53 +26,53 @@ import (
 type cursorDebuggerHook struct {
 	logic.NullDebuggerHook
 
-	cursor         TxnPath
-	nextInnerIndex uint64
-	groupIndex     int
+	relativeCursor    []int
+	previousInnerTxns []int
 }
 
 func (cdbg *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	top := len(cdbg.cursor) - 1
+	top := len(cdbg.relativeCursor) - 1
 	if top < 0 {
-		cdbg.cursor = TxnPath{0}
+		cdbg.relativeCursor = []int{0}
 	} else {
-		cdbg.cursor[top]++
+		cdbg.relativeCursor[top]++
 	}
-	cdbg.groupIndex = groupIndex
+	cdbg.previousInnerTxns = append(cdbg.previousInnerTxns, 0)
 	return nil
 }
 
 func (cdbg *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	cdbg.nextInnerIndex = 0
+	cdbg.previousInnerTxns = cdbg.previousInnerTxns[:len(cdbg.previousInnerTxns)-1]
 	return nil
 }
 
 // Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (cdbg *cursorDebuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	innerIndexStart := uint64(math.MaxUint64) // will overflow to 0 when incremented
-	if cdbg.nextInnerIndex != 0 {
-		innerIndexStart = cdbg.nextInnerIndex - 1
-		cdbg.nextInnerIndex = 0
-	}
-	cdbg.cursor = append(cdbg.cursor, innerIndexStart)
+	cdbg.relativeCursor = append(cdbg.relativeCursor, -1) // will go to 0 in BeforeTxn
 	return nil
 }
 
 func (cdbg *cursorDebuggerHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	top := len(cdbg.cursor) - 1
-	cdbg.nextInnerIndex = cdbg.cursor[top] + 1
-	cdbg.cursor = cdbg.cursor[:top]
-	cdbg.groupIndex = ep.GetCaller().GroupIndex()
+	top := len(cdbg.relativeCursor) - 1
+	cdbg.previousInnerTxns[len(cdbg.previousInnerTxns)-1] += cdbg.relativeCursor[top] + 1
+	cdbg.relativeCursor = cdbg.relativeCursor[:top]
 	return nil
 }
 
 func (cdbg *cursorDebuggerHook) relativeGroupIndex() int {
-	return cdbg.groupIndex
+	top := len(cdbg.relativeCursor) - 1
+	return cdbg.relativeCursor[top]
 }
 
 func (cdbg *cursorDebuggerHook) absolutePath() TxnPath {
-	path := make(TxnPath, len(cdbg.cursor))
-	copy(path, cdbg.cursor)
+	path := make(TxnPath, len(cdbg.relativeCursor))
+	for i, relativeGroupIndex := range cdbg.relativeCursor {
+		absoluteIndex := uint64(relativeGroupIndex)
+		if i > 0 {
+			absoluteIndex += uint64(cdbg.previousInnerTxns[i-1])
+		}
+		path[i] = absoluteIndex
+	}
 	return path
 }
 
@@ -114,7 +113,7 @@ func (dh *debuggerHook) getApplyDataAtPath(path TxnPath) (*transactions.ApplyDat
 
 // Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
 func (dh *debuggerHook) populateInnerTransactions(txgroup []transactions.SignedTxnWithAD) error {
-	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.cursor) // this works because the cursor has not been updated yet by `BeforeTxn`
+	applyDataOfCallingTxn, err := dh.getApplyDataAtPath(dh.absolutePath()) // this works because the cursor has not been updated yet by `BeforeTxn`
 	if err != nil {
 		return err
 	}
@@ -131,7 +130,7 @@ func (dh *debuggerHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
 }
 
 func (dh *debuggerHook) saveApplyData(applyData transactions.ApplyData) error {
-	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.cursor)
+	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.absolutePath())
 	if err != nil {
 		return err
 	}
@@ -150,7 +149,7 @@ func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
 }
 
 func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {
-	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.cursor)
+	applyDataOfCurrentTxn, err := dh.getApplyDataAtPath(dh.absolutePath())
 	if err != nil {
 		return err
 	}

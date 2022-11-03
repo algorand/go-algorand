@@ -218,16 +218,13 @@ func TestCursorDebuggerHooks(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
-			cursor := TxnPath{}
-			hook := cursorDebuggerHook{
-				cursor: cursor,
-			}
+			var hook cursorDebuggerHook
 
 			// These don't matter so they can be nil
 			ep := logic.EvalParams{}
 			groupIndex := 0
 
-			for _, step := range tc.timeline {
+			for i, step := range tc.timeline {
 				switch step.action {
 				case BeforeTxn:
 					hook.BeforeTxn(&ep, groupIndex)
@@ -245,12 +242,12 @@ func TestCursorDebuggerHooks(t *testing.T) {
 					case BeforeInnerTxnGroup, AfterInnerTxnGroup:
 						t.Fatalf("Path is unspecified for hook: %d", step.action)
 					}
-					require.Equal(t, step.expectedPath, hook.cursor)
+					require.Equalf(t, step.expectedPath, hook.absolutePath(), "step index %d (action %v), hook: %#v", i, step.action, hook)
 				}
 			}
 
 			if tc.expectedPathAtEnd != nil {
-				require.Equal(t, tc.expectedPathAtEnd, hook.cursor)
+				require.Equal(t, tc.expectedPathAtEnd, hook.absolutePath())
 			}
 		})
 	}
