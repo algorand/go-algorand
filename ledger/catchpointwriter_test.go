@@ -448,7 +448,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 
 func TestStateProofVerificationDataWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
 
 	verificationData := ledgercore.StateProofVerificationData{
 		TargetStateProofRound: 120,
@@ -461,7 +461,7 @@ func TestStateProofVerificationDataWrite(t *testing.T) {
 
 func TestEmptyStateProofVerificationDataWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
 
 	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{})
 }
