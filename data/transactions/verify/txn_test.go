@@ -40,7 +40,7 @@ import (
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-var blockHeader = bookkeeping.BlockHeader{
+var blockHeader = &bookkeeping.BlockHeader{
 	RewardsState: bookkeeping.RewardsState{
 		FeeSink:     feeSink,
 		RewardsPool: poolAddr,
@@ -271,7 +271,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 		},
 	}
 
-	var blockHeader = bookkeeping.BlockHeader{
+	var blockHeader = &bookkeeping.BlockHeader{
 		RewardsState: bookkeeping.RewardsState{
 			FeeSink:     feeSink,
 			RewardsPool: poolAddr,
@@ -452,13 +452,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	dummyLedger := DummyLedgerForSignature{}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
 	///// no sig
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "has no sig")
 	txnGroups[0][0].Sig = tmpSig
@@ -469,14 +469,14 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
@@ -489,7 +489,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
@@ -505,7 +505,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
 
@@ -562,7 +562,7 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateMultiSig makes sure that a payment transaction signed with multisig
@@ -584,7 +584,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Msig.Subsigs[0].Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
@@ -623,7 +623,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 
 }
 
@@ -667,7 +667,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
@@ -676,7 +676,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
 // TestTxnGroupCacheUpdateLogicWithMultiSig makes sure that a payment transaction contains logicsig signed with multisig is valid
@@ -738,7 +738,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
 
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]++
@@ -746,7 +746,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
 func createDummyBlockHeader() bookkeeping.BlockHeader {
@@ -783,7 +783,7 @@ func createPayTransaction(fee uint64, fv, lv, amount int, sender, receiver basic
 // verifyGroup uses TxnGroup to verify txns and add them to the
 // cache. Then makes sure that only the valid txns are verified and added to
 // the cache.
-func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
+func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
 	cache := MakeVerifiedTransactionCache(1000)
 
 	breakSig(&txnGroups[0][0])

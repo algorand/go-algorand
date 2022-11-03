@@ -127,7 +127,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 		b.Logf("verifying %d signedTransactionGroups", len(signedTransactionGroups))
 		b.ResetTimer()
 		for i := range signedTransactionGroups {
-			verify.TxnGroup(signedTransactionGroups[i], hdr, vtc, l)
+			verify.TxnGroup(signedTransactionGroups[i], &hdr, vtc, l)
 		}
 	})
 }
