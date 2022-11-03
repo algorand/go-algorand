@@ -783,8 +783,8 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 
 func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs uint64, err error) {
 	batchSigs = 0
-	for _, stx := range stxs {
-		count, err := getNumberOfBatchableSigsInTxn(stx)
+	for i := range stxs {
+		count, err := getNumberOfBatchableSigsInTxn(&stxs[i])
 		if err != nil {
 			return 0, err
 		}
