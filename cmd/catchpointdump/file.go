@@ -151,6 +151,7 @@ func printLoadCatchpointProgressLine(progress int, barLength int, dld int64) {
 
 func isGzipCompressed(catchpointReader *bufio.Reader, catchpointFileSize int64) bool {
 	const gzipPrefixSize = 2
+	const gzipPrefix = "\x1F\x8B"
 
 	if catchpointFileSize < gzipPrefixSize {
 		return false
@@ -162,7 +163,7 @@ func isGzipCompressed(catchpointReader *bufio.Reader, catchpointFileSize int64) 
 		return false
 	}
 
-	return prefixBytes[0] == 31 && prefixBytes[1] == 139
+	return prefixBytes[0] == gzipPrefix[0] && prefixBytes[1] == gzipPrefix[1]
 }
 
 func getCatchpointTarReader(catchpointReader *bufio.Reader, catchpointFileSize int64) (*tar.Reader, error) {
