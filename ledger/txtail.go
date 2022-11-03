@@ -213,9 +213,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	t.tailMu.Lock()
 	defer t.tailMu.Unlock()
-	if delta.Txleases == nil {
-		delta.Txleases = make(map[ledgercore.Txlease]basics.Round)
-	}
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],

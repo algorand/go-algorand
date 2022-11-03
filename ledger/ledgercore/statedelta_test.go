@@ -102,11 +102,14 @@ func TestMakeStateDeltaMaps(t *testing.T) {
 	sd := MakeStateDelta(nil, 0, 23000, basics.Round(2))
 	require.Nil(t, sd.Txleases)
 	require.Nil(t, sd.Creatables)
+	require.Nil(t, sd.KvMods)
 
-	sd.UpsertTxLease(Txlease{}, basics.Round(10))
-	require.Equal(t, 1, len(sd.Txleases))
-	sd.UpsertCreatable(basics.CreatableIndex(5), ModifiedCreatable{})
-	require.Equal(t, 1, len(sd.Creatables))
+	sd.AddTxLease(Txlease{}, basics.Round(10))
+	require.Len(t, sd.Txleases, 1)
+	sd.AddCreatable(basics.CreatableIndex(5), ModifiedCreatable{})
+	require.Len(t, sd.Creatables, 1)
+	sd.AddKvMod("key", KvValueDelta{Data: []byte("value")})
+	require.Len(t, sd.KvMods, 1)
 
 	txLeaseMap := make(map[Txlease]basics.Round)
 	txLeaseMap[Txlease{}] = basics.Round(10)
@@ -115,6 +118,10 @@ func TestMakeStateDeltaMaps(t *testing.T) {
 	creatableMap := make(map[basics.CreatableIndex]ModifiedCreatable)
 	creatableMap[basics.CreatableIndex(5)] = ModifiedCreatable{}
 	require.Equal(t, sd.Creatables, creatableMap)
+
+	kvModMap := make(map[string]KvValueDelta)
+	kvModMap["key"] = KvValueDelta{Data: []byte("value")}
+	require.Equal(t, sd.KvMods, kvModMap)
 
 }
 

@@ -253,7 +253,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, Intra: uint64(len(cb.mods.Txids))}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
-		cb.mods.UpsertTxLease(ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}, txn.LastValid)
+		cb.mods.AddTxLease(ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}, txn.LastValid)
 	}
 }
 
@@ -287,10 +287,10 @@ func (cb *roundCowState) commitToParent() {
 	cb.commitParent.txnCount += cb.txnCount
 
 	for txl, expires := range cb.mods.Txleases {
-		cb.commitParent.mods.UpsertTxLease(txl, expires)
+		cb.commitParent.mods.AddTxLease(txl, expires)
 	}
 	for cidx, delta := range cb.mods.Creatables {
-		cb.commitParent.mods.UpsertCreatable(cidx, delta)
+		cb.commitParent.mods.AddCreatable(cidx, delta)
 	}
 	for addr, smod := range cb.sdeltas {
 		for aapp, nsd := range smod {
@@ -309,7 +309,7 @@ func (cb *roundCowState) commitToParent() {
 	cb.commitParent.mods.StateProofNext = cb.mods.StateProofNext
 
 	for key, value := range cb.mods.KvMods {
-		cb.commitParent.mods.KvMods[key] = value
+		cb.commitParent.mods.AddKvMod(key, value)
 	}
 }
 
