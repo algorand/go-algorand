@@ -838,20 +838,20 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var group transactions.TxGroup
-	for gi, txn := range txgroup {
-		err := eval.TestTransaction(txn)
+	for gi := range txgroup {
+		err := eval.TestTransaction(&txgroup[gi])
 		if err != nil {
 			return err
 		}
 
 		// Make sure all transactions in group have the same group value
-		if txn.Txn.Group != txgroup[0].Txn.Group {
+		if txgroup[gi].Txn.Group != txgroup[0].Txn.Group {
 			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
-				txn.Txn.Group, txgroup[0].Txn.Group)
+				txgroup[gi].Txn.Group, txgroup[0].Txn.Group)
 		}
 
-		if !txn.Txn.Group.IsZero() {
-			txWithoutGroup := txn.Txn
+		if !txgroup[gi].Txn.Group.IsZero() {
+			txWithoutGroup := txgroup[gi].Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
@@ -874,7 +874,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+func (eval *BlockEvaluator) TestTransaction(txn *transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.block)
 	if err != nil {
