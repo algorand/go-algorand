@@ -339,6 +339,11 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 		data.TotalExtraAppPages = uint32(crypto.RandUint64() % 50)
 	}
 
+	if (crypto.RandUint64() % 3) == 1 {
+		data.TotalBoxes = crypto.RandUint64() % 100
+		data.TotalBoxBytes = crypto.RandUint64() % 10000
+	}
+
 	return data
 }
 

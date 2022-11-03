@@ -79,6 +79,9 @@ for LEDGER in $LEDGERS; do
       stateproofverification)
         SORT=targetstateproofround
         ;;
+      kvstore)
+        SORT=key
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

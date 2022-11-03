@@ -1877,7 +1877,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	m := message{
-		MessageHandle:           "msghandle",
+		messageHandle:           "msghandle",
 		UnauthenticatedProposal: payload.u(),
 	}
 	inMsg = messageEvent{
@@ -1952,7 +1952,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	m := message{
-		MessageHandle:           "msghandle",
+		messageHandle:           "msghandle",
 		UnauthenticatedProposal: payload.u(),
 	}
 	inMsg = messageEvent{
@@ -2269,7 +2269,7 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 			return false
 		}
 		act := wrapper.action.(networkAction)
-		if act.T == disconnect && act.h == m.MessageHandle && act.Err != nil {
+		if act.T == disconnect && act.h == m.messageHandle && act.Err != nil {
 			return true
 		}
 		return false
@@ -2287,7 +2287,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 
 	// check ignore on malformed payloads
 	m := message{
-		MessageHandle:           "uniquemessage",
+		messageHandle:           "uniquemessage",
 		Proposal:                proposal{},
 		UnauthenticatedProposal: unauthenticatedProposal{},
 	}
@@ -2308,7 +2308,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 			return false
 		}
 		act := wrapper.action.(networkAction)
-		if act.T == ignore && act.h == m.MessageHandle && act.Err != nil {
+		if act.T == ignore && act.h == m.messageHandle && act.Err != nil {
 			return true
 		}
 		return false
@@ -2329,7 +2329,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 	m := message{
 		Vote:                vv,
 		UnauthenticatedVote: vv.u(),
-		MessageHandle:       "uniquemalformedvote",
+		messageHandle:       "uniquemalformedvote",
 	}
 	inMsg := messageEvent{
 		T:     voteVerified,
@@ -2348,7 +2348,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 			return false
 		}
 		act := wrapper.action.(networkAction)
-		if act.T == disconnect && act.h == m.MessageHandle && act.Err != nil {
+		if act.T == disconnect && act.h == m.messageHandle && act.Err != nil {
 			return true
 		}
 		return false
@@ -2368,7 +2368,7 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 	m := message{
 		Bundle:                bundle{},
 		UnauthenticatedBundle: unauthenticatedBundle{},
-		MessageHandle:         "uniquemalformedBundle",
+		messageHandle:         "uniquemalformedBundle",
 	}
 	inMsg := messageEvent{
 		Err:   verifyError,
@@ -2387,7 +2387,7 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 			return false
 		}
 		act := wrapper.action.(networkAction)
-		if act.T == disconnect && act.h == m.MessageHandle && act.Err != nil {
+		if act.T == disconnect && act.h == m.messageHandle && act.Err != nil {
 			return true
 		}
 		return false
@@ -2524,7 +2524,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	require.NoError(t, panicErr)
 	m := message{
 		UnauthenticatedProposal: payloadTwo.u(),
-		MessageHandle:           "r2",
+		messageHandle:           "r2",
 	}
 	inMsg = messageEvent{
 		T:     payloadPresent,

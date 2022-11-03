@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -43,7 +45,7 @@ import (
 
 var tarFile string
 var outFileName string
-var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
+var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 
 func init() {
 	fileCmd.Flags().StringVarP(&tarFile, "tar", "t", "", "Specify the tar file to process")
@@ -133,6 +135,10 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
 			}
+			err = printKeyValueStore("./ledger.tracker.sqlite", outFile)
+			if err != nil {
+				reportErrorf("Unable to print key value store : %v", err)
+			}
 		}
 	},
 }
@@ -181,7 +187,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 				return fileHeader, err
 			}
 		}
-		err = catchupAccessor.ProgressStagingBalances(ctx, header.Name, balancesBlockBytes, &downloadProgress)
+		err = catchupAccessor.ProcessStagingBalances(ctx, header.Name, balancesBlockBytes, &downloadProgress)
 		if err != nil {
 			return fileHeader, err
 		}
@@ -385,7 +391,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		// increase the deadline warning to disable the warning message.
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
+		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
 }
@@ -419,4 +425,62 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	}
 	_, err = fmt.Fprintf(fileWriter, "State Proof Verification Data:\n"+strings.Join(printedLines, "\n")+"\n")
 	return err
+}
+
+func printKeyValue(writer *bufio.Writer, key, value []byte) {
+	var pretty string
+	ai, rest, err := logic.SplitBoxKey(string(key))
+	if err == nil {
+		pretty = fmt.Sprintf("box(%d, %s)", ai, base64.StdEncoding.EncodeToString([]byte(rest)))
+	} else {
+		pretty = base64.StdEncoding.EncodeToString(key)
+	}
+
+	fmt.Fprintf(writer, "%s : %v\n", pretty, base64.StdEncoding.EncodeToString(value))
+}
+
+func printKeyValueStore(databaseName string, outFile *os.File) error {
+	fmt.Printf("\n")
+	printDumpingCatchpointProgressLine(0, 50, 0)
+	lastProgressUpdate := time.Now()
+	progress := uint64(0)
+	defer printDumpingCatchpointProgressLine(0, 0, 0)
+
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var rowsCount int64
+		err := tx.QueryRow("SELECT count(*) from catchpointkvstore").Scan(&rowsCount)
+		if err != nil {
+			return err
+		}
+
+		// ordered to make dumps more "diffable"
+		rows, err := tx.Query("SELECT key, value FROM catchpointkvstore order by key")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			progress++
+			var key []byte
+			var value []byte
+			err := rows.Scan(&key, &value)
+			if err != nil {
+				return err
+			}
+			printKeyValue(fileWriter, key, value)
+			if time.Since(lastProgressUpdate) > 50*time.Millisecond {
+				lastProgressUpdate = time.Now()
+				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
+			}
+		}
+		return nil
+	})
 }

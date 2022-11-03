@@ -178,7 +178,7 @@ main:
  +           // This consumes the top arg. We could complain in assembly if checked stack height against pgm.fp
  dup; dup	 // But the dup;dup restores it, so it _evals_ fine.
  retsub
-`, AssemblerMaxVersion)
+`, fpVersion)
 
 }
 

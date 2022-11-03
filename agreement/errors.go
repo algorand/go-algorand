@@ -16,38 +16,39 @@
 
 package agreement
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // serializableError, or state machine error, is a serializable error that
 // is correctly written to cadaver files.
-type serializableErrorUnderlying string
-type serializableError = *serializableErrorUnderlying
+type serializableError string
 
 // implement error interface
-func (e serializableErrorUnderlying) Error() string {
+func (e serializableError) Error() string {
 	return string(e)
 }
 
-func (e serializableErrorUnderlying) String() string {
+func (e serializableError) String() string {
 	return e.Error()
 }
 
 // makeSerErrStr returns an serializableError that formats as the given text.
-func makeSerErrStr(text string) serializableError {
-	s := serializableErrorUnderlying(text)
+func makeSerErrStr(text string) *serializableError {
+	s := serializableError(text)
 	return &s
 }
 
-func makeSerErrf(format string, a ...interface{}) serializableError {
-	s := serializableErrorUnderlying(fmt.Sprintf(format, a...))
+func makeSerErrf(format string, a ...interface{}) *serializableError {
+	s := serializableError(fmt.Sprintf(format, a...))
 	return &s
 }
 
 // makeSerErr returns an serializableError that formats as the given error.
-func makeSerErr(err error) serializableError {
+func makeSerErr(err error) *serializableError {
 	if err == nil {
 		return nil
 	}
-	s := serializableErrorUnderlying(err.Error())
+	s := serializableError(err.Error())
 	return &s
 }

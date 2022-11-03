@@ -369,6 +369,16 @@ pushint 1
 gitxnas 0 Logs
 `
 
+const boxNonsense = `
+  box_create
+  box_extract
+  box_replace
+  box_del
+  box_len
+  box_put
+  box_get
+`
+
 const randomnessNonsense = `
 pushint 0xffff
 block BlkTimestamp
@@ -407,7 +417,15 @@ switch_label1:
 pushint 1
 `
 
-const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense
+const matchNonsense = `
+match_label0:
+pushints 1 2 1
+match match_label0 match_label1
+match_label1:
+pushbytess "1" "2" "1"
+`
+
+const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense + pairingNonsense
 
@@ -418,11 +436,14 @@ const randomnessCompiled = "81ffff03d101d000"
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
 	randomnessCompiled + "800243218001775c0280018881015d"
 
+const boxCompiled = "b9babbbcbdbfbe"
+
 const switchCompiled = "81018d02fff800008101"
+const matchCompiled = "83030102018e02fff500008203013101320131"
 
-const v8Compiled = v7Compiled + switchCompiled + frameCompiled
+const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled + boxCompiled
 
-const v9Compiled = v7Compiled + pairingCompiled
+const v9Compiled = v8Compiled + pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -445,6 +466,7 @@ var compiled = map[uint64]string{
 	6: "06" + v6Compiled,
 	7: "07" + v7Compiled,
 	8: "08" + v8Compiled,
+	9: "09" + v9Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -487,7 +509,9 @@ func TestAssemble(t *testing.T) {
 			// check that compilation is stable over
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
-			expectedBytes, _ := hex.DecodeString(compiled[v])
+			bytecode, ok := compiled[v]
+			require.True(t, ok, "Need v%d bytecode", v)
+			expectedBytes, _ := hex.DecodeString(bytecode)
 			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
@@ -863,8 +887,8 @@ func TestAssembleBytes(t *testing.T) {
 	expectedOptimizedConsts := "018006616263646566"
 
 	bad := [][]string{
-		{"byte", "...operation needs byte literal argument"},
-		{`byte "john" "doe"`, "...operation with extraneous argument"},
+		{"byte", "...needs byte literal argument"},
+		{`byte "john" "doe"`, "...with extraneous argument"},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1651,17 +1675,40 @@ func TestConstantArgs(t *testing.T) {
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "int", v, Expect{1, "int needs one argument"})
-		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
-		testProg(t, "byte", v, Expect{1, "byte operation needs byte literal argument"})
-		testProg(t, "bytec", v, Expect{1, "bytec operation needs one argument"})
-		testProg(t, "addr", v, Expect{1, "addr operation needs one argument"})
+		testProg(t, "int", v, Expect{1, "int needs one immediate argument, was given 0"})
+		testProg(t, "int 1 2", v, Expect{1, "int needs one immediate argument, was given 2"})
+		testProg(t, "intc", v, Expect{1, "intc needs one immediate argument, was given 0"})
+		testProg(t, "intc hi bye", v, Expect{1, "intc needs one immediate argument, was given 2"})
+		testProg(t, "byte", v, Expect{1, "byte needs byte literal argument"})
+		testProg(t, "bytec", v, Expect{1, "bytec needs one immediate argument, was given 0"})
+		testProg(t, "bytec 1 x", v, Expect{1, "bytec needs one immediate argument, was given 2"})
+		testProg(t, "addr", v, Expect{1, "addr needs one immediate argument, was given 0"})
+		testProg(t, "addr x y", v, Expect{1, "addr needs one immediate argument, was given 2"})
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "pushint", v, Expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, Expect{1, "pushbytes operation needs byte literal argument"})
+		testProg(t, "pushint", v, Expect{1, "pushint needs one immediate argument, was given 0"})
+		testProg(t, "pushint 3 4", v, Expect{1, "pushint needs one immediate argument, was given 2"})
+		testProg(t, "pushbytes", v, Expect{1, "pushbytes needs byte literal argument"})
+	}
+}
+
+func TestBranchArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "b", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "b lab1 lab2", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "int 1; bz", v, Expect{1, "bz needs a single label argument"})
+		testProg(t, "int 1; bz a b", v, Expect{1, "bz needs a single label argument"})
+		testProg(t, "int 1; bnz", v, Expect{1, "bnz needs a single label argument"})
+		testProg(t, "int 1; bnz c d", v, Expect{1, "bnz needs a single label argument"})
 	}
 
+	for v := uint64(4); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "callsub", v, Expect{1, "callsub needs a single label argument"})
+		testProg(t, "callsub one two", v, Expect{1, "callsub needs a single label argument"})
+	}
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {
@@ -2347,13 +2394,13 @@ func TestErrShortBytecblock(t *testing.T) {
 
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops := testProg(t, text, 1)
-	_, _, err := parseIntcblock(ops.Program, 1)
-	require.Equal(t, err, errShortIntcblock)
+	_, _, err := parseIntImmArgs(ops.Program, 1)
+	require.Equal(t, err, errShortIntImmArgs)
 
 	var cx EvalContext
 	cx.program = ops.Program
-	err = checkIntConstBlock(&cx)
-	require.Equal(t, err, errShortIntcblock)
+	err = checkIntImmArgs(&cx)
+	require.Equal(t, err, errShortIntImmArgs)
 }
 
 func TestMethodWarning(t *testing.T) {
@@ -2889,4 +2936,120 @@ int 1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
+}
+
+func TestAssembleMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// fail when target doesn't correspond to existing label
+	source := `
+	pushints 1 1 1
+	match label1 label2
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion, NewExpect(3, "reference to undefined label \"label2\""))
+
+	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
+	testProg(t, `
+int 0
+match
+int 1
+`, AssemblerMaxVersion)
+
+	// confirm arg limit
+	source = `
+	pushints 1 2 1
+	match label1 label2
+	label1:
+	label2:
+	`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 12) // ver (1) + pushints (5) + opcode (1) + length (1) + labels (2*2)
+
+	// confirm byte array args are assembled successfully
+	source = `
+	pushbytess "1" "2" "1"
+	match label1 label2
+	label1:
+	label2:
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	var labels []string
+	for i := 0; i < 255; i++ {
+		labels = append(labels, fmt.Sprintf("label%d", i))
+	}
+
+	// test that 255 labels is ok
+	source = fmt.Sprintf(`
+	pushint 1
+	match %s
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+
+	// 256 is too many
+	source = fmt.Sprintf(`
+	pushint 1
+	match %s extra
+	%s
+	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "match cannot take more than 255 labels"})
+
+	// allow duplicate label reference
+	source = `
+	pushint 1
+	match label1 label1
+	label1:
+	`
+	testProg(t, source, AssemblerMaxVersion)
+}
+
+func TestAssemblePushConsts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// allow empty const int list
+	source := `pushints`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty const bytes list
+	source = `pushbytess`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// basic test
+	source = `pushints 1 2 3`
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 6) // ver (1) + pushints (5)
+	source = `pushbytess "1" "2" "33"`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 10) // ver (1) + pushbytess (9)
+
+	// 256 increases size of encoded length to two bytes
+	valsStr := make([]string, 256)
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("%d", 1)
+	}
+	source = fmt.Sprintf(`pushints %s`, strings.Join(valsStr, " "))
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 260) // ver (1) + opcode (1) + len (2) + ints (256)
+
+	for i := range valsStr {
+		valsStr[i] = fmt.Sprintf("\"%d\"", 1)
+	}
+	source = fmt.Sprintf(`pushbytess %s`, strings.Join(valsStr, " "))
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Len(t, ops.Program, 516) // ver (1) + opcode (1) + len (2) + bytess (512)
+
+	// enforce correct types
+	source = `pushints "1" "2" "3"`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, `strconv.ParseUint: parsing "\"1\"": invalid syntax`})
+	source = `pushbytess 1 2 3`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "byte arg did not parse: 1"})
+	source = `pushints 6 4; concat`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "concat arg 1 wanted type []byte got uint64"})
+	source = `pushbytess "x" "y"; +`
+	testProg(t, source, AssemblerMaxVersion, Expect{1, "+ arg 1 wanted type uint64 got []byte"})
 }

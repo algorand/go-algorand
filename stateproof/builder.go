@@ -206,7 +206,7 @@ func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig)
 
 	isPresent, err := builderForRound.Present(pos)
 	if err != nil {
-		spw.log.Warnf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+		spw.log.Warnf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %v", pos, err)
 		return
 	}
 	if isPresent {
@@ -219,7 +219,7 @@ func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig)
 		return
 	}
 	if err := builderForRound.Add(pos, sig.sig); err != nil {
-		spw.log.Warnf("insertSigToBuilder: error while adding sig. inner error: %w", err)
+		spw.log.Warnf("insertSigToBuilder: error while adding sig. inner error: %v", err)
 		return
 	}
 }
@@ -480,12 +480,12 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 	for _, key := range keys {
 		firstRoundAtKeyLifeTime, err := key.StateProofSecrets.FirstRoundInKeyLifetime()
 		if err != nil {
-			spw.log.Errorf("deleteStaleKeys: could not calculate keylifetime for account %v on round %s:  %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+			spw.log.Errorf("deleteStaleKeys: could not calculate keylifetime for account %v on round %d:  %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 			continue
 		}
 		err = spw.accts.DeleteStateProofKey(key.ParticipationID, basics.Round(firstRoundAtKeyLifeTime))
 		if err != nil {
-			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %s: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
+			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %d: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 		}
 	}
 	spw.accts.DeleteStateProofKeysForExpiredAccounts(retainRound)
@@ -535,7 +535,7 @@ func (spw *Worker) tryBroadcast() {
 
 		sp, err := b.Build()
 		if err != nil {
-			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %w", rnd, err)
+			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %v", rnd, err)
 			continue
 		}
 

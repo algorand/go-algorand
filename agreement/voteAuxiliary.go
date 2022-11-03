@@ -19,6 +19,7 @@ package agreement
 // A voteTrackerPeriod is a voteMachinePeriod which indicates whether a
 // next-threshold of votes was observed for a some value in a period.
 type voteTrackerPeriod struct {
+	_struct struct{} `codec:","`
 	// Make it explicit that we are serializing player fields for crash recovery;
 	// we should probably adopt this convention over the rest of player at some point.
 	Cached nextThresholdStatusEvent
@@ -99,6 +100,7 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 // It returns the following type(s) of event: none and
 // {soft,cert,next}Threshold, and freshestBundle
 type voteTrackerRound struct {
+	_struct struct{} `codec:","`
 	// Freshest holds the freshest thresholdEvent seen this round.
 	Freshest thresholdEvent
 	// Ok is set if any thresholdEvent has been seen.

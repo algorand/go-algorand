@@ -13,12 +13,13 @@ application call transactions.
 Programs have read-only access to the transaction they are attached
 to, the other transactions in their atomic transaction group, and a
 few global values. In addition, _Smart Contracts_ have access to
-limited state that is global to the application and per-account local
-state for each account that has opted-in to the application. For both
-types of program, approval is signaled by finishing with the stack
-containing a single non-zero uint64 value, though `return` can be used
-to signal an early approval which approves based only upon the top
-stack value being a non-zero uint64 value.
+limited state that is global to the application, per-account local
+state for each account that has opted-in to the application, and
+additional per-application arbitrary state in named _boxes_. For both types of
+program, approval is signaled by finishing with the stack containing a
+single non-zero uint64 value, though `return` can be used to signal an
+early approval which approves based only upon the top stack value
+being a non-zero uint64 value.
 
 ## The Stack
 
@@ -29,8 +30,15 @@ arguments from it and pushing results to it. Some operations have
 _immediate_ arguments that are encoded directly into the instruction,
 rather than coming from the stack.
 
-The maximum stack depth is 1000. If the stack depth is
-exceeded or if a byte-array element exceed 4096 bytes, the program fails.
+The maximum stack depth is 1000. If the stack depth is exceeded or if
+a byte-array element exceeds 4096 bytes, the program fails. If an
+opcode is documented to access a position in the stack that does not
+exist, the operation fails. Most often, this is an attempt to access
+an element below the stack -- the simplest example is an operation
+like `concat` which expects two arguments on the stack. If the stack
+has fewer than two elements, the operation fails. Some operations, like
+`frame_dig` and `proto` could fail because of an attempt to access
+above the current stack.
 
 ## Scratch Space
 
@@ -38,7 +46,9 @@ In addition to the stack there are 256 positions of scratch
 space. Like stack values, scratch locations may be uint64s or
 byte-arrays. Scratch locations are initialized as uint64 zero. Scratch
 space is accessed by the `load(s)` and `store(s)` opcodes which move
-data from or to scratch space, respectively.
+data from or to scratch space, respectively. Application calls may
+inspect the final scratch space of earlier application calls in the
+same group using `gload(s)(s)`
 
 ## Versions
 
@@ -116,11 +126,13 @@ while being evaluated. If the program exceeds its budget, it fails.
 
 Smart Contracts are executed in ApplicationCall transactions. Like
 Smart Signatures, contracts indicate success by leaving a single
-non-zero integer on the stack.  A failed Smart Contract call is not a
-valid transaction, thus not written to the blockchain. Nodes maintain
-a list of transactions that would succeed, given the current state of
-the blockchain, called the transaction pool. Nodes draw from the pool
-if they are called upon to propose a block.
+non-zero integer on the stack.  A failed Smart Contract call to an
+ApprovalProgram is not a valid transaction, thus not written to the
+blockchain. An ApplicationCall with OnComplete set to ClearState
+invokes the ClearStateProgram, rather than the usual
+ApprovalProgram. If the ClearStateProgram fails, application state
+changes are rolled back, but the transaction still succeeds, and the
+Sender's local state for the called application is removed.
 
 Smart Contracts have access to everything a Smart Signature may access
 (see previous section), as well as the ability to examine blockchain
@@ -134,14 +146,15 @@ blockchain.
 
 Smart contracts have limits on their execution cost (700, consensus
 parameter MaxAppProgramCost). Before v4, this was a static limit on
-the cost of all the instructions in the program. Since then, the cost
+the cost of all the instructions in the program. Starting in v4, the cost
 is tracked dynamically during execution and must not exceed
 MaxAppProgramCost. Beginning with v5, programs costs are pooled and
 tracked dynamically across app executions in a group.  If `n`
 application invocations appear in a group, then the total execution
-cost of such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
+cost of all such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
 application calls become possible, and each such call increases the
-pooled budget by MaxAppProgramCost.
+pooled budget by MaxAppProgramCost at the time the inner group is submitted
+with `itxn_submit`.
 
 Executions of the ClearStateProgram are more stringent, in order to
 ensure that applications may be closed out, but that applications also
@@ -158,7 +171,7 @@ ClearStateProgram fails, and the app's state _is cleared_.
 
 Smart contracts have limits on the amount of blockchain state they
 may examine.  Opcodes may only access blockchain resources such as
-Accounts, Assets, and contract state if the given resource is
+Accounts, Assets, Boxes, and contract state if the given resource is
 _available_.
 
  * A resource in the "foreign array" fields of the ApplicationCall
@@ -180,6 +193,14 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+
+ * A Box is _available_ to an Approval Program if _any_ transaction in
+   the same group contains a box reference (`txn.Boxes`) that denotes
+   the box. A box reference contains an index `i`, and name `n`. The
+   index refers to the `ith` application in the transaction's
+   ForeignApplications array, with the usual convention that 0
+   indicates the application ID of the app called by that
+   transaction. No box is ever _available_ to a ClearStateProgram.
 
 ## Constants
 
@@ -383,6 +404,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `intc_2` | constant 2 from intcblock |
 | `intc_3` | constant 3 from intcblock |
 | `pushint uint` | immediate UINT |
+| `pushints uint ...` | push sequence of immediate uints to stack in the order they appear (first uint being deepest) |
 | `bytecblock bytes ...` | prepare block of byte-array constants for use by bytec |
 | `bytec i` | Ith constant from bytecblock |
 | `bytec_0` | constant 0 from bytecblock |
@@ -390,6 +412,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | constant 2 from bytecblock |
 | `bytec_3` | constant 3 from bytecblock |
 | `pushbytes bytes` | immediate BYTES |
+| `pushbytess bytes ...` | push sequences of immediate byte arrays to stack (first byte array being deepest) |
 | `bzero` | zero filled byte-array of length A |
 | `arg n` | Nth LogicSig argument |
 | `arg_0` | LogicSig argument 0 |
@@ -567,11 +590,20 @@ App fields used in the `app_params_get` opcode.
 
 Account fields used in the `acct_params_get` opcode.
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | AcctBalance | uint64 | Account balance in microalgos |
-| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | AcctBalance | uint64 |      | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
+| 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
+| 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
+| 6 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created by this account. |
+| 7 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
+| 8 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
+| 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
+| 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
+| 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
 
 
 ### Flow Control
@@ -584,16 +616,16 @@ Account fields used in the `acct_params_get` opcode.
 | `b target` | branch unconditionally to TARGET |
 | `return` | use A as success value; end |
 | `pop` | discard A |
-| `popn n` | Remove N values from the top of the stack |
+| `popn n` | remove N values from the top of the stack |
 | `dup` | duplicate A |
 | `dup2` | duplicate A and B |
 | `dupn n` | duplicate A, N times |
 | `dig n` | Nth value from the top of the stack. dig 0 is equivalent to dup |
-| `bury n` | Replace the Nth value from the top of the stack. bury 0 fails. |
+| `bury n` | replace the Nth value from the top of the stack with A. bury 0 fails. |
 | `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N. |
 | `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N. |
 | `frame_dig i` | Nth (signed) value from the frame pointer. |
-| `frame_bury i` | Replace the Nth (signed) value from the frame pointer in the stack |
+| `frame_bury i` | replace the Nth (signed) value from the frame pointer in the stack with A |
 | `swap` | swaps A and B on stack |
 | `select` | selects one of two values based on top-of-stack: B if C != 0, else A |
 | `assert` | immediately fail unless A is a non-zero number |
@@ -601,13 +633,14 @@ Account fields used in the `acct_params_get` opcode.
 | `proto a r` | Prepare top call frame for a retsub that will assume A args and R return values. |
 | `retsub` | pop the top instruction from the call stack and branch to it |
 | `switch target ...` | branch to the Ath label. Continue at following instruction if index A exceeds the number of labels. |
+| `match target ...` | given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found. |
 
 ### State Access
 
 | Opcode | Description |
 | - | -- |
-| `balance` | get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `balance` | balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit` |
+| `min_balance` | minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change. |
 | `app_opted_in` | 1 if account A is opted in to application B, else 0 |
 | `app_local_get` | local state of the key B in the current application in account A |
 | `app_local_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |
@@ -623,6 +656,28 @@ Account fields used in the `acct_params_get` opcode.
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
+
+### Box Access
+
+All box related opcodes fail immediately if used in a
+ClearStateProgram. This behavior is meant to discourage Smart Contract
+authors from depending upon the availability of boxes in a ClearState
+transaction, as accounts using ClearState are under no requirement to
+furnish appropriate Box References.  Authors would do well to keep the
+same issue in mind with respect to the availability of Accounts,
+Assets, and Apps though State Access opcodes _are_ allowed in
+ClearState programs because the current application and sender account
+are sure to be _available_.
+
+| Opcode | Description |
+| - | -- |
+| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
+| `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
+| `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
+| `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. |
+| `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist |
 
 ### Inner Transactions
 

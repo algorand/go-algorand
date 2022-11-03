@@ -55,8 +55,8 @@ type CatchpointCatchupAccessor interface {
 	// ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 	ResetStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
-	// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-	ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error)
+	// ProcessStagingBalances deserialize the given bytes as a temporary staging balances
+	ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error)
 
 	// BuildMerkleTrie inserts the account hashes into the merkle trie
 	BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error)
@@ -95,6 +95,7 @@ type stagingWriter interface {
 	writeBalances(context.Context, []normalizedAccountBalance) error
 	writeCreatables(context.Context, []normalizedAccountBalance) error
 	writeHashes(context.Context, []normalizedAccountBalance) error
+	writeKVs(context.Context, []encodedKVRecordV6) error
 	isShared() bool
 }
 
@@ -105,6 +106,12 @@ type stagingWriterImpl struct {
 func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []normalizedAccountBalance) error {
 	return w.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return writeCatchpointStagingBalances(ctx, tx, balances)
+	})
+}
+
+func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encodedKVRecordV6) error {
+	return w.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		return writeCatchpointStagingKVs(ctx, tx, kvrs)
 	})
 }
 
@@ -263,7 +270,7 @@ func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 	return
 }
 
-// CatchpointCatchupAccessorProgress is used by the caller of ProgressStagingBalances to obtain progress information
+// CatchpointCatchupAccessorProgress is used by the caller of ProcessStagingBalances to obtain progress information
 type CatchpointCatchupAccessorProgress struct {
 	TotalAccounts      uint64
 	ProcessedAccounts  uint64
@@ -280,10 +287,11 @@ type CatchpointCatchupAccessorProgress struct {
 	BalancesWriteDuration   time.Duration
 	CreatablesWriteDuration time.Duration
 	HashesWriteDuration     time.Duration
+	KVWriteDuration         time.Duration
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (c *catchpointCatchupAccessorImpl) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
+// ProcessStagingBalances deserialize the given bytes as a temporary staging balances
+func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if sectionName == "content.msgpack" {
 		return c.processStagingContent(ctx, bytes, progress)
 	}
@@ -294,7 +302,7 @@ func (c *catchpointCatchupAccessorImpl) ProgressStagingBalances(ctx context.Cont
 		return c.processStagingStateProofVerificationData(ctx, bytes, progress)
 	}
 	// we want to allow undefined sections to support backward compatibility.
-	c.log.Warnf("CatchpointCatchupAccessorImpl::ProgressStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
+	c.log.Warnf("CatchpointCatchupAccessorImpl::ProcessStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
 	return nil
 }
 
@@ -383,6 +391,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 	var normalizedAccountBalances []normalizedAccountBalance
 	var expectingMoreEntries []bool
+	var chunkKVs []encodedKVRecordV6
 
 	switch progress.Version {
 	default:
@@ -404,21 +413,22 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
-		var balances catchpointFileBalancesChunkV6
-		err = protocol.Decode(bytes, &balances)
+		var chunk catchpointFileChunkV6
+		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
 			return err
 		}
 
-		if len(balances.Balances) == 0 {
-			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
+		if len(chunk.Balances) == 0 && len(chunk.KVs) == 0 {
+			return fmt.Errorf("processStagingBalances received a chunk with no accounts or KVs")
 		}
 
-		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
-		expectingMoreEntries = make([]bool, len(balances.Balances))
-		for i, balance := range balances.Balances {
+		normalizedAccountBalances, err = prepareNormalizedBalancesV6(chunk.Balances, c.ledger.GenesisProto())
+		expectingMoreEntries = make([]bool, len(chunk.Balances))
+		for i, balance := range chunk.Balances {
 			expectingMoreEntries[i] = balance.ExpectingMoreEntries
 		}
+		chunkKVs = chunk.KVs
 	}
 
 	if err != nil {
@@ -497,9 +507,11 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	var errBalances error
 	var errCreatables error
 	var errHashes error
+	var errKVs error
 	var durBalances time.Duration
 	var durCreatables time.Duration
 	var durHashes time.Duration
+	var durKVs time.Duration
 
 	// start the balances writer
 	wg.Add(1)
@@ -549,6 +561,21 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		durHashes = time.Since(start)
 	}()
 
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if c.stagingWriter.isShared() {
+		wg.Wait()
+	}
+
+	// start the kv store writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		start := time.Now()
+		errKVs = c.stagingWriter.writeKVs(ctx, chunkKVs)
+		durKVs = time.Since(start)
+	}()
+
 	wg.Wait()
 
 	if errBalances != nil {
@@ -560,10 +587,14 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	if errHashes != nil {
 		return errHashes
 	}
+	if errKVs != nil {
+		return errKVs
+	}
 
 	progress.BalancesWriteDuration += durBalances
 	progress.CreatablesWriteDuration += durCreatables
 	progress.HashesWriteDuration += durHashes
+	progress.KVWriteDuration += durKVs
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	progress.ProcessedBytes += uint64(len(bytes))
