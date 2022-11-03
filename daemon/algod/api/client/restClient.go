@@ -117,7 +117,33 @@ func extractError(resp *http.Response) error {
 	}
 
 	errorBuf, _ := io.ReadAll(resp.Body) // ignore returned error
-	errorString := filterASCII(string(errorBuf))
+	var errorJSON generatedV2.ErrorResponse
+	decodeErr := json.Unmarshal(errorBuf, &errorJSON)
+
+	var errorString string
+	if decodeErr == nil {
+		if errorJSON.Data == nil {
+			// There's no additional data, so let's just use the message
+			errorString = errorJSON.Message
+		} else {
+			// There's additional data, so let's re-encode the JSON response to show everything.
+			// We do this because the original response is likely encoded with escapeHTML=true, but
+			// since this isn't a webpage that extra encoding is not preferred.
+			var buffer strings.Builder
+			enc := json.NewEncoder(&buffer)
+			enc.SetEscapeHTML(false)
+			encErr := enc.Encode(errorJSON)
+			if encErr != nil {
+				// This really shouldn't happen, but if it does let's default to errorBuff
+				errorString = string(errorBuf)
+			} else {
+				errorString = buffer.String()
+			}
+		}
+	} else {
+		errorString = string(errorBuf)
+	}
+	errorString = filterASCII(errorString)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		apiToken := resp.Request.Header.Get(authHeader)
