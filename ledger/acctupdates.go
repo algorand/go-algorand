@@ -1376,11 +1376,11 @@ func (au *accountUpdates) lookupAccountDeltas(rnd basics.Round) (ledgercore.Acco
 	if err != nil {
 		return deltas, err
 	}
-	if uint64(len(au.deltas)) <= offset {
+	if uint64(len(au.deltas)) < offset || offset == 0 {
 		err = fmt.Errorf("round %d not in deltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.deltas), offset)
 		return deltas, err
 	}
-	deltas = au.deltas[offset]
+	deltas = au.deltas[offset-1]
 	return deltas, err
 }
 
@@ -1393,11 +1393,11 @@ func (au *accountUpdates) lookupKvDeltas(rnd basics.Round) (map[string]ledgercor
 	if err != nil {
 		return deltas, err
 	}
-	if uint64(len(au.kvDeltas)) <= offset {
+	if uint64(len(au.kvDeltas)) < offset || offset == 0 {
 		err = fmt.Errorf("round %d not in kvDeltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.kvDeltas), offset)
 		return deltas, err
 	}
-	deltas = au.kvDeltas[offset]
+	deltas = au.kvDeltas[offset-1]
 	return deltas, err
 }
 

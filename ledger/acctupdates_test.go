@@ -76,6 +76,21 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	return
 }
 
+func setupAccts(niter int) []map[basics.Address]basics.AccountData {
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(niter, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	return accts
+}
+
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
 	dbs.Rdb.SetLogger(l)
@@ -472,19 +487,8 @@ func TestAcctUpdates(t *testing.T) {
 
 			conf.MaxAcctLookback = lookback
 
-			accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+			accts := setupAccts(20)
 			rewardsLevels := []uint64{0}
-
-			pooldata := basics.AccountData{}
-			pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-			pooldata.Status = basics.NotParticipating
-			accts[0][testPoolAddr] = pooldata
-
-			sinkdata := basics.AccountData{}
-			sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-			sinkdata.Status = basics.NotParticipating
-			accts[0][testSinkAddr] = sinkdata
-
 			initialBlocksCount := int(lookback)
 			ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 			defer ml.Close()
@@ -593,18 +597,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	accts := setupAccts(20)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
 
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
@@ -680,20 +674,9 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	protocolVersion := protocol.ConsensusCurrentVersion
 
 	initialRounds := uint64(1)
-
 	accountsCount := 5000
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
+	accts := setupAccts(accountsCount)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
 
 	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion, accts)
 	defer ml.Close()
@@ -821,19 +804,8 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		os.RemoveAll(CatchpointDirName)
 	}()
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
+	accts := setupAccts(100000)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
@@ -912,18 +884,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
-		accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(9, true)}
-
-		pooldata := basics.AccountData{}
-		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-		pooldata.Status = basics.NotParticipating
-		accts[0][testPoolAddr] = pooldata
-
-		sinkdata := basics.AccountData{}
-		sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-		sinkdata.Status = basics.NotParticipating
-		accts[0][testSinkAddr] = sinkdata
-
+		accts := setupAccts(9)
 		ml := makeMockLedgerForTracker(t, inMemory, 10, testProtocolVersion, accts)
 		defer ml.Close()
 
@@ -1586,18 +1547,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
+	accts := setupAccts(5)
 	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
@@ -1924,19 +1874,8 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 
 	initialRounds := uint64(1)
 	accountsCount := 5
-
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	accts := setupAccts(accountsCount)
 
 	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
@@ -2021,18 +1960,8 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 	initialRounds := uint64(1)
 
 	accountsCount := 5
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	accts := setupAccts(accountsCount)
 
 	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
@@ -2137,20 +2066,9 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	initProtocolVersion := protocol.ConsensusV20
 
 	initialRounds := uint64(1)
-
 	accountsCount := 5
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	accts := setupAccts(accountsCount)
 
 	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
@@ -2287,17 +2205,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 func TestAcctUpdatesResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
+	accts := setupAccts(20)
 	testProtocolVersion := protocol.ConsensusCurrentVersion
 	protoParams := config.Consensus[testProtocolVersion]
 
@@ -2536,18 +2444,8 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	testProtocolVersion := protocol.ConsensusCurrentVersion
 	proto := config.Consensus[testProtocolVersion]
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	accts := setupAccts(20)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
 
 	conf := config.GetDefaultLocal()
 	initialBlocksCount := int(conf.MaxAcctLookback)
@@ -2784,16 +2682,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	accts := setupAccts(20)
 
 	testProtocolVersion := protocol.ConsensusCurrentVersion
 	protoParams := config.Consensus[testProtocolVersion]
@@ -2915,16 +2804,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 func TestAcctUpdatesLookupResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(1, true)}
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	accts := setupAccts(1)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupResources")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -2996,4 +2876,168 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	require.Contains(t, data.Assets, aidx1)
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
+}
+
+func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	initialBlocksCount := 1
+	accts := make(map[basics.Address]basics.AccountData)
+
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
+		[]map[basics.Address]basics.AccountData{accts},
+	)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+	defer au.close()
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
+
+	kvCnt := 1000
+	kvsPerBlock := 100
+	curKV := 0
+	var currentRound basics.Round
+
+	kvMap := make(map[string][]byte)
+	for i := 0; i < kvCnt; i++ {
+		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
+	}
+
+	var roundMods = make(map[basics.Round]map[string]ledgercore.KvValueDelta)
+
+	for i := 0; i < kvCnt/kvsPerBlock; i++ {
+		currentRound = currentRound + 1
+		kvMods := make(map[string]ledgercore.KvValueDelta)
+		if i < kvCnt/kvsPerBlock {
+			for j := 0; j < kvsPerBlock; j++ {
+				name := fmt.Sprintf("%d", curKV)
+				curKV++
+				val := kvMap[name]
+				kvMods[name] = ledgercore.KvValueDelta{Data: val, OldData: nil}
+			}
+		}
+		roundMods[currentRound] = kvMods
+
+		auNewBlock(t, currentRound, au, accts, opts, kvMods)
+		auCommitSync(t, currentRound, au, ml)
+
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
+		}
+
+		for j := uint64(rnd); j > uint64(au.cachedDBRound); j-- {
+			roundDeltas, err := au.lookupKvDeltas(basics.Round(j))
+			require.NoError(t, err)
+			startKV := (j - 1) * uint64(kvsPerBlock)
+			expectedRoundDeltas, has := roundMods[basics.Round(j)]
+			require.True(t, has)
+			for kv := 0; kv < kvsPerBlock; kv++ {
+				name := fmt.Sprintf("%d", startKV+uint64(kv))
+				delta, has := roundDeltas[name]
+				require.True(t, has)
+				expectedDelta, has := expectedRoundDeltas[name]
+				require.True(t, has)
+				require.Equal(t, expectedDelta.Data, delta.Data)
+				require.Equal(t, expectedDelta.OldData, delta.OldData)
+
+			}
+		}
+	}
+}
+
+func TestAcctUpdatesLookupAccountDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := setupAccts(1)
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupAccountDeltas")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+	defer au.close()
+
+	var addr1 basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			addr1 = addr
+			break
+		}
+	}
+
+	aidx1 := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AssetIndex(3)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// Store AccountDeltas for each round
+	updatesI := make(map[basics.Round]ledgercore.AccountDeltas)
+
+	// test requires 5 blocks: 1 with aidx1, protoParams.MaxBalLookback empty blocks to commit the first one
+	// and 1 block with aidx2 and aidx3, and another one with aidx2 deleted
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
+		var updates ledgercore.AccountDeltas
+
+		// add data
+		if i == 1 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+		}
+		if i == basics.Round(protoParams.MaxBalLookback+2) {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+			updates.UpsertAssetResource(addr1, aidx3, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 300}})
+		}
+		if i == basics.Round(protoParams.MaxBalLookback+3) {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+		}
+		updatesI[i] = updates
+
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		// prepare block
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+
+		// Make sure the AccountDeltas can be retrieved and match
+		for j := i; j > 0 && uint64(i-j) > au.acctLookback; j-- {
+			expectedDeltas, has := updatesI[j]
+			require.True(t, has)
+			actualDeltas, err := au.lookupAccountDeltas(j)
+			require.NoError(t, err)
+			// Do basic checking
+			require.Equal(t, expectedDeltas.Len(), actualDeltas.Len())
+			require.Equal(t, len(expectedDeltas.Accts), len(actualDeltas.Accts))
+			for _, acct := range expectedDeltas.Accts {
+				_, has := expectedDeltas.GetBasicsAccountData(acct.Addr)
+				require.True(t, has)
+			}
+			require.Equal(t, len(expectedDeltas.AppResources), len(actualDeltas.AppResources))
+			require.Equal(t, len(expectedDeltas.AssetResources), len(actualDeltas.AssetResources))
+		}
+	}
 }
