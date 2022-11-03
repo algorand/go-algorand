@@ -5367,13 +5367,13 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 func getLatestVerificationData(handle *sql.DB) (ledgercore.StateProofVerificationData, error) {
 	row := handle.QueryRow("SELECT verificationdata FROM stateproofverification ORDER BY targetstateproofround DESC LIMIT 1")
 
-	var data []byte
-	if err := row.Scan(data); err != nil {
+	var buffer []byte
+	if err := row.Scan(&buffer); err != nil {
 		return ledgercore.StateProofVerificationData{}, err
 	}
 
 	var res ledgercore.StateProofVerificationData
-	if err := protocol.Decode(data, &res); err != nil {
+	if err := protocol.Decode(buffer, &res); err != nil {
 		return ledgercore.StateProofVerificationData{}, err
 	}
 

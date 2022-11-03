@@ -182,7 +182,8 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
-	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
+	if len(spt.trackedCommitData) > 0 &&
+		stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
 		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
 		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
 	}
