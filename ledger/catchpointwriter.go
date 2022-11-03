@@ -214,7 +214,6 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 	return dataHash, nil
 }
 
-
 // WriteStep works for a short period of time (determined by stepCtx) to get
 // some more data (accounts/resources/kvpairs) by using readDatabaseStep, and
 // write that data to the open tar file in cw.tar.  The writing is done in
