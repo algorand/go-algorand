@@ -5,6 +5,7 @@ date '+app-simple-test start %Y%m%d_%H%M%S'
 set -e
 set -x
 set -o pipefail
+set -o nounset
 export SHELLOPTS
 
 WALLET=$1
@@ -23,7 +24,7 @@ printf 'int 1' > "${TEMPDIR}/simplev1.teal"
 
 # Fail in creating app with v1 approval program
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simplev1.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true)
-EXPERROR='program version must be >= 2 for this transaction groupd'
+EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* && $RES != *"${EXPERRORUNICODE}"* ]]; then
     date '+app-create-test FAIL should fail to create app with v1 approval program %Y%m%d_%H%M%S'
     false
