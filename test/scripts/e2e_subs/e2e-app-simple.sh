@@ -5,6 +5,7 @@ date '+app-simple-test start %Y%m%d_%H%M%S'
 set -e
 set -x
 set -o pipefail
+set -o nounset
 export SHELLOPTS
 
 WALLET=$1

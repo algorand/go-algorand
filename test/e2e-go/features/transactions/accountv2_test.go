@@ -232,10 +232,11 @@ int 1
 	// Ensure the txn committed
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTxns)
-	txinfo, err := client.TransactionInformation(signedTxn.Txn.Sender.String(), txid)
+	a.Equal(uint64(0), resp.TotalTransactions)
+	txinfo, err := client.PendingTransactionInformationV2(txid)
 	a.NoError(err)
-	a.True(txinfo.ConfirmedRound != 0)
+	a.NotNil(txinfo.ConfirmedRound)
+	a.True(*txinfo.ConfirmedRound != 0)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -622,13 +623,14 @@ int 1
 		_, err = client.WaitForRound(round + 1)
 		a.NoError(err)
 		// Ensure the txn committed
-		resp, err = client.GetPendingTransactions(2)
+		resp, err := client.GetParsedPendingTransactions(2)
 		a.NoError(err)
-		if resp.TotalTxns == 1 {
-			a.Equal(resp.TruncatedTxns.Transactions[0].TxID, txid)
+		if resp.TotalTransactions == 1 {
+			pendingTxn := resp.TopTransactions[0]
+			a.Equal(pendingTxn.Txn.ID().String(), txid)
 			continue
 		}
-		a.Equal(uint64(0), resp.TotalTxns)
+		a.Equal(uint64(0), resp.TotalTransactions)
 		break
 	}
 
